@@ -1,0 +1,285 @@
+/* 整体背景 - 白色 */
+body {
+    background: #FFFFFF !important;
+}
+.gradio-container {
+    background: #FFFFFF !important;
+    font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif !important;
+}
+/* 主标题 - 黑色大字 */
+.cute-title {
+    text-align: center;
+    font-size: 2.2em !important;
+    font-weight: bold;
+    color: #222222;
+    padding: 10px 0;
+}
+.cute-subtitle {
+    text-align: center;
+    font-size: 1.2em;
+    color: #222222;
+    margin-bottom: 20px;
+}
+/* 步骤标题 */
+.step-header {
+    font-size: 1.4em !important;
+    font-weight: bold;
+    color: #222222;
+    padding: 8px 16px;
+    background: #FFFFFF;
+    border-radius: 20px;
+    border: 2px solid #BEF2BD;
+    margin-bottom: 10px;
+    text-align: center;
+}
+/* 按钮样式 - 大圆角、薄荷绿 */
+.gr-button-primary {
+    background: #222222 !important;
+    border: none !important;
+    border-radius: 30px !important;
+    font-size: 1.3em !important;
+    font-weight: bold !important;
+    color: #BEF2BD !important;
+    padding: 14px 32px !important;
+    box-shadow: 0 4px 15px rgba(34,34,34,0.3) !important;
+    transition: all 0.3s ease !important;
+}
+.gr-button-primary:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(34,34,34,0.4) !important;
+}
+/* Tab 标签文字 - 黑色加粗，边框清晰 */
+.tabs .tab-nav {
+    border: 2px solid #222222 !important;
+    border-radius: 16px 16px 0 0 !important;
+    background: #FFFFFF !important;
+}
+.tabs .tab-nav button {
+    color: #222222 !important;
+    font-weight: bold !important;
+    font-size: 1.2em !important;
+    border-radius: 12px !important;
+    border: 2px solid transparent !important;
+}
+.tabs .tab-nav button.selected {
+    border: 2px solid #222222 !important;
+    background: #FFFFFF !important;
+    color: #222222 !important;
+}
+.tabs .tab-nav button:not(.selected) {
+    background: #e9f2de !important;
+    color: #1a5c1a !important;
+}
+/* "Quick Select" 标签 - 绿色 */
+.tabs .tab-nav button:nth-child(2) {
+    background: #BEF2BD !important;
+    color: #1a5c1a !important;
+    border-color: #8FD98F !important;
+}
+.tabs .tab-nav button:nth-child(2).selected {
+    background: #A8E6A3 !important;
+    color: #1a5c1a !important;
+    border-color: #222222 !important;
+}
+/* "Check My Homework" 标签 - 绿色 */
+.tabs .tab-nav button:nth-child(3) {
+    background: #BEF2BD !important;
+    color: #1a5c1a !important;
+    border-color: #8FD98F !important;
+}
+.tabs .tab-nav button:nth-child(3).selected {
+    background: #A8E6A3 !important;
+    color: #1a5c1a !important;
+    border-color: #222222 !important;
+}
+/* "Quick Select" 内容区域 - 浅绿色背景 */
+.tabs .tabitem:nth-child(2) {
+    background: #F8FFF8 !important;
+}
+/* Tab 内容区域边框 */
+.tabs .tabitem {
+    border: 2px solid #222222 !important;
+    border-top: none !important;
+    border-radius: 0 0 16px 16px !important;
+    background: #FFFFFF !important;
+    padding: 20px !important;
+}
+/* 卡片容器 - 白色带圆角阴影 */
+.gr-box, .gr-panel {
+    border-radius: 20px !important;
+    border: 2px solid #BEF2BD !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+    background: #FFFFFF !important;
+}
+/* 输入框圆角 */
+input, textarea {
+    border-radius: 15px !important;
+    border: 2px solid #BEF2BD !important;
+    background: #FFFFFF !important;
+    color: #000000 !important;
+}
+/* 学生描述输入框 - 白色背景黑色字体 */
+#cp_profile textarea {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+}
+/* 复选框标签加大 */
+.gr-checkbox-group label {
+    font-size: 1.05em !important;
+    padding: 4px 8px !important;
+}
+/* 单选框标签加大 */
+.gr-radio label {
+    font-size: 1.05em !important;
+    padding: 4px 8px !important;
+}
+
+/* 单选框和复选框容器背景 */
+.gr-radio, .gr-checkbox-group {
+    background: #f6f4f4 !important;
+}
+
+.gr-radio label, .gr-checkbox-group label {
+    background: #FFFFFF !important;
+}
+
+/* Radio 和 Checkbox 输入框背景 */
+input[type="radio"], input[type="checkbox"] {
+    background: #fefdfd !important;
+}
+
+/* Radio 选中状态 - 显示橙色圆点 */
+input[type="radio"]:checked {
+    background: #FF8C42 !important;
+    border-color: #FF8C42 !important;
+    accent-color: #FF8C42 !important;
+}
+
+/* Radio 选中状态的标签高亮 - 橙色 */
+input[type="radio"]:checked + span {
+    color: #FF8C42 !important;
+    font-weight: bold !important;
+}
+
+/* Checkbox 选中状态 - 显示橙色 */
+input[type="checkbox"]:checked {
+    background: #FF8C42 !important;
+    border-color: #FF8C42 !important;
+    accent-color: #FF8C42 !important;
+}
+
+/* Checkbox 选中状态的标签高亮 - 橙色 */
+input[type="checkbox"]:checked + span {
+    color: #FF8C42 !important;
+    font-weight: bold !important;
+}
+
+/* ===== 作业 HTML 显示样式 ===== */
+.homework-container {
+    background: #FFFFFF;
+    border-radius: 20px;
+    border: 2px solid #BEF2BD;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 24px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+.homework-subject {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    border: 2px solid #E0E0E0;
+    color: #000000;
+}
+.homework-subject-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.homework-task {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    border-left: 4px solid #333333;
+    color: #000000;
+}
+.homework-task-number {
+    display: inline-block;
+    background: #000000;
+    color: #FFFFFF;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    text-align: center;
+    line-height: 26px;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-right: 10px;
+}
+.homework-task-content {
+    font-size: 1.05em;
+    color: #000000;
+    line-height: 1.6;
+}
+.homework-tip {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    border: 1px solid #CCCCCC;
+    font-size: 0.95em;
+    color: #000000;
+}
+.homework-tip-title {
+    font-weight: bold;
+    color: #000000;
+    margin-bottom: 6px;
+}
+.homework-divider {
+    border: none;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #BEF2BD, transparent);
+    margin: 24px 0;
+}
+.homework-resource {
+    background: #F0F8FF;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    border: 1px solid #B8D4E8;
+}
+.homework-resource a {
+    color: #2B7CB9;
+    text-decoration: none;
+    font-weight: bold;
+}
+.homework-resource a:hover {
+    text-decoration: underline;
+}
+.homework-error {
+    background: #FFF0F0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    border: 2px solid #FFB8B8;
+    color: #CC0000;
+    font-size: 1.1em;
+}
+.homework-loading {
+    text-align: center;
+    padding: 40px;
+    color: #888888;
+    font-size: 1.1em;
+}
+.homework-placeholder {
+    text-align: center;
+    padding: 60px 20px;
+    color: #222222;
+    font-size: 1.15em;
+    font-weight: bold;
+}
