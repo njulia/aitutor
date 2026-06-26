@@ -567,20 +567,15 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
         subjects: 选中的科目列表
 
     Returns:
-        按科目分隔的完整作业文本
+        按科目分隔的完整作业文本，每个科目用 ~~~~~~~~~~ 分隔
     """
     sections = []
-    separator = f"\n{'~'*60}\n"
     for subject in subjects:
-        sections.append( separator)
         print(f"[Homework] Generating homework for {subject}...")
         homework = generate_homework_for_subject(student_profile, subject)
-        sections.append( homework)
-        # separator = f"\n{'~'*60}\n"
-        # sections.append(f"{separator}\n{homework}\n")
-        sections.append( separator)
+        sections.append(f"Subject: {subject}\n\n{homework}")
 
-    return "\n".join(sections)
+    return "\n~~~~~~~~~~\n".join(sections)
 
 
 # Define student information data structure
@@ -1125,19 +1120,21 @@ SUBJECT_ICONS = {
 
 
 def homework_to_html(raw_text: str) -> str:
-    """将纯文本作业内容转换为带样式的 HTML
+    """将纯文本作业内容转换为带Tab样式的 HTML
 
     Args:
-        raw_text: 原始纯文本作业内容（多个科目用 ~~~ 分隔）
+        raw_text: 原始纯文本作业内容（多个科目用 ~~~~~~~~~~ 分隔）
 
     Returns:
-        渲染后的 HTML 字符串
+        渲染后的 HTML 字符串（带Tab切换功能）
     """
 
     # 按分隔符拆分为多个科目
     sections = re.split(r'~{10,}', raw_text)
-    html_parts = ['<div class="homework-container">']
-
+    
+    # 收集所有科目的数据
+    subject_data = []
+    
     for section in sections:
         section = section.strip()
         if not section:
@@ -1150,11 +1147,14 @@ def homework_to_html(raw_text: str) -> str:
 
         for line in lines:
             line_stripped = line.strip()
-            # 匹配类似 "# English" 或 "Subject: English" 或 "English Homework" 这样的标题
+            # 匹配 "Subject: English" 格式
+            if not subject_name and line_stripped.startswith('Subject:'):
+                subject_name = line_stripped.replace('Subject:', '').strip()
+                continue
+            # 匹配类似 "# English" 或 "English Homework" 这样的标题
             if not subject_name and (line_stripped.startswith('#') or
-                                     line_stripped.startswith('Subject:') or
                                      (len(line_stripped) < 50 and line_stripped.endswith('Homework'))):
-                subject_name = line_stripped.lstrip('# ').replace('Subject:', '').replace('Homework', '').strip()
+                subject_name = line_stripped.lstrip('# ').replace('Homework', '').strip()
                 continue
             content_lines.append(line)
 
@@ -1166,18 +1166,42 @@ def homework_to_html(raw_text: str) -> str:
                 subject_name = "Homework"
 
         icon = SUBJECT_ICONS.get(subject_name, "*")
+        full_content = '\n'.join(content_lines)
+        subject_data.append((subject_name, icon, full_content))
 
+    if not subject_data:
+        return '<div class="homework-container"><p>No homework available</p></div>'
+
+    # 构建HTML Tab结构（使用内联事件处理器，Gradio HTML组件支持）
+    html_parts = ['<div class="homework-container">']
+    
+    # Tab按钮区域
+    html_parts.append('<div class="homework-tabs">')
+    for i, (subject_name, icon, _) in enumerate(subject_data):
+        active_class = 'active' if i == 0 else ''
+        html_parts.append(
+            f'<button class="homework-tab {active_class}" '
+            f'onclick="switchHomeworkTab({i})" '
+            f'id="tab-btn-{i}">'
+            f'<span class="tab-icon">{icon}</span>'
+            f'{html.escape(subject_name)}'
+            f'</button>'
+        )
+    html_parts.append('</div>')  # end tabs
+    
+    # Tab内容区域
+    for i, (subject_name, icon, content) in enumerate(subject_data):
+        active_class = 'active' if i == 0 else ''
+        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
+        
         html_parts.append(f'<div class="homework-subject">')
         html_parts.append(f'<div class="homework-subject-title">'
                           f'<span class="homework-task-number">{icon}</span>'
                           f'{html.escape(subject_name)}'
                           f'</div>')
 
-        # 保留所有原始内容，只做安全的渲染处理
-        full_content = '\n'.join(content_lines)
-
-        # 先按段落分割
-        paragraphs = re.split(r'\n{2,}', full_content)
+        # 处理内容段落
+        paragraphs = re.split(r'\n{2,}', content)
         for para in paragraphs:
             para = para.strip()
             if not para:
@@ -1214,9 +1238,27 @@ def homework_to_html(raw_text: str) -> str:
                 html_parts.append(f'<div class="homework-paragraph">{formatted}</div>')
 
         html_parts.append('</div>')  # end homework-subject
-        html_parts.append('<hr class="homework-divider">')
+        html_parts.append('</div>')  # end tab-content
 
     html_parts.append('</div>')  # end container
+    
+    # 添加Tab切换的JavaScript（使用window全局函数）
+    js_code = '''
+<script>
+window.switchHomeworkTab = function(index) {
+    // 隐藏所有内容
+    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
+    // 移除所有tab的active状态
+    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
+    // 显示选中的内容
+    document.getElementById("tab-content-" + index).classList.add("active");
+    // 设置选中的tab状态
+    document.getElementById("tab-btn-" + index).classList.add("active");
+}
+</script>
+'''
+    html_parts.append(js_code)
+    
     return '\n'.join(html_parts)
 
 
@@ -1285,9 +1327,10 @@ def run_gui():
 
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices)
-                return homework
+                html_page = homework_to_html(homework)
+                return html_page
             except Exception as e:
-                return f"**Oh no!** Something went wrong: {str(e)}"
+                return f"**Oh no!** Something wect wrong: {str(e)}"
 
         def process_custom_homework(profile_description, subject_vals):
             """方式1: 使用自然语言描述的学生档案生成作业"""
@@ -1394,7 +1437,7 @@ def run_gui():
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Your Homework</div>')
-                            cp_output = gr.Markdown(value='Your custom homework will appear here!')
+                            cp_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
 
                     def cp_wrapper(profile_desc, subject_vals):
                         return process_custom_homework(profile_desc, subject_vals)
@@ -1422,7 +1465,7 @@ def run_gui():
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Your Homework</div>')
-                            qs_output = gr.Markdown(value='Your quick homework will appear here!')
+                            qs_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
 
                     def qs_wrapper(year_val, subject_vals):
                         # clean_subjects = [strip_emoji(s) for s in subject_vals] if subject_vals else []

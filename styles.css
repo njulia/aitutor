@@ -273,7 +273,7 @@ input[type="checkbox"]:checked + span {
 .homework-loading {
     text-align: center;
     padding: 40px;
-    color: #888888;
+    color: #000000;
     font-size: 1.1em;
 }
 .homework-placeholder {
@@ -282,4 +282,55 @@ input[type="checkbox"]:checked + span {
     color: #222222;
     font-size: 1.15em;
     font-weight: bold;
+}
+
+/* ===== 作业 Tab 样式 ===== */
+.homework-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #E0E0E0;
+    padding-bottom: 10px;
+}
+.homework-tab {
+    padding: 10px 20px;
+    border: 2px solid #E0E0E0;
+    border-radius: 12px 12px 0 0;
+    background: #F5F5F5;
+    color: #666666;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.homework-tab:hover {
+    background: #E8F5E8;
+    border-color: #BEF2BD;
+    color: #1a5c1a;
+}
+.homework-tab.active {
+    background: #FFFFFF;
+    border-color: #222222;
+    border-bottom-color: #FFFFFF;
+    color: #222222;
+    position: relative;
+    bottom: -2px;
+}
+.tab-icon {
+    display: inline-block;
+    background: #000000;
+    color: #FFFFFF;
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+.homework-tab-content {
+    display: none;
+}
+.homework-tab-content.active {
+    display: block;
 }
