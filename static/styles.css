@@ -92,15 +92,13 @@ body {
     color: #1a5c1a !important;
     border-color: #222222 !important;
 }
-/* "Quick Select" 内容区域 - 浅绿色背景 */
+/* "Quick Select" 内容区域 - 白色背景 */
 .tabs .tabitem:nth-child(2) {
-    background: #F8FFF8 !important;
+    background: #FFFFFF !important;
 }
-/* Tab 内容区域边框 */
+/* Tab 内容区域边框 - 移除边框 */
 .tabs .tabitem {
-    border: 2px solid #222222 !important;
-    border-top: none !important;
-    border-radius: 0 0 16px 16px !important;
+    border: none !important;
     background: #FFFFFF !important;
     padding: 20px !important;
 }

@@ -21,8 +21,10 @@ import glob
 import html
 import os
 import json
+import base64
 import logging
 from datetime import datetime
+from jinja2 import Template
 from typing import Dict, List, Any, Literal, TypedDict, Optional, Annotated
 
 from src.prompts import (
@@ -568,7 +570,33 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subjects: List[str]) -> str:
+def load_homework_from_file(filepath: str = None) -> List[Dict[str, str]]:
+    sections = []
+    # 数据文件在父目录的 data/ 文件夹
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rag_path = os.path.join(project_dir, "data", "homework.csv") if not filepath else filepath
+    # Open the CSV file safely with UTF-8 encoding
+    if os.path.exists(rag_path):
+        with open(rag_path, mode="r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            # Skip the header row (e.g., "key,value")
+            next(reader, None)
+            for row in reader:
+                if not row or len(row) < 2:
+                    continue
+                # Convert each row into a dict and append it to the list
+                subject = row[0].strip()
+                homework = row[1].strip().replace('\\""', '"').replace('""', '"')
+                sections.append({
+                    'subject': subject,
+                    'homework': homework
+                })
+        logger.info('[Load] Loaded existing homework plan\n')
+        logger.debug(sections)
+    return sections
+
+
+def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subjects: List[str]) -> list:
     """使用自定义学生档案生成作业
 
     Args:
@@ -576,48 +604,34 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
         subjects: 选中的科目列表
 
     Returns:
-        按科目分隔的完整作业文本，每个科目用 ~~~~~~~~~~ 分隔
+        包含科目和作业字典的列表
     """
-    sections = []
-    # 数据文件在父目录的 data/ 文件夹
-    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rag_path = os.path.join(project_dir, "data", "homework.csv")
-    # Open the CSV file safely with UTF-8 encoding
-    if os.path.exists(rag_path):
-        with open(rag_path, mode="r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            # Skip the header row (e.g., "key,value")
-            next(reader, None) 
-            # Convert each row into a tuple and append it to the list
-            sections = [(row[0], row[1]) for row in reader if len(row) >= 2]
-        logger.info('[Load] Loaded existing homework plan\n')
-        logger.debug(sections)
-        return sections
-
-    # if os.path.exists(rag_path):
-    #     # Test with existing homeworks.csv
-    #     df = pd.read_excel(rag_path)
-    #     if not df.empty:
-    #         sections = df.values.tolist()
-    #         return sections
+    # return load_homework_from_file()
 
     # Generate new homework
-
+    sections = []  # 数据文件在父目录的 data/ 文件夹
     for subject in subjects:
         logger.info(f"[Homework] Generating homework for {subject}...")
         homework = generate_homework_for_subject(student_profile, subject)
-        # sections.append(f"Subject: {subject}\n\n{homework}")
-        sections.append((subject, homework))
+        sections.append({
+            'subject': subject,
+            'homework': homework
+        })
         logger.debug(f"==============={subject}===================\n{homework}")
 
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rag_path = os.path.join(project_dir, "data", "homework.csv")
+    os.makedirs(os.path.dirname(rag_path), exist_ok=True)
     with open(rag_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
         writer.writeheader()
-        writer.writerows(sections)
-    # df = pd.DataFrame(sections, columns=["Subject", "Homework"])
-    # df.to_excel(rag_path, index=False)
+        for section in sections:
+            writer.writerow({
+                "Subject": section["subject"],
+                "Homework": section["homework"]
+            })
+
     return sections
-    # return "\n~~~~~~~~~~\n".join(sections)
 
 
 # Define student information data structure
@@ -1158,300 +1172,49 @@ SUBJECT_ICONS = {
 }
 
 
-def display_homework_tab(sections):
-    """使用 homework.html 模板渲染每个科目的作业，带Tab切换功能
-
-    Args:
-        sections: 包含科目和作业的元组列表 [(subject, homework), ...]
-
-    Returns:
-        渲染后的 HTML 字符串（带Tab切换功能）
-    """
-    if not sections:
-        return '<div class="homework-container"><p>No homework available</p></div>'
-
-    # 读取 homework.html 模板（在 templates/ 目录）
-    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    template_path = os.path.join(project_dir, "templates", "homework.html")
-    with open(template_path, 'r', encoding='utf-8') as f:
-        template_html = f.read()
-
-    # 提取 Marked.js 脚本（只加载一次）
-    marked_script = '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>'
-
-    # 构建HTML Tab结构
-    html_parts = ['<div class="homework-container">', marked_script]
-    
-    # Tab按钮区域
-    html_parts.append('<div class="homework-tabs">')
-    for i, (subject, _) in enumerate(sections):
-        active_class = 'active' if i == 0 else ''
-        html_parts.append(
-            f'<button class="homework-tab {active_class}" '
-            f'onclick="switchHomeworkTab({i})" '
-            f'id="tab-btn-{i}">'
-            f'{html.escape(subject)}'
-            f'</button>'
-        )
-    html_parts.append('</div>')  # end tabs
-    
-    # Tab内容区域
-    for i, (subject, homework) in enumerate(sections):
-        active_class = 'active' if i == 0 else ''
-        # 使用模板渲染每个科目的 markdown
-        subject_html = template_html.replace('{{subject}}', html.escape(subject))
-        subject_html = subject_html.replace('{{homework}}', homework)
-        # 使每个 tab 内的 ID 唯一
-        subject_html = subject_html.replace('id="content"', f'id="content-{i}"')
-        subject_html = subject_html.replace('id="markdown-source"', f'id="markdown-source-{i}"')
-        subject_html = subject_html.replace(
-            "document.getElementById('markdown-source').text",
-            f"document.getElementById('markdown-source-{i}').text"
-        )
-        subject_html = subject_html.replace(
-            "document.getElementById('content').innerHTML",
-            f"document.getElementById('content-{i}').innerHTML"
-        )
-        # 移除多余的 body/html 标签
-        subject_html = subject_html.replace('</body>', '').replace('</html>', '')
-        subject_html = subject_html.replace('<!DOCTYPE html>', '').replace('<html lang="en">', '')
-        subject_html = re.sub(r'<head>.*?</head>', '', subject_html, flags=re.DOTALL)
-        # 移除 Marked.js 脚本（已在顶部加载一次）
-        subject_html = subject_html.replace('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>', '')
-        
-        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
-        html_parts.append(subject_html)
-        html_parts.append('</div>')  # end tab-content
-
-    html_parts.append('</div>')  # end container
-    
-    # 添加Tab切换的JavaScript
-    js_code = '''
-<script>
-window.switchHomeworkTab = function(index) {
-    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
-    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
-    document.getElementById("tab-content-" + index).classList.add("active");
-    document.getElementById("tab-btn-" + index).classList.add("active");
-}
-</script>
-'''
-    html_parts.append(js_code)
-    
-    return '\n'.join(html_parts)
-
-
 def display_homeworks(sections) -> str:
-    return display_homework_tab(sections)
     """将作业内容转换为带Tab切换的HTML页面，使用 homework.html 模板渲染 markdown
 
-    Args:
-        sections: 包含科目和作业的元组列表
+      Args:
+          sections: 包含科目和作业的列表
 
-    Returns:
-        渲染后的 HTML 字符串（带Tab切换功能）
+      Returns:
+          渲染后的 HTML 字符串（带Tab切换功能）
     """
-    if not sections:
-        return '<div class="homework-container"><p>No homework available</p></div>'
-
     # 读取 homework.html 模板（在 templates/ 目录）
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     template_path = os.path.join(project_dir, "templates", "homework.html")
-    with open(template_path, 'r', encoding='utf-8') as f:
-        template_html = f.read()
 
-    # 提取 Marked.js 脚本（只加载一次）
-    marked_script = '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>'
+    # Read the template file directly as a string to avoid folder scanning
+    with open(template_path, mode='r', encoding='utf-8') as temp_file:
+        template_content = temp_file.read()
 
-    # 构建HTML Tab结构
-    html_parts = ['<div class="homework-container">', marked_script]
-    
-    # Tab按钮区域
-    html_parts.append('<div class="homework-tabs">')
-    for i, (subject, _) in enumerate(sections):
-        active_class = 'active' if i == 0 else ''
-        html_parts.append(
-            f'<button class="homework-tab {active_class}" '
-            f'onclick="switchHomeworkTab({i})" '
-            f'id="tab-btn-{i}">'
-            f'{html.escape(subject)}'
-            f'</button>'
-        )
-    html_parts.append('</div>')  # end tabs
-    
-    # Tab内容区域
-    for i, (subject, homework) in enumerate(sections):
-        active_class = 'active' if i == 0 else ''
-        # 使用模板渲染每个科目的 markdown
-        subject_html = template_html.replace('{{subject}}', html.escape(subject))
-        subject_html = subject_html.replace('{{homework}}', homework)
-        # 使每个 tab 内的 ID 唯一
-        subject_html = subject_html.replace('id="content"', f'id="content-{i}"')
-        subject_html = subject_html.replace('id="markdown-source"', f'id="markdown-source-{i}"')
-        subject_html = subject_html.replace(
-            "document.getElementById('markdown-source').text",
-            f"document.getElementById('markdown-source-{i}').text"
-        )
-        subject_html = subject_html.replace(
-            "document.getElementById('content').innerHTML",
-            f"document.getElementById('content-{i}').innerHTML"
-        )
-        # 移除多余的 body/html 标签
-        subject_html = subject_html.replace('</body>', '').replace('</html>', '')
-        subject_html = subject_html.replace('<!DOCTYPE html>', '').replace('<html lang="en">', '')
-        subject_html = re.sub(r'<head>.*?</head>', '', subject_html, flags=re.DOTALL)
-        # 移除 Marked.js 脚本（已在顶部加载一次）
-        subject_html = subject_html.replace('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>', '')
-        
-        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
-        html_parts.append(subject_html)
-        html_parts.append('</div>')  # end tab-content
+    # Compile the template directly from the string
+    template = Template(template_content)
 
-    html_parts.append('</div>')  # end container
-    
-    # 添加Tab切换的JavaScript
-    js_code = '''
-<script>
-window.switchHomeworkTab = function(index) {
-    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
-    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
-    document.getElementById("tab-content-" + index).classList.add("active");
-    document.getElementById("tab-btn-" + index).classList.add("active");
-}
-</script>
-'''
-    html_parts.append(js_code)
-    
-    return '\n'.join(html_parts)
+    # Normalize section format to ensure compatible keys are mapped to 'subject' and 'content'
+    normalized_sections = []
+    for item in sections:
+        if isinstance(item, dict):
+            subject = item.get('subject') or item.get('Subject') or ""
+            homework = item.get('content') or item.get('homework') or item.get('Homework') or ""
+            normalized_sections.append({'subject': subject, 'homework': homework})
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            normalized_sections.append({'subject': item[0], 'homework': item[1]})
 
-def homework_to_html(sections: list) -> str:
-    """将纯文本作业内容转换为带Tab样式的 HTML
+    # Render template with parsed data
+    rendered_html = template.render(homework_items=normalized_sections)
 
-    Args:
-        raw_text: 原始纯文本作业内容（多个科目用 ~~~~~~~~~~ 分隔）
+    output_path = os.path.join(project_dir, "data", "output.html")
+    with open(output_path, mode='w', encoding='utf-8') as output_file:
+        output_file.write(rendered_html)
 
-    Returns:
-        渲染后的 HTML 字符串（带Tab切换功能）
-    """
-    
-    # 收集所有科目的数据
-    subject_data = []
-    
-    for subject, section in sections:
-        section = section.strip()
-        if not section:
-            continue
+    logger.debug(f"Generated {output_path}")
 
-        # 尝试提取科目名称（第一个标题行）
-        lines = section.split('\n')
-        content_lines = []
-
-        for line in lines:
-            line_stripped = line.strip()
-            content_lines.append(line)
-
-        if not subject:
-            # 如果没有找到科目名，尝试从内容中提取第一行作为标题
-            if content_lines:
-                subject = content_lines.pop(0).strip()
-            else:
-                subject = "Homework"
-
-        icon = SUBJECT_ICONS.get(subject, "*")
-        full_content = '\n'.join(content_lines)
-        subject_data.append((subject, icon, full_content))
-
-    if not subject_data:
-        return '<div class="homework-container"><p>No homework available</p></div>'
-
-    # 构建HTML Tab结构（使用内联事件处理器，Gradio HTML组件支持）
-    html_parts = ['<div class="homework-container">']
-    
-    # Tab按钮区域
-    html_parts.append('<div class="homework-tabs">')
-    for i, (subject, icon, _) in enumerate(subject_data):
-        active_class = 'active' if i == 0 else ''
-        html_parts.append(
-            f'<button class="homework-tab {active_class}" '
-            f'onclick="switchHomeworkTab({i})" '
-            f'id="tab-btn-{i}">'
-            f'<span class="tab-icon">{icon}</span>'
-            f'{html.escape(subject)}'
-            f'</button>'
-        )
-    html_parts.append('</div>')  # end tabs
-    
-    # Tab内容区域
-    for i, (subject, icon, content) in enumerate(subject_data):
-        active_class = 'active' if i == 0 else ''
-        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
-        
-        html_parts.append(f'<div class="homework-subject">')
-        html_parts.append(f'<div class="homework-subject-title">'
-                          f'<span class="homework-task-number">{icon}</span>'
-                          f'{html.escape(subject)}'
-                          f'</div>')
-
-        # 处理内容段落
-        paragraphs = re.split(r'\n{2,}', content)
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-
-            # 检测是否是提示/建议
-            is_tip = any(kw in para.lower() for kw in ['tip', 'hint', 'remember', 'note:', 'helpful'])
-            # 检测是否是资源链接
-            is_resource = any(kw in para.lower() for kw in ['bbc bitesize', 'oak national', 'times tables', 'twinkl', 'national geographic', 'resource', 'http'])
-
-            if is_tip:
-                html_parts.append(f'<div class="homework-tip">'
-                                  f'<div class="homework-tip-title">Tip</div>'
-                                  f'{html.escape(para)}'
-                                  f'</div>')
-            elif is_resource:
-                # 先转换 markdown 风格的链接 [text](url) 为 HTML 链接
-                def md_link_to_html(match):
-                    text = html.escape(match.group(1))
-                    url = html.escape(match.group(2))
-                    return f'<a href="{url}" target="_blank">{text}</a>'
-
-                processed = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', md_link_to_html, para)
-                # 再转换裸 URL 为 HTML 链接
-                processed = re.sub(r'(https?://\S+)', r'<a href="\1" target="_blank">\1</a>', processed)
-                html_parts.append(f'<div class="homework-resource">{processed}</div>')
-            else:
-                # 普通段落：保留所有原始换行和内容，只做 URL 渲染
-                escaped = html.escape(para)
-                # 转换 URL 为可点击链接
-                formatted = re.sub(r'(https?://\S+)', r'<a href="\1" target="_blank">\1</a>', escaped)
-                # 保留单换行
-                formatted = formatted.replace('\n', '<br>')
-                html_parts.append(f'<div class="homework-paragraph">{formatted}</div>')
-
-        html_parts.append('</div>')  # end homework-subject
-        html_parts.append('</div>')  # end tab-content
-
-    html_parts.append('</div>')  # end container
-    
-    # 添加Tab切换的JavaScript（使用window全局函数）
-    js_code = '''
-<script>
-window.switchHomeworkTab = function(index) {
-    // 隐藏所有内容
-    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
-    // 移除所有tab的active状态
-    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
-    // 显示选中的内容
-    document.getElementById("tab-content-" + index).classList.add("active");
-    // 设置选中的tab状态
-    document.getElementById("tab-btn-" + index).classList.add("active");
-}
-</script>
-'''
-    html_parts.append(js_code)
-    
-    return '\n'.join(html_parts)
+    # 返回 iframe 用于 Gradio 显示，使用 data URI 避免完整 HTML 文档嵌套问题
+    html_base64 = base64.b64encode(rendered_html.encode('utf-8')).decode('utf-8')
+    iframe_html = f'<iframe src="data:text/html;base64,{html_base64}" style="width: 100%; height: 900px; border: none; border-radius: 8px;"></iframe>'
+    return iframe_html
 
 
 def run_gui():
@@ -1520,15 +1283,11 @@ def run_gui():
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices)
                 html_page = display_homeworks(homework)
-                # html_page = homework_to_html(homework)
                 return html_page
             except Exception as e:
                 return f"**Oh no!** Something wect wrong: {str(e)}"
 
         def process_custom_homework(profile_description, subject_choices):
-            # test
-            return process_homework("test", "test")
-
             """方式1: 使用自然语言描述的学生档案生成作业"""
             profile = parse_profile_from_natural_language(profile_description)
 
@@ -1704,3 +1463,6 @@ def run_gui():
         logger.warning("Switching to terminal interactive mode...")
         run_tui()
 
+
+if __name__ == "__main__":
+    run_gui()
