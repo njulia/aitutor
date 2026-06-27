@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{subject}}</title>
+    <!-- Marked.js library for parsing Markdown to HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+            font-size: 2em;
+            margin-top: 0;
+        }
+        h2, h3 {
+            color: #2980b9;
+            margin-top: 30px;
+            border-bottom: 1px solid #f2f2f2;
+            padding-bottom: 5px;
+        }
+        p {
+            margin: 10px 0;
+        }
+        ul, ol {
+            margin-bottom: 20px;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        code {
+            background-color: #f1f2f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background: #e0e0e0;
+            margin: 30px 0;
+        }
+        /* Style for Markdown blockquotes (useful for tips or metadata) */
+        blockquote {
+            background-color: #ebf5fb;
+            border-left: 4px solid #3498db;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        blockquote p {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="content">
+    <!-- The parsed HTML content will appear here -->
+</div>
+
+<!-- Paste your raw Markdown inside this script tag -->
+<script type="text/markdown" id="markdown-source">
+{{homework}}
+</script>
+
+<script>
+    // Fetch the raw markdown string
+    const markdownText = document.getElementById('markdown-source').text;
+    
+    // Parse the markdown into HTML using the Marked.js library
+    const htmlContent = marked.parse(markdownText);
+    
+    // Inject the generated HTML into the container
+    document.getElementById('content').innerHTML = htmlContent;
+</script>
+
+</body>
+</html>

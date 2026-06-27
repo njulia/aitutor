@@ -22,6 +22,8 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, List, Any, Literal, TypedDict, Optional, Annotated
+import pandas as pd
+import csv
 
 from prompts import (
     HOMEWORK_PROMPT,
@@ -49,6 +51,8 @@ import warnings
 
 
 warnings.filterwarnings("ignore")
+
+NUM_DAYS = 5
 
 # AGICTO API Key
 LLM_MODEL = "qwen3.5-plus"
@@ -111,7 +115,7 @@ def get_homework_time_by_age(year_group: int) -> Dict[str, Any]:
         year_group: 英国小学年级 (1-6)
 
     Returns:
-        包含建议作业时间及说明的字典
+        dict: 包含建议作业时间及说明的字典
     """
     age = YEAR_GROUP_AGE.get(year_group, 7)
     key_stage = KEY_STAGES.get(year_group, "KS2")
@@ -177,7 +181,6 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
         "year_group": year_group,
         "age": student_profile.get("age", 7),
     })
-    print(f"[- {subject}] {result}")
     return result
 
 
@@ -203,8 +206,8 @@ def extract_subjects_from_prompt(user_input: str) -> List[str]:
     return []
 
 
-def generate_5day_homework(student_profile: Dict[str, Any], subjects: List[str]) -> Dict[int, Dict[str, str]]:
-    """生成5天的作业，每天最多两个科目
+def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[str]) -> Dict[int, Dict[str, str]]:
+    """生成指定天数的作业，每天最多两个科目
 
     Args:
         student_profile: 学生信息字典
@@ -216,7 +219,7 @@ def generate_5day_homework(student_profile: Dict[str, Any], subjects: List[str])
     homework_plan = {}
 
     # 将科目分配到5天中，每天最多2个科目
-    day_assignments = distribute_subjects_to_days(subjects, 5)
+    day_assignments = distribute_subjects_to_days(subjects, NUM_DAYS)
 
     for day, day_subjects in day_assignments.items():
         day_homework = {}
@@ -260,7 +263,7 @@ def distribute_subjects_to_days(subjects: List[str], num_days: int) -> Dict[int,
 
 
 def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: str, output_dir: str = "homework_output") -> str:
-    """将5天作业保存到本地文件
+    """将指定天数的作业保存到本地文件
 
     Args:
         homework_plan: 作业计划 {day: {subject: content}}
@@ -275,7 +278,7 @@ def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: 
     filename = f"{output_dir}/homework_{student_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write(f"# 5-Day Homework Plan\n")
+        f.write(f"# {NUM_DAYS}-Day Homework Plan\n")
         f.write(f"Student: {student_id}\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"{'='*60}\n\n")
@@ -365,7 +368,7 @@ def load_latest_homework(student_id: str, output_dir: str = "homework_output") -
 
 
 def check_homework_completion(homework_plan: Dict[int, Dict[str, str]], student_id: str, output_dir: str = "homework_output") -> Dict[int, List[str]]:
-    """检查5天作业的完成情况
+    """检查指定天数的作业的完成情况
 
     Args:
         homework_plan: 作业计划
@@ -478,8 +481,8 @@ def save_review_with_homework(homework_plan: Dict[int, Dict[str, str]], reviews:
     return filename
 
 
-def regenerate_5day_homework(student_profile: Dict[str, Any], subjects: List[str], output_dir: str = "homework_output") -> tuple:
-    """重新生成5天作业并检查完成情况
+def regenerate_multiday_homework(student_profile: Dict[str, Any], subjects: List[str], output_dir: str = "homework_output") -> tuple:
+    """重新生成指定天数的作业并检查完成情况
 
     Args:
         student_profile: 学生档案
@@ -500,15 +503,15 @@ def regenerate_5day_homework(student_profile: Dict[str, Any], subjects: List[str
         incomplete = check_homework_completion(homework_plan, student_profile["student_id"], output_dir)
 
         if not incomplete:
-            print("[Info] All homework completed! Generating new 5-day plan...")
-            homework_plan = generate_5day_homework(student_profile, subjects)
+            print(f"[Info] All homework completed! Generating new {NUM_DAYS}- day plan...")
+            homework_plan = generate_multiday_homework(student_profile, subjects)
             filepath = save_homework_to_file(homework_plan, student_profile["student_id"], output_dir)
             incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
         else:
             print(f"[Info] Found incomplete days: {list(incomplete.keys())}")
     else:
-        print("[Info] No existing homework found. Generating new 5-day plan...")
-        homework_plan = generate_5day_homework(student_profile, subjects)
+        print(f"[Info] No existing homework found. Generating new {NUM_DAYS}- day plan...")
+        homework_plan = generate_multiday_homework(student_profile, subjects)
         filepath = save_homework_to_file(homework_plan, student_profile["student_id"], output_dir)
         incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
 
@@ -526,20 +529,23 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     Returns:
         保存的文件路径
     """
-    # 1. 提取科目
-    subjects = extract_subjects_from_prompt(user_input)
+    # 1. 获取学生档案
+    profile = parse_profile_from_natural_language(profile_description)
 
-    if not subjects:
+    # 2. 提取科目
+    if profile and profile.get("extracted_subjects"):
+        subjects = profile["extracted_subjects"]
+    elif profile and profile.get("learning_goals"):
+        subjects = extract_subjects_from_prompt(profile["learning_goals"])
+        print(f"[Extracted Subjects from Learning Goals] {', '.join(subjects)}")
+    else:
         print("[Warning] No subjects found in input. Using default subjects: English, Math")
         subjects = ["English", "Math"]
 
     print(f"[Extracted Subjects] {', '.join(subjects)}")
 
-    # 2. 获取学生档案
-    student_profile = SAMPLE_STUDENT_PROFILES.get(student_id, SAMPLE_STUDENT_PROFILES["student1"])
-
     # 3. 加载或重新生成作业
-    homework_plan, incomplete, filepath = regenerate_5day_homework(student_profile, subjects)
+    homework_plan, incomplete, filepath = regenerate_multiday_homework(student_profile, subjects)
 
     # 4. 点评未完成的作业
     reviews = {}
@@ -570,12 +576,43 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
         按科目分隔的完整作业文本，每个科目用 ~~~~~~~~~~ 分隔
     """
     sections = []
+    # 数据文件在父目录的 data/ 文件夹
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rag_path = os.path.join(project_dir, "data", "homeworks.csv")
+    # Open the CSV file safely with UTF-8 encoding
+    if os.path.exists(rag_path):
+        with open(rag_path, mode="r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            # Skip the header row (e.g., "key,value")
+            next(reader, None) 
+            # Convert each row into a tuple and append it to the list
+            sections = [(row[0], row[1]) for row in reader if len(row) >= 2]
+        print(f'[Load] Loaded existing homework plan:\n{sections}')
+
+    # if os.path.exists(rag_path):
+    #     # Test with existing homeworks.csv
+    #     df = pd.read_excel(rag_path)
+    #     if not df.empty:
+    #         sections = df.values.tolist()
+    #         return sections
+
+    # Generate new homework
+
     for subject in subjects:
         print(f"[Homework] Generating homework for {subject}...")
         homework = generate_homework_for_subject(student_profile, subject)
-        sections.append(f"Subject: {subject}\n\n{homework}")
+        # sections.append(f"Subject: {subject}\n\n{homework}")
+        sections.append((subject, homework))
+        print(f"==============={subject}===================\n{homework}")
 
-    return "\n~~~~~~~~~~\n".join(sections)
+    with open(rag_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
+        writer.writeheader()
+        writer.writerows(sections)
+    # df = pd.DataFrame(sections, columns=["Subject", "Homework"])
+    # df.to_excel(rag_path, index=False)
+    return sections
+    # return "\n~~~~~~~~~~\n".join(sections)
 
 
 # Define student information data structure
@@ -1002,6 +1039,11 @@ def run_english_tutor(user_query: str, student_id: str = "student1") -> Dict[str
     # 准备 LangSmith 配置（如果启用）
     config = {}
     if LANGSMITH_ENABLED:
+        # 显示 LangSmith 状态
+        print(f"✓ LangSmith is enabled")
+        print(f"  Project: {LANGSMITH_PROJECT}")
+        print(f"  View Tracking: https://smith.langchain.com\n")
+
         config = RunnableConfig(
             tags=[
                 "english-tutor",
@@ -1019,6 +1061,8 @@ def run_english_tutor(user_query: str, student_id: str = "student1") -> Dict[str
             },
             run_name=f"english-tutor-{student_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         )
+    else:
+        print("ℹ LangSmith is disabled\n")
 
     # 运行智能体
     if config:
@@ -1032,16 +1076,6 @@ def run_tui():
     print("=== AI Homework Generator for UK Primary School Students (Year 1-6) ===\n")
     print(f"Using Model: AGICTO ({LLM_MODEL})\n")
     
-    # 显示 LangSmith 状态
-    if LANGSMITH_ENABLED:
-        print(f"✓ LangSmith 追踪已启用")
-        print(f"  项目: {LANGSMITH_PROJECT}")
-        print(f"  查看追踪: https://smith.langchain.com\n")
-    else:
-        print("ℹ LangSmith 追踪未启用\n")
-    
-    print("-" * 50)
-
     # 步骤1: 选择年级
     print("\nStep 1: Select Year Group\n")
     year_choices = {}
@@ -1119,7 +1153,173 @@ SUBJECT_ICONS = {
 }
 
 
-def homework_to_html(raw_text: str) -> str:
+def display_homework_tab(sections):
+    """使用 homework.html 模板渲染每个科目的作业，带Tab切换功能
+
+    Args:
+        sections: 包含科目和作业的元组列表 [(subject, homework), ...]
+
+    Returns:
+        渲染后的 HTML 字符串（带Tab切换功能）
+    """
+    if not sections:
+        return '<div class="homework-container"><p>No homework available</p></div>'
+
+    # 读取 homework.html 模板（在 templates/ 目录）
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template_path = os.path.join(project_dir, "templates", "homework.html")
+    with open(template_path, 'r', encoding='utf-8') as f:
+        template_html = f.read()
+
+    # 提取 Marked.js 脚本（只加载一次）
+    marked_script = '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>'
+
+    # 构建HTML Tab结构
+    html_parts = ['<div class="homework-container">', marked_script]
+    
+    # Tab按钮区域
+    html_parts.append('<div class="homework-tabs">')
+    for i, (subject, _) in enumerate(sections):
+        active_class = 'active' if i == 0 else ''
+        html_parts.append(
+            f'<button class="homework-tab {active_class}" '
+            f'onclick="switchHomeworkTab({i})" '
+            f'id="tab-btn-{i}">'
+            f'{html.escape(subject)}'
+            f'</button>'
+        )
+    html_parts.append('</div>')  # end tabs
+    
+    # Tab内容区域
+    for i, (subject, homework) in enumerate(sections):
+        active_class = 'active' if i == 0 else ''
+        # 使用模板渲染每个科目的 markdown
+        subject_html = template_html.replace('{{subject}}', html.escape(subject))
+        subject_html = subject_html.replace('{{homework}}', homework)
+        # 使每个 tab 内的 ID 唯一
+        subject_html = subject_html.replace('id="content"', f'id="content-{i}"')
+        subject_html = subject_html.replace('id="markdown-source"', f'id="markdown-source-{i}"')
+        subject_html = subject_html.replace(
+            "document.getElementById('markdown-source').text",
+            f"document.getElementById('markdown-source-{i}').text"
+        )
+        subject_html = subject_html.replace(
+            "document.getElementById('content').innerHTML",
+            f"document.getElementById('content-{i}').innerHTML"
+        )
+        # 移除多余的 body/html 标签
+        subject_html = subject_html.replace('</body>', '').replace('</html>', '')
+        subject_html = subject_html.replace('<!DOCTYPE html>', '').replace('<html lang="en">', '')
+        subject_html = re.sub(r'<head>.*?</head>', '', subject_html, flags=re.DOTALL)
+        # 移除 Marked.js 脚本（已在顶部加载一次）
+        subject_html = subject_html.replace('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>', '')
+        
+        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
+        html_parts.append(subject_html)
+        html_parts.append('</div>')  # end tab-content
+
+    html_parts.append('</div>')  # end container
+    
+    # 添加Tab切换的JavaScript
+    js_code = '''
+<script>
+window.switchHomeworkTab = function(index) {
+    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
+    document.getElementById("tab-content-" + index).classList.add("active");
+    document.getElementById("tab-btn-" + index).classList.add("active");
+}
+</script>
+'''
+    html_parts.append(js_code)
+    
+    return '\n'.join(html_parts)
+
+
+def display_homeworks(sections) -> str:
+    return display_homework_tab(sections)
+    """将作业内容转换为带Tab切换的HTML页面，使用 homework.html 模板渲染 markdown
+
+    Args:
+        sections: 包含科目和作业的元组列表
+
+    Returns:
+        渲染后的 HTML 字符串（带Tab切换功能）
+    """
+    if not sections:
+        return '<div class="homework-container"><p>No homework available</p></div>'
+
+    # 读取 homework.html 模板（在 templates/ 目录）
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template_path = os.path.join(project_dir, "templates", "homework.html")
+    with open(template_path, 'r', encoding='utf-8') as f:
+        template_html = f.read()
+
+    # 提取 Marked.js 脚本（只加载一次）
+    marked_script = '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>'
+
+    # 构建HTML Tab结构
+    html_parts = ['<div class="homework-container">', marked_script]
+    
+    # Tab按钮区域
+    html_parts.append('<div class="homework-tabs">')
+    for i, (subject, _) in enumerate(sections):
+        active_class = 'active' if i == 0 else ''
+        html_parts.append(
+            f'<button class="homework-tab {active_class}" '
+            f'onclick="switchHomeworkTab({i})" '
+            f'id="tab-btn-{i}">'
+            f'{html.escape(subject)}'
+            f'</button>'
+        )
+    html_parts.append('</div>')  # end tabs
+    
+    # Tab内容区域
+    for i, (subject, homework) in enumerate(sections):
+        active_class = 'active' if i == 0 else ''
+        # 使用模板渲染每个科目的 markdown
+        subject_html = template_html.replace('{{subject}}', html.escape(subject))
+        subject_html = subject_html.replace('{{homework}}', homework)
+        # 使每个 tab 内的 ID 唯一
+        subject_html = subject_html.replace('id="content"', f'id="content-{i}"')
+        subject_html = subject_html.replace('id="markdown-source"', f'id="markdown-source-{i}"')
+        subject_html = subject_html.replace(
+            "document.getElementById('markdown-source').text",
+            f"document.getElementById('markdown-source-{i}').text"
+        )
+        subject_html = subject_html.replace(
+            "document.getElementById('content').innerHTML",
+            f"document.getElementById('content-{i}').innerHTML"
+        )
+        # 移除多余的 body/html 标签
+        subject_html = subject_html.replace('</body>', '').replace('</html>', '')
+        subject_html = subject_html.replace('<!DOCTYPE html>', '').replace('<html lang="en">', '')
+        subject_html = re.sub(r'<head>.*?</head>', '', subject_html, flags=re.DOTALL)
+        # 移除 Marked.js 脚本（已在顶部加载一次）
+        subject_html = subject_html.replace('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>', '')
+        
+        html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
+        html_parts.append(subject_html)
+        html_parts.append('</div>')  # end tab-content
+
+    html_parts.append('</div>')  # end container
+    
+    # 添加Tab切换的JavaScript
+    js_code = '''
+<script>
+window.switchHomeworkTab = function(index) {
+    document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
+    document.getElementById("tab-content-" + index).classList.add("active");
+    document.getElementById("tab-btn-" + index).classList.add("active");
+}
+</script>
+'''
+    html_parts.append(js_code)
+    
+    return '\n'.join(html_parts)
+
+def homework_to_html(sections: list) -> str:
     """将纯文本作业内容转换为带Tab样式的 HTML
 
     Args:
@@ -1128,46 +1328,33 @@ def homework_to_html(raw_text: str) -> str:
     Returns:
         渲染后的 HTML 字符串（带Tab切换功能）
     """
-
-    # 按分隔符拆分为多个科目
-    sections = re.split(r'~{10,}', raw_text)
     
     # 收集所有科目的数据
     subject_data = []
     
-    for section in sections:
+    for subject, section in sections:
         section = section.strip()
         if not section:
             continue
 
         # 尝试提取科目名称（第一个标题行）
         lines = section.split('\n')
-        subject_name = None
         content_lines = []
 
         for line in lines:
             line_stripped = line.strip()
-            # 匹配 "Subject: English" 格式
-            if not subject_name and line_stripped.startswith('Subject:'):
-                subject_name = line_stripped.replace('Subject:', '').strip()
-                continue
-            # 匹配类似 "# English" 或 "English Homework" 这样的标题
-            if not subject_name and (line_stripped.startswith('#') or
-                                     (len(line_stripped) < 50 and line_stripped.endswith('Homework'))):
-                subject_name = line_stripped.lstrip('# ').replace('Homework', '').strip()
-                continue
             content_lines.append(line)
 
-        if not subject_name:
+        if not subject:
             # 如果没有找到科目名，尝试从内容中提取第一行作为标题
             if content_lines:
-                subject_name = content_lines.pop(0).strip()
+                subject = content_lines.pop(0).strip()
             else:
-                subject_name = "Homework"
+                subject = "Homework"
 
-        icon = SUBJECT_ICONS.get(subject_name, "*")
+        icon = SUBJECT_ICONS.get(subject, "*")
         full_content = '\n'.join(content_lines)
-        subject_data.append((subject_name, icon, full_content))
+        subject_data.append((subject, icon, full_content))
 
     if not subject_data:
         return '<div class="homework-container"><p>No homework available</p></div>'
@@ -1177,27 +1364,27 @@ def homework_to_html(raw_text: str) -> str:
     
     # Tab按钮区域
     html_parts.append('<div class="homework-tabs">')
-    for i, (subject_name, icon, _) in enumerate(subject_data):
+    for i, (subject, icon, _) in enumerate(subject_data):
         active_class = 'active' if i == 0 else ''
         html_parts.append(
             f'<button class="homework-tab {active_class}" '
             f'onclick="switchHomeworkTab({i})" '
             f'id="tab-btn-{i}">'
             f'<span class="tab-icon">{icon}</span>'
-            f'{html.escape(subject_name)}'
+            f'{html.escape(subject)}'
             f'</button>'
         )
     html_parts.append('</div>')  # end tabs
     
     # Tab内容区域
-    for i, (subject_name, icon, content) in enumerate(subject_data):
+    for i, (subject, icon, content) in enumerate(subject_data):
         active_class = 'active' if i == 0 else ''
         html_parts.append(f'<div class="homework-tab-content {active_class}" id="tab-content-{i}">')
         
         html_parts.append(f'<div class="homework-subject">')
         html_parts.append(f'<div class="homework-subject-title">'
                           f'<span class="homework-task-number">{icon}</span>'
-                          f'{html.escape(subject_name)}'
+                          f'{html.escape(subject)}'
                           f'</div>')
 
         # 处理内容段落
@@ -1267,10 +1454,10 @@ def run_gui():
     try:
         import gradio as gr
 
-        # 加载外部 CSS 和 HTML 模板
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        css_path = os.path.join(script_dir, "styles.css")
-        html_path = os.path.join(script_dir, "gui_template.html")
+        # 加载外部 CSS 和 HTML 模板（在 static/ 和 templates/ 目录）
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        css_path = os.path.join(project_dir, "static", "styles.css")
+        html_path = os.path.join(project_dir, "templates", "gui_template.html")
 
         with open(css_path, 'r', encoding='utf-8') as f:
             cute_theme = f.read()
@@ -1327,31 +1514,34 @@ def run_gui():
 
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices)
-                html_page = homework_to_html(homework)
+                html_page = display_homeworks(homework)
+                # html_page = homework_to_html(homework)
                 return html_page
             except Exception as e:
                 return f"**Oh no!** Something wect wrong: {str(e)}"
 
-        def process_custom_homework(profile_description, subject_vals):
+        def process_custom_homework(profile_description, subject_choices):
+            # test
+            return process_homework("test", "test")
+
             """方式1: 使用自然语言描述的学生档案生成作业"""
             profile = parse_profile_from_natural_language(profile_description)
 
-            if subject_vals:
-                subject_choices = [strip_emoji(s) for s in subject_vals]
-            elif profile and profile.get("extracted_subjects"):
-                subject_choices = profile["extracted_subjects"]
-            elif profile and profile.get("learning_goals"):
-                subject_choices = extract_subjects_from_prompt(profile["learning_goals"])
-                print(f"[Extracted Subjects from Learning Goals] {', '.join(subject_choices)}")
-            else:
-                print("[Warning] No subjects found in input. Using default subjects: Math")
-                subject_choices = ["Math"]
+            if not subject_choices:
+                if profile and profile.get("extracted_subjects"):
+                    subject_choices = profile["extracted_subjects"]
+                elif profile and profile.get("learning_goals"):
+                    subject_choices = extract_subjects_from_prompt(profile["learning_goals"])
+                    print(f"[Extracted Subjects from Learning Goals] {', '.join(subject_choices)}")
+                else:
+                    print("[Warning] No subjects found in input. Using default subjects: Math")
+                    subject_choices = ["Math"]
 
             return process_homework(profile, subject_choices)
 
-        def process_quick_homework(year_choice, subject_vals):
+        def process_quick_homework(year_choice, subject_choices):
             """方式2: 使用预设档案生成作业"""
-            if not subject_vals:
+            if not subject_choices:
                 return "Oops! Please pick at least one subject first!"
 
             try:
@@ -1363,7 +1553,6 @@ def run_gui():
             if student_id not in SAMPLE_STUDENT_PROFILES:
                 return f"Oops! No student found for Year {year_num}."
 
-            subject_choices = [strip_emoji(s) for s in subject_vals] if subject_vals else []
             profile = SAMPLE_STUDENT_PROFILES[student_id]
             return process_homework(profile, subject_choices)
 
@@ -1373,25 +1562,8 @@ def run_gui():
             yg = profile["year_group"]
             year_options.append(f"Year {yg}")
 
-        # 科目对应的可爱图标
-        subject_emojis = {
-            "English": "ABC",
-            "Mathematics": "123",
-            "Science": "[*]",
-            "Art and Design": "(~)",
-            "Computing": ">_<",
-            "Geography": "(@)",
-            "History": "(?)",
-            "Spanish": "(S)",
-            "Chinese": "(C)",
-        }
         # 构建带可爱图标的科目列表
-        cute_subjects = [f"{subject_emojis.get(s, '*')}  {s}" for s in UK_PRIMARY_SUBJECTS]
-
-        # 去掉图标前缀还原科目名（用于内部调用）
-        def strip_emoji(subject_with_icon):
-            """去除科目名前的图标前缀"""
-            return subject_with_icon.split("  ", 1)[-1].strip()
+        cute_subjects = UK_PRIMARY_SUBJECTS
 
         with gr.Blocks(
             title="Homework Magic - UK Primary School",
@@ -1439,12 +1611,9 @@ def run_gui():
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             cp_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
 
-                    def cp_wrapper(profile_desc, subject_vals):
-                        return process_custom_homework(profile_desc, subject_vals)
-                        # clean_subjects = [strip_emoji(s) for s in subject_vals] if subject_vals else []
-                        # profile = parse_profile_from_natural_language(profile_desc)
-                        # return process_homework(profile, clean_subjects)
-
+                    def cp_wrapper(profile_desc, subject_choices):
+                        return process_custom_homework(profile_desc, subject_choices)
+      
                     cp_btn.click(
                         fn=cp_wrapper,
                         inputs=[cp_profile, cp_subjects],
@@ -1467,9 +1636,8 @@ def run_gui():
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             qs_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
 
-                    def qs_wrapper(year_val, subject_vals):
-                        # clean_subjects = [strip_emoji(s) for s in subject_vals] if subject_vals else []
-                        return process_quick_homework(year_val, subject_vals)
+                    def qs_wrapper(year_choices, subject_choices):
+                        return process_quick_homework(year_choices, subject_choices)
 
                     qs_btn.click(
                         fn=qs_wrapper,
@@ -1553,7 +1721,7 @@ if __name__ == "__main__":
         else:
             print("Unknown argument. Available options:")
             print("  --tui     : Terminal interactive mode")
-            print("  --prompt  : Generate/import 5-day homework with review from natural language prompt")
+            print(f"  --prompt  : Generate/import {NUM_DAYS}-day homework with review from natural language prompt")
             print("  (no arg)  : Web GUI mode (default)")
             print("\nExample: python hybrid_english_tutor_langgraph.py --prompt 'I need Math, English, and Science homework for this week'")
     else:
