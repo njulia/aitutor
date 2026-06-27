@@ -39,6 +39,8 @@ from src.prompts import (
     PROFILE_PARSE_PROMPT,
 )
 
+from src.homework_rag import store_homework, search_homework, get_homework_rag_store
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, BaseMessage
 from langchain_core.tools import tool
@@ -186,6 +188,22 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
         "year_group": year_group,
         "age": student_profile.get("age", 7),
     })
+
+    # Store homework in RAG for future search
+    try:
+        store_homework(
+            homework_content=result,
+            year_group=year_group,
+            subject=subject,
+            homework_minutes=homework_time,
+            key_stage=KEY_STAGES.get(year_group, "KS2"),
+            english_level=student_profile.get("english_level", "Beginner"),
+            student_id=student_profile.get("student_id"),
+        )
+        logger.info(f"[RAG] Stored homework for {subject} (Year {year_group}) in vector database")
+    except Exception as e:
+        logger.warning(f"[RAG] Failed to store homework for {subject}: {e}")
+
     return result
 
 
