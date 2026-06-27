@@ -15,17 +15,17 @@ Three-tier architecture:
 2. Middle layer (Coordination): Evaluates question types and difficulty, dynamically selects processing mode
 3. Top layer (Deliberative): Performs learning analysis and creates personalized study plans
 """
+import csv
 import re
 import glob
 import html
 import os
 import json
+import logging
 from datetime import datetime
 from typing import Dict, List, Any, Literal, TypedDict, Optional, Annotated
-import pandas as pd
-import csv
 
-from prompts import (
+from src.prompts import (
     HOMEWORK_PROMPT,
     SUBJECT_EXTRACTION_PROMPT,
     REVIEW_HOMEWORK_PROMPT,
@@ -50,6 +50,9 @@ from langgraph.prebuilt import ToolNode
 import warnings
 
 
+# This automatically grabs the configuration set in main.py
+logger = logging.getLogger(__name__)
+
 warnings.filterwarnings("ignore")
 
 NUM_DAYS = 5
@@ -60,8 +63,8 @@ AGICTO_API_KEY = os.getenv("AGICTO_API_KEY")
 
 # Check if API Key is set
 if not AGICTO_API_KEY:
-    print("Error: AGICTO_API_KEY environment variable not found")
-    print("Please set the environment variable: export AGICTO_API_KEY='your-api-key'")
+    logger.error("Error: AGICTO_API_KEY environment variable not found")
+    logger.error("Please set the environment variable: export AGICTO_API_KEY='your-api-key'")
     exit(1)
 
 # ==================== LangSmith 配置 ====================
@@ -224,7 +227,7 @@ def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[s
     for day, day_subjects in day_assignments.items():
         day_homework = {}
         for subject in day_subjects:
-            print(f"[Homework] Day {day}: Generating homework for {subject}...")
+            logger.info(f"[Homework] Day {day}: Generating homework for {subject}...")
             homework = generate_homework_for_subject(student_profile, subject)
             day_homework[subject] = homework
         homework_plan[day] = day_homework
@@ -294,7 +297,7 @@ def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: 
                 f.write(f"{content}\n\n")
                 f.write(f"{'~'*40}\n\n")
 
-    print(f"[Save] Homework saved to: {filename}")
+    logger.info(f"[Save] Homework saved to: {filename}")
     return filename
 
 
@@ -322,7 +325,7 @@ def load_latest_homework(student_id: str, output_dir: str = "homework_output") -
     files.sort(key=os.path.getmtime, reverse=True)
     latest_file = files[0]
 
-    print(f"[Load] Found latest homework file: {latest_file}")
+    logger.info(f"[Load] Found latest homework file: {latest_file}")
 
     # 解析文件内容
     homework_plan = {}
@@ -477,7 +480,7 @@ def save_review_with_homework(homework_plan: Dict[int, Dict[str, str]], reviews:
             f.write(f"{day_review}\n\n")
             f.write(f"{'~'*40}\n\n")
 
-    print(f"[Save] Review saved to: {filename}")
+    logger.info(f"[Save] Review saved to: {filename}")
     return filename
 
 
@@ -497,20 +500,20 @@ def regenerate_multiday_homework(student_profile: Dict[str, Any], subjects: List
 
     if latest:
         homework_plan, filepath = latest
-        print(f"[Load] Loaded existing homework plan from: {filepath}")
+        logger.info(f"[Load] Loaded existing homework plan from: {filepath}")
 
         # 检查完成情况
         incomplete = check_homework_completion(homework_plan, student_profile["student_id"], output_dir)
 
         if not incomplete:
-            print(f"[Info] All homework completed! Generating new {NUM_DAYS}- day plan...")
+            logger.info(f"[Info] All homework completed! Generating new {NUM_DAYS}- day plan...")
             homework_plan = generate_multiday_homework(student_profile, subjects)
             filepath = save_homework_to_file(homework_plan, student_profile["student_id"], output_dir)
             incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
         else:
-            print(f"[Info] Found incomplete days: {list(incomplete.keys())}")
+            logger.info(f"[Info] Found incomplete days: {list(incomplete.keys())}")
     else:
-        print(f"[Info] No existing homework found. Generating new {NUM_DAYS}- day plan...")
+        logger.info(f"[Info] No existing homework found. Generating new {NUM_DAYS}- day plan...")
         homework_plan = generate_multiday_homework(student_profile, subjects)
         filepath = save_homework_to_file(homework_plan, student_profile["student_id"], output_dir)
         incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
@@ -537,12 +540,12 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         subjects = profile["extracted_subjects"]
     elif profile and profile.get("learning_goals"):
         subjects = extract_subjects_from_prompt(profile["learning_goals"])
-        print(f"[Extracted Subjects from Learning Goals] {', '.join(subjects)}")
+        logger.info(f"[Extracted Subjects from Learning Goals] {', '.join(subjects)}")
     else:
-        print("[Warning] No subjects found in input. Using default subjects: English, Math")
+        logger.warning("[Warning] No subjects found in input. Using default subjects: English, Math")
         subjects = ["English", "Math"]
 
-    print(f"[Extracted Subjects] {', '.join(subjects)}")
+    logger.info(f"[Extracted Subjects] {', '.join(subjects)}")
 
     # 3. 加载或重新生成作业
     homework_plan, incomplete, filepath = regenerate_multiday_homework(student_profile, subjects)
@@ -555,7 +558,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         # 使用提供的答案或默认"未提交"
         day_answers = student_answers.get(day, {s: "Not submitted" for s in day_subjects})
 
-        print(f"[Review] Reviewing Day {day} homework...")
+        logger.info(f"[Review] Reviewing Day {day} homework...")
         review = review_day_homework(student_profile, day, day_homework, day_answers)
         reviews[day] = review
 
@@ -578,7 +581,7 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     sections = []
     # 数据文件在父目录的 data/ 文件夹
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rag_path = os.path.join(project_dir, "data", "homeworks.csv")
+    rag_path = os.path.join(project_dir, "data", "homework.csv")
     # Open the CSV file safely with UTF-8 encoding
     if os.path.exists(rag_path):
         with open(rag_path, mode="r", encoding="utf-8") as f:
@@ -587,7 +590,9 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
             next(reader, None) 
             # Convert each row into a tuple and append it to the list
             sections = [(row[0], row[1]) for row in reader if len(row) >= 2]
-        print(f'[Load] Loaded existing homework plan:\n{sections}')
+        logger.info('[Load] Loaded existing homework plan\n')
+        logger.debug(sections)
+        return sections
 
     # if os.path.exists(rag_path):
     #     # Test with existing homeworks.csv
@@ -599,11 +604,11 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     # Generate new homework
 
     for subject in subjects:
-        print(f"[Homework] Generating homework for {subject}...")
+        logger.info(f"[Homework] Generating homework for {subject}...")
         homework = generate_homework_for_subject(student_profile, subject)
         # sections.append(f"Subject: {subject}\n\n{homework}")
         sections.append((subject, homework))
-        print(f"==============={subject}===================\n{homework}")
+        logger.debug(f"==============={subject}===================\n{homework}")
 
     with open(rag_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
@@ -1695,34 +1700,7 @@ def run_gui():
         demo.launch(share=True)
 
     except ImportError:
-        print("gradio not installed. Please run: pip install gradio")
-        print("Switching to terminal interactive mode...")
+        logger.warning("gradio not installed. Please run: pip install gradio")
+        logger.warning("Switching to terminal interactive mode...")
         run_tui()
 
-
-if __name__ == "__main__":
-    import sys
-
-    # Select run mode based on command line argument
-    if len(sys.argv) > 1:
-        if sys.argv[1] == '--tui':
-            run_tui()
-        elif sys.argv[1] == '--prompt':
-            # 从命令行提示词生成/导入作业并点评
-            if len(sys.argv) < 3:
-                print("Usage: python hybrid_english_tutor_langgraph.py --prompt 'I want Math and English homework'")
-                sys.exit(1)
-            
-            user_input = sys.argv[2]
-            student_id = sys.argv[3] if len(sys.argv) > 3 else "student1"
-            
-            filepath = process_homework_with_review(user_input, student_id)
-            print(f"\nDone! Homework with review saved to: {filepath}")
-        else:
-            print("Unknown argument. Available options:")
-            print("  --tui     : Terminal interactive mode")
-            print(f"  --prompt  : Generate/import {NUM_DAYS}-day homework with review from natural language prompt")
-            print("  (no arg)  : Web GUI mode (default)")
-            print("\nExample: python hybrid_english_tutor_langgraph.py --prompt 'I need Math, English, and Science homework for this week'")
-    else:
-        run_gui()  # Default to Web interface
