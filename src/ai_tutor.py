@@ -171,27 +171,54 @@ UK_PRIMARY_SUBJECTS = [
 
 
 def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str) -> str:
-    """为指定科目生成作业
+    """为指定科目生成作业（优先从 RAG 中查找，未找到则生成新作业）
 
     Args:
         student_profile: 学生信息字典
         subject: 科目名称
+
+    Returns:
+        作业内容字符串
     """
     year_group = student_profile.get("year_group", 3)
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
     student_id = student_profile.get("student_id", "")
 
-    # Get previous homework topics for this student to avoid duplicates
-    previous_topics = []
+    # 1. 先从 RAG 中搜索该学生该科目的历史作业
     try:
         previous_topics = get_student_previous_topics(student_id, subject)
         if previous_topics:
             logger.info(f"[RAG] Found {len(previous_topics)} previous homework for {student_id} in {subject}")
     except Exception as e:
         logger.warning(f"[RAG] Failed to get previous topics: {e}")
+        previous_topics = []
 
-    # Build previous topics context
+    # 2. 使用学习目标和弱项构建查询，搜索 RAG 中是否有相关作业
+    learning_goals = student_profile.get("learning_goals", [])
+    weak_areas = student_profile.get("weak_areas", [])
+    search_query = " ".join(learning_goals + weak_areas + [subject])
+
+    try:
+        rag_results = search_homework(
+            query=search_query,
+            year_group=year_group,
+            subject=subject,
+            k=1,
+        )
+
+        # 如果 RAG 中有相关作业，直接返回
+        if rag_results:
+            homework_content = rag_results[0]["content"]
+            logger.info(f"[RAG] Found matching homework in RAG for {subject} (Year {year_group})")
+            return homework_content
+    except Exception as e:
+        logger.warning(f"[RAG] Failed to search homework: {e}")
+
+    # 3. RAG 中没有相关作业，生成新作业
+    logger.info(f"[RAG] No matching homework found in RAG, generating new homework for {subject}")
+
+    # Build previous topics context to avoid duplicates
     previous_context = ""
     if previous_topics:
         previous_context = "\n\nPreviously covered topics (DO NOT repeat these):\n"
@@ -210,7 +237,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
         "previous_topics": previous_context,
     })
 
-    # Store homework in RAG for future search
+    # 4. 将新生成的作业存储到 RAG 中
     try:
         store_homework(
             homework_content=result,
@@ -221,7 +248,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
             english_level=student_profile.get("english_level", "Beginner"),
             student_id=student_id,
         )
-        logger.info(f"[RAG] Stored homework for {subject} (Year {year_group}) in vector database")
+        logger.info(f"[RAG] Stored new homework for {subject} (Year {year_group}) in vector database")
     except Exception as e:
         logger.warning(f"[RAG] Failed to store homework for {subject}: {e}")
 
