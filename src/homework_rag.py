@@ -253,13 +253,18 @@ class HomeworkRAGStore:
         if not filters:
             return {}
 
-        # Simple equality filters
-        where = {}
+        # ChromaDB requires $and for multiple conditions
+        conditions = []
         for key, value in filters.items():
             if value is not None:
-                where[key] = value
+                conditions.append({key: value})
 
-        return where
+        if len(conditions) == 1:
+            return conditions[0]
+        elif len(conditions) > 1:
+            return {"$and": conditions}
+
+        return {}
 
     def get_student_homework_history(
         self,

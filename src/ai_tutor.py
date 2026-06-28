@@ -31,6 +31,7 @@ from src.prompts import (
     HOMEWORK_PROMPT,
     SUBJECT_EXTRACTION_PROMPT,
     REVIEW_HOMEWORK_PROMPT,
+    REVIEW_UPLOADED_HOMEWORK_PROMPT,
     ASSESSMENT_PROMPT,
     DATA_COLLECTION_PROMPT,
     ANALYSIS_PROMPT,
@@ -616,7 +617,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     logger.info(f"[Extracted Subjects] {', '.join(subjects)}")
 
     # 3. 加载或重新生成作业
-    homework_plan, incomplete, filepath = regenerate_multiday_homework(student_profile, subjects)
+    homework_plan, incomplete, filepath = regenerate_multiday_homework(profile, subjects)
 
     # 4. 点评未完成的作业
     reviews = {}
@@ -627,7 +628,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         day_answers = student_answers.get(day, {s: "Not submitted" for s in day_subjects})
 
         logger.info(f"[Review] Reviewing Day {day} homework...")
-        review = review_day_homework(student_profile, day, day_homework, day_answers)
+        review = review_day_homework(profile, day, day_homework, day_answers)
         reviews[day] = review
 
     # 5. 保存作业和点评
@@ -657,7 +658,7 @@ def load_homework_from_file(filepath: str = None) -> List[Dict[str, str]]:
                     'subject': subject,
                     'homework': homework
                 })
-        logger.info('[Load] Loaded existing homework plan\n')
+        logger.info(f"[Load] Loaded existing homework plan from {rag_path}")
         logger.debug(sections)
     return sections
 
@@ -1366,10 +1367,80 @@ def display_homeworks(sections) -> str:
 
     logger.debug(f"Generated {output_path}")
 
-    # 返回 iframe 用于 Gradio 显示，使用 data URI 避免完整 HTML 文档嵌套问题
+    # 返回 iframe 用于 Gradio 显示，使用 data URI 避免完整HTML文档嵌套问题
     html_base64 = base64.b64encode(rendered_html.encode('utf-8')).decode('utf-8')
     iframe_html = f'<iframe src="data:text/html;base64,{html_base64}" style="width: 100%; height: 900px; border: none; border-radius: 8px;"></iframe>'
     return iframe_html
+
+
+def extract_text_from_image(image_path: str) -> str:
+    """从图片中提取文本（使用多模态 LLM）"""
+    try:
+        vision_llm = ChatOpenAI(
+            model=LLM_MODEL,
+            openai_api_key=AGICTO_API_KEY,
+            openai_api_base="https://api.agicto.cn/v1/",
+            temperature=0,
+        )
+
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+
+        message = HumanMessage(content=[
+            {"type": "text", "text": "Please extract all the text content from this image. This is a student's homework. Only return the text you see, do not add any commentary."},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+        ])
+
+        response = vision_llm.invoke([message])
+        return response.content
+    except Exception as e:
+        logger.error(f"Failed to extract text from image: {e}")
+        return ""
+
+
+def read_text_file(file_path: str) -> str:
+    """读取文本文件内容"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        try:
+            with open(file_path, 'r', encoding='gbk') as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"Failed to read text file: {e}")
+            return ""
+    except Exception as e:
+        logger.error(f"Failed to read text file: {e}")
+        return ""
+
+
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, student_work: str, homework_assignment: str = "") -> str:
+    """批阅上传的作业
+
+    Args:
+        student_profile: 学生档案
+        subject: 科目
+        student_work: 学生提交的作业内容
+        homework_assignment: 原始作业题目（如果有）
+
+    Returns:
+        批阅结果
+    """
+    if not homework_assignment:
+        homework_assignment = "Please analyze the homework assignment from the context."
+
+    prompt = ChatPromptTemplate.from_template(REVIEW_UPLOADED_HOMEWORK_PROMPT)
+    chain = prompt | llm | StrOutputParser()
+
+    review = chain.invoke({
+        "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
+        "subject": subject,
+        "homework_assignment": homework_assignment,
+        "student_work": student_work,
+    })
+
+    return review
 
 
 def run_gui():
@@ -1408,7 +1479,8 @@ def run_gui():
                     extracted_subjects = []
                 # 过滤为有效科目
                 extracted_subjects = [s for s in extracted_subjects if s in UK_PRIMARY_SUBJECTS]
-                print(f"[Profile Parse] Extracted subjects: {', '.join(extracted_subjects) if extracted_subjects else 'None'}")
+                print(
+                    f"[Profile Parse] Extracted subjects: {', '.join(extracted_subjects) if extracted_subjects else 'None'}")
 
                 return {
                     "student_id": f"custom_{result.get('name', 'student').strip()}",
@@ -1428,7 +1500,7 @@ def run_gui():
                 return None
 
         def process_homework(profile, subject_choices):
-            """根据学生档案和选定科目生成作业"""
+            """根据 student profile 和 选定科目生成作业"""
             if not subject_choices:
                 return "**Oops!** Please pick at least one subject first!"
 
@@ -1440,7 +1512,7 @@ def run_gui():
                 html_page = display_homeworks(homework)
                 return html_page
             except Exception as e:
-                return f"**Oh no!** Something wect wrong: {str(e)}"
+                return f"**Oh no!** Something went wrong: {str(e)}"
 
         def process_custom_homework(profile_description, subject_choices):
             """方式1: 使用自然语言描述的学生档案生成作业"""
@@ -1485,8 +1557,8 @@ def run_gui():
         cute_subjects = UK_PRIMARY_SUBJECTS
 
         with gr.Blocks(
-            title="Homework Magic - UK Primary School",
-            css=cute_theme
+                title="Homework Magic - UK Primary School",
+                css=cute_theme
         ) as demo:
             # 注入 CSS
             gr.HTML(f"<style>{cute_theme}</style>")
@@ -1494,7 +1566,8 @@ def run_gui():
             # 主标题
             gr.HTML(main_title_html)
 
-            with gr.Tabs():
+            # Assign a reference to gr.Tabs() to allow programmatically updating the active tab
+            with gr.Tabs() as tabs:
 
                 # ====== Tab 1: Custom Student Profile ======
                 DEFAULT_PROFILE_EXAMPLE = (
@@ -1502,8 +1575,8 @@ def run_gui():
                     "She has a particular interest in mathematics. "
                     "Ana is eager to learn both Chinese and Spanish and is committed to spending 15–30 minutes each day practicing these languages as well as developing her math skills. "
                 )
-                
-                with gr.Tab("Custom Profile"):
+
+                with gr.Tab("Custom Profile", id="custom_profile_tab"):
                     with gr.Row():
                         with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Describe the Student</div>')
@@ -1524,36 +1597,53 @@ def run_gui():
                                 container=False
                             )
 
-                            cp_btn = gr.Button("Generate My Homework!", variant="primary")
+                            # Fixed variable names to avoid overwriting each other
+                            cp_gen_btn = gr.Button("Generate My Homework!", variant="primary")
+                            cp_check_btn = gr.Button("Check My Homework!", variant="secondary")
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Your Homework</div>')
-                            cp_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
+                            cp_output = gr.HTML(
+                                value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
 
                     def cp_wrapper(profile_desc, subject_choices):
                         return process_custom_homework(profile_desc, subject_choices)
-      
-                    cp_btn.click(
+
+                    # Navigation handler to change active tab selection
+                    def switch_to_check_tab():
+                        return gr.update(selected="check_homework_tab")
+
+                    # Generate Button triggers compilation
+                    cp_gen_btn.click(
                         fn=cp_wrapper,
                         inputs=[cp_profile, cp_subjects],
                         outputs=[cp_output]
                     )
 
+                    # Check Button updates the active tab in the layout
+                    cp_check_btn.click(
+                        fn=switch_to_check_tab,
+                        inputs=None,
+                        outputs=tabs
+                    )
+
                 # ====== Tab 2: Quick Select ======
-                with gr.Tab("Quick Select"):
+                with gr.Tab("Quick Select", id="quick_select_tab"):
                     with gr.Row():
                         with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Pick Your Year</div>')
                             qs_year = gr.Radio(choices=year_options, label="", value=year_options[0], container=False)
 
                             gr.HTML('<div class="step-header">Choose Your Subjects</div>')
-                            qs_subjects = gr.CheckboxGroup(choices=cute_subjects, label="", value=[cute_subjects[0]], container=False)
+                            qs_subjects = gr.CheckboxGroup(choices=cute_subjects, label="", value=[cute_subjects[0]],
+                                                           container=False)
 
                             qs_btn = gr.Button("Make My Homework!", variant="primary")
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Your Homework</div>')
-                            qs_output = gr.HTML(value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
+                            qs_output = gr.HTML(
+                                value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
 
                     def qs_wrapper(year_choices, subject_choices):
                         return process_quick_homework(year_choices, subject_choices)
@@ -1565,22 +1655,42 @@ def run_gui():
                     )
 
                 # ====== Tab 3: Check My Homework ======
-                with gr.Tab("Check My Homework"):
+                with gr.Tab("Check My Homework", id="check_homework_tab"):
                     gr.HTML('<div class="step-header">Check My Homework</div>')
 
                     with gr.Row():
-                        take_photo_btn = gr.Button("Take Photo", variant="secondary")
-                        upload_file_btn = gr.Button("Upload File", variant="secondary")
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header">Upload Your Work</div>')
+                            take_photo_btn = gr.Button("Take Photo", variant="secondary")
+                            upload_file_btn = gr.Button("Upload File", variant="secondary")
 
-                    with gr.Row(visible=False) as photo_input_row:
-                        photo_input = gr.Image(label="Take a photo or upload an image", sources=["webcam", "upload"], type="filepath")
+                            with gr.Row(visible=False) as photo_input_row:
+                                photo_input = gr.Image(label="Take a photo or upload an image", sources=["webcam", "upload"],
+                                                       type="filepath")
 
-                    with gr.Row(visible=False) as file_input_row:
-                        file_input = gr.File(label="Upload your homework file")
+                            with gr.Row(visible=False) as file_input_row:
+                                file_input = gr.File(label="Upload your homework file")
 
-                    check_btn = gr.Button("Submit for Review", variant="primary")
+                            gr.HTML('<div class="step-header">Select Subject</div>')
+                            check_subject = gr.Dropdown(
+                                choices=["Math", "English", "Spanish", "Chinese"],
+                                label="Subject",
+                                value="English"
+                            )
 
-                    check_result = gr.Markdown(value='Upload your homework to get feedback!')
+                            gr.HTML('<div class="step-header">Homework Assignment (Optional)</div>')
+                            check_assignment = gr.Textbox(
+                                label="What was the homework assignment? (Optional)",
+                                lines=4,
+                                placeholder="Paste the original homework question here if available...",
+                                value=""
+                            )
+
+                            check_btn = gr.Button("Submit for Review", variant="primary")
+
+                        with gr.Column(scale=2):
+                            gr.HTML('<div class="step-header">Teacher Feedback</div>')
+                            check_result = gr.Markdown(value='Upload your homework to get feedback!')
 
                     def show_photo_input():
                         return gr.update(visible=True), gr.update(visible=False)
@@ -1588,12 +1698,45 @@ def run_gui():
                     def show_file_input():
                         return gr.update(visible=False), gr.update(visible=True)
 
-                    def handle_submit(photo, file):
+                    def handle_submit(photo, file, subject, assignment):
+                        """批阅上传的作业"""
+                        yield "**Reviewing your homework...** Please wait a moment."
+
+                        if not photo and not file:
+                            yield "**Please upload a photo or file first.**"
+                            return
+
+                        student_work = ""
+
                         if photo:
-                            return "**Photo received.** Review feature coming soon!"
+                            logger.info(f"[Review] Extracting text from image: {photo}")
+                            student_work = extract_text_from_image(photo)
+                            if not student_work:
+                                yield "**Failed to extract text from the image. Please ensure the image is clear and try again.**"
+                                return
                         elif file:
-                            return f"**File received:** {file.name}. Review feature coming soon!"
-                        return "**Please upload a photo or file first.**"
+                            file_ext = os.path.splitext(file.name)[1].lower()
+                            if file_ext in ['.txt', '.md', '.csv']:
+                                student_work = read_text_file(file.name)
+                            else:
+                                yield f"**Unsupported file type: {file_ext}**. Please upload .txt, .md, or .csv files, or take a photo of your homework."
+                                return
+
+                            if not student_work:
+                                yield "**Failed to read the file content. Please check the file and try again.**"
+                                return
+
+                        student_profile = {
+                            "description": "UK Primary School student",
+                            "year_group": 3,
+                            "age": 7,
+                        }
+
+                        logger.info(f"[Review] Reviewing {subject} homework...")
+                        review = review_uploaded_homework(student_profile, subject, student_work, assignment)
+
+                        result_text = f"## Subject: {subject}\n\n{review}"
+                        yield result_text
 
                     take_photo_btn.click(
                         fn=show_photo_input,
@@ -1607,7 +1750,7 @@ def run_gui():
 
                     check_btn.click(
                         fn=handle_submit,
-                        inputs=[photo_input, file_input],
+                        inputs=[photo_input, file_input, check_subject, check_assignment],
                         outputs=[check_result]
                     )
 

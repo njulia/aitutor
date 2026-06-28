@@ -343,3 +343,52 @@ input[type="checkbox"]:checked + span {
     border-radius: 8px;
     font-size: 16px;
 }
+
+/* ===== 批阅反馈区域样式 ===== */
+.gr-markdown, .prose {
+    color: #000000 !important;
+}
+
+.gr-markdown h1, .gr-markdown h2, .gr-markdown h3, .gr-markdown h4,
+.prose h1, .prose h2, .prose h3, .prose h4 {
+    color: #000000 !important;
+}
+
+.gr-markdown p, .gr-markdown li, .gr-markdown td, .gr-markdown th,
+.prose p, .prose li, .prose td, .prose th {
+    color: #000000 !important;
+}
+
+.gr-markdown strong, .prose strong {
+    color: #000000 !important;
+}
+
+.gr-markdown code, .prose code {
+    color: #000000 !important;
+    background: #f0f0f0 !important;
+}
+
+/* 批阅反馈中的绿色对勾和红色叉号样式 */
+.gr-markdown span[style*="color: green"],
+.prose span[style*="color: green"] {
+    font-size: 1.2em !important;
+}
+
+.gr-markdown span[style*="color: red"],
+.prose span[style*="color: red"] {
+    font-size: 1.2em !important;
+}
+
+/* 批阅反馈区域的问题和答案样式 */
+.gr-markdown strong, .prose strong {
+    color: #000000 !important;
+}
+
+.gr-markdown ul, .prose ul {
+    padding-left: 20px !important;
+}
+
+.gr-markdown ul li, .prose ul li {
+    margin-bottom: 12px !important;
+    line-height: 1.6 !important;
+}
