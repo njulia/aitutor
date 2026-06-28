@@ -39,7 +39,10 @@ from src.prompts import (
     PROFILE_PARSE_PROMPT,
 )
 
-from src.homework_rag import store_homework, search_homework, get_homework_rag_store
+from src.homework_rag import (
+    store_homework, search_homework,
+    get_student_previous_topics, ingest_chinese_textbooks, search_chinese_textbooks,
+)
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, BaseMessage
@@ -177,6 +180,23 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
     year_group = student_profile.get("year_group", 3)
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
+    student_id = student_profile.get("student_id", "")
+
+    # Get previous homework topics for this student to avoid duplicates
+    previous_topics = []
+    try:
+        previous_topics = get_student_previous_topics(student_id, subject)
+        if previous_topics:
+            logger.info(f"[RAG] Found {len(previous_topics)} previous homework for {student_id} in {subject}")
+    except Exception as e:
+        logger.warning(f"[RAG] Failed to get previous topics: {e}")
+
+    # Build previous topics context
+    previous_context = ""
+    if previous_topics:
+        previous_context = "\n\nPreviously covered topics (DO NOT repeat these):\n"
+        for i, topic in enumerate(previous_topics[-5:], 1):  # Last 5 homework
+            previous_context += f"{i}. {topic}\n"
 
     prompt = ChatPromptTemplate.from_template(HOMEWORK_PROMPT)
     chain = prompt | llm | StrOutputParser()
@@ -187,6 +207,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
         "homework_time": homework_time,
         "year_group": year_group,
         "age": student_profile.get("age", 7),
+        "previous_topics": previous_context,
     })
 
     # Store homework in RAG for future search
@@ -198,7 +219,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
             homework_minutes=homework_time,
             key_stage=KEY_STAGES.get(year_group, "KS2"),
             english_level=student_profile.get("english_level", "Beginner"),
-            student_id=student_profile.get("student_id"),
+            student_id=student_id,
         )
         logger.info(f"[RAG] Stored homework for {subject} (Year {year_group}) in vector database")
     except Exception as e:
@@ -624,7 +645,7 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     Returns:
         包含科目和作业字典的列表
     """
-    # return load_homework_from_file()
+    return load_homework_from_file()
 
     # Generate new homework
     sections = []  # 数据文件在父目录的 data/ 文件夹
@@ -768,8 +789,97 @@ def get_homework_time(year_group: int) -> str:
     print(f"[Tool Call] {result}")
     return result
 
+@tool
+def search_homework_by_topic(
+    query: str,
+    year_group: int = None,
+    subject: str = None,
+) -> str:
+    """Search for previously generated homework by topic and optional filters
+
+    Args:
+        query: Search query (e.g., "fractions exercise", "grammar past tense")
+        year_group: Optional UK year group filter (1-6)
+        subject: Optional subject filter (e.g., "Math", "English")
+    """
+    try:
+        results = search_homework(
+            query=query,
+            year_group=year_group,
+            subject=subject,
+            k=3,
+        )
+
+        if not results:
+            return f"No homework found matching: '{query}'"
+
+        output = f"Found {len(results)} homework results for: '{query}'\n\n"
+        for i, result in enumerate(results, 1):
+            meta = result["metadata"]
+            output += f"--- Result {i} ---\n"
+            output += f"Subject: {meta.get('subject', 'N/A')}\n"
+            output += f"Year Group: {meta.get('year_group', 'N/A')}\n"
+            output += f"Key Stage: {meta.get('key_stage', 'N/A')}\n"
+            output += f"Recommended Time: {meta.get('homework_minutes', 'N/A')} minutes\n"
+            output += f"Created: {meta.get('created_at', 'N/A')}\n"
+            output += f"Content Preview:\n{result['content'][:500]}...\n\n"
+
+        return output
+    except Exception as e:
+        return f"Error searching homework: {str(e)}"
+
+@tool
+def load_chinese_textbooks() -> str:
+    """Load Chinese textbooks into the RAG system for future reference.
+    Textbooks are mapped by volume: 第一册=Year1, 第二册=Year2, etc.
+    Call this once to make textbooks searchable.
+    """
+    try:
+        count = ingest_chinese_textbooks()
+        if count > 0:
+            return f"Successfully loaded {count} Chinese textbook documents into RAG system."
+        else:
+            return "Chinese textbooks are already loaded or directory not found."
+    except Exception as e:
+        return f"Error loading Chinese textbooks: {str(e)}"
+
+@tool
+def search_chinese_resources(query: str, year_group: int = None) -> str:
+    """Search Chinese textbooks by topic
+
+    Args:
+        query: Search query (e.g., "生字", "识字", "拼音")
+        year_group: Optional year group filter (1-6)
+    """
+    try:
+        results = search_chinese_textbooks(
+            query=query,
+            year_group=year_group,
+            k=3,
+        )
+
+        if not results:
+            return f"No Chinese textbook found matching: '{query}'"
+
+        output = f"Found {len(results)} Chinese textbook results for: '{query}'\n\n"
+        for i, result in enumerate(results, 1):
+            meta = result["metadata"]
+            output += f"--- Result {i} ---\n"
+            output += f"Volume: {meta.get('volume', 'N/A')}\n"
+            output += f"Year Group: {meta.get('year_group', 'N/A')}\n"
+            output += f"File: {meta.get('filename', 'N/A')}\n"
+            output += f"Content: {result['content']}\n\n"
+
+        return output
+    except Exception as e:
+        return f"Error searching Chinese textbooks: {str(e)}"
+
 # Tool list
-tools = [lookup_word_definition, check_grammar, get_year_group_vocabulary, get_homework_time]
+tools = [
+    lookup_word_definition, check_grammar, get_year_group_vocabulary,
+    get_homework_time, search_homework_by_topic,
+    load_chinese_textbooks, search_chinese_resources,
+]
 
 # Bind tools to LLM
 llm_with_tools = llm.bind_tools(tools)

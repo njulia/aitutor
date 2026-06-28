@@ -8,7 +8,6 @@ Stores generated homework with metadata in a vector database for future search a
 Metadata includes: year_group, subject, homework_minutes, study_year_month, etc.
 """
 import os
-import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -41,11 +40,20 @@ class HomeworkRAGStore:
             openai_api_base="https://api.agicto.cn/v1/",
         )
 
-        # Initialize ChromaDB vector store
+        # Initialize ChromaDB vector store for homework
         self.db = Chroma(
             persist_directory=self.persist_dir,
             embedding_function=self.embeddings,
             collection_name="homework_collection",
+        )
+
+        # Initialize ChromaDB vector store for Chinese textbooks
+        self.chinese_db_path = os.path.join(self.persist_dir, "chinese_textbooks")
+        os.makedirs(self.chinese_db_path, exist_ok=True)
+        self.chinese_db = Chroma(
+            persist_directory=self.chinese_db_path,
+            embedding_function=self.embeddings,
+            collection_name="chinese_collection",
         )
 
     def add_homework(
@@ -253,6 +261,193 @@ class HomeworkRAGStore:
 
         return where
 
+    def get_student_homework_history(
+        self,
+        student_id: str,
+        subject: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Get all homework previously generated for a student
+
+        Args:
+            student_id: Student ID
+            subject: Optional subject filter
+
+        Returns:
+            List of homework documents with metadata
+        """
+        filters = {"student_id": student_id}
+        if subject:
+            filters["subject"] = subject
+
+        results = self.db.get(where=self._build_where_clause(filters))
+
+        if not results or not results.get("ids"):
+            return []
+
+        return [
+            {
+                "doc_id": results["ids"][i],
+                "content": results["documents"][i],
+                "metadata": results["metadatas"][i],
+            }
+            for i in range(len(results["ids"]))
+        ]
+
+    def get_student_previous_topics(
+        self,
+        student_id: str,
+        subject: str,
+    ) -> List[str]:
+        """Extract list of topics/areas previously covered for a student in a subject
+
+        Args:
+            student_id: Student ID
+            subject: Subject name
+
+        Returns:
+            List of topic keywords/descriptions from previous homework
+        """
+        history = self.get_student_homework_history(student_id, subject)
+        if not history:
+            return []
+
+        # Extract content previews (first 200 chars) as topic indicators
+        topics = []
+        for hw in history:
+            content = hw["content"][:200]
+            topics.append(content)
+        return topics
+
+    def ingest_chinese_textbooks(self, chinese_dir: str = None) -> int:
+        """Ingest Chinese textbooks into RAG store
+
+        Textbook mapping:
+        - 第一册 -> Year 1
+        - 第二册 -> Year 2
+        - ... up to 第九册 -> Year 9
+
+        Args:
+            chinese_dir: Path to Chinese textbooks directory
+
+        Returns:
+            Number of documents ingested
+        """
+        if chinese_dir is None:
+            chinese_dir = os.path.join(PROJECT_DIR, "data", "chinese")
+
+        if not os.path.exists(chinese_dir):
+            logger.warning(f"[RAG] Chinese textbooks directory not found: {chinese_dir}")
+            return 0
+
+        # Map Chinese numeral to year group
+        chinese_num_to_year = {
+            "第一册": 1,
+            "第二册": 2,
+            "第三册": 3,
+            "第四册": 4,
+            "第五册": 5,
+            "第六册": 6,
+            "第七册": 7,
+            "第八册": 8,
+            "第九册": 9,
+        }
+
+        documents = []
+        doc_ids = []
+
+        # Iterate through each volume folder
+        for volume_folder in os.listdir(chinese_dir):
+            volume_path = os.path.join(chinese_dir, volume_folder)
+            if not os.path.isdir(volume_path):
+                continue
+
+            # Match volume name to year group
+            year_group = None
+            for chinese_num, year in chinese_num_to_year.items():
+                if chinese_num in volume_folder:
+                    year_group = year
+                    break
+
+            if year_group is None:
+                logger.warning(f"[RAG] Could not determine year group for: {volume_folder}")
+                continue
+
+            # Find PDF files in subfolders
+            for root, _dirs, files in os.walk(volume_path):
+                for filename in files:
+                    if not filename.endswith(".pdf"):
+                        continue
+
+                    filepath = os.path.join(root, filename)
+                    doc_id = f"chinese_y{year_group}_{filename.replace('.pdf', '')}"
+
+                    # Skip if already ingested
+                    try:
+                        existing = self.chinese_db.get(ids=[doc_id])
+                        if existing and existing.get("ids"):
+                            logger.debug(f"[RAG] Already ingested: {doc_id}")
+                            continue
+                    except Exception:
+                        pass
+
+                    metadata = {
+                        "subject": "Chinese",
+                        "year_group": year_group,
+                        "volume": volume_folder,
+                        "filename": filename,
+                        "filepath": filepath,
+                        "source": "chinese_textbook",
+                        "ingested_at": datetime.now().isoformat(),
+                    }
+
+                    # Use filename and path as content (PDF parsing would need additional library)
+                    content = f"Chinese Textbook - Year {year_group}\nVolume: {volume_folder}\nFile: {filename}\nPath: {filepath}"
+
+                    documents.append(Document(page_content=content, metadata=metadata))
+                    doc_ids.append(doc_id)
+
+        if documents:
+            self.chinese_db.add_documents(documents, ids=doc_ids)
+            logger.info(f"[RAG] Ingested {len(doc_ids)} Chinese textbook documents")
+
+        return len(doc_ids)
+
+    def search_chinese_textbooks(
+        self,
+        query: str,
+        year_group: int = None,
+        k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Search Chinese textbooks
+
+        Args:
+            query: Search query
+            year_group: Optional year group filter
+            k: Number of results
+
+        Returns:
+            List of search results
+        """
+        filters = {}
+        if year_group is not None:
+            filters["year_group"] = year_group
+
+        where_clause = self._build_where_clause(filters) if filters else None
+
+        if where_clause:
+            results = self.chinese_db.similarity_search_with_score(query, k=k, filter=where_clause)
+        else:
+            results = self.chinese_db.similarity_search_with_score(query, k=k)
+
+        return [
+            {
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+                "score": score,
+            }
+            for doc, score in results
+        ]
+
 
 # Convenience functions for direct use
 _homework_rag_store = None
@@ -344,3 +539,27 @@ def search_homework(
         filters["study_year_month"] = study_year_month
 
     return store.search(query, k=k, filters=filters if filters else None)
+
+
+def get_student_homework_history(student_id: str, subject: str = None) -> List[Dict[str, Any]]:
+    """Get homework history for a student"""
+    store = get_homework_rag_store()
+    return store.get_student_homework_history(student_id, subject)
+
+
+def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
+    """Get previous topics covered for a student in a subject"""
+    store = get_homework_rag_store()
+    return store.get_student_previous_topics(student_id, subject)
+
+
+def ingest_chinese_textbooks(chinese_dir: str = None) -> int:
+    """Ingest Chinese textbooks into RAG"""
+    store = get_homework_rag_store()
+    return store.ingest_chinese_textbooks(chinese_dir)
+
+
+def search_chinese_textbooks(query: str, year_group: int = None, k: int = 5) -> List[Dict[str, Any]]:
+    """Search Chinese textbooks"""
+    store = get_homework_rag_store()
+    return store.search_chinese_textbooks(query, year_group, k)

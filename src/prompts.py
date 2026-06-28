@@ -13,11 +13,14 @@ Subject: {subject}
 
 Homework Time Available: {homework_time} minutes
 
+{previous_topics}
+
 Please create engaging and age-appropriate homework tasks for this subject. The homework should:
 1. Be suitable for a Year {year_group} student (age {age})
 2. Fit within {homework_time} minutes of work
 3. Include 2-3 clear tasks or activities
 4. Be fun and engaging for primary school children
+5. AVOID repeating previously covered topics (if provided above)
 
 Format the homework clearly with:
 - Subject title
