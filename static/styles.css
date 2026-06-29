@@ -347,6 +347,9 @@ input[type="checkbox"]:checked + span {
 /* ===== 批阅反馈区域样式 ===== */
 .gr-markdown, .prose {
     color: #000000 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-size: 16px !important;
+    line-height: 1.6 !important;
 }
 
 .gr-markdown h1, .gr-markdown h2, .gr-markdown h3, .gr-markdown h4,
