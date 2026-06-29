@@ -80,6 +80,28 @@ Please review the student's work and provide:
 Return the review in a clear, encouraging format appropriate for a primary school student.
 """
 
+# 生成作业正确答案的 Prompt（针对有唯一答案的题目）
+HOMEWORK_ANSWER_PROMPT = """You are an AI tutor generating correct answers for homework.
+
+Homework Content:
+{homework_content}
+
+Subject: {subject}
+Year Group: {year_group}
+
+Please provide the correct answers for this homework. Only generate answers for questions/tasks that have clear, unique answers (e.g., math calculations, grammar exercises, fill-in-the-blank, spelling).
+
+For open-ended questions (e.g., creative writing, opinions, descriptions), provide a brief answer guideline or example instead of marking as "no unique answer".
+
+Format the answers clearly:
+- Use numbered list matching the homework task numbers
+- Keep answers concise
+- For math: show the final answer only
+- For grammar/language: provide the correct word/sentence
+
+Return ONLY the answers, no explanations.
+"""
+
 # 批阅上传作业的 Prompt（无结构化作业计划时使用）
 REVIEW_UPLOADED_HOMEWORK_PROMPT = """You are an AI tutor reviewing homework submitted by a UK Primary School student (Year 1-6).
 
@@ -110,6 +132,7 @@ For each correct or well-done answer, use this format:
 For each incorrect or needs-improvement answer, use this format:
 - <span style="color: red; font-weight: bold;">&#10008;</span> **Question:** [original question]
   **Your Answer:** [student's answer]
+
   **Correct Answer:** [the correct answer with brief explanation if needed]
 
 ## Learning Suggestions

@@ -29,6 +29,7 @@ from typing import Dict, List, Any, Literal, TypedDict, Optional, Annotated
 
 from src.prompts import (
     HOMEWORK_PROMPT,
+    HOMEWORK_ANSWER_PROMPT,
     SUBJECT_EXTRACTION_PROMPT,
     REVIEW_HOMEWORK_PROMPT,
     REVIEW_UPLOADED_HOMEWORK_PROMPT,
@@ -43,6 +44,7 @@ from src.prompts import (
 from src.homework_rag import (
     store_homework, search_homework,
     get_student_previous_topics, ingest_chinese_textbooks, search_chinese_textbooks,
+    search_homework_answers,
 )
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -238,7 +240,21 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
         "previous_topics": previous_context,
     })
 
-    # 4. 将新生成的作业存储到 RAG 中
+    # 4. 生成正确答案（针对有唯一答案的作业）
+    correct_answers = None
+    try:
+        answer_prompt = ChatPromptTemplate.from_template(HOMEWORK_ANSWER_PROMPT)
+        answer_chain = answer_prompt | llm | StrOutputParser()
+        correct_answers = answer_chain.invoke({
+            "homework_content": result,
+            "subject": subject,
+            "year_group": year_group,
+        })
+        logger.info(f"[RAG] Generated correct answers for {subject} (Year {year_group})")
+    except Exception as e:
+        logger.warning(f"[RAG] Failed to generate correct answers for {subject}: {e}")
+
+    # 5. 将新生成的作业存储到 RAG 中（包含正确答案）
     try:
         store_homework(
             homework_content=result,
@@ -248,6 +264,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str)
             key_stage=KEY_STAGES.get(year_group, "KS2"),
             english_level=student_profile.get("english_level", "Beginner"),
             student_id=student_id,
+            correct_answers=correct_answers,
         )
         logger.info(f"[RAG] Stored new homework for {subject} (Year {year_group}) in vector database")
     except Exception as e:
@@ -1427,12 +1444,37 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, stud
     Returns:
         批阅结果
     """
-    if not homework_assignment:
-        homework_assignment = "Please analyze the homework assignment from the context."
+    prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
 
-    prompt = ChatPromptTemplate.from_template(REVIEW_UPLOADED_HOMEWORK_PROMPT)
+    if homework_assignment:
+        # 1. 先从 RAG 中检索是否有该作业的答案
+        correct_answers = None
+        year_group = student_profile.get("year_group")
+        try:
+            correct_answers = search_homework_answers(
+                homework_content=homework_assignment,
+                year_group=year_group,
+                subject=subject,
+                k=1,
+            )
+            if correct_answers:
+                logger.info(f"[RAG] Found correct answers in RAG for {subject} review")
+            else:
+                logger.info(f"[RAG] No matching answers found in RAG, using LLM for review")
+        except Exception as e:
+            logger.warning(f"[RAG] Failed to search answers for review: {e}")
+
+        # 2. 构建 prompt（如果有正确答案，加入到 prompt 中）
+        if correct_answers:
+            prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT + f"""
+            Correct Answers (use these to check student's work):
+            {correct_answers}
+            """
+
+    # 3. 构建 prompt, 并调用 LLM 进行批阅
+    homework_assignment = "Please analyze the homework assignment from the context."
+    prompt = ChatPromptTemplate.from_template(prompt_template)
     chain = prompt | llm | StrOutputParser()
-
     review = chain.invoke({
         "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
         "subject": subject,
@@ -1501,18 +1543,22 @@ def run_gui():
 
         def process_homework(profile, subject_choices):
             """根据 student profile 和 选定科目生成作业"""
+            yield '<div class="homework-container"><p class="homework-placeholder">Generating homework... Please wait a moment.</p></div>'
+
             if not subject_choices:
-                return "**Oops!** Please pick at least one subject first!"
+                yield "**Oops!** Please pick at least one subject first!"
+                return
 
             if not profile:
-                return "**Hmm,** please check your student profile inputs!"
+                yield "**Hmm,** please check your student profile inputs!"
+                return
 
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices)
                 html_page = display_homeworks(homework)
-                return html_page
+                yield html_page
             except Exception as e:
-                return f"**Oh no!** Something went wrong: {str(e)}"
+                yield f"**Oh no!** Something went wrong: {str(e)}"
 
         def process_custom_homework(profile_description, subject_choices):
             """方式1: 使用自然语言描述的学生档案生成作业"""
@@ -1528,24 +1574,29 @@ def run_gui():
                     print("[Warning] No subjects found in input. Using default subjects: Math")
                     subject_choices = ["Math"]
 
-            return process_homework(profile, subject_choices)
+            yield from process_homework(profile, subject_choices)
 
         def process_quick_homework(year_choice, subject_choices):
             """方式2: 使用预设档案生成作业"""
+            yield '<div class="homework-container"><p class="homework-placeholder">Generating homework... Please wait a moment.</p></div>'
+
             if not subject_choices:
-                return "Oops! Please pick at least one subject first!"
+                yield "Oops! Please pick at least one subject first!"
+                return
 
             try:
                 year_num = int(year_choice.replace("Year", "").strip())
             except (ValueError, AttributeError):
-                return "Hmm, that year doesn't seem right. Try again!"
+                yield "Hmm, that year doesn't seem right. Try again!"
+                return
 
             student_id = f"student{year_num}"
             if student_id not in SAMPLE_STUDENT_PROFILES:
-                return f"Oops! No student found for Year {year_num}."
+                yield f"Oops! No student found for Year {year_num}."
+                return
 
             profile = SAMPLE_STUDENT_PROFILES[student_id]
-            return process_homework(profile, subject_choices)
+            yield from process_homework(profile, subject_choices)
 
         # 构建年级选项
         year_options = []
@@ -1555,6 +1606,76 @@ def run_gui():
 
         # 构建带可爱图标的科目列表
         cute_subjects = UK_PRIMARY_SUBJECTS
+
+        # 存储生成的作业内容
+        last_generated_homework = {"content": ""}
+
+        def cp_wrapper_with_storage(profile_desc, subject_choices):
+            """包装 custom homework 生成，存储作业内容"""
+            profile = parse_profile_from_natural_language(profile_desc)
+
+            if not subject_choices:
+                if profile and profile.get("extracted_subjects"):
+                    subject_choices = profile["extracted_subjects"]
+                elif profile and profile.get("learning_goals"):
+                    subject_choices = extract_subjects_from_prompt(profile["learning_goals"])
+                else:
+                    subject_choices = ["Math"]
+
+            if not profile:
+                yield "**Hmm,** please check your student profile inputs!"
+                return
+
+            if not subject_choices:
+                yield "**Oops!** Please pick at least one subject first!"
+                return
+
+            try:
+                homework = generate_homework_with_custom_profile(profile, subject_choices)
+                html_page = display_homeworks(homework)
+                # 存储作业内容
+                homework_texts = [h.get('homework', '') for h in homework if isinstance(h, dict)]
+                last_generated_homework["content"] = "\n\n".join(homework_texts)
+                yield html_page
+            except Exception as e:
+                yield f"**Oh no!** Something went wrong: {str(e)}"
+
+        def qs_wrapper_with_storage(year_choice, subject_choices):
+            """包装 quick homework 生成，存储作业内容"""
+            if not subject_choices:
+                yield "Oops! Please pick at least one subject first!"
+                return
+
+            try:
+                year_num = int(year_choice.replace("Year", "").strip())
+            except (ValueError, AttributeError):
+                yield "Hmm, that year doesn't seem right. Try again!"
+                return
+
+            student_id = f"student{year_num}"
+            if student_id not in SAMPLE_STUDENT_PROFILES:
+                yield f"Oops! No student found for Year {year_num}."
+                return
+
+            profile = SAMPLE_STUDENT_PROFILES[student_id]
+
+            if not subject_choices:
+                yield "Oops! Please pick at least one subject first!"
+                return
+
+            try:
+                homework = generate_homework_with_custom_profile(profile, subject_choices)
+                html_page = display_homeworks(homework)
+                # 存储作业内容
+                homework_texts = [h.get('homework', '') for h in homework if isinstance(h, dict)]
+                last_generated_homework["content"] = "\n\n".join(homework_texts)
+                yield html_page
+            except Exception as e:
+                yield f"**Oh no!** Something went wrong: {str(e)}"
+
+        def switch_to_check_with_homework():
+            """切换到 check tab 并填充作业内容"""
+            return gr.update(selected="check_homework_tab"), last_generated_homework.get("content", "")
 
         with gr.Blocks(
                 title="Homework Magic - UK Primary School",
@@ -1597,7 +1718,6 @@ def run_gui():
                                 container=False
                             )
 
-                            # Fixed variable names to avoid overwriting each other
                             cp_gen_btn = gr.Button("Generate My Homework!", variant="primary")
                             cp_check_btn = gr.Button("Check My Homework!", variant="secondary")
 
@@ -1605,27 +1725,6 @@ def run_gui():
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             cp_output = gr.HTML(
                                 value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
-
-                    def cp_wrapper(profile_desc, subject_choices):
-                        return process_custom_homework(profile_desc, subject_choices)
-
-                    # Navigation handler to change active tab selection
-                    def switch_to_check_tab():
-                        return gr.update(selected="check_homework_tab")
-
-                    # Generate Button triggers compilation
-                    cp_gen_btn.click(
-                        fn=cp_wrapper,
-                        inputs=[cp_profile, cp_subjects],
-                        outputs=[cp_output]
-                    )
-
-                    # Check Button updates the active tab in the layout
-                    cp_check_btn.click(
-                        fn=switch_to_check_tab,
-                        inputs=None,
-                        outputs=tabs
-                    )
 
                 # ====== Tab 2: Quick Select ======
                 with gr.Tab("Quick Select", id="quick_select_tab"):
@@ -1639,20 +1738,12 @@ def run_gui():
                                                            container=False)
 
                             qs_btn = gr.Button("Make My Homework!", variant="primary")
+                            qs_check_btn = gr.Button("Check My Homework!", variant="secondary")
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             qs_output = gr.HTML(
                                 value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
-
-                    def qs_wrapper(year_choices, subject_choices):
-                        return process_quick_homework(year_choices, subject_choices)
-
-                    qs_btn.click(
-                        fn=qs_wrapper,
-                        inputs=[qs_year, qs_subjects],
-                        outputs=[qs_output]
-                    )
 
                 # ====== Tab 3: Check My Homework ======
                 with gr.Tab("Check My Homework", id="check_homework_tab"):
@@ -1671,11 +1762,12 @@ def run_gui():
                             with gr.Row(visible=False) as file_input_row:
                                 file_input = gr.File(label="Upload your homework file")
 
-                            gr.HTML('<div class="step-header">Select Subject</div>')
-                            check_subject = gr.Dropdown(
-                                choices=["Math", "English", "Spanish", "Chinese"],
-                                label="Subject",
-                                value="English"
+                            gr.HTML('<div class="step-header">Choose Your Subject</div>')
+                            check_subject = gr.Radio(
+                                choices=cute_subjects,
+                                label="",
+                                value="Math",
+                                container=False
                             )
 
                             gr.HTML('<div class="step-header">Homework Assignment (Optional)</div>')
@@ -1735,7 +1827,7 @@ def run_gui():
                         logger.info(f"[Review] Reviewing {subject} homework...")
                         review = review_uploaded_homework(student_profile, subject, student_work, assignment)
 
-                        result_text = f"## Subject: {subject}\n\n{review}"
+                        result_text = f"{review}"
                         yield result_text
 
                     take_photo_btn.click(
@@ -1752,6 +1844,29 @@ def run_gui():
                         fn=handle_submit,
                         inputs=[photo_input, file_input, check_subject, check_assignment],
                         outputs=[check_result]
+                    )
+
+                    # Event handlers for Tab 1 and Tab 2 (must be after all components are defined)
+                    cp_gen_btn.click(
+                        fn=cp_wrapper_with_storage,
+                        inputs=[cp_profile, cp_subjects],
+                        outputs=[cp_output]
+                    )
+
+                    cp_check_btn.click(
+                        fn=switch_to_check_with_homework,
+                        outputs=[tabs, check_assignment]
+                    )
+
+                    qs_btn.click(
+                        fn=qs_wrapper_with_storage,
+                        inputs=[qs_year, qs_subjects],
+                        outputs=[qs_output]
+                    )
+
+                    qs_check_btn.click(
+                        fn=switch_to_check_with_homework,
+                        outputs=[tabs, check_assignment]
                     )
 
         demo.launch(share=True)
