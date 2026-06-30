@@ -26,6 +26,32 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
 
 
+class ElevenPlusRAGStore:
+    def __init__(self, persist_directory: str = None):
+        self.persist_dir = persist_directory or CHROMA_DB_PATH
+        os.makedirs(self.persist_dir, exist_ok=True)
+
+        # Initialize embeddings using AGICTO API
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            openai_api_key=AGICTO_API_KEY,
+            openai_api_base="https://api.agicto.cn/v1/",
+        )
+
+        # Initialize ChromaDB vector store for homework
+        self.db = Chroma(
+            persist_directory=self.persist_dir,
+            embedding_function=self.embeddings,
+            collection_name="elevenplus_collection",
+        )
+        # self.retriever = self.db.as_retriever(
+        #     search_type="mmr",
+        #     search_kwargs={
+        #     "k":5
+        #    }
+        # )
+
+
 class HomeworkRAGStore:
     """RAG store for homework documents with metadata-based search"""
 
@@ -471,10 +497,10 @@ class HomeworkRAGStore:
         subject: str = None,
         k: int = 1,
     ) -> Optional[str]:
-        """Search for correct answers to homework in RAG store
+        """Search for correct answers to homework in RAG store using metadata
 
         Args:
-            homework_content: The homework content to match
+            homework_content: The homework content (not used for search, kept for API compatibility)
             year_group: Optional year group filter
             subject: Optional subject filter
             k: Number of results to search
@@ -488,23 +514,18 @@ class HomeworkRAGStore:
         if subject is not None:
             filters["subject"] = subject
 
-        where_clause = self._build_where_clause(filters) if filters else None
+        if not filters:
+            logger.warning("[RAG] No metadata filters provided for answer search")
+            return None
 
-        if where_clause:
-            results = self.db.similarity_search_with_score(
-                homework_content,
-                k=k,
-                filter=where_clause,
-            )
-        else:
-            results = self.db.similarity_search_with_score(homework_content, k=k)
+        # Use metadata-based search instead of semantic search
+        results = self.search_by_metadata(filters=filters, k=k)
 
-        # Return correct answers from the most similar homework
-        if results:
-            doc, score = results[0]
-            correct_answers = doc.metadata.get("correct_answers")
+        # Return correct answers from matching homework documents
+        for result in results:
+            correct_answers = result.get("metadata", {}).get("correct_answers")
             if correct_answers:
-                logger.info(f"[RAG] Found correct answers in RAG (score: {score})")
+                logger.info(f"[RAG] Found correct answers via metadata search")
                 return correct_answers
 
         return None

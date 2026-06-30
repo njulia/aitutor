@@ -164,7 +164,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 1 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 1 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 1 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year2_homework(topic: str, index: int) -> str:
@@ -254,7 +254,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 2 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 2 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year3_homework(topic: str, index: int) -> str:
@@ -386,7 +386,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 3 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 3 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year4_homework(topic: str, index: int) -> str:
@@ -518,7 +518,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 4 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year5_homework(topic: str, index: int) -> str:
@@ -651,7 +651,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 5 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year6_homework(topic: str, index: int) -> str:
@@ -761,7 +761,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 6 Math practice question {i+1}" for i in range(10)]
 
-    return f"Math Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Math Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 # 各年级 Key Stage 和作业时间设置
@@ -773,6 +773,25 @@ YEAR_CONFIG = {
     5: {"key_stage": "KS2", "homework_minutes": "30"},
     6: {"key_stage": "KS2", "homework_minutes": "30"},
 }
+
+
+def clean_year_math(year_group: int) -> int:
+    """清理指定年级的所有数学作业"""
+    store = get_homework_rag_store()
+    results = store.search_by_metadata({"year_group": year_group, "subject": "Math"})
+    
+    if not results:
+        print(f"  Year {year_group}: 没有找到需要清理的作业")
+        return 0
+    
+    deleted = 0
+    for item in results:
+        doc_id = item.get("doc_id")
+        if doc_id and store.delete_homework(doc_id):
+            deleted += 1
+    
+    print(f"  Year {year_group}: 已清理 {deleted} 份作业")
+    return deleted
 
 
 def check_year_math_exists(year_group: int) -> bool:
@@ -819,32 +838,20 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
 
 
 def main():
-    """主函数：检查各年级数学作业，缺失则生成"""
-    print("检查各年级数学作业是否存在...\n")
+    """主函数：清理并重新生成 Year 3 数学作业"""
+    print("清理 Year 3 数学作业...\n")
 
     store = get_homework_rag_store()
-    years_to_generate = []
+    
+    # 清理 Year 3
+    clean_year_math(3)
+    
+    print(f"\n开始生成 Year 3 数学作业...")
+    batch_data = generate_year_homework(3, count=100)
 
-    for year in range(1, 7):
-        exists = check_year_math_exists(year)
-        status = "已有" if exists else "缺失"
-        print(f"  Year {year}: {status}")
-        if not exists:
-            years_to_generate.append(year)
-
-    if not years_to_generate:
-        print("\n所有年级数学作业已存在，无需生成。")
-        return
-
-    print(f"\n需要生成的年级: {', '.join(f'Year {y}' for y in years_to_generate)}")
-
-    for year in years_to_generate:
-        print(f"\n开始生成 Year {year} 数学作业...")
-        batch_data = generate_year_homework(year, count=100)
-
-        if batch_data:
-            store.add_batch_homework(batch_data)
-            print(f"成功添加 {len(batch_data)} 份 Year {year} 数学作业到 RAG 存储")
+    if batch_data:
+        store.add_batch_homework(batch_data)
+        print(f"成功添加 {len(batch_data)} 份 Year 3 数学作业到 RAG 存储")
 
     # 显示统计信息
     stats = store.get_stats()

@@ -234,7 +234,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 1 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 1 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 1 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year2_homework(topic: str, index: int) -> str:
@@ -378,7 +378,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 2 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 2 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year3_homework(topic: str, index: int) -> str:
@@ -527,7 +527,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 3 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 3 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year4_homework(topic: str, index: int) -> str:
@@ -678,7 +678,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 4 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year5_homework(topic: str, index: int) -> str:
@@ -830,7 +830,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 5 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 def _generate_year6_homework(topic: str, index: int) -> str:
@@ -981,7 +981,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 6 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
 
 
 # 各年级 Key Stage 和作业时间设置

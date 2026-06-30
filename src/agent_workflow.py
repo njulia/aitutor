@@ -56,7 +56,7 @@ def init_llm():
         model=LLM_MODEL,
         openai_api_key=agicto_api_key,
         openai_api_base="https://api.agicto.cn/v1/",
-        temperature=0.7,
+        temperature=0.8,
     )
 
     llm_with_tools = llm.bind_tools(tools)

@@ -386,11 +386,14 @@ def run_gui(llm):
 
         cute_subjects = UK_PRIMARY_SUBJECTS
 
-        # 存储生成的作业内容
-        last_generated_homework = {"content": ""}
+        # 使用 gr.State 为每个 session 存储独立的作业内容
+        # 这样多个用户可以同时使用而不会互相干扰
+        def init_session_state():
+            """初始化 session 状态"""
+            return {"content": ""}
 
-        def cp_wrapper_with_storage(profile_desc, subject_choices):
-            """包装 custom homework 生成，存储作业内容"""
+        def cp_wrapper_with_storage(profile_desc, subject_choices, session_state):
+            """包装 custom homework 生成,存储作业内容到 session"""
             profile = parse_profile_from_natural_language(profile_desc)
 
             if not subject_choices:
@@ -412,47 +415,84 @@ def run_gui(llm):
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices, llm)
                 html_page = display_homeworks(homework)
-                homework_texts = [h.get('homework', '') for h in homework if isinstance(h, dict)]
-                last_generated_homework["content"] = "\n\n".join(homework_texts)
-                yield html_page
+                homework_raw = [h.get('homework', '') for h in homework if isinstance(h, dict)]
+                session_state["homework_raw"] = homework_raw
+                session_state["content"] = "\n\n".join(homework_raw)
+                session_state["year_group"] = profile.get("year_group", 3)
+                session_state["subject"] = subject_choices[0] if subject_choices else "Math"
+                yield html_page, session_state
             except Exception as e:
-                yield f"**Oh no!** Something went wrong: {str(e)}"
+                yield f"**Oh no!** Something went wrong: {str(e)}", session_state
 
-        def qs_wrapper_with_storage(year_choice, subject_choices):
-            """包装 quick homework 生成，存储作业内容"""
+        def qs_wrapper_with_storage(year_choice, subject_choices, session_state):
+            """包装 quick homework 生成,存储作业内容到 session"""
             if not subject_choices:
-                yield "Oops! Please pick at least one subject first!"
+                yield "Oops! Please pick at least one subject first!", session_state
                 return
 
             try:
                 year_num = int(year_choice.replace("Year", "").strip())
             except (ValueError, AttributeError):
-                yield "Hmm, that year doesn't seem right. Try again!"
+                yield "Hmm, that year doesn't seem right. Try again!", session_state
                 return
 
             student_id = f"student{year_num}"
             if student_id not in SAMPLE_STUDENT_PROFILES:
-                yield f"Oops! No student found for Year {year_num}."
+                yield f"Oops! No student found for Year {year_num}.", session_state
                 return
 
             profile = SAMPLE_STUDENT_PROFILES[student_id]
 
             if not subject_choices:
-                yield "Oops! Please pick at least one subject first!"
+                yield "Oops! Please pick at least one subject first!", session_state
                 return
 
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices, llm)
                 html_page = display_homeworks(homework)
                 homework_texts = [h.get('homework', '') for h in homework if isinstance(h, dict)]
-                last_generated_homework["content"] = "\n\n".join(homework_texts)
-                yield html_page
+                session_state["content"] = "\n\n".join(homework_texts)
+                session_state["year_group"] = profile.get("year_group", 3)
+                session_state["subject"] = subject_choices[0] if subject_choices else "Math"
+                yield html_page, session_state
             except Exception as e:
-                yield f"**Oh no!** Something went wrong: {str(e)}"
+                yield f"**Oh no!** Something went wrong: {str(e)}", session_state
 
-        def switch_to_check_with_homework():
-            """切换到 check tab 并填充作业内容"""
-            return gr.update(selected="check_homework_tab"), last_generated_homework.get("content", "")
+        def combine_questions_with_answers(homework_content: str, student_answers: str) -> str:
+            """将作业题目和学生答案逐对组合，格式为 question: xxx / answer: xxx"""
+            questions = [line.strip() for line in homework_content.strip().split('\n') if line.strip()]
+            questions = questions[1:] # Remove the 1st line (usually "Homework")
+            answers = [line.strip() for line in student_answers.strip().split('\n') if line.strip()]
+
+            combined_lines = []
+            max_len = max(len(questions), len(answers))
+            for i in range(max_len):
+                q = questions[i] if i < len(questions) else ""
+                a = answers[i] if i < len(answers) else ""
+                if q and a:
+                    combined_lines.append(f"question: {q}\nanswer: {a}")
+                elif q:
+                    logger.warning(f"Missing answer for question: {q}")
+                elif a:
+                    logger.warning(f"Missing question for answer: {a}")
+
+            return '\n\n'.join(combined_lines)
+
+        def switch_to_check_with_homework(session_state, student_answers):
+            """切换到 check tab 并填充当前 session 的作业内容和学生答案"""
+            # 存储学生答案到 session
+            session_state["student_answers"] = student_answers
+            
+            # 组合作业题目和学生答案
+            homework_content = session_state.get("content", "")
+            if homework_content and student_answers:
+                combined_assignment = combine_questions_with_answers(homework_content, student_answers)
+            elif homework_content:
+                combined_assignment = homework_content
+            else:
+                combined_assignment = student_answers
+            
+            return gr.update(selected="check_homework_tab"), combined_assignment, session_state["homework_raw"]
 
         with gr.Blocks(
                 title="Homework Magic - UK Primary School",
@@ -460,6 +500,9 @@ def run_gui(llm):
         ) as demo:
             gr.HTML(f"<style>{cute_theme}</style>")
             gr.HTML(main_title_html)
+
+            # 为每个用户 session 创建独立状态
+            session_state = gr.State(value=init_session_state())
 
             with gr.Tabs() as tabs:
 
@@ -499,6 +542,15 @@ def run_gui(llm):
                             cp_output = gr.HTML(
                                 value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
 
+                            gr.HTML('<div class="step-header">Your Answers</div>')
+                            cp_answer_input = gr.Textbox(
+                                label="Enter your answers here",
+                                lines=6,
+                                max_lines=15,
+                                placeholder="Type your answers here, one per line or in any format you prefer...",
+                                value=""
+                            )
+
                 # ====== Tab 2: Quick Select ======
                 with gr.Tab("Quick Select", id="quick_select_tab"):
                     with gr.Row():
@@ -517,6 +569,15 @@ def run_gui(llm):
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             qs_output = gr.HTML(
                                 value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
+
+                            gr.HTML('<div class="step-header">Your Answers</div>')
+                            qs_answer_input = gr.Textbox(
+                                label="Enter your answers here",
+                                lines=6,
+                                max_lines=15,
+                                placeholder="Type your answers here, one per line or in any format you prefer...",
+                                value=""
+                            )
 
                 # ====== Tab 3: Check My Homework ======
                 with gr.Tab("Check My Homework", id="check_homework_tab"):
@@ -543,11 +604,11 @@ def run_gui(llm):
                                 container=False
                             )
 
-                            gr.HTML('<div class="step-header">Homework Assignment (Optional)</div>')
-                            check_assignment = gr.Textbox(
-                                label="What was the homework assignment? (Optional)",
+                            gr.HTML('<div class="step-header">Homework Completed (Optional)</div>')
+                            homework_completed = gr.Textbox(
+                                label="What was the homework completed? (Optional)",
                                 lines=4,
-                                placeholder="Paste the original homework question here if available...",
+                                placeholder="Paste the homework completed here if available...",
                                 value=""
                             )
 
@@ -563,43 +624,55 @@ def run_gui(llm):
                     def show_file_input():
                         return gr.update(visible=False), gr.update(visible=True)
 
-                    def handle_submit(photo, file, subject, assignment):
+                    def handle_submit(photo, file, subject, assignment, session_state):
                         """批阅上传的作业"""
                         yield "**Reviewing your homework...** Please wait a moment."
 
-                        if not photo and not file:
-                            yield "**Please upload a photo or file first.**"
-                            return
+                        # 获取学生输入的答案
+                        student_answers = session_state.get("student_answers", "")
 
                         student_work = ""
                         image_path = None
 
-                        if photo:
-                            logger.info(f"[Review] Reviewing image directly: {photo}")
-                            image_path = photo
-                        elif file:
-                            file_ext = os.path.splitext(file.name)[1].lower()
-                            if file_ext in ['.txt', '.md', '.csv']:
-                                student_work = read_text_file(file.name)
-                            elif file_ext in ['.jpg', '.jpeg', '.png', '.heic']:
-                                logger.info(f"[Review] Reviewing image directly: {file.name}")
-                                image_path = file.name
-                            elif file_ext in ['.pdf']:
-                                student_work = read_pdf_file(file.name)
-                            else:
-                                yield f"**Unsupported file type: {file_ext}**. Please upload .txt, .md, .csv, .pdf files, or take a photo of your homework."
-                                return
+                        # 如果用户在答案框中输入了答案，直接使用
+                        if student_answers:
+                            student_work = student_answers
+                            logger.info(f"[Review] Using student typed answers for review")
 
-                            if student_work and not image_path:
-                                if not student_work:
-                                    yield "**Failed to read the file content. Please check the file and try again.**"
+                        if not student_work:
+                            if photo:
+                                logger.info(f"[Review] Reviewing image directly: {photo}")
+                                image_path = photo
+                            elif file:
+                                file_ext = os.path.splitext(file.name)[1].lower()
+                                if file_ext in ['.txt', '.md', '.csv']:
+                                    student_work = read_text_file(file.name)
+                                elif file_ext in ['.jpg', '.jpeg', '.png', '.heic']:
+                                    logger.info(f"[Review] Reviewing image directly: {file.name}")
+                                    image_path = file.name
+                                elif file_ext in ['.pdf']:
+                                    student_work = read_pdf_file(file.name)
+                                else:
+                                    yield f"**Unsupported file type: {file_ext}**. Please upload .txt, .md, .csv, .pdf files, or take a photo of your homework."
                                     return
+
+                                if student_work and not image_path:
+                                    if not student_work:
+                                        yield "**Failed to read the file content. Please check the file and try again.**"
+                                        return
+
+                        if not student_work and not image_path:
+                            yield "**Please enter your answers or upload a photo/file first.**"
+                            return
 
                         student_profile = {
                             "description": "UK Primary School student",
-                            "year_group": 3,
+                            "year_group": session_state.get("year_group", 3),
                             "age": 7,
                         }
+
+                        # 获取 metadata 用于 RAG 检索
+                        metadata_subject = session_state.get("subject", subject)
 
                         logger.info(f"[Review] Reviewing {subject} homework...")
 
@@ -647,7 +720,13 @@ Provide detailed feedback with:
                                 logger.error(f"[Review] Failed to review image: {e}")
                                 yield f"**Failed to review the image:** {str(e)}"
                         else:
-                            review = review_uploaded_homework(student_profile, subject, student_work, assignment, llm)
+                            review = review_uploaded_homework(
+                                student_profile=student_profile,
+                                subject=metadata_subject,
+                                homework_completed=homework_completed,
+                                homework_raw=homework_raw,
+                                llm=llm,
+                            )
                             yield review
 
                     take_photo_btn.click(
@@ -662,31 +741,33 @@ Provide detailed feedback with:
 
                     check_btn.click(
                         fn=handle_submit,
-                        inputs=[photo_input, file_input, check_subject, check_assignment],
+                        inputs=[photo_input, file_input, check_subject, homework_completed, session_state],
                         outputs=[check_result]
                     )
 
                     # Event handlers
                     cp_gen_btn.click(
                         fn=cp_wrapper_with_storage,
-                        inputs=[cp_profile, cp_subjects],
-                        outputs=[cp_output]
+                        inputs=[cp_profile, cp_subjects, session_state],
+                        outputs=[cp_output, session_state]
                     )
 
                     cp_check_btn.click(
                         fn=switch_to_check_with_homework,
-                        outputs=[tabs, check_assignment]
+                        inputs=[session_state, cp_answer_input],
+                        outputs=[tabs, homework_completed, homework_raw]
                     )
 
                     qs_btn.click(
                         fn=qs_wrapper_with_storage,
-                        inputs=[qs_year, qs_subjects],
-                        outputs=[qs_output]
+                        inputs=[qs_year, qs_subjects, session_state],
+                        outputs=[qs_output, session_state]
                     )
 
                     qs_check_btn.click(
                         fn=switch_to_check_with_homework,
-                        outputs=[tabs, check_assignment]
+                        inputs=[session_state, qs_answer_input],
+                        outputs=[tabs, homework_completed, homework_raw]
                     )
 
         demo.launch(share=True)

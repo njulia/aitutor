@@ -211,3 +211,5 @@ def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[s
         homework_plan[day] = day_homework
 
     return homework_plan
+
+

@@ -19,6 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from src.models import get_homework_time_by_age
+from src.homework_generator import generate_homework_for_subject
 from src.homework_rag import search_homework_answers
 from src.prompts import (
     REVIEW_HOMEWORK_PROMPT, REVIEW_UPLOADED_HOMEWORK_PROMPT,
@@ -26,7 +27,7 @@ from src.prompts import (
 
 logger = logging.getLogger(__name__)
 
-
+TEST_MODE = False
 def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: str, num_days: int, output_dir: str = "homework_output") -> str:
     """将指定天数的作业保存到本地文件
 
@@ -333,7 +334,34 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
         包含科目和作业字典的列表
     """
     # 从文件加载（现有逻辑）
-    return load_homework_from_file()
+    if TEST_MODE:
+        return load_homework_from_file()
+
+    # Generate new homework
+    sections = []  # 数据文件在父目录的 data/ 文件夹
+    for subject in subjects:
+        logger.info(f"[Homework] Generating homework for {subject}...")
+        homework = generate_homework_for_subject(student_profile, subject, llm)
+        sections.append({
+            'subject': subject,
+            'homework': homework
+        })
+        logger.debug(f"==============={subject}===================\n{homework}")
+
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rag_path = os.path.join(project_dir, "data", "homework.csv")
+    os.makedirs(os.path.dirname(rag_path), exist_ok=True)
+    with open(rag_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
+        writer.writeheader()
+        for section in sections:
+            writer.writerow({
+                "Subject": section["subject"],
+                "Homework": section["homework"]
+            })
+
+    return sections
+
 
 
 def process_homework_with_review(user_input: str, student_id: str = "student1", student_answers: Dict[int, Dict[str, str]] = None, llm = None, output_dir: str = "homework_output") -> str:
@@ -389,28 +417,29 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, student_work: str, homework_assignment: str, llm) -> str:
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework_completed: str, homework_raw, llm) -> str:
     """批阅上传的作业
 
     Args:
         student_profile: 学生档案
         subject: 科目
-        student_work: 学生提交的作业内容
-        homework_assignment: 原始作业题目（如果有）
+        homework_completed: 学生提交的作业内容
+        homework_raw: 原始作业题目（如果有）
         llm: LangChain LLM 实例
 
     Returns:
         批阅结果
     """
     prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
+    # homework_assignment = "Please analyze the homework assignment from the context."
 
-    if homework_assignment:
+    if homework_raw:
         # 1. 先从 RAG 中检索是否有该作业的答案
         correct_answers = None
         year_group = student_profile.get("year_group")
         try:
             correct_answers = search_homework_answers(
-                homework_content=homework_assignment,
+                homework_content=homework_raw,
                 year_group=year_group,
                 subject=subject,
                 k=1,
@@ -428,16 +457,16 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, stud
             Correct Answers (use these to check student's work):
             {correct_answers}
             """
+            homework_raw = "" # Clear homework_raw after using as it is in the homework_completed
 
     # 3. 调用 LLM 进行批阅
-    homework_assignment = "Please analyze the homework assignment from the context."
     prompt = ChatPromptTemplate.from_template(prompt_template)
     chain = prompt | llm | StrOutputParser()
     review = chain.invoke({
         "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
         "subject": subject,
-        "homework_assignment": homework_assignment,
-        "student_work": student_work,
+        "homework_assignment": homework_raw#,
+        "homework_completed": homework_completed,
     })
 
     return review

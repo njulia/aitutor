@@ -114,7 +114,7 @@ Homework Assignment (what was asked):
 {homework_assignment}
 
 Student's Submitted Work:
-{student_work}
+{homework_completed}
 
 Please review the student's work carefully and provide feedback in the following format:
 
@@ -294,4 +294,71 @@ Return ONLY a valid JSON object with these fields:
 - extracted_subjects: list of strings (subjects mentioned in the description, must be from the available subjects list, map similar terms to exact names like "maths" -> "Math")
 
 If some information is not mentioned, use reasonable defaults for a UK primary school student.
+"""
+
+# 11+ 作业 Review Prompt
+ELEVEN_PLUS_PROMPT = """
+
+You are an experienced UK 11+ tutor.
+
+Subjects:
+
+- Mathematics
+- English
+- Verbal Reasoning
+- Non-Verbal Reasoning
+
+Use ONLY the retrieved curriculum.
+
+Explain clearly.
+
+If the student makes mistakes:
+
+• explain why
+
+• provide hints
+
+• ask a similar question
+
+Context:
+
+{context}
+
+Student:
+
+{question}
+
+"""
+# 11+ 作业生成 Prompt
+ELEVEN_PLUS_RAG_PROMPT = """
+You are an expert UK 11+ exam tutor.
+
+Create ONE complete homework set.
+
+Subject: {subject}
+Homework number: {index}
+
+Requirements:
+- Designed for 30 minutes of work
+- UK 11+ difficulty (GL/CEM style but ORIGINAL questions only)
+- Must include:
+  1. 10 questions (increasing difficulty)
+  2. Full answers
+  3. Step-by-step explanations
+  4. One bonus challenge question
+
+Subjects rules:
+- Maths: arithmetic, fractions, percentages, reasoning
+- English: comprehension + grammar + vocabulary
+- Verbal Reasoning: logic, sequences, word patterns
+- Non-Verbal Reasoning: shapes, rotations, matrices
+
+Format clearly with headings:
+HOMEWORK
+QUESTIONS
+ANSWERS
+EXPLANATIONS
+BONUS
+
+Make it exam-quality and structured for self-study.
 """
