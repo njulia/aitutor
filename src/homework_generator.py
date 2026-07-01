@@ -72,8 +72,9 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         # 如果 RAG 中有相关作业，直接返回
         if rag_results:
             homework_content = rag_results[0]["content"]
+            homework_id = rag_results['metadata']["homework_id"]
             logger.info(f"[RAG] Found matching homework in RAG for {subject} (Year {year_group})")
-            return homework_content
+            return homework_content, homework_id
     except Exception as e:
         logger.warning(f"[RAG] Failed to search homework: {e}")
 
@@ -115,7 +116,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
 
     # 5. 将新生成的作业存储到 RAG 中（包含正确答案）
     try:
-        store_homework(
+        homework_id = store_homework(
             homework_content=result,
             year_group=year_group,
             subject=subject,
@@ -125,11 +126,11 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             student_id=student_id,
             correct_answers=correct_answers,
         )
-        logger.info(f"[RAG] Stored new homework for {subject} (Year {year_group}) in vector database")
+        logger.info(f"[RAG] Stored new homework for {subject} (Year {year_group}) in vector database, homework_id: {homework_id}")
     except Exception as e:
         logger.warning(f"[RAG] Failed to store homework for {subject}: {e}")
 
-    return result
+    return result, homework_id
 
 
 def extract_subjects_from_prompt(user_input: str, llm) -> List[str]:
@@ -206,7 +207,7 @@ def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[s
         day_homework = {}
         for subject in day_subjects:
             logger.info(f"[Homework] Day {day}: Generating homework for {subject}...")
-            homework = generate_homework_for_subject(student_profile, subject, llm)
+            homework, homework_id = generate_homework_for_subject(student_profile, subject, llm)
             day_homework[subject] = homework
         homework_plan[day] = day_homework
 

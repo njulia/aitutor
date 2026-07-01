@@ -86,7 +86,6 @@ class HomeworkRAGStore:
         self,
         homework_content: str,
         metadata: Dict[str, Any],
-        doc_id: str = None,
         correct_answers: str = None,
     ) -> str:
         """Add a homework document to the RAG store
@@ -101,6 +100,7 @@ class HomeworkRAGStore:
                 - key_stage: str (e.g., "KS1", "KS2")
                 - english_level: str
                 - student_id: str
+                - homework_id: str
                 - created_at: str (ISO datetime)
             doc_id: Optional document ID (auto-generated if not provided)
             correct_answers: Optional correct answers for homework with unique answers
@@ -108,12 +108,15 @@ class HomeworkRAGStore:
         Returns:
             The document ID
         """
-        if not doc_id:
-            doc_id = f"hw_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{metadata.get('subject', 'unknown')}"
+        now = datetime.now()
+        homework_id = int(now.timestamp())
+        year_group = metadata.get('year_group', '')
+        doc_id = f"hw_({metadata.get('subject', 'unknown').lower()}_y{year_group}_{homework_id}"
 
         # Ensure metadata has required fields
-        metadata.setdefault("created_at", datetime.now().isoformat())
-        metadata.setdefault("study_year_month", datetime.now().strftime("%Y-%m"))
+        metadata.setdefault("created_at", now.isoformat())
+        # Store homework id in metadata for later retrieval
+        metadata["homework_id"] = homework_id
 
         # Store correct answers in metadata if provided
         if correct_answers:
@@ -126,7 +129,7 @@ class HomeworkRAGStore:
 
         self.db.add_documents([document], ids=[doc_id])
         logger.info(f"[RAG] Added homework document: {doc_id}")
-        return doc_id
+        return homework_id
 
     def add_batch_homework(
         self,
@@ -153,11 +156,16 @@ class HomeworkRAGStore:
             doc_id = item.get("doc_id")
             correct_answers = item.get("correct_answers")
 
+            now = datetime.now()
+            homework_id = int(now.timestamp())
+            year_group = metadata.get('year_group', '')
             if not doc_id:
-                doc_id = f"hw_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{metadata.get('subject', 'unknown')}"
+                doc_id = f"hw_{metadata.get('subject', 'unknown').lower()}_y{year_group}_{homework_id}"
 
-            metadata.setdefault("created_at", datetime.now().isoformat())
-            metadata.setdefault("study_year_month", datetime.now().strftime("%Y-%m"))
+            metadata.setdefault("created_at", now.isoformat())
+            metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
+            # Store doc_id in metadata for later retrieval
+            metadata["homework_id"] = homework_id
 
             if correct_answers:
                 metadata["correct_answers"] = correct_answers
@@ -492,9 +500,9 @@ class HomeworkRAGStore:
 
     def search_homework_answers(
         self,
-        homework_content: str,
         year_group: int = None,
         subject: str = None,
+        homework_id: str = None,
         k: int = 1,
     ) -> Optional[str]:
         """Search for correct answers to homework in RAG store using metadata
@@ -503,12 +511,15 @@ class HomeworkRAGStore:
             homework_content: The homework content (not used for search, kept for API compatibility)
             year_group: Optional year group filter
             subject: Optional subject filter
+            homework_id: Optional ID to search for specific homework
             k: Number of results to search
 
         Returns:
             Correct answers string if found, None otherwise
         """
         filters = {}
+        if homework_id is not None:
+            filters["homework_id"] = homework_id
         if year_group is not None:
             filters["year_group"] = year_group
         if subject is not None:
@@ -551,7 +562,6 @@ def store_homework(
     key_stage: str = None,
     english_level: str = None,
     student_id: str = None,
-    doc_id: str = None,
     correct_answers: str = None,
 ) -> str:
     """Store a homework document in the RAG store
@@ -564,7 +574,6 @@ def store_homework(
         key_stage: UK Key Stage (KS1/KS2)
         english_level: Student English level
         student_id: Student ID
-        doc_id: Optional document ID
         correct_answers: Optional correct answers for homework with unique answers
 
     Returns:
@@ -586,7 +595,7 @@ def store_homework(
     if student_id:
         metadata["student_id"] = student_id
 
-    return store.add_homework(homework_content, metadata, doc_id, correct_answers)
+    return store.add_homework(homework_content, metadata, correct_answers)
 
 
 def search_homework(
@@ -650,9 +659,10 @@ def search_chinese_textbooks(query: str, year_group: int = None, k: int = 5) -> 
 
 
 def search_homework_answers(
-    homework_content: str,
+    # homework_content: str,
     year_group: int = None,
     subject: str = None,
+    homework_id: str = None,
     k: int = 1,
 ) -> Optional[str]:
     """Search for correct answers to homework in RAG store
@@ -661,10 +671,11 @@ def search_homework_answers(
         homework_content: The homework content to match
         year_group: Optional year group filter
         subject: Optional subject filter
+        homework_id: Optional homework ID to search for specific homework
         k: Number of results to search
 
     Returns:
         Correct answers string if found, None otherwise
     """
     store = get_homework_rag_store()
-    return store.search_homework_answers(homework_content, year_group, subject, k)
+    return store.search_homework_answers(year_group, subject, homework_id, k)

@@ -12,7 +12,7 @@ import random
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from homework_rag import get_homework_rag_store
+from src.homework_rag import get_homework_rag_store
 
 
 # 各年级西班牙语主题（英国小学课程）
@@ -80,8 +80,8 @@ SPANISH_TOPICS_BY_YEAR = {
 }
 
 
-def generate_spanish_homework(year_group: int, topic: str, index: int) -> str:
-    """根据年级、主题生成西班牙语作业"""
+def generate_spanish_homework(year_group: int, topic: str, index: int) -> tuple:
+    """根据年级、主题生成西班牙语作业，返回 (content, correct_answers)"""
 
     if year_group == 1:
         return _generate_year1_homework(topic, index)
@@ -97,8 +97,8 @@ def generate_spanish_homework(year_group: int, topic: str, index: int) -> str:
         return _generate_year6_homework(topic, index)
 
 
-def _generate_year1_homework(topic: str, index: int) -> str:
-    """Year 1 西班牙语作业（5-6 岁）"""
+def _generate_year1_homework(topic: str, index: int) -> tuple:
+    """Year 1 西班牙语作业（5-6 岁），返回 (content, correct_answers)"""
     if topic == "Greetings and Introductions":
         questions = [
             "1. Learn: Hola = Hello",
@@ -112,6 +112,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Match: Hola - Hello, Adios - Goodbye",
             "10. Draw a speech bubble and write 'Hola!'",
         ]
+        answers = ["(learning)", "(learning)", "(learning)", "(learning)", "(learning)", "(learning)", "(practice)", "student's own name", "Hola-Hello, Adios-Goodbye", "drawing"]
     elif topic == "Numbers 1-10":
         questions = [
             "Learn the numbers 1-10 in Spanish:",
@@ -129,6 +130,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. How do you say '4' in Spanish?",
             "10. How do you say '9' in Spanish?",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "3", "cinco", "(oral practice)", "7", "8", "uno-1, dos-2, tres-3", "uno, dos, tres, cuatro, cinco", "seis, siete, ocho, nueve, diez", "cuatro", "nueve"]
     elif topic == "Colours":
         questions = [
             "Learn the colours in Spanish:",
@@ -146,6 +148,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. What colour is grass? Write in Spanish",
             "10. Name 3 colours in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "red", "azul", "green", "amarillo", "drawing (coloured red)", "drawing (coloured blue)", "negro-black, blanco-white", "azul (typically)", "verde", "student's own 3 colours"]
     elif topic == "Animals":
         questions = [
             "Learn the animals in Spanish:",
@@ -163,6 +166,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Name 3 animals in Spanish",
             "10. What is your favourite animal? Write in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "cat", "perro", "fish", "pajaro", "gato-cat, perro-dog", "drawing (cat labelled 'gato')", "drawing (dog labelled 'perro')", "cow", "student's own 3 animals", "student's own answer"]
     elif topic == "Family Members":
         questions = [
             "Learn family members in Spanish:",
@@ -180,6 +184,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. How do you say 'sister' in Spanish?",
             "10. How do you say 'brother' in Spanish?",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "mother", "padre", "sister", "hermano", "madre-mother, padre-father", "drawing (family labelled in Spanish)", "grandmother", "abuelo", "hermana", "hermano"]
     elif topic == "Food and Drink":
         questions = [
             "Learn food and drink in Spanish:",
@@ -197,6 +202,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Say 'I like apples' in Spanish: Me gustan las manzanas",
             "10. Name 3 foods in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "apple", "pan", "milk", "agua", "agua-water, leche-milk", "drawing (food labelled in Spanish)", "cheese", "manzana", "(practice phrase)", "student's own 3 foods"]
     elif topic == "Days of the Week":
         questions = [
             "Learn the days of the week in Spanish:",
@@ -214,6 +220,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. What is your favourite day? Write in Spanish",
             "10. Practise saying the days in order",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "Monday", "viernes", "Wednesday", "domingo", "lunes-Monday, viernes-Friday", "lunes, martes, miercoles, jueves, viernes, sabado, domingo", "miercoles", "viernes", "student's own answer", "(oral practice)"]
     elif topic == "Simple Commands":
         questions = [
             "Learn commands in Spanish:",
@@ -231,14 +238,17 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Draw someone saying 'Sientate'",
             "10. Write 3 commands you learned",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "Sit down", "Levantate", "Listen", "Mira", "Mira-Look, Escucha-Listen", "Be quiet", "Ven aqui", "(practice)", "drawing", "student's own 3 commands"]
     else:
         questions = [f"{i+1}. Year 1 Spanish practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 1 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"Spanish Homework - Year 1 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year2_homework(topic: str, index: int) -> str:
-    """Year 2 西班牙语作业（6-7 岁）"""
+def _generate_year2_homework(topic: str, index: int) -> tuple:
+    """Year 2 西班牙语作业（6-7 岁），返回 (content, correct_answers)"""
     if topic == "Numbers 1-20":
         questions = [
             "Learn numbers 11-20 in Spanish:",
@@ -256,6 +266,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. What is 10 + 5 in Spanish?",
             "10. What is 20 - 3 in Spanish?",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "quince", "12", "dieciocho", "20", "(oral practice)", "once-11, doce-12, trece-13", "uno, dos, tres, cuatro, cinco, seis, siete, ocho, nueve, diez", "once, doce, trece, catorce, quince, dieciseis, diecisiete, dieciocho, diecinueve, veinte", "quince", "diecisiete"]
     elif topic == "Body Parts":
         questions = [
             "Learn body parts in Spanish:",
@@ -273,6 +284,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Touch your 'cabeza'!",
             "10. Name 5 body parts in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "head", "mano", "eye", "nariz", "boca-mouth, nariz-nose", "drawing (5 body parts labelled)", "foot", "oreja", "(physical action)", "student's own 5 body parts"]
     elif topic == "Clothes":
         questions = [
             "Learn clothes in Spanish:",
@@ -290,6 +302,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write 'jacket' in Spanish",
             "10. Name 4 clothes in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "shirt", "zapatos", "dress", "sombrero", "pantalones-trousers, zapatos-shoes", "student's own answer", "drawing (3 clothes labelled)", "coat", "chaqueta", "student's own 4 clothes"]
     elif topic == "Weather":
         questions = [
             "Learn weather words in Spanish:",
@@ -307,6 +320,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. What is 'nevado' in English?",
             "10. Name 3 weather words in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "sunny", "lluvioso", "cold", "calor", "nublado-cloudy, ventoso-windy", "student's own answer", "drawing (labelled 'soleado')", "drawing (labelled 'lluvioso')", "snowy", "student's own 3 weather words"]
     elif topic == "Months and Seasons":
         questions = [
             "Learn months and seasons in Spanish:",
@@ -324,6 +338,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. What season is it now? Write in Spanish",
             "10. Name 3 months in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "spring", "verano", "winter", "otono", "verano-summer, otono-autumn", "primavera, verano, otono, invierno", "student's own answer", "January", "student's own answer", "student's own 3 months"]
     elif topic == "Feelings and Emotions":
         questions = [
             "Learn feelings in Spanish:",
@@ -341,6 +356,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. What is 'emocionado' in English?",
             "10. Name 4 feelings in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "happy", "triste", "tired", "enfadado", "triste-sad, enfadado-angry", "student's own answer (e.g., Estoy feliz)", "drawing (labelled 'feliz')", "drawing (labelled 'triste')", "excited", "student's own 4 feelings"]
     elif topic == "Hobbies and Sports":
         questions = [
             "Learn hobbies and sports in Spanish:",
@@ -358,6 +374,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write 'running' in Spanish",
             "10. Name 3 hobbies in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "football", "natacion", "reading", "baile", "natacion-swimming, baile-dancing", "student's own answer", "drawing (labelled in Spanish)", "singing", "correr", "student's own 3 hobbies"]
     elif topic == "School Objects":
         questions = [
             "Learn school objects in Spanish:",
@@ -375,14 +392,17 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write 'desk' in Spanish",
             "10. Name 5 school objects in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "book", "boligrafo", "pencil", "regla", "boligrafo-pen, goma-rubber", "student's own 3 items", "drawing (5 objects labelled)", "bag", "pupitre", "student's own 5 objects"]
     else:
         questions = [f"{i+1}. Year 2 Spanish practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 2 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"Spanish Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year3_homework(topic: str, index: int) -> str:
-    """Year 3 西班牙语作业（7-8 岁）"""
+def _generate_year3_homework(topic: str, index: int) -> tuple:
+    """Year 3 西班牙语作业（7-8 岁），返回 (content, correct_answers)"""
     if topic == "Numbers 1-100":
         questions = [
             "Learn tens in Spanish:",
@@ -400,6 +420,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. What is 20 + 30 in Spanish?",
             "10. What is 100 - 50 in Spanish?",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(practice)", "treinta", "50", "setenta", "80", "treinta", "cuarenta y cinco", "ochenta y dos", "63", "cincuenta", "cincuenta"]
     elif topic == "Telling Time":
         questions = [
             "Learn to tell time in Spanish:",
@@ -419,6 +440,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Write 'quarter past 7' in Spanish",
             "10. Practise telling 3 times in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(reference)", "(reference)", "(learning)", "Que hora es?", "Son las tres", "5 o'clock", "Son las cuatro y media", "2:30", "drawing (labelled 'Son las tres')", "drawing (labelled 'Son las seis y media')", "quarter past", "Son las siete y cuarto", "(oral practice)"]
     elif topic == "Daily Routine":
         questions = [
             "Learn daily routine phrases in Spanish:",
@@ -437,6 +459,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Order: Me despierto, Voy al colegio, Me levanto",
             "10. Name 4 daily routine phrases in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "I wake up", "Me levanto", "I have breakfast", "Voy al colegio", "Me levanto-I get up, Almuerzo-I have lunch", "student's own 3 sentences", "student's own answer", "I go to bed", "Me despierto, Me levanto, Voy al colegio", "student's own 4 phrases"]
     elif topic == "My House":
         questions = [
             "Learn rooms and items in Spanish:",
@@ -454,6 +477,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Describe your bedroom in 2 sentences (Spanish)",
             "10. Name 5 house items in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "kitchen", "dormitorio", "bathroom", "jardin", "salon-living room, jardin-garden", "drawing (4 rooms labelled)", "door", "ventana", "student's own 2 sentences", "student's own 5 items"]
     elif topic == "Town and Places":
         questions = [
             "Learn places in town in Spanish:",
@@ -471,6 +495,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Where do you go on weekends? Write in Spanish",
             "10. Name 6 places in town in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "school", "parque", "shop", "biblioteca", "hospital-hospital, cine-cinema", "drawing (4 places labelled)", "library", "restaurante", "student's own answer", "student's own 6 places"]
     elif topic == "Likes and Dislikes":
         questions = [
             "Learn to express likes and dislikes in Spanish:",
@@ -489,6 +514,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. What is 'Me encanta' in English?",
             "10. Write a dialogue about likes (4 lines)",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(reference)", "(learning)", "Me gusta", "No me gusta", "I like football", "Me encanta la musica", "I don't like rain", "student's own 3 things", "student's own 2 things", "(oral practice)", "I love", "student's own dialogue"]
     elif topic == "Describing People":
         questions = [
             "Learn to describe people in Spanish:",
@@ -506,6 +532,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Describe yourself in Spanish (2 sentences)",
             "10. Name 5 describing words in Spanish",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(learning)", "tall", "bajo", "blonde", "gracioso", "gordo-fat, delgado-thin", "student's own 3 sentences", "kind", "moreno", "student's own 2 sentences", "student's own 5 words"]
     elif topic == "Simple Conversations":
         questions = [
             "Learn useful conversation phrases:",
@@ -524,10 +551,13 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Practise ordering food in Spanish",
             "10. Write 5 conversation phrases you learned",
         ]
+        answers = ["(learning)", "(reference)", "(reference)", "(reference)", "(learning)", "Por favor", "Gracias", "Sorry", "No entiendo", "Gracias-Thank you, Si-Yes", "student's own dialogue", "Excuse me", "Puedes repetir?", "(oral practice)", "student's own 5 phrases"]
     else:
         questions = [f"{i+1}. Year 3 Spanish practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 3 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"Spanish Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return content, answers
 
 
 def _generate_year4_homework(topic: str, index: int) -> str:
@@ -678,7 +708,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 4 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 def _generate_year5_homework(topic: str, index: int) -> str:
@@ -830,7 +860,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 5 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 def _generate_year6_homework(topic: str, index: int) -> str:
@@ -981,7 +1011,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 6 Spanish practice question {i+1}" for i in range(10)]
 
-    return f"Spanish Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"Spanish Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 # 各年级 Key Stage 和作业时间设置
@@ -1014,9 +1044,8 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
 
     for i in range(1, count + 1):
         topic = topics[(i - 1) % len(topics)]
-        content = generate_spanish_homework(year_group, topic, i)
+        content, correct_answers = generate_spanish_homework(year_group, topic, i)
 
-        doc_id = f"hw_spanish_y{year_group}_{i:03d}"
         metadata = {
             "year_group": year_group,
             "subject": "Spanish",
@@ -1024,8 +1053,11 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
+            "homework_id": i,
+            "correct_answers": correct_answers
         }
 
+        doc_id = f"hw_spanish_y{year_group}_{i:03d}"
         batch_data.append({
             "content": content,
             "metadata": metadata,

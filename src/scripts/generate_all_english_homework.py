@@ -12,7 +12,7 @@ import random
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from homework_rag import get_homework_rag_store
+from src.homework_rag import get_homework_rag_store
 
 
 # 各年级英语主题（英国小学课程）
@@ -80,8 +80,8 @@ ENGLISH_TOPICS_BY_YEAR = {
 }
 
 
-def generate_english_homework(year_group: int, topic: str, index: int) -> str:
-    """根据年级、主题生成英语作业"""
+def generate_english_homework(year_group: int, topic: str, index: int) -> tuple:
+    """根据年级、主题生成英语作业，返回 (content, correct_answers)"""
 
     if year_group == 1:
         return _generate_year1_homework(topic, index)
@@ -97,14 +97,16 @@ def generate_english_homework(year_group: int, topic: str, index: int) -> str:
         return _generate_year6_homework(topic, index)
 
 
-def _generate_year1_homework(topic: str, index: int) -> str:
-    """Year 1 英语作业（5-6 岁）"""
+def _generate_year1_homework(topic: str, index: int) -> tuple:
+    """Year 1 英语作业（5-6 岁），返回 (content, correct_answers)"""
     if topic == "Phonics and Letter Sounds":
         words = ["cat", "dog", "fish", "bird", "sun", "moon", "star", "tree", "book", "pen"]
         questions = [f"{i+1}. What sound does '{w}' start with?" for i, w in enumerate(words)]
+        answers = [w[0].upper() for w in words]
     elif topic == "Sight Words":
         sight_words = ["the", "and", "is", "it", "to", "in", "on", "was", "for", "are"]
         questions = [f"{i+1}. Read the word: '{w}'. Write a sentence using it." for i, w in enumerate(sight_words)]
+        answers = ["student's own sentence (must use the word correctly)" for _ in sight_words]
     elif topic == "Simple Sentence Writing":
         prompts = [
             "a cat",
@@ -119,6 +121,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "a yellow flower",
         ]
         questions = [f"{i+1}. Write a sentence about {p}." for i, p in enumerate(prompts)]
+        answers = ["student's own sentence (must be complete with capital letter and full stop)" for _ in prompts]
     elif topic == "Reading Comprehension (Simple)":
         questions = [
             "Read: 'The cat is big. It sits on the mat.'",
@@ -133,6 +136,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Write one word about the cat.",
             "10. Do you like cats?",
         ]
+        answers = ["(reading passage)", "cat", "on the mat", "no", "drawing", "not stated (any reasonable answer)", "no", "on the floor/under the cat", "not stated (any reasonable answer)", "big (or any word from the text)", "student's own opinion"]
     elif topic == "Capital Letters and Full Stops":
         sentences = [
             "the dog ran fast",
@@ -147,9 +151,12 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "my mum is kind",
         ]
         questions = [f"{i+1}. Add capital letters and full stops: '{s}'" for i, s in enumerate(sentences)]
+        answers = [s[0].upper() + s[1:] + "." if s[0] != 'i' else "I" + s[1:] + "." for s in sentences]
     elif topic == "Rhyming Words":
         words = ["cat", "dog", "hat", "ball", "tree", "book", "star", "fish", "moon", "pen"]
         questions = [f"{i+1}. Write a word that rhymes with '{w}'" for i, w in enumerate(words)]
+        rhyme_answers = {"cat": "bat/mat/rat", "dog": "fog/log", "hat": "bat/mat/cat", "ball": "tall/fall/call", "tree": "bee/free/key", "book": "look/cook/hook", "star": "car/far/bar", "fish": "dish/wish", "moon": "spoon/soon/tune", "pen": "hen/ten/ben"}
+        answers = [rhyme_answers.get(w, "any rhyming word") for w in words]
     elif topic == "Story Sequencing":
         questions = [
             "Put the story in order:",
@@ -167,6 +174,7 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "",
             "What happens next?",
         ]
+        answers = ["(instructions)", "(story event)", "(story event)", "(story event)", "(story event)", "(story event)", "2, 3, 1, 4, 5", "student's own story", "drawing", "student's own answer"]
     elif topic == "Describing Pictures":
         questions = [
             "Look at a picture of a park.",
@@ -181,14 +189,17 @@ def _generate_year1_homework(topic: str, index: int) -> str:
             "9. Would you like to go there?",
             "10. Draw your favourite part.",
         ]
+        answers = ["(instructions)", "student's observation", "student's count", "student's observation", "yes/no (student's observation)", "yes/no (student's observation)", "student's observation", "student's observation", "student's own sentences (2 complete sentences)", "student's own opinion", "drawing"]
     else:
         questions = [f"{i+1}. Year 1 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 1 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 1 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year2_homework(topic: str, index: int) -> str:
-    """Year 2 英语作业（6-7 岁）"""
+def _generate_year2_homework(topic: str, index: int) -> tuple:
+    """Year 2 英语作业（6-7 岁），返回 (content, correct_answers)"""
     if topic == "Spelling Patterns":
         patterns = [
             ("ight", ["light", "night", "right", "sight", "might"]),
@@ -211,6 +222,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Read aloud the pattern words",
             "10. Test: spell 'station'",
         ]
+        answers = ["(learning)", f"any 3 words ending in '{pattern}'", "student's own sentence", f"/aɪt/" if pattern == "ight" else f"/{pattern}/", "student's own words", "student's own sentence", "station, action have 'tion'; future has 'ture'", "light", "tion", "(reading aloud)", "station"]
     elif topic == "Punctuation (Full Stops, Capital Letters, Question Marks)":
         sentences = [
             "where are you going",
@@ -225,6 +237,18 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "the cat sat on the mat",
         ]
         questions = [f"{i+1}. Add correct punctuation: '{s}'" for i, s in enumerate(sentences)]
+        answers = [
+            "Where are you going?",
+            "I live in London.",
+            "Do you like cats?",
+            "The dog is very big.",
+            "What time is it?",
+            "She has three brothers.",
+            "Can I have some water?",
+            "My favourite colour is blue.",
+            "How old are you?",
+            "The cat sat on the mat.",
+        ]
     elif topic == "Sentence Structure":
         questions = [
             "1. Write a sentence with a noun and a verb",
@@ -238,6 +262,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write a sentence with 'but'",
             "10. Write about your favourite toy",
         ]
+        answers = ["student's own sentence (must contain noun and verb)", "student's own sentence (must contain adjective)", "student's improved sentence (with 2 adjectives)", "I like apples and oranges.", "student's own question (with question mark)", "student's own exclamation (with exclamation mark)", "student's own sentence (with 'because')", "student's expanded sentence", "student's own sentence (with 'but')", "student's own sentence"]
     elif topic == "Reading Comprehension (Short Texts)":
         questions = [
             "Read: 'Tom has a red bike. He rides it every day. His friend Sam has a blue bike. They race in the park.'",
@@ -252,6 +277,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write one sentence about the story",
             "10. Draw the bikes",
         ]
+        answers = ["(reading passage)", "red", "every day", "blue", "in the park", "yes", "Tom", "no", "no (they race in the park)", "student's own sentence", "drawing"]
     elif topic == "Creative Writing (Simple Stories)":
         questions = [
             "Write a short story (5-8 sentences) about:",
@@ -269,6 +295,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "",
             "Draw a picture of the magic key.",
         ]
+        answers = ["(writing task)", "(title)", "(story prompt)", "student's own answer", "student's own answer", "student's own answer", "student's own answer", "(reminder)", "(drawing task)"]
     elif topic == "Word Classes (Nouns, Verbs, Adjectives)":
         questions = [
             "1. Circle the nouns: dog, run, happy, table, jump, cat, big, book",
@@ -282,6 +309,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Is 'beautiful' a noun, verb, or adjective?",
             "10. Is 'swim' a noun, verb, or adjective?",
         ]
+        answers = ["dog, table, cat, book", "sing, dance, write, read", "fast, slow, happy, sad", "student's own 3 nouns", "student's own 3 verbs", "student's own 3 adjectives", "student's own sentence", "student's own sentence", "adjective", "verb"]
     elif topic == "Prefixes and Suffixes":
         questions = [
             "1. Add 'un-' to 'happy' = ?",
@@ -295,6 +323,7 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "9. Write 2 words with 'un-'",
             "10. Write 2 words with '-ful'",
         ]
+        answers = ["unhappy", "unkind", "helpful", "careful", "hopeless", "fearless", "not/ opposite of", "full of", "student's own words (e.g., unhappy, unkind)", "student's own words (e.g., helpful, careful)"]
     elif topic == "Writing Instructions":
         questions = [
             "Write instructions for making a sandwich:",
@@ -309,14 +338,17 @@ def _generate_year2_homework(topic: str, index: int) -> str:
             "Use time words (first, next, then, finally)",
             "Write 5 clear steps",
         ]
+        answers = ["(writing task)", "(writing template)", "(writing template)", "(writing template)", "(writing template)", "(writing template)", "(reminder)", "(reminder)", "(reminder)"]
     else:
         questions = [f"{i+1}. Year 2 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 2 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year3_homework(topic: str, index: int) -> str:
-    """Year 3 英语作业（7-8 岁）"""
+def _generate_year3_homework(topic: str, index: int) -> tuple:
+    """Year 3 英语作业（7-8 岁），返回 (content, correct_answers)"""
     if topic == "Grammar (Tenses)":
         questions = [
             "1. Change to past tense: 'I walk to school' -> ?",
@@ -330,6 +362,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Identify tense: 'They will sing' (past, present, or future?)",
             "10. Write a sentence in each tense",
         ]
+        answers = ["I walked to school", "She ate an apple", "They will play football", "He read a book", "We go to the park", "student's own 3 past tense sentences", "student's own 3 future tense sentences", "present", "future", "student's own sentences"]
     elif topic == "Paragraph Writing":
         questions = [
             "Write a paragraph about 'My Favourite Animal':",
@@ -346,6 +379,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "Use adjectives to describe it.",
             "Check your spelling and punctuation.",
         ]
+        answers = ["(writing task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(reminder)"]
     elif topic == "Reading Comprehension":
         questions = [
             "Read: 'The rainforest is home to many animals. It rains almost every day. The trees are very tall. Monkeys swing from branch to branch. Colourful birds fly through the trees. The forest floor is dark and wet.'",
@@ -360,6 +394,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Would you like to visit? Why?",
             "10. Find a word meaning 'almost the same as' 'house'",
         ]
+        answers = ["(reading passage)", "in the rainforest", "almost every day", "tall", "branches", "colourful birds", "dark and wet", "monkeys and birds", "student's own answer (e.g., home to animals)", "student's own opinion", "home"]
     elif topic == "Spelling Rules":
         questions = [
             "1. Add '-ing' to 'run' (double the consonant?)",
@@ -373,6 +408,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Write the rule for doubling consonants",
             "10. Write the rule for changing 'y' to 'i'",
         ]
+        answers = ["running (yes, double n)", "stopped (yes, double p)", "bigger (yes, double g)", "happier", "carried", "because", "friend", "people", "double the consonant when a short vowel is followed by one consonant", "change 'y' to 'i' when adding a suffix (unless the suffix starts with i)"]
     elif topic == "Creative Writing":
         questions = [
             "Write a story (8-12 sentences) about:",
@@ -392,6 +428,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "- Dialogue (speech marks)",
             "- Varied sentence types",
         ]
+        answers = ["(writing task)", "(title)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(requirement)"]
     elif topic == "Punctuation (Commas, Speech Marks)":
         questions = [
             "1. Add speech marks: Hello, said Tom.",
@@ -405,6 +442,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Correct: we need pens pencils rulers and paper",
             "10. Write 2 sentences with both commas and speech marks",
         ]
+        answers = ['"Hello," said Tom.', '"I love reading," said Mary.', "I bought apples, bananas, oranges, grapes.", '"Watch out!" shouted Dad.', '"Can I come too?" asked Sam.', "student's own sentence", "student's own sentence", 'She said, "I am tired."', "We need pens, pencils, rulers, and paper.", "student's own 2 sentences"]
     elif topic == "Word Classes (Adverbs, Prepositions)":
         questions = [
             "1. Circle the adverbs: quickly, happy, slowly, big, carefully, tall",
@@ -418,6 +456,7 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "9. Use 'quickly' in a sentence",
             "10. Use 'beside' in a sentence",
         ]
+        answers = ["quickly, slowly, carefully", "under, over, beside, between", "student's own adverb (e.g., quickly)", "student's own preposition (e.g., under)", "student's own 3 adverbs", "student's own 3 prepositions", "verbs (how, when, where)", "position/direction relationships", "student's own sentence", "student's own sentence"]
     elif topic == "Editing and Proofreading":
         questions = [
             "Find and correct 5 errors in this text:",
@@ -434,10 +473,13 @@ def _generate_year3_homework(topic: str, index: int) -> str:
             "",
             "Check: capitals, full stops, spelling, sense",
         ]
+        answers = ["(editing task)", "(text to edit)", "(task)", "(task)", "(task)", "I went to the park yesterday. It was a lovely day. My friend and I played on the swing. We saw a small dog. It was very cute. We gave it some water.", "student's count", "(editing task)", "(reminder)"]
     else:
         questions = [f"{i+1}. Year 3 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 3 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    return content, answers
 
 
 def _generate_year4_homework(topic: str, index: int) -> str:
@@ -569,7 +611,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 4 English practice question {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"English Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 def _generate_year5_homework(topic: str, index: int) -> str:
@@ -709,7 +751,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 5 English practice question {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"English Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 def _generate_year6_homework(topic: str, index: int) -> str:
@@ -850,7 +892,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
     else:
         questions = [f"{i+1}. Year 6 English practice question {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return f"English Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
 
 
 # 各年级 Key Stage 和作业时间设置
@@ -883,9 +925,8 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
 
     for i in range(1, count + 1):
         topic = topics[(i - 1) % len(topics)]
-        content = generate_english_homework(year_group, topic, i)
+        content, correct_answers = generate_english_homework(year_group, topic, i)
 
-        doc_id = f"hw_english_y{year_group}_{i:03d}"
         metadata = {
             "year_group": year_group,
             "subject": "English",
@@ -893,8 +934,11 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
+            "homework_id": i,
+            "correct_answers": correct_answers
         }
 
+        doc_id = f"hw_english_y{year_group}_{i:03d}"
         batch_data.append({
             "content": content,
             "metadata": metadata,

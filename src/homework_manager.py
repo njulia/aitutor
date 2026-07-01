@@ -341,24 +341,25 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     sections = []  # 数据文件在父目录的 data/ 文件夹
     for subject in subjects:
         logger.info(f"[Homework] Generating homework for {subject}...")
-        homework = generate_homework_for_subject(student_profile, subject, llm)
+        homework, homework_id = generate_homework_for_subject(student_profile, subject, llm)
         sections.append({
             'subject': subject,
-            'homework': homework
+            'homework': homework,
+            'homework_id': homework_id
         })
         logger.debug(f"==============={subject}===================\n{homework}")
 
-    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rag_path = os.path.join(project_dir, "data", "homework.csv")
-    os.makedirs(os.path.dirname(rag_path), exist_ok=True)
-    with open(rag_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
-        writer.writeheader()
-        for section in sections:
-            writer.writerow({
-                "Subject": section["subject"],
-                "Homework": section["homework"]
-            })
+    # project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # rag_path = os.path.join(project_dir, "data", "homework.csv")
+    # os.makedirs(os.path.dirname(rag_path), exist_ok=True)
+    # with open(rag_path, "w", newline="", encoding="utf-8") as f:
+    #     writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
+    #     writer.writeheader()
+    #     for section in sections:
+    #         writer.writerow({
+    #             "Subject": section["subject"],
+    #             "Homework": section["homework"]
+    #         })
 
     return sections
 
@@ -417,14 +418,14 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework_completed: str, homework_raw, llm) -> str:
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework_completed: str, homework_id, llm) -> str:
     """批阅上传的作业
 
     Args:
         student_profile: 学生档案
         subject: 科目
         homework_completed: 学生提交的作业内容
-        homework_raw: 原始作业题目（如果有）
+        homework_id: 原始作业题目ID（如果有）
         llm: LangChain LLM 实例
 
     Returns:
@@ -433,15 +434,16 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
     prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
     # homework_assignment = "Please analyze the homework assignment from the context."
 
-    if homework_raw:
+    if homework_id:
         # 1. 先从 RAG 中检索是否有该作业的答案
         correct_answers = None
         year_group = student_profile.get("year_group")
         try:
             correct_answers = search_homework_answers(
-                homework_content=homework_raw,
+                # homework_content=homework_completed,
                 year_group=year_group,
                 subject=subject,
+                homework_id=homework_id,
                 k=1,
             )
             if correct_answers:
@@ -465,7 +467,7 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
     review = chain.invoke({
         "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
         "subject": subject,
-        "homework_assignment": homework_raw#,
+        "homework_assignment": homework_raw,
         "homework_completed": homework_completed,
     })
 

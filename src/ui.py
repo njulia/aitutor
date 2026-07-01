@@ -61,7 +61,7 @@ def display_homeworks(sections) -> str:
     for item in sections:
         if isinstance(item, dict):
             subject = item.get('subject') or item.get('Subject') or ""
-            homework = item.get('content') or item.get('homework') or item.get('Homework') or ""
+            homework = item.get('homework') or item.get('Homework') or ""
             normalized_sections.append({'subject': subject, 'homework': homework})
         elif isinstance(item, (list, tuple)) and len(item) >= 2:
             normalized_sections.append({'subject': item[0], 'homework': item[1]})
@@ -415,10 +415,11 @@ def run_gui(llm):
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices, llm)
                 html_page = display_homeworks(homework)
-                homework_raw = [h.get('homework', '') for h in homework if isinstance(h, dict)]
-                session_state["homework_raw"] = homework_raw
-                session_state["content"] = "\n\n".join(homework_raw)
-                session_state["year_group"] = profile.get("year_group", 3)
+                homework_id = [h.get('homework_id', '') for h in homework if isinstance(h, dict)]
+                session_state["homework_id"] = homework_id
+                homework_content = [h.get('homework', '') for h in homework if isinstance(h, dict)]
+                session_state["content"] = "\n\n".join(homework_content)
+                session_state["year_group"] = profile.get("year_group", -1)
                 session_state["subject"] = subject_choices[0] if subject_choices else "Math"
                 yield html_page, session_state
             except Exception as e:
@@ -450,8 +451,10 @@ def run_gui(llm):
             try:
                 homework = generate_homework_with_custom_profile(profile, subject_choices, llm)
                 html_page = display_homeworks(homework)
-                homework_texts = [h.get('homework', '') for h in homework if isinstance(h, dict)]
-                session_state["content"] = "\n\n".join(homework_texts)
+                homework_id = [h.get('homework_id', '') for h in homework if isinstance(h, dict)]
+                session_state["homework_id"] = homework_id
+                homework_content = [h.get('homework', '') for h in homework if isinstance(h, dict)]
+                session_state["content"] = "\n\n".join(homework_content)
                 session_state["year_group"] = profile.get("year_group", 3)
                 session_state["subject"] = subject_choices[0] if subject_choices else "Math"
                 yield html_page, session_state
@@ -492,7 +495,7 @@ def run_gui(llm):
             else:
                 combined_assignment = student_answers
             
-            return gr.update(selected="check_homework_tab"), combined_assignment, session_state["homework_raw"]
+            return gr.update(selected="check_homework_tab"), combined_assignment, session_state["homework_id"]
 
         with gr.Blocks(
                 title="Homework Magic - UK Primary School",
@@ -724,7 +727,7 @@ Provide detailed feedback with:
                                 student_profile=student_profile,
                                 subject=metadata_subject,
                                 homework_completed=homework_completed,
-                                homework_raw=homework_raw,
+                                homework_raw=homework_id,
                                 llm=llm,
                             )
                             yield review
@@ -755,7 +758,7 @@ Provide detailed feedback with:
                     cp_check_btn.click(
                         fn=switch_to_check_with_homework,
                         inputs=[session_state, cp_answer_input],
-                        outputs=[tabs, homework_completed, homework_raw]
+                        outputs=[tabs, homework_completed, homework_id]
                     )
 
                     qs_btn.click(
@@ -767,7 +770,7 @@ Provide detailed feedback with:
                     qs_check_btn.click(
                         fn=switch_to_check_with_homework,
                         inputs=[session_state, qs_answer_input],
-                        outputs=[tabs, homework_completed, homework_raw]
+                        outputs=[tabs, homework_completed, homework_id]
                     )
 
         demo.launch(share=True)
