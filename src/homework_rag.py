@@ -85,8 +85,7 @@ class HomeworkRAGStore:
     def add_homework(
         self,
         homework_content: str,
-        metadata: Dict[str, Any],
-        correct_answers: str = None,
+        metadata: Dict[str, Any]
     ) -> str:
         """Add a homework document to the RAG store
 
@@ -102,8 +101,8 @@ class HomeworkRAGStore:
                 - student_id: str
                 - homework_id: str
                 - created_at: str (ISO datetime)
+                - correct_answers: Optional correct answers for homework with unique answers
             doc_id: Optional document ID (auto-generated if not provided)
-            correct_answers: Optional correct answers for homework with unique answers
 
         Returns:
             The document ID
@@ -117,10 +116,6 @@ class HomeworkRAGStore:
         metadata.setdefault("created_at", now.isoformat())
         # Store homework id in metadata for later retrieval
         metadata["homework_id"] = homework_id
-
-        # Store correct answers in metadata if provided
-        if correct_answers:
-            metadata["correct_answers"] = correct_answers
 
         document = Document(
             page_content=homework_content,
@@ -142,7 +137,6 @@ class HomeworkRAGStore:
                 - content: str (homework content)
                 - metadata: Dict[str, Any]
                 - doc_id: Optional[str]
-                - correct_answers: Optional[str]
 
         Returns:
             List of document IDs
@@ -154,7 +148,6 @@ class HomeworkRAGStore:
             content = item["content"]
             metadata = item["metadata"]
             doc_id = item.get("doc_id")
-            correct_answers = item.get("correct_answers")
 
             now = datetime.now()
             homework_id = int(now.timestamp())
@@ -166,9 +159,6 @@ class HomeworkRAGStore:
             metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
             # Store doc_id in metadata for later retrieval
             metadata["homework_id"] = homework_id
-
-            if correct_answers:
-                metadata["correct_answers"] = correct_answers
 
             documents.append(Document(page_content=content, metadata=metadata))
             doc_ids.append(doc_id)
@@ -594,8 +584,10 @@ def store_homework(
         metadata["english_level"] = english_level
     if student_id:
         metadata["student_id"] = student_id
+    if correct_answers:
+        metadata["correct_answers"] = correct_answers
 
-    return store.add_homework(homework_content, metadata, correct_answers)
+    return store.add_homework(homework_content, metadata)
 
 
 def search_homework(

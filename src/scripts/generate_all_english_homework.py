@@ -482,8 +482,8 @@ def _generate_year3_homework(topic: str, index: int) -> tuple:
     return content, answers
 
 
-def _generate_year4_homework(topic: str, index: int) -> str:
-    """Year 4 英语作业（8-9 岁）"""
+def _generate_year4_homework(topic: str, index: int) -> tuple:
+    """Year 4 英语作业（8-9 岁），返回 (content, correct_answers)"""
     if topic == "Advanced Grammar":
         questions = [
             "1. Identify the verb tense: 'She will have finished by noon'",
@@ -497,6 +497,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. Write a sentence with a relative clause (who, which, that)",
             "10. Correct: 'Me and him went to the shop'",
         ]
+        answers = ["future perfect", "past perfect", "The mouse was chased by the cat", "The ball was kicked by the boy", "student's own sentence (present perfect)", "student's own sentence (past perfect)", "a clause that depends on the main clause", "because it was raining", "student's own sentence (with who/which/that)", "He and I went to the shop"]
     elif topic == "Formal and Informal Writing":
         questions = [
             "Rewrite these informal sentences in formal style:",
@@ -513,6 +514,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. Which is formal: 'I am writing to enquire' or 'I'm writing to ask'?",
             "10. Write a formal email to your teacher",
         ]
+        answers = ["I would like to go to the park", "The film was excellent", "She has many friends", "I do not think that is fair", "The food was rather cold", "student's own formal letter", "student's own informal letter", "student's own 3 differences (e.g., contractions, vocabulary, sentence structure)", "I am writing to enquire", "student's own formal email"]
     elif topic == "Reading Inference":
         questions = [
             "Read: 'Emma looked at her shoes. They had holes in them. She sighed and put them back in the box.'",
@@ -529,6 +531,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. What happened just before this moment?",
             "10. What will happen next?",
         ]
+        answers = ["sad/disappointed", "because her shoes are damaged/poor", "they may not have much money", "not stated (could be back-to-school or any time)", "because they are not usable/broken", "(reading passage)", "John's team won a competition", "happy/proud", "not specified (any team sport)", "the final match/game ended", "celebrations/awards ceremony"]
     elif topic == "Creative Writing (Descriptions)":
         questions = [
             "Write a descriptive paragraph (10-15 sentences) about:",
@@ -547,6 +550,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "",
             "Do not just list events. Focus on description.",
         ]
+        answers = ["(writing task)", "(title)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(reminder)"]
     elif topic == "Report Writing":
         questions = [
             "Write a report about 'Dolphins':",
@@ -566,6 +570,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "- Subheadings",
             "- Facts, not opinions",
         ]
+        answers = ["(writing task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(requirement)", "(requirement)", "(reminder)"]
     elif topic == "Punctuation (Colons, Semi-colons)":
         questions = [
             "1. Add a colon to introduce a list: I need three things paper, pens, and rulers",
@@ -579,6 +584,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. Correct: The colours are red blue green yellow",
             "10. Correct: She was tired she went to bed early",
         ]
+        answers = ["I need three things: paper, pens, and rulers", "It was raining; we stayed inside.", "The winner is: Sarah", "I love reading; it is my favourite hobby", "to introduce a list or explain", "to join two closely related independent clauses", "student's own sentence (with colon)", "student's own sentence (with semi-colon)", "The colours are: red, blue, green, yellow", "She was tired; she went to bed early"]
     elif topic == "Figurative Language":
         questions = [
             "1. Identify the simile: 'She is as brave as a lion'",
@@ -592,6 +598,7 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. Write personification for 'the moon'",
             "10. Explain the difference between simile and metaphor",
         ]
+        answers = ["simile (as brave as a lion)", "metaphor", "personification (wind howled)", "student's own simile (with 'like')", "student's own simile (with 'as')", "student's own metaphor about the sun", "student's own metaphor about the sea", "student's own personification for flowers", "student's own personification for the moon", "simile uses 'like' or 'as', metaphor states one thing IS another"]
     elif topic == "Sentence Variety":
         questions = [
             "Improve these sentences by varying structure:",
@@ -608,14 +615,17 @@ def _generate_year4_homework(topic: str, index: int) -> str:
             "9. A sentence with dialogue",
             "10. A complex sentence with 'although'",
         ]
+        answers = ["student's improved combined sentence", "student's improved combined sentence", "student's improved combined sentence", "student's own sentence (starting with adverb)", "student's own sentence (starting with preposition)", "student's own sentence (with subordinate clause first)", "student's own question", "student's own exclamation", "student's own sentence with dialogue", "student's own sentence with 'although'"]
     else:
         questions = [f"{i+1}. Year 4 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year5_homework(topic: str, index: int) -> str:
-    """Year 5 英语作业（9-10 岁）"""
+def _generate_year5_homework(topic: str, index: int) -> tuple:
+    """Year 5 英语作业（9-10 岁），返回 (content, correct_answers)"""
     if topic == "Complex Sentences":
         questions = [
             "1. Join using 'although': It was cold. We went outside.",
@@ -629,6 +639,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "9. Identify clauses: 'After the bell rang, the students ran outside'",
             "10. Write a paragraph using at least 5 different complex sentence types",
         ]
+        answers = ["Although it was cold, we went outside", "Despite the rain, the match continued", "Tom likes football, whereas Sam likes rugby", "You must hurry, unless you will be late", "student's own sentence (with relative clause)", "student's own sentence (with conditional clause)", "student's own sentence (with subordinate clause of reason)", "student's own sentence (with participle clause)", "subordinate clause: 'After the bell rang'; main clause: 'the students ran outside'", "student's own paragraph"]
     elif topic == "Persuasive Writing":
         questions = [
             "Write a persuasive letter (12-15 sentences) arguing that:",
@@ -647,6 +658,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "",
             "Remember: AIDA (Attention, Interest, Desire, Action)",
         ]
+        answers = ["(writing task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(reminder)"]
     elif topic == "Reading Analysis":
         questions = [
             "Read: 'The old house stood alone at the end of the lane. Its windows were broken, and the front door hung open. No one had lived there for years, or so the villagers said. But sometimes, on quiet nights, a faint light could be seen flickering in an upstairs window.'",
@@ -661,6 +673,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "9. Find a word showing the house is abandoned",
             "10. How does the writer make the reader curious?",
         ]
+        answers = ["eerie/mysterious/isolated", "by contrasting abandonment with the unexplained light", "e.g., 'windows were broken', 'front door hung open'", "creates uncertainty/unreliable narration", "someone/something is there/supernatural activity", "mystery/horror/gothic", "isolated/abandoned/eerie", "someone will investigate the light", "broken/hung open/no one had lived", "by hinting at mystery without explaining"]
     elif topic == "Creative Writing (Narratives)":
         questions = [
             "Write a story (15-20 sentences) starting with:",
@@ -679,6 +692,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "9. A twist or surprise",
             "10. A satisfying ending",
         ]
+        answers = ["(writing task)", "(story prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(requirement)"]
     elif topic == "Newspaper Reports":
         questions = [
             "Write a newspaper report about:",
@@ -700,6 +714,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "- Direct and reported speech",
             "- Short paragraphs",
         ]
+        answers = ["(writing task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(requirement)", "(requirement)", "(requirement)", "(requirement)"]
     elif topic == "Grammar (Modal Verbs, Passive Voice)":
         questions = [
             "1. Identify the modal verb: 'She might come to the party'",
@@ -713,6 +728,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "9. When is passive voice appropriate?",
             "10. Rewrite in active voice: 'Mistakes were made'",
         ]
+        answers = ["might", "must", "student's own sentence (with 'could' showing possibility)", "student's own sentence (with 'should' giving advice)", "student's own sentence (with 'would' showing condition)", "The papers were marked by the teacher", "A new school will be built by the company", "The children ate the cake", "when the doer is unknown/unimportant/when focusing on the action", "Someone made mistakes"]
     elif topic == "Vocabulary Development":
         questions = [
             "Replace the underlined word with a more sophisticated alternative:",
@@ -729,6 +745,7 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "9. Use 3 new vocabulary words in sentences",
             "10. Explain the difference between 'happy' and 'elated'",
         ]
+        answers = ["excellent/outstanding/brilliant", "devastated/heartbroken/sorrowful", "enormous/spacious/massive", "swiftly/rapidly/hurriedly", "pleasant/fine/delightful", "significant/crucial/vital/essential/critical", "gorgeous/stunning/lovely/attractive/radiant", "furious/irate/livid/enraged/indignant", "student's own 3 sentences", "elated is much stronger than happy (extreme joy vs general contentment)"]
     elif topic == "Essay Structure":
         questions = [
             "Plan an essay on: 'Should school uniforms be compulsory?'",
@@ -748,14 +765,17 @@ def _generate_year5_homework(topic: str, index: int) -> str:
             "- Evidence and examples",
             "- Clear topic sentences",
         ]
+        answers = ["(essay task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(requirement)", "(requirement)"]
     else:
         questions = [f"{i+1}. Year 5 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return content, answers
 
 
-def _generate_year6_homework(topic: str, index: int) -> str:
-    """Year 6 英语作业（10-11 岁）"""
+def _generate_year6_homework(topic: str, index: int) -> tuple:
+    """Year 6 英语作业（10-11 岁），返回 (content, correct_answers)"""
     if topic == "Advanced Writing Techniques":
         questions = [
             "Write a descriptive passage (15-20 sentences) about:",
@@ -774,6 +794,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "",
             "Avoid cliches. Be original and specific.",
         ]
+        answers = ["(writing task)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)", "(requirement)", "(reminder)"]
     elif topic == "Analytical Writing":
         questions = [
             "Analyse this poem excerpt:",
@@ -792,6 +813,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "",
             "Use quotes from the poem. Use analytical language.",
         ]
+        answers = ["(analysis task)", "(poem excerpt)", "(writing prompt)", "fog/mist", "fog is compared to a cat", "by comparing fog's movement to a cat's quiet, graceful movement", "quiet/mysterious/peaceful", "through short lines, soft sounds, animal imagery", "suggests fog is patient, watchful, animal-like", "fog leaves quietly as it came", "student's own interpretation"]
     elif topic == "Reading Comprehension (Complex Texts)":
         questions = [
             "Read: 'History is not merely a record of events; it is the story of human experience, shaped by memory, interpretation, and perspective. What we choose to remember, and how we choose to remember it, reveals as much about ourselves as it does about the past.'",
@@ -806,6 +828,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "9. How might two people remember the same event differently?",
             "10. Summarise the passage in one sentence",
         ]
+        answers = ["history is more than facts; it is shaped by human perspective", "history is more than just a simple record", "memory, interpretation, perspective", "it shapes how we understand the past", "it reveals our values/biases/identity", "perspective", "student's own opinion with reasoning", "record = factual account; story = narrative with meaning/emotion", "different perspectives/memories/biases/experiences", "student's own one-sentence summary"]
     elif topic == "Creative Writing (Advanced)":
         questions = [
             "Write a story (20-25 sentences) based on this prompt:",
@@ -824,6 +847,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "9. Varied paragraph lengths",
             "10. A memorable final sentence",
         ]
+        answers = ["(writing task)", "(story prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(writing prompt)", "(requirement)"]
     elif topic == "Debate and Argument":
         questions = [
             "Prepare arguments for BOTH sides of this debate:",
@@ -843,6 +867,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "Now write a speech (10-12 sentences) supporting ONE side.",
             "Use persuasive techniques and formal language.",
         ]
+        answers = ["(debate task)", "(debate topic)", "(writing prompt)", "student's own argument + evidence", "student's own argument + evidence", "student's own argument + evidence", "student's own argument + evidence", "student's own argument + evidence", "student's own argument + evidence", "(speech task)", "(requirement)"]
     elif topic == "SATs Writing Preparation":
         questions = [
             "SPaG (Spelling, Punctuation and Grammar) Practice:",
@@ -858,6 +883,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "9. What is the subjunctive mood? Give an example.",
             "10. Identify all word classes in: 'The quick brown fox jumps over the lazy dog'",
         ]
+        answers = ["(practice task)", "complex sentence", "imperative sentence/exclamation", "a clause that gives more information about a noun, using who/which/that; e.g., 'The boy who won the race is my friend'", "It was dark; we could see nothing; we decided to wait", "accommodation, necessary, occasion, definitely", "student's own sentence (with colon)", "student's own sentence (passive voice)", "student's own sentence (with modal verb)", "expressing wishes/hypotheticals; e.g., 'If I were you...'", "The (article) quick (adjective) brown (adjective) fox (noun) jumps (verb) over (preposition) the (article) lazy (adjective) dog (noun)"]
     elif topic == "Literary Devices":
         questions = [
             "1. Define and give an example of: alliteration",
@@ -871,6 +897,7 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "9. Explain irony in your own words",
             "10. Write a paragraph using at least 3 different literary devices",
         ]
+        answers = ["repetition of initial consonant sounds; e.g., 'big blue boat'", "words that sound like what they describe; e.g., 'buzz', 'crash'", "extreme exaggeration; e.g., 'I've told you a million times'", "when the opposite of what is expected happens; e.g., a fire station burning down", "hints about what will happen later; e.g., dark clouds suggesting trouble", "Peter Piper picked a peck of pickled peppers (repetition of 'p')", "student's own 2 lines (with onomatopoeia)", "student's own sentence (with hyperbole)", "when something happens that is the opposite of what you expected", "student's own paragraph (with 3+ literary devices)"]
     elif topic == "Editing for Impact":
         questions = [
             "Improve this paragraph by editing for impact:",
@@ -889,10 +916,13 @@ def _generate_year6_homework(topic: str, index: int) -> str:
             "9. Explain what changes you made and why",
             "10. Rate the original (1-10) and your version (1-10)",
         ]
+        answers = ["(editing task)", "(original paragraph)", "(task)", "(task)", "(task)", "(task)", "(task)", "(task)", "(task)", "student's rewritten paragraph", "student's explanation of changes", "student's own ratings"]
     else:
         questions = [f"{i+1}. Year 6 English practice question {i+1}" for i in range(10)]
+        answers = [f"answer {i+1}" for i in range(10)]
 
-    return f"English Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    content = f"English Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
+    return content, answers
 
 
 # 各年级 Key Stage 和作业时间设置

@@ -28,7 +28,7 @@ from src.prompts import (
 )
 
 # AGICTO API Key
-LLM_MODEL = "qwen3.5-plus"
+LLM_MODEL = "deepseek-v4-flash" # "qwen3.5-plus"
 
 logger = logging.getLogger(__name__)
 

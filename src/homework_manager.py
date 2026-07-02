@@ -418,13 +418,13 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework_completed: str, homework_id, llm) -> str:
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework: str, homework_id, llm) -> str:
     """批阅上传的作业
 
     Args:
         student_profile: 学生档案
         subject: 科目
-        homework_completed: 学生提交的作业内容
+        homework: 学生提交的作业内容
         homework_id: 原始作业题目ID（如果有）
         llm: LangChain LLM 实例
 
@@ -432,7 +432,7 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
         批阅结果
     """
     prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
-    # homework_assignment = "Please analyze the homework assignment from the context."
+    correct_answers_section = ""
 
     if homework_id:
         # 1. 先从 RAG 中检索是否有该作业的答案
@@ -440,7 +440,6 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
         year_group = student_profile.get("year_group")
         try:
             correct_answers = search_homework_answers(
-                # homework_content=homework_completed,
                 year_group=year_group,
                 subject=subject,
                 homework_id=homework_id,
@@ -453,13 +452,15 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
         except Exception as e:
             logger.warning(f"[RAG] Failed to search answers for review: {e}")
 
-        # 2. 构建 prompt（如果有正确答案，加入到 prompt 中）
+        # 2. 构建正确答案区块
         if correct_answers:
-            prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT + f"""
-            Correct Answers (use these to check student's work):
-            {correct_answers}
-            """
-            homework_raw = "" # Clear homework_raw after using as it is in the homework_completed
+            correct_answers_section = f"""
+
+Reference Answers (for definitive-answer tasks only):
+{correct_answers}
+
+Note: Answers marked as "student's own..." or "(writing/drawing/learning task)" are open-ended and should be evaluated by AI quality assessment. Only use exact answers for definitive-answer questions (translation, calculation, spelling, grammar, etc.).
+"""
 
     # 3. 调用 LLM 进行批阅
     prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -467,8 +468,8 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
     review = chain.invoke({
         "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
         "subject": subject,
-        "homework_assignment": homework_raw,
-        "homework_completed": homework_completed,
+        "homework": homework,
+        "correct_answers_section": correct_answers_section,
     })
 
     return review

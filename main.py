@@ -22,7 +22,7 @@ Usage:
 import argparse
 import logging
 
-from src.agent_workflow import run_english_tutor, init_llm
+from src.agent_workflow import init_llm
 from src.homework_manager import process_homework_with_review
 from src.ui import run_gui, run_tui
 

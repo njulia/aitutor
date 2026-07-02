@@ -2,6 +2,8 @@ import os
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from src.homework_rag import ElevenPlusRAGStore
 from src.agent_workflow import init_llm
@@ -23,7 +25,16 @@ from src.prompts import ELEVEN_PLUS_RAG_PROMPT
 # =========================
 
 def generate_homework(subject: str, index: int, llm) -> str:
-  
+    """
+    Generate homework for a given subject and index using the provided LLM.
+    Args:
+        subject:
+        index:
+        llm:
+
+    Returns:
+
+    """
     prompt = ChatPromptTemplate.from_template(ELEVEN_PLUS_RAG_PROMPT)
     chain = prompt | llm | StrOutputParser()
 
@@ -31,9 +42,11 @@ def generate_homework(subject: str, index: int, llm) -> str:
         "subject": subject,
         "index": index
     })
+    return result.content
+
     # prompt = ELEVEN_PLUS_RAG_PROMPT.format(subject=subject, index=index, context=result )
     # response = llm.invoke(prompt)
-    return response.content
+    # return response.content
 
 
 # =========================

@@ -25,8 +25,6 @@ from src.prompts import (
     HOMEWORK_PROMPT, HOMEWORK_ANSWER_PROMPT, SUBJECT_EXTRACTION_PROMPT,
 )
 
-# AGICTO API Key
-LLM_MODEL = "qwen3.5-plus"
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +70,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         # 如果 RAG 中有相关作业，直接返回
         if rag_results:
             homework_content = rag_results[0]["content"]
-            homework_id = rag_results['metadata']["homework_id"]
+            homework_id = rag_results[0]['metadata']["homework_id"]
             logger.info(f"[RAG] Found matching homework in RAG for {subject} (Year {year_group})")
             return homework_content, homework_id
     except Exception as e:

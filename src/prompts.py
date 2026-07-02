@@ -110,13 +110,23 @@ Student Information:
 
 Subject: {subject}
 
-Homework Assignment (what was asked):
-{homework_assignment}
-
 Student's Submitted Work:
-{homework_completed}
+{homework}
+{correct_answers_section}
 
-Please review the student's work carefully and provide feedback in the following format:
+Please review the student's work carefully. This homework contains two types of tasks:
+
+1. **Definitive Answer Tasks** (e.g., translation, spelling, grammar, math calculations, fill-in-the-blank):
+   - These have clear, single correct answers
+   - Compare the student's answer against the provided correct answers
+   - Mark as correct only if the answer matches or is equivalent
+
+2. **Open-Ended Tasks** (e.g., creative writing, opinions, descriptions, dialogues):
+   - These do not have single correct answers
+   - Evaluate based on: relevance to the task, appropriate language use, effort, and quality
+   - Provide constructive feedback on what was done well and what could be improved
+
+Provide feedback in the following format:
 
 ## Score: X/10
 
@@ -144,6 +154,8 @@ For each incorrect or needs-improvement answer, use this format:
 
 Important:
 - Review EVERY question/task from the homework
+- For definitive answer tasks: strictly compare with correct answers
+- For open-ended tasks: evaluate quality and provide specific feedback
 - Place correct answers in "What You Did Well" section with green tick
 - Place incorrect answers in "Areas to Improve" section with red cross
 - Always show the original question, student's answer, and correct answer for incorrect items

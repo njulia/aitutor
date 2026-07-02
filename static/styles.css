@@ -1,10 +1,19 @@
 /* 整体背景 - 白色 */
+/*The Official Google Color Codes
+ColorHex Code       RGB Values
+Google Blue#4285F4 rgb(66, 133, 244)
+Google Red#EA4335  rgb(234, 67, 53)
+Google Yellow#FBBC05 rgb(251, 188, 5)
+Google Green#34A853 rgb(52, 168, 83)
+*/
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
+
 body {
     background: #FFFFFF !important;
 }
 .gradio-container {
     background: #FFFFFF !important;
-    font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif !important;
+    font-family: 'Google Sans', sans-serif !important;
 }
 /* 主标题 - 黑色大字 */
 .cute-title {
@@ -28,72 +37,66 @@ body {
     padding: 8px 16px;
     background: #FFFFFF;
     border-radius: 20px;
-    border: 2px solid #BEF2BD;
     margin-bottom: 10px;
     text-align: center;
 }
 /* 按钮样式 - 大圆角、薄荷绿 */
 .gr-button-primary {
-    background: #222222 !important;
+    background: #FFFFFF !important;
     border: none !important;
     border-radius: 30px !important;
     font-size: 1.3em !important;
     font-weight: bold !important;
-    color: #BEF2BD !important;
+    color: #34A853 !important;
     padding: 14px 32px !important;
-    box-shadow: 0 4px 15px rgba(34,34,34,0.3) !important;
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3) !important;
     transition: all 0.3s ease !important;
 }
+/* 蓝色按钮 - Check My Homework / Submit for Review */
+.btn-blue {
+    background: #4285F4 !important;
+    color: #FFFFFF !important;
+    border-color: #4285F4 !important;
+}
+
 .gr-button-primary:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(34,34,34,0.4) !important;
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.4) !important;
 }
 /* Tab 标签文字 - 黑色加粗，边框清晰 */
 .tabs .tab-nav {
-    border: 2px solid #222222 !important;
+    border: 2px solid #FFFFFF !important;
     border-radius: 16px 16px 0 0 !important;
     background: #FFFFFF !important;
 }
+/* Tab 标签文字 - 选中 #34A853，未选中 #222222 */
+.main-tabs .tab-nav button,
+.main-tabs button[role="tab"],
+.main-tabs nav button,
 .tabs .tab-nav button {
     color: #222222 !important;
     font-weight: bold !important;
     font-size: 1.2em !important;
     border-radius: 12px !important;
     border: 2px solid transparent !important;
-}
-.tabs .tab-nav button.selected {
-    border: 2px solid #222222 !important;
     background: #FFFFFF !important;
+}
+.main-tabs .tab-nav button.selected,
+.main-tabs button[role="tab"][aria-selected="true"],
+.main-tabs nav button.selected,
+.tabs .tab-nav button.selected {
+    border: 2px solid #34A853 !important;
+    background: #FFFFFF !important;
+    color: #34A853 !important;
+}
+.main-tabs .tab-nav button.gr-button-primary,
+.tabs .tab-nav button.gr-button-primary {
     color: #222222 !important;
+    background: #FFFFFF !important;
 }
-.tabs .tab-nav button:not(.selected) {
-    background: #e9f2de !important;
-    color: #1a5c1a !important;
-}
-/* "Quick Select" 标签 - 绿色 */
-.tabs .tab-nav button:nth-child(2) {
-    background: #BEF2BD !important;
-    color: #1a5c1a !important;
-    border-color: #8FD98F !important;
-}
-.tabs .tab-nav button:nth-child(2).selected {
-    background: #A8E6A3 !important;
-    color: #1a5c1a !important;
-    border-color: #222222 !important;
-}
-/* "Check My Homework" 标签 - 绿色 */
-.tabs .tab-nav button:nth-child(3) {
-    background: #BEF2BD !important;
-    color: #1a5c1a !important;
-    border-color: #8FD98F !important;
-}
-.tabs .tab-nav button:nth-child(3).selected {
-    background: #A8E6A3 !important;
-    color: #1a5c1a !important;
-    border-color: #222222 !important;
-}
-/* "Quick Select" 内容区域 - 白色背景 */
-.tabs .tabitem:nth-child(2) {
+.main-tabs .tab-nav button.selected.gr-button-primary,
+.tabs .tab-nav button.selected.gr-button-primary {
+    color: #34A853 !important;
     background: #FFFFFF !important;
 }
 /* Tab 内容区域边框 - 移除边框 */
@@ -105,21 +108,21 @@ body {
 /* 卡片容器 - 白色带圆角阴影 */
 .gr-box, .gr-panel {
     border-radius: 20px !important;
-    border: 2px solid #BEF2BD !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+    border: 2px solid #ffffff !important;
+    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.06) !important;
     background: #FFFFFF !important;
 }
 /* 输入框圆角 */
 input, textarea {
     border-radius: 15px !important;
-    border: 2px solid #BEF2BD !important;
+    border: 2px solid #ffffff !important;
     background: #FFFFFF !important;
-    color: #000000 !important;
+    color: #222222 !important;
 }
 /* 学生描述输入框 - 白色背景黑色字体 */
 #cp_profile textarea {
     background: #FFFFFF !important;
-    color: #000000 !important;
+    color: #222222 !important;
 }
 /* 复选框标签加大 */
 .gr-checkbox-group label {
@@ -134,41 +137,42 @@ input, textarea {
 
 /* 单选框和复选框容器背景 */
 .gr-radio, .gr-checkbox-group {
-    background: #f6f4f4 !important;
+    background: #FFFFFF !important;
 }
 
 .gr-radio label, .gr-checkbox-group label {
     background: #FFFFFF !important;
+    color: #ffffff !important;
 }
 
 /* Radio 和 Checkbox 输入框背景 */
 input[type="radio"], input[type="checkbox"] {
-    background: #fefdfd !important;
+    background: #FFFFFF !important;
 }
 
-/* Radio 选中状态 - 显示橙色圆点 */
+/* Radio 选中状态 - 黑色边框 */
 input[type="radio"]:checked {
-    background: #FF8C42 !important;
-    border-color: #FF8C42 !important;
-    accent-color: #FF8C42 !important;
+    background: #34A853 !important;
+    border-color: #34A853 !important;
+    accent-color: #34A853 !important;
 }
 
-/* Radio 选中状态的标签高亮 - 橙色 */
+/* Radio 选中状态的标签高亮 - 黑色 */
 input[type="radio"]:checked + span {
-    color: #FF8C42 !important;
+    color: #34A853 !important;
     font-weight: bold !important;
 }
 
-/* Checkbox 选中状态 - 显示橙色 */
+/* Checkbox 选中状态 - 显示 Google Green */
 input[type="checkbox"]:checked {
-    background: #FF8C42 !important;
-    border-color: #FF8C42 !important;
-    accent-color: #FF8C42 !important;
+    background: #34A853 !important;
+    border-color: #34A853 !important;
+    accent-color: #34A853 !important;
 }
 
-/* Checkbox 选中状态的标签高亮 - 橙色 */
+/* Checkbox 选中状态的标签高亮 - Google Green */
 input[type="checkbox"]:checked + span {
-    color: #FF8C42 !important;
+    color: #34A853 !important;
     font-weight: bold !important;
 }
 
@@ -176,8 +180,8 @@ input[type="checkbox"]:checked + span {
 .homework-container {
     background: #FFFFFF;
     border-radius: 20px;
-    border: 2px solid #BEF2BD;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.06);
     padding: 24px;
     max-height: 600px;
     overflow-y: auto;
@@ -187,13 +191,13 @@ input[type="checkbox"]:checked + span {
     border-radius: 16px;
     padding: 16px 20px;
     margin-bottom: 20px;
-    border: 2px solid #E0E0E0;
-    color: #000000;
+    border: 2px solid #ffffff;
+    color: #ffffff;
 }
 .homework-subject-title {
     font-size: 1.6em;
     font-weight: bold;
-    color: #1a1a1a;
+    color: #222222;
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -204,13 +208,13 @@ input[type="checkbox"]:checked + span {
     border-radius: 12px;
     padding: 14px 18px;
     margin-bottom: 10px;
-    border-left: 4px solid #333333;
-    color: #000000;
+    border-left: 4px solid #FFFFFF;
+    color: #222222;
 }
 .homework-task-number {
     display: inline-block;
-    background: #000000;
-    color: #FFFFFF;
+    background: #FFFFFF;
+    color: #222222;
     border-radius: 50%;
     width: 26px;
     height: 26px;
@@ -230,7 +234,7 @@ input[type="checkbox"]:checked + span {
     border-radius: 12px;
     padding: 12px 16px;
     margin-top: 12px;
-    border: 1px solid #CCCCCC;
+    border: 1px solid #ffffff;
     font-size: 0.95em;
     color: #000000;
 }
@@ -261,17 +265,17 @@ input[type="checkbox"]:checked + span {
     text-decoration: underline;
 }
 .homework-error {
-    background: #FFF0F0;
+    background: #ffffff;
     border-radius: 12px;
     padding: 16px 20px;
     border: 2px solid #FFB8B8;
-    color: #CC0000;
+    color: #EA4335;
     font-size: 1.1em;
 }
 .homework-loading {
     text-align: center;
     padding: 40px;
-    color: #000000;
+    color: #222222;
     font-size: 1.1em;
 }
 .homework-placeholder {
@@ -282,20 +286,26 @@ input[type="checkbox"]:checked + span {
     font-weight: bold;
 }
 
+/* 作业输出区域 - 高度跟随内容自适应 */
+.homework-output {
+    height: auto !important;
+    min-height: unset !important;
+}
+
 /* ===== 作业 Tab 样式 ===== */
 .homework-tabs {
     display: flex;
     gap: 8px;
     margin-bottom: 20px;
-    border-bottom: 2px solid #E0E0E0;
+    border-bottom: 2px solid #4285F4;
     padding-bottom: 10px;
 }
 .homework-tab {
     padding: 10px 20px;
-    border: 2px solid #E0E0E0;
+    border: 2px solid #ffffff;
     border-radius: 12px 12px 0 0;
-    background: #F5F5F5;
-    color: #666666;
+    background: #ffffff;
+    color: #4285F4;
     font-size: 1.1em;
     font-weight: bold;
     cursor: pointer;
@@ -305,15 +315,15 @@ input[type="checkbox"]:checked + span {
     gap: 8px;
 }
 .homework-tab:hover {
-    background: #E8F5E8;
-    border-color: #BEF2BD;
-    color: #1a5c1a;
+    background: #ffffff;
+    border-color: #FFFFFF;
+    color: #34A853;
 }
 .homework-tab.active {
     background: #FFFFFF;
-    border-color: #222222;
+    border-color: #ffffff;
     border-bottom-color: #FFFFFF;
-    color: #222222;
+    color: #000000;
     position: relative;
     bottom: -2px;
 }
@@ -339,7 +349,7 @@ input[type="checkbox"]:checked + span {
     line-height: 1.6;
     margin: 0;
     padding: 16px;
-    background: #f9f9f9;
+    background: #ffffff;
     border-radius: 8px;
     font-size: 16px;
 }
@@ -347,13 +357,17 @@ input[type="checkbox"]:checked + span {
 /* ===== 批阅反馈区域样式 ===== */
 .gr-markdown, .prose {
     color: #000000 !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-family: 'Google Sans', sans-serif !important;
     font-size: 16px !important;
     line-height: 1.6 !important;
 }
 
-.gr-markdown h1, .gr-markdown h2, .gr-markdown h3, .gr-markdown h4,
-.prose h1, .prose h2, .prose h3, .prose h4 {
+.gr-markdown h1, .prose h1 {
+    color: #4285F4 !important;
+}
+
+.gr-markdown h2, .gr-markdown h3, .gr-markdown h4,
+.prose h2, .prose h3, .prose h4 {
     color: #000000 !important;
 }
 
@@ -368,7 +382,7 @@ input[type="checkbox"]:checked + span {
 
 .gr-markdown code, .prose code {
     color: #000000 !important;
-    background: #f0f0f0 !important;
+    background: #ffffff !important;
 }
 
 /* 批阅反馈中的绿色对勾和红色叉号样式 */

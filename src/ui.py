@@ -455,7 +455,7 @@ def run_gui(llm):
                 session_state["homework_id"] = homework_id
                 homework_content = [h.get('homework', '') for h in homework if isinstance(h, dict)]
                 session_state["content"] = "\n\n".join(homework_content)
-                session_state["year_group"] = profile.get("year_group", 3)
+                session_state["year_group"] = profile.get("year_group", -1)
                 session_state["subject"] = subject_choices[0] if subject_choices else "Math"
                 yield html_page, session_state
             except Exception as e:
@@ -495,7 +495,7 @@ def run_gui(llm):
             else:
                 combined_assignment = student_answers
             
-            return gr.update(selected="check_homework_tab"), combined_assignment, session_state["homework_id"]
+            return gr.update(selected="check_homework_tab"), combined_assignment
 
         with gr.Blocks(
                 title="Homework Magic - UK Primary School",
@@ -507,7 +507,7 @@ def run_gui(llm):
             # 为每个用户 session 创建独立状态
             session_state = gr.State(value=init_session_state())
 
-            with gr.Tabs() as tabs:
+            with gr.Tabs(elem_classes=["main-tabs"]) as tabs:
 
                 # ====== Tab 1: Custom Student Profile ======
                 DEFAULT_PROFILE_EXAMPLE = (
@@ -529,6 +529,7 @@ def run_gui(llm):
                                 container=False
                             )
 
+                        with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Choose Your Subjects</div>')
                             cp_subjects = gr.CheckboxGroup(
                                 choices=cute_subjects,
@@ -536,15 +537,19 @@ def run_gui(llm):
                                 value=None,
                                 container=False
                             )
-
-                            cp_gen_btn = gr.Button("Generate My Homework!", variant="primary")
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header"></div>')
+                            cp_gen_btn = gr.Button("Generate My Homework!", variant="primary", elem_classes=["btn-blue"])
                             cp_check_btn = gr.Button("Check My Homework!", variant="secondary")
 
-                        with gr.Column(scale=2):
+                    with gr.Row():
+                        with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             cp_output = gr.HTML(
-                                value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>')
+                                value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>',
+                                elem_classes=["homework-output"])
 
+                        with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Your Answers</div>')
                             cp_answer_input = gr.Textbox(
                                 label="Enter your answers here",
@@ -559,32 +564,36 @@ def run_gui(llm):
                     with gr.Row():
                         with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Pick Your Year</div>')
-                            qs_year = gr.Radio(choices=year_options, label="", value=year_options[0], container=False)
-
-                            gr.HTML('<div class="step-header">Choose Your Subjects</div>')
-                            qs_subjects = gr.CheckboxGroup(choices=cute_subjects, label="", value=[cute_subjects[0]],
-                                                           container=False)
-
-                            qs_btn = gr.Button("Generate My Homework!", variant="primary")
-                            qs_check_btn = gr.Button("Check My Homework!", variant="secondary")
+                            qs_year = gr.Radio(choices=year_options, label="", value=year_options[1], container=False)
 
                         with gr.Column(scale=2):
+                            gr.HTML('<div class="step-header">Choose Your Subjects</div>')
+                            qs_subjects = gr.CheckboxGroup(choices=cute_subjects, label="", value=[cute_subjects[0]],
+                                                        container=False)
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header"></div>')
+                            qs_btn = gr.Button("Generate My Homework!", variant="primary", elem_classes=["btn-blue"])
+                            qs_check_btn = gr.Button("Check My Homework!", variant="secondary")
+
+                    with gr.Row():
+                        with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Your Homework</div>')
                             qs_output = gr.HTML(
-                                value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>')
+                                value='<div class="homework-container"><p class="homework-placeholder">Your quick homework will appear here!</p></div>',
+                                elem_classes=["homework-output"])
 
+                        with gr.Column(scale=1):
                             gr.HTML('<div class="step-header">Your Answers</div>')
                             qs_answer_input = gr.Textbox(
                                 label="Enter your answers here",
                                 lines=6,
                                 max_lines=15,
                                 placeholder="Type your answers here, one per line or in any format you prefer...",
-                                value=""
-                            )
+                            value=""
+                        )
 
                 # ====== Tab 3: Check My Homework ======
                 with gr.Tab("Check My Homework", id="check_homework_tab"):
-                    gr.HTML('<div class="step-header">Check My Homework</div>')
 
                     with gr.Row():
                         with gr.Column(scale=1):
@@ -599,7 +608,7 @@ def run_gui(llm):
                             with gr.Row(visible=False) as file_input_row:
                                 file_input = gr.File(label="Upload your homework file")
 
-                            gr.HTML('<div class="step-header">Choose Your Subject</div>')
+                            gr.HTML('<div class="step-header">Choose Your Subjects</div>')
                             check_subject = gr.Radio(
                                 choices=cute_subjects,
                                 label="",
@@ -615,7 +624,7 @@ def run_gui(llm):
                                 value=""
                             )
 
-                            check_btn = gr.Button("Submit for Review", variant="primary")
+                            check_btn = gr.Button("Submit for Review", variant="primary", elem_classes=["btn-blue"])
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Teacher Feedback</div>')
@@ -627,7 +636,7 @@ def run_gui(llm):
                     def show_file_input():
                         return gr.update(visible=False), gr.update(visible=True)
 
-                    def handle_submit(photo, file, subject, assignment, session_state):
+                    def handle_submit(photo, file, subject, homework, session_state):
                         """批阅上传的作业"""
                         yield "**Reviewing your homework...** Please wait a moment."
 
@@ -700,7 +709,7 @@ Be warm, encouraging, and age-appropriate in your feedback."""),
 
 Subject: {subject}
 Student Profile: {student_profile}
-Homework Assignment (if provided): {assignment}
+Homework Assignment (if provided): {homework}
 
 Provide detailed feedback with:
 - What the student did well
@@ -715,7 +724,7 @@ Provide detailed feedback with:
                                 review = review_chain.invoke({
                                     "subject": subject,
                                     "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
-                                    "assignment": assignment if assignment else "Not provided",
+                                    "homework": homework if homework else "Not provided",
                                     "image_data": image_data
                                 })
                                 yield review
@@ -726,8 +735,8 @@ Provide detailed feedback with:
                             review = review_uploaded_homework(
                                 student_profile=student_profile,
                                 subject=metadata_subject,
-                                homework_completed=homework_completed,
-                                homework_raw=homework_id,
+                                homework=homework,
+                                homework_id=session_state.get("homework_id", -1),
                                 llm=llm,
                             )
                             yield review
@@ -758,7 +767,7 @@ Provide detailed feedback with:
                     cp_check_btn.click(
                         fn=switch_to_check_with_homework,
                         inputs=[session_state, cp_answer_input],
-                        outputs=[tabs, homework_completed, homework_id]
+                        outputs=[tabs, homework_completed]
                     )
 
                     qs_btn.click(
@@ -770,7 +779,7 @@ Provide detailed feedback with:
                     qs_check_btn.click(
                         fn=switch_to_check_with_homework,
                         inputs=[session_state, qs_answer_input],
-                        outputs=[tabs, homework_completed, homework_id]
+                        outputs=[tabs, homework_completed]
                     )
 
         demo.launch(share=True)
