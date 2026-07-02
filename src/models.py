@@ -36,6 +36,7 @@ KEY_STAGES = {
 UK_PRIMARY_SUBJECTS = [
     "Math",
     "English",
+    "Spanish",
     "Science",
     "History",
     "Geography",
@@ -43,9 +44,15 @@ UK_PRIMARY_SUBJECTS = [
     "Art and Design",
     "Computing",
     "Latin",
-    "Spanish",
     "Chinese",
 ]
+
+ELEVEN_PLUS_SUBJECTS = [
+    "Maths", 
+    "English", 
+    "Verbal Reasoning", 
+    "Non-Verbal Reasoning"
+    ]
 
 # 科目对应的可爱图标
 SUBJECT_ICONS = {

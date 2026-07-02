@@ -378,7 +378,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     Returns:
         保存的文件路径
     """
-    from src.ui import parse_profile_from_natural_language
+    from src.primary import parse_profile_from_natural_language
     from src.homework_generator import extract_subjects_from_prompt
 
     # 1. 获取学生档案

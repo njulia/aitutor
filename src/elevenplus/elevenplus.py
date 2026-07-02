@@ -8,16 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.homework_rag import ElevenPlusRAGStore
 from src.agent_workflow import init_llm
 from src.prompts import ELEVEN_PLUS_RAG_PROMPT
-
-
-# =========================
-# CONFIG
-# =========================
-
-# os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY_HERE"
-# llm = ChatOpenAI(model="gpt-4.1", temperature=0.8)
-# DB_DIR = "vectordb_11plus_homework"
-# embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+from src.models import ELEVEN_PLUS_SUBJECTS
 
 
 # =========================
@@ -82,7 +73,7 @@ def store_homework(db, subject, index, content):
 # =========================
 
 def generate_all_homework(db, llm):
-    subjects = ["Maths", "English", "Verbal Reasoning", "Non-Verbal Reasoning"]
+    subjects = ELEVEN_PLUS_SUBJECTS
 
     total = 300
     per_subject = total // len(subjects)

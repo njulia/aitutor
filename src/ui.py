@@ -425,10 +425,10 @@ def run_gui(llm):
             except Exception as e:
                 yield f"**Oh no!** Something went wrong: {str(e)}", session_state
 
-        def qs_wrapper_with_storage(year_choice, subject_choices, session_state):
+        def qs_wrapper_with_storage(year_choice, subject_choice, session_state):
             """包装 quick homework 生成,存储作业内容到 session"""
-            if not subject_choices:
-                yield "Oops! Please pick at least one subject first!", session_state
+            if not subject_choice:
+                yield "Oops! Please pick a subject first!", session_state
                 return
 
             try:
@@ -444,19 +444,15 @@ def run_gui(llm):
 
             profile = SAMPLE_STUDENT_PROFILES[student_id]
 
-            if not subject_choices:
-                yield "Oops! Please pick at least one subject first!", session_state
-                return
-
             try:
-                homework = generate_homework_with_custom_profile(profile, subject_choices, llm)
+                homework = generate_homework_with_custom_profile(profile, [subject_choice], llm)
                 html_page = display_homeworks(homework)
                 homework_id = [h.get('homework_id', '') for h in homework if isinstance(h, dict)]
                 session_state["homework_id"] = homework_id
                 homework_content = [h.get('homework', '') for h in homework if isinstance(h, dict)]
                 session_state["content"] = "\n\n".join(homework_content)
                 session_state["year_group"] = profile.get("year_group", -1)
-                session_state["subject"] = subject_choices[0] if subject_choices else "Math"
+                session_state["subject"] = subject_choice
                 yield html_page, session_state
             except Exception as e:
                 yield f"**Oh no!** Something went wrong: {str(e)}", session_state
@@ -499,10 +495,53 @@ def run_gui(llm):
 
         with gr.Blocks(
                 title="Homework Magic - UK Primary School",
-                css=cute_theme
+                css=cute_theme,
+                theme=gr.themes.Default()
         ) as demo:
             gr.HTML(f"<style>{cute_theme}</style>")
             gr.HTML(main_title_html)
+            gr.HTML("""
+            <script>
+            function fixRadioBackground() {
+                // 修复所有 Radio 相关元素
+                const selectors = [
+                    '.gradio-radio',
+                    '.gradio-radio *',
+                    '.gradio-radio .wrap',
+                    '.gradio-radio .wrap-inner',
+                    '.gradio-radio label',
+                    '.gradio-radio div',
+                    '.gradio-radio span',
+                    '[class*="radio"]',
+                    '[class*="Radio"]'
+                ];
+                
+                selectors.forEach(selector => {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.background = '#FFFFFF';
+                        el.style.backgroundColor = '#FFFFFF';
+                    });
+                });
+            }
+            
+            // 页面加载后执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fixRadioBackground);
+            } else {
+                fixRadioBackground();
+            }
+            
+            // 使用 MutationObserver 监听 DOM 变化
+            const observer = new MutationObserver((mutations) => {
+                fixRadioBackground();
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            </script>
+            """)
 
             # 为每个用户 session 创建独立状态
             session_state = gr.State(value=init_session_state())
@@ -568,7 +607,7 @@ def run_gui(llm):
 
                         with gr.Column(scale=2):
                             gr.HTML('<div class="step-header">Choose Your Subjects</div>')
-                            qs_subjects = gr.CheckboxGroup(choices=cute_subjects, label="", value=[cute_subjects[0]],
+                            qs_subjects = gr.Radio(choices=cute_subjects, label="", value=cute_subjects[0],
                                                         container=False)
                         with gr.Column(scale=1):
                             gr.HTML('<div class="step-header"></div>')
@@ -592,7 +631,65 @@ def run_gui(llm):
                             value=""
                         )
 
-                # ====== Tab 3: Check My Homework ======
+                # ====== Tab 3: Eleven Plus ======
+                DEFAULT_PROFILE_EXAMPLE = (
+                    "Ana"
+                    "Age & Year Group: 9 years old (Year 5, London, UK)"
+                    "Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)"
+                    "Academic Strengths:"
+                    "Strong foundation in mathematics and numerical reasoning."
+                    "Analytical mindset, aided by an early interest in language learning (bilingual/multilingual exposure)."
+                    "Development Areas:"
+                    "Building advanced vocabulary and understanding words in unfamiliar contexts."
+                    "Mastering specific verbal reasoning question types (e.g., synonyms, antonyms, code-breaking)."
+                    "Improving speed and accuracy under timed conditions."
+                    "Study Routine: 45–60 minutes daily, broken down into 15–20 minute focused blocks."
+                )
+
+                with gr.Tab("Custom Profile", id="custom_profile_tab"):
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header">Describe the Student</div>')
+                            cp_profile = gr.Textbox(
+                                label="",
+                                lines=8,
+                                max_lines=20,
+                                placeholder=DEFAULT_PROFILE_EXAMPLE,
+                                value=DEFAULT_PROFILE_EXAMPLE,
+                                container=False
+                            )
+
+                        with gr.Column(scale=2):
+                            gr.HTML('<div class="step-header">Choose Your Subjects</div>')
+                            cp_subjects = gr.CheckboxGroup(
+                                choices=cute_subjects,
+                                label="",
+                                value=None,
+                                container=False
+                            )
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header"></div>')
+                            cp_gen_btn = gr.Button("Generate My Homework!", variant="primary", elem_classes=["btn-blue"])
+                            cp_check_btn = gr.Button("Check My Homework!", variant="secondary")
+
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header">Your Homework</div>')
+                            cp_output = gr.HTML(
+                                value='<div class="homework-container"><p class="homework-placeholder">Your custom homework will appear here!</p></div>',
+                                elem_classes=["homework-output"])
+
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="step-header">Your Answers</div>')
+                            cp_answer_input = gr.Textbox(
+                                label="Enter your answers here",
+                                lines=6,
+                                max_lines=15,
+                                placeholder="Type your answers here, one per line or in any format you prefer...",
+                                value=""
+                            )
+
+                # ====== Tab 4: Check My Homework ======
                 with gr.Tab("Check My Homework", id="check_homework_tab"):
 
                     with gr.Row():

@@ -15,6 +15,11 @@ body {
     background: #FFFFFF !important;
     font-family: 'Google Sans', sans-serif !important;
 }
+/* Gradio 内部容器白色背景 */
+.form, .gradio-column, .gap, .col {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+}
 /* 主标题 - 黑色大字 */
 .cute-title {
     text-align: center;
@@ -135,6 +140,54 @@ input, textarea {
     padding: 4px 8px !important;
 }
 
+/* Radio 组件所有元素白色背景 - 最高优先级 */
+html body .gradio-radio,
+html body .gradio-radio *,
+html body .gradio-radio .wrap,
+html body .gradio-radio .wrap-inner,
+html body .gradio-radio fieldset,
+html body .gradio-radio .gr-block,
+html body .gradio-radio .form,
+html body .gradio-radio label,
+html body .gradio-radio div,
+html body .gradio-radio span,
+html body .gradio-radio button,
+html body .gradio-radio input,
+html body .gradio-container .gradio-radio,
+html body .gradio-container .gradio-radio *,
+html body .gradio-container .gradio-radio .wrap,
+html body .gradio-container .gradio-radio .wrap-inner,
+html body .gradio-container .gradio-radio label,
+html body .gradio-container .gradio-radio div,
+html body .gradio-container .gradio-radio span,
+html body .gradio-container .gradio-radio button,
+html body .gradio-container .gradio-radio input,
+.gradio-radio,
+.gradio-radio *,
+.gradio-radio .wrap,
+.gradio-radio .wrap-inner,
+.gradio-radio fieldset,
+.gradio-radio .gr-block,
+.gradio-radio .form,
+.gradio-radio label,
+.gradio-radio div,
+.gradio-radio span,
+.gradio-radio button,
+.gradio-radio input,
+[class*="radio"] {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+}
+
+/* 强制覆盖所有可能的深色背景 */
+.gradio-container [class*="wrap"],
+.gradio-container [class*="radio"] div,
+.gradio-container [class*="radio"] span,
+.gradio-container [class*="radio"] label {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+}
+
 /* 单选框和复选框容器背景 */
 .gr-radio, .gr-checkbox-group {
     background: #FFFFFF !important;
@@ -142,7 +195,7 @@ input, textarea {
 
 .gr-radio label, .gr-checkbox-group label {
     background: #FFFFFF !important;
-    color: #ffffff !important;
+    color: #222222 !important;
 }
 
 /* Radio 和 Checkbox 输入框背景 */
