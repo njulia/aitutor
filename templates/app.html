@@ -499,6 +499,11 @@
                             <option value="6">Year 6 (Age 10)</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label>Student ID (for unique homework)</label>
+                        <input type="text" id="quick-student-id" placeholder="e.g. emma_year3" 
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -707,6 +712,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         let currentHomework = [];
         let currentSubject = 'Maths';
         let currentProfile = null;
+        let currentInputMethod = 'text';
+        let currentPhotoData = null;
+        let currentFileData = null;
+        let extractedContent = '';
         
         // Configure marked for better line breaks
         marked.setOptions({
@@ -717,8 +726,134 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         // Initialize subjects
         document.addEventListener('DOMContentLoaded', function() {
             loadSubjects();
-            loadYearGroups();
         });
+        
+        // Input method handling
+        function setInputMethod(method) {
+            currentInputMethod = method;
+            
+            // Update tab styles
+            document.querySelectorAll('.input-method-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Hide all content
+            document.querySelectorAll('.input-method-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Show selected content
+            document.getElementById('input-' + method).style.display = 'block';
+        }
+        
+        // Photo handling
+        function handlePhotoSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentPhotoData = e.target.result;
+                
+                // Show preview
+                document.getElementById('photo-img').src = currentPhotoData;
+                document.getElementById('photo-preview').style.display = 'block';
+                document.querySelector('#input-photo .upload-placeholder').style.display = 'none';
+                
+                // Process the photo
+                processPhoto(currentPhotoData);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        function clearPhoto() {
+            currentPhotoData = null;
+            extractedContent = '';
+            document.getElementById('photo-preview').style.display = 'none';
+            document.querySelector('#input-photo .upload-placeholder').style.display = 'block';
+            document.getElementById('photo-input').value = '';
+        }
+        
+        async function processPhoto(dataUrl) {
+            showLoading();
+            
+            try {
+                const response = await fetch('/api/upload-photo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ photo: dataUrl })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    extractedContent = data.content;
+                    console.log('Extracted content:', extractedContent);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing photo');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // File handling
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            currentFileData = file;
+            
+            // Show file info
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-info').style.display = 'block';
+            document.querySelector('#input-file .upload-placeholder').style.display = 'none';
+            
+            // Process the file
+            processFile(file);
+        }
+        
+        function clearFile() {
+            currentFileData = null;
+            extractedContent = '';
+            document.getElementById('file-info').style.display = 'none';
+            document.querySelector('#input-file .upload-placeholder').style.display = 'block';
+            document.getElementById('file-input').value = '';
+        }
+        
+        async function processFile(file) {
+            showLoading();
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    extractedContent = data.content;
+                    console.log('Extracted content:', extractedContent);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing file');
+            } finally {
+                hideLoading();
+            }
+        }
 
         function loadSubjects() {
             fetch('/api/subjects')
@@ -964,21 +1099,54 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         }
 
         function reviewHomework() {
-            const homework = document.getElementById('review-homework').value;
-            const answers = document.getElementById('review-answers').value;
+            let homework = '';
+            let answers = '';
             const subject = document.getElementById('review-subject').value;
             
-            if (!homework.trim() || !answers.trim()) {
-                alert('Please enter both homework questions and answers!');
-                return;
+            if (currentInputMethod === 'text') {
+                homework = document.getElementById('review-homework').value;
+                answers = document.getElementById('review-answers').value;
+                
+                if (!homework.trim() || !answers.trim()) {
+                    alert('Please enter both homework questions and answers!');
+                    return;
+                }
+            } else if (currentInputMethod === 'photo' || currentInputMethod === 'file') {
+                // Use extracted content from photo/file
+                answers = extractedContent;
+                
+                // Check if user provided additional homework questions
+                const extraHomeworkId = currentInputMethod === 'photo' ? 
+                    'review-homework-photo' : 'review-homework-file';
+                homework = document.getElementById(extraHomeworkId).value;
+                
+                if (!answers.trim()) {
+                    alert('No content extracted from ' + currentInputMethod + '. Please try again or use text input.');
+                    return;
+                }
+                
+                // If no separate homework provided, use the extracted content as both
+                if (!homework.trim()) {
+                    homework = 'Homework content (from ' + currentInputMethod + '):';
+                }
             }
             
             // First, display the homework in results section for better UX
             const homeworkResultsDiv = document.getElementById('homework-results');
             homeworkResultsDiv.innerHTML = `
-                <div class="homework-output">
-                    <h3 style="margin-bottom: 15px; color: #667eea;">${subject}</h3>
-                    <div>${homework}</div>
+                <div class="homework-block">
+                    <h3 class="subject-header">${subject}</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(marked.parse(homework))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answers:</h4>
+                            <textarea class="answer-input-inline" readonly style="background: #fafafa; border-color: #ccc;">
+${answers}
+                            </textarea>
+                        </div>
+                    </div>
                 </div>
             `;
             

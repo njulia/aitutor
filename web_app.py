@@ -133,6 +133,10 @@ def generate_homework_with_profile(profile, subjects):
     from src.homework_generator import generate_homework_for_subject
     from src.homework_manager import process_homework_with_review
     
+    # Ensure student_id exists in profile
+    if 'student_id' not in profile or not profile['student_id']:
+        profile['student_id'] = 'student_' + str(profile.get('year_group', 3)) + '_default'
+    
     results = []
     
     for subject in subjects:
@@ -143,7 +147,7 @@ def generate_homework_with_profile(profile, subjects):
                 'content': homework_content,
                 'doc_id': doc_id
             })
-            logger.info(f"✓ Generated homework for {subject}")
+            logger.info(f"✓ Generated NEW homework for {subject} for student {profile['student_id']}")
         except Exception as e:
             logger.error(f"✗ Error generating {subject}: {e}")
             results.append({

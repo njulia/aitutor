@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str, llm) -> str:
-    """为指定科目生成作业（优先从 RAG 中查找，未找到则生成新作业）
+    """为指定科目生成作业（每次都生成新作业，避免重复以前的内容）
 
     Args:
         student_profile: 学生信息字典
@@ -43,48 +43,27 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     year_group = student_profile.get("year_group", 3)
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
-    student_id = student_profile.get("student_id", "")
+    student_id = student_profile.get("student_id", "student_1")
 
-    # 1. 先从 RAG 中搜索该学生该科目的历史作业
+    # 1. 获取该学生该科目的历史作业，用于避免重复
     try:
         previous_topics = get_student_previous_topics(student_id, subject)
         if previous_topics:
-            logger.info(f"[RAG] Found {len(previous_topics)} previous homework for {student_id} in {subject}")
+            logger.info(f"[RAG] Found {len(previous_topics)} previous homework for {student_id} in {subject} - will avoid duplicates")
     except Exception as e:
         logger.warning(f"[RAG] Failed to get previous topics: {e}")
         previous_topics = []
 
-    # 2. 使用学习目标和弱项构建查询，搜索 RAG 中是否有相关作业
-    learning_goals = student_profile.get("learning_goals", [])
-    weak_areas = student_profile.get("weak_areas", [])
-    search_query = " ".join(learning_goals + weak_areas + [subject])
-
-    try:
-        rag_results = search_homework(
-            query=search_query,
-            year_group=year_group,
-            subject=subject,
-            k=1,
-        )
-
-        # 如果 RAG 中有相关作业，直接返回
-        if rag_results:
-            homework_content = rag_results[0]["content"]
-            doc_id = rag_results[0]["doc_id"]
-            logger.info(f"[RAG] Found matching homework in RAG for {subject} (Year {year_group})")
-            return homework_content, doc_id
-    except Exception as e:
-        logger.warning(f"[RAG] Failed to search homework: {e}")
-
-    # 3. RAG 中没有相关作业，生成新作业
-    logger.info(f"[RAG] No matching homework found in RAG, generating new homework for {subject}")
-
-    # Build previous topics context to avoid duplicates
+    # 2. 构建避免重复的上下文
     previous_context = ""
     if previous_topics:
-        previous_context = "\n\nPreviously covered topics (DO NOT repeat these):\n"
-        for i, topic in enumerate(previous_topics[-5:], 1):  # Last 5 homework
+        previous_context = "\n\nIMPORTANT - Previously covered topics (DO NOT repeat ANY of these):\n"
+        for i, topic in enumerate(previous_topics[-8:], 1):  # 最后 8 个作业
             previous_context += f"{i}. {topic}\n"
+        previous_context += "\nPlease create completely NEW homework that does not cover any of the topics above.\n"
+
+    # 3. 每次都生成新作业
+    logger.info(f"[Homework] Generating NEW homework for {student_id} in {subject} (Year {year_group})")
 
     prompt = ChatPromptTemplate.from_template(HOMEWORK_PROMPT)
     chain = prompt | llm | StrOutputParser()
@@ -124,9 +103,10 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             student_id=student_id,
             correct_answers=correct_answers,
         )
-        logger.info(f"[RAG] Stored new homework for {subject} (Year {year_group}) in vector database, doc_id: {doc_id}")
+        logger.info(f"[RAG] Stored NEW homework for {student_id} in {subject} (Year {year_group}), doc_id: {doc_id}")
     except Exception as e:
         logger.warning(f"[RAG] Failed to store homework for {subject}: {e}")
+        doc_id = None
 
     return result, doc_id
 
