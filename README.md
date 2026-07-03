@@ -13,7 +13,7 @@ Three-tier hybrid agent architecture:
 ## Features
 
 - Generates age-appropriate English homework based on UK Department for Education guidelines
-- Automatic subject detection (Math, English, Science, History, Geography, etc.)
+- Automatic subject detection (Maths, English, Science, History, Geography, etc.)
 - Homework review and feedback
 - Student learning analytics and personalized recommendations
 - Built-in 《中文》(Zhongwen) textbook PDF resources (Volumes 1–12)
@@ -53,4 +53,4 @@ ai_tutor/
 
 ## Subjects
 
-Math, English, Science, History, Geography, Design and Technology, Art and Design, Computing, Latin, Spanish, Chinese
+Maths, English, Science, History, Geography, Design and Technology, Art and Design, Computing, Latin, Spanish, Chinese

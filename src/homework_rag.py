@@ -99,7 +99,6 @@ class HomeworkRAGStore:
                 - key_stage: str (e.g., "KS1", "KS2")
                 - english_level: str
                 - student_id: str
-                - homework_id: str
                 - created_at: str (ISO datetime)
                 - correct_answers: Optional correct answers for homework with unique answers
             doc_id: Optional document ID (auto-generated if not provided)
@@ -108,14 +107,11 @@ class HomeworkRAGStore:
             The document ID
         """
         now = datetime.now()
-        homework_id = int(now.timestamp())
-        year_group = metadata.get('year_group', '')
-        doc_id = f"hw_({metadata.get('subject', 'unknown').lower()}_y{year_group}_{homework_id}"
+        # 用毫秒时间戳生成唯一 ID
+        doc_id = str(int(now.timestamp() * 1000))
 
         # Ensure metadata has required fields
         metadata.setdefault("created_at", now.isoformat())
-        # Store homework id in metadata for later retrieval
-        metadata["homework_id"] = homework_id
 
         document = Document(
             page_content=homework_content,
@@ -124,7 +120,7 @@ class HomeworkRAGStore:
 
         self.db.add_documents([document], ids=[doc_id])
         logger.info(f"[RAG] Added homework document: {doc_id}")
-        return homework_id
+        return doc_id
 
     def add_batch_homework(
         self,
@@ -150,15 +146,12 @@ class HomeworkRAGStore:
             doc_id = item.get("doc_id")
 
             now = datetime.now()
-            homework_id = int(now.timestamp())
-            year_group = metadata.get('year_group', '')
             if not doc_id:
-                doc_id = f"hw_{metadata.get('subject', 'unknown').lower()}_y{year_group}_{homework_id}"
+                # 用毫秒时间戳生成唯一 ID
+                doc_id = str(int(now.timestamp() * 1000))
 
             metadata.setdefault("created_at", now.isoformat())
             metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
-            # Store doc_id in metadata for later retrieval
-            metadata["homework_id"] = homework_id
 
             documents.append(Document(page_content=content, metadata=metadata))
             doc_ids.append(doc_id)
@@ -173,36 +166,45 @@ class HomeworkRAGStore:
         k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Search for homework documents
+        """搜索作业文档
 
         Args:
-            query: Search query text
-            k: Number of results to return
-            filters: Optional metadata filters, e.g.:
-                {"year_group": 3, "subject": "Math"}
+            query: 语义搜索关键词
+            k: 返回结果数量
+            filters: 可选的 metadata 过滤条件, 如:
+                {"year_group": 3, "subject": "Maths"}
 
         Returns:
-            List of dicts with 'content', 'metadata', and 'score'
+            包含 'doc_id', 'content', 'metadata', 'score' 的字典列表
         """
-        if filters:
-            # Build ChromaDB where clause
-            where_clause = self._build_where_clause(filters)
-            results = self.db.similarity_search_with_score(
-                query,
-                k=k,
-                filter=where_clause,
-            )
-        else:
-            results = self.db.similarity_search_with_score(query, k=k)
+        where_clause = self._build_where_clause(filters) if filters else None
 
-        return [
-            {
-                "content": doc.page_content,
-                "metadata": doc.metadata,
-                "score": score,
-            }
-            for doc, score in results
-        ]
+        # 使用底层 ChromaDB collection 查询，可以同时获取 ID
+        query_kwargs = {
+            "query_texts": [query],
+            "n_results": k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where_clause:
+            query_kwargs["where"] = where_clause
+
+        raw = self.db._collection.query(**query_kwargs)
+
+        results = []
+        if raw and raw.get("ids") and raw["ids"][0]:
+            ids = raw["ids"][0]
+            docs = raw["documents"][0]
+            metas = raw["metadatas"][0]
+            dists = raw["distances"][0]
+            for i in range(len(ids)):
+                results.append({
+                    "doc_id": ids[i],
+                    "content": docs[i],
+                    "metadata": metas[i],
+                    "score": dists[i],
+                })
+
+        return results
 
     def search_by_metadata(
         self,
@@ -213,7 +215,7 @@ class HomeworkRAGStore:
 
         Args:
             filters: Metadata filter dict, e.g.:
-                {"year_group": 3, "subject": "Math", "study_year_month": "2026-09"}
+                {"year_group": 3, "subject": "Maths", "study_year_month": "2026-09"}
             k: Max number of results
 
         Returns:
@@ -490,46 +492,34 @@ class HomeworkRAGStore:
 
     def search_homework_answers(
         self,
-        year_group: int = None,
-        subject: str = None,
-        homework_id: str = None,
-        k: int = 1,
+        doc_id: str,
     ) -> Optional[str]:
-        """Search for correct answers to homework in RAG store using metadata
+        """通过 doc_id 直接获取正确答案
 
         Args:
-            homework_content: The homework content (not used for search, kept for API compatibility)
-            year_group: Optional year group filter
-            subject: Optional subject filter
-            homework_id: Optional ID to search for specific homework
-            k: Number of results to search
+            doc_id: 作业文档 ID
 
         Returns:
-            Correct answers string if found, None otherwise
+            正确答案字符串，未找到则返回 None
         """
-        filters = {}
-        if homework_id is not None:
-            filters["homework_id"] = homework_id
-        if year_group is not None:
-            filters["year_group"] = year_group
-        if subject is not None:
-            filters["subject"] = subject
-
-        if not filters:
-            logger.warning("[RAG] No metadata filters provided for answer search")
+        if not doc_id:
+            logger.warning("[RAG] doc_id 为空")
             return None
 
-        # Use metadata-based search instead of semantic search
-        results = self.search_by_metadata(filters=filters, k=k)
+        try:
+            result = self.db.get(ids=[doc_id])
+            if not result or not result.get("ids"):
+                logger.warning(f"[RAG] 未找到 doc_id={doc_id} 对应的文档")
+                return None
 
-        # Return correct answers from matching homework documents
-        for result in results:
-            correct_answers = result.get("metadata", {}).get("correct_answers")
+            metadata = result["metadatas"][0]
+            correct_answers = metadata.get("correct_answers")
             if correct_answers:
-                logger.info(f"[RAG] Found correct answers via metadata search")
-                return correct_answers
-
-        return None
+                logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
+            return correct_answers
+        except Exception as e:
+            logger.error(f"[RAG] 获取正确答案失败: {e}")
+            return None
 
 
 # Convenience functions for direct use
@@ -650,24 +640,14 @@ def search_chinese_textbooks(query: str, year_group: int = None, k: int = 5) -> 
     return store.search_chinese_textbooks(query, year_group, k)
 
 
-def search_homework_answers(
-    # homework_content: str,
-    year_group: int = None,
-    subject: str = None,
-    homework_id: str = None,
-    k: int = 1,
-) -> Optional[str]:
-    """Search for correct answers to homework in RAG store
+def search_homework_answers(doc_id: str) -> Optional[str]:
+    """通过 doc_id 获取正确答案
 
     Args:
-        homework_content: The homework content to match
-        year_group: Optional year group filter
-        subject: Optional subject filter
-        homework_id: Optional homework ID to search for specific homework
-        k: Number of results to search
+        doc_id: 作业文档 ID
 
     Returns:
-        Correct answers string if found, None otherwise
+        正确答案字符串，未找到则返回 None
     """
     store = get_homework_rag_store()
-    return store.search_homework_answers(year_group, subject, homework_id, k)
+    return store.search_homework_answers(doc_id)

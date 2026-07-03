@@ -341,11 +341,11 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     sections = []  # 数据文件在父目录的 data/ 文件夹
     for subject in subjects:
         logger.info(f"[Homework] Generating homework for {subject}...")
-        homework, homework_id = generate_homework_for_subject(student_profile, subject, llm)
+        homework, doc_id = generate_homework_for_subject(student_profile, subject, llm)
         sections.append({
             'subject': subject,
             'homework': homework,
-            'homework_id': homework_id
+            'doc_id': doc_id
         })
         logger.debug(f"==============={subject}===================\n{homework}")
 
@@ -378,7 +378,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     Returns:
         保存的文件路径
     """
-    from src.primary import parse_profile_from_natural_language
+    from src.ui import parse_profile_from_natural_language
     from src.homework_generator import extract_subjects_from_prompt
 
     # 1. 获取学生档案
@@ -391,8 +391,8 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         subjects = extract_subjects_from_prompt(profile["learning_goals"], llm)
         logger.info(f"[Extracted Subjects from Learning Goals] {', '.join(subjects)}")
     else:
-        logger.warning("[Warning] No subjects found in input. Using default subjects: English, Math")
-        subjects = ["English", "Math"]
+        logger.warning("[Warning] No subjects found in input. Using default subjects: English, Maths")
+        subjects = ["English", "Maths"]
 
     logger.info(f"[Extracted Subjects] {', '.join(subjects)}")
 
@@ -418,14 +418,14 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework: str, homework_id, llm) -> str:
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework: str, doc_id, llm) -> str:
     """批阅上传的作业
 
     Args:
         student_profile: 学生档案
         subject: 科目
         homework: 学生提交的作业内容
-        homework_id: 原始作业题目ID（如果有）
+        doc_id: 原始作业文档ID（如果有）
         llm: LangChain LLM 实例
 
     Returns:
@@ -434,17 +434,11 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
     prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
     correct_answers_section = ""
 
-    if homework_id:
+    if doc_id:
         # 1. 先从 RAG 中检索是否有该作业的答案
         correct_answers = None
-        year_group = student_profile.get("year_group")
         try:
-            correct_answers = search_homework_answers(
-                year_group=year_group,
-                subject=subject,
-                homework_id=homework_id,
-                k=1,
-            )
+            correct_answers = search_homework_answers(doc_id=doc_id)
             if correct_answers:
                 logger.info(f"[RAG] Found correct answers in RAG for {subject} review")
             else:

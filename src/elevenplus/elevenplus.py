@@ -55,17 +55,17 @@ def create_vectorstore():
 # =========================
 
 def store_homework(db, subject, index, content):
+    doc_id = f"{subject.lower()}_{index:03d}"
     doc = Document(
         page_content=content,
         metadata={
             "subject": subject,
-            "homework_id": index,
             "type": "11plus_homework",
             "duration_minutes": 30
         }
     )
 
-    db.add_documents([doc])
+    db.add_documents([doc], ids=[doc_id])
 
 
 # =========================

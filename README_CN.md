@@ -13,7 +13,7 @@
 ## 功能
 
 - 根据 UK Department for Education 指南，按年龄段生成英语作业
-- 自动识别科目（支持 Math、English、Science、History、Geography 等）
+- 自动识别科目（支持 Maths、English、Science、History、Geography 等）
 - 作业点评与反馈
 - 学生学习数据分析与个性化推荐
 - 内置《中文》教材（第一册至第十二册）PDF 资源
@@ -53,4 +53,4 @@ ai_tutor/
 
 ## 科目列表
 
-Math、English、Science、History、Geography、Design and Technology、Art and Design、Computing、Latin、Spanish、Chinese
+Maths、English、Science、History、Geography、Design and Technology、Art and Design、Computing、Latin、Spanish、Chinese

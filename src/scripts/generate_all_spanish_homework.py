@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-检查各年级Spanish作业是否存在，缺失则生成 100 份作业并添加到 RAG 存储
+检查各年级Spanish作业是否存在，缺失则生成 300 份作业并添加到 RAG 存储
 支持 Year 1-6 所有年级
 """
 import sys
@@ -10,11 +10,11 @@ import os
 import random
 
 # 添加项目根目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.homework_rag import get_homework_rag_store
 
-
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # 各年级西班牙语主题（英国小学课程）
 SPANISH_TOPICS_BY_YEAR = {
     1: [
@@ -1062,7 +1062,7 @@ def check_year_spanish_exists(year_group: int) -> bool:
     return len(results) > 0
 
 
-def generate_year_homework(year_group: int, count: int = 100) -> list:
+def generate_year_homework(year_group: int, count: int = 300) -> list:
     """为指定年级生成指定数量的西班牙语作业"""
     topics = SPANISH_TOPICS_BY_YEAR.get(year_group, [])
     if not topics:
@@ -1083,11 +1083,10 @@ def generate_year_homework(year_group: int, count: int = 100) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
-            "homework_id": i,
             "correct_answers": correct_answers
         }
 
-        doc_id = f"hw_spanish_y{year_group}_{i:03d}"
+        doc_id = f"spanish_y{year_group}_{i:03d}"
         batch_data.append({
             "content": content,
             "metadata": metadata,
@@ -1122,7 +1121,7 @@ def main():
 
     for year in years_to_generate:
         print(f"\n开始生成 Year {year} Spanish作业...")
-        batch_data = generate_year_homework(year, count=100)
+        batch_data = generate_year_homework(year, count=300)
 
         if batch_data:
             store.add_batch_homework(batch_data)

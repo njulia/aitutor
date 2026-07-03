@@ -4,6 +4,9 @@
 """Prompt templates for the AI English Tutor."""
 
 # 按科目生成作业的 Prompt 模板
+from chromadb.types import MetadataEmbeddingRecord
+
+
 HOMEWORK_PROMPT = """You are an AI Homework Generator for UK Primary School Students. Create age-appropriate homework for the following subject.
 
 Student Information:
@@ -46,12 +49,12 @@ User Input: {user_input}
 
 Rules:
 1. Extract only subjects that are in the available subjects list
-2. Map similar terms to the exact subject name in the list (e.g., "maths" -> "Math", "science" -> "Science")
+2. Map similar terms to the exact subject name in the list (e.g., "maths" -> "Maths", "science" -> "Science")
 3. Return only the matched subjects as a JSON list
 4. If no subjects are mentioned, return an empty list
 
 Return ONLY a JSON list, nothing else.
-Example: ["Math", "English"]
+Example: ["Maths", "English"]
 """
 
 # 点评作业的 Prompt 模板
@@ -89,14 +92,14 @@ Homework Content:
 Subject: {subject}
 Year Group: {year_group}
 
-Please provide the correct answers for this homework. Only generate answers for questions/tasks that have clear, unique answers (e.g., math calculations, grammar exercises, fill-in-the-blank, spelling).
+Please provide the correct answers for this homework. Only generate answers for questions/tasks that have clear, unique answers (e.g., maths calculations, grammar exercises, fill-in-the-blank, spelling).
 
 For open-ended questions (e.g., creative writing, opinions, descriptions), provide a brief answer guideline or example instead of marking as "no unique answer".
 
 Format the answers clearly:
 - Use numbered list matching the homework task numbers
 - Keep answers concise
-- For math: show the final answer only
+- For maths: show the final answer only
 - For grammar/language: provide the correct word/sentence
 
 Return ONLY the answers, no explanations.
@@ -303,74 +306,34 @@ Return ONLY a valid JSON object with these fields:
 - weak_areas: list of strings
 - learning_style: one of "Visual", "Auditory", "Kinesthetic", "Reading/Writing"
 - vocabulary_count: integer
-- extracted_subjects: list of strings (subjects mentioned in the description, must be from the available subjects list, map similar terms to exact names like "maths" -> "Math")
+- extracted_subjects: list of strings (subjects mentioned in the description, must be from the available subjects list, map similar terms to exact names like "maths" -> "Maths")
 
 If some information is not mentioned, use reasonable defaults for a UK primary school student.
 """
 
-# 11+ 作业 Review Prompt
-ELEVEN_PLUS_PROMPT = """
+MEMORY_PROMPT = """Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim where possible, especially for instructions and preferences.
 
-You are an experienced UK 11+ tutor.
+## Categories (output in this order):
 
-Subjects:
+1. **Instructions**: Rules I've explicitly asked you to follow going forward — tone, format, style, "always do X", "never do Y", and corrections to your behavior. Only include rules from stored memories, not from conversations.
 
-- Mathematics
-- English
-- Verbal Reasoning
-- Non-Verbal Reasoning
+2. **Identity**: Name, age, location, education, family, relationships, languages, and personal interests.
 
-Use ONLY the retrieved curriculum.
+3. **Career**: Current and past roles, companies, and general skill areas.
 
-Explain clearly.
+4. **Projects**: Projects I meaningfully built or committed to. Ideally ONE entry per project. Include what it does, current status, and any key decisions. Use the project name or a short descriptor as the first words of the entry.
 
-If the student makes mistakes:
+5. **Preferences**: Opinions, tastes, and working-style preferences that apply broadly.
 
-• explain why
+## Format:
 
-• provide hints
+Use section headers for each category. Within each category, list one entry per line, sorted by oldest date first. Format each line as:
 
-• ask a similar question
+[YYYY-MM-DD] - Entry content here.
 
-Context:
+If no date is known, use [unknown] instead.
 
-{context}
-
-Student:
-
-{question}
-
-"""
-# 11+ 作业生成 Prompt
-ELEVEN_PLUS_RAG_PROMPT = """
-You are an expert UK 11+ exam tutor.
-
-Create ONE complete homework set.
-
-Subject: {subject}
-Homework number: {index}
-
-Requirements:
-- Designed for 30 minutes of work
-- UK 11+ difficulty (GL/CEM style but ORIGINAL questions only)
-- Must include:
-  1. 10 questions (increasing difficulty)
-  2. Full answers
-  3. Step-by-step explanations
-  4. One bonus challenge question
-
-Subjects rules:
-- Maths: arithmetic, fractions, percentages, reasoning
-- English: comprehension + grammar + vocabulary
-- Verbal Reasoning: logic, sequences, word patterns
-- Non-Verbal Reasoning: shapes, rotations, matrices
-
-Format clearly with headings:
-HOMEWORK
-QUESTIONS
-ANSWERS
-EXPLANATIONS
-BONUS
-
-Make it exam-quality and structured for self-study.
+## Output:
+- Wrap the entire export in a single code block for easy copying.
+- After the code block, state whether this is the complete set or if more remain.
 """

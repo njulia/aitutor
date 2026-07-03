@@ -34,7 +34,7 @@ KEY_STAGES = {
 
 # UK Primary School National Curriculum subjects
 UK_PRIMARY_SUBJECTS = [
-    "Math",
+    "Maths",
     "English",
     "Spanish",
     "Science",
@@ -58,7 +58,7 @@ ELEVEN_PLUS_SUBJECTS = [
 SUBJECT_ICONS = {
     "English": "ABC",
     "Mathematics": "123",
-    "Math": "123",
+    "Maths": "123",
     "Science": "Sci",
     "History": "His",
     "Geography": "Geo",
@@ -317,7 +317,7 @@ def search_homework_by_topic(
     Args:
         query: Search query (e.g., "fractions exercise", "grammar past tense")
         year_group: Optional UK year group filter (1-6)
-        subject: Optional subject filter (e.g., "Math", "English")
+        subject: Optional subject filter (e.g., "Maths, "English")
     """
     from src.homework_rag import search_homework
 

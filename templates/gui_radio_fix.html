@@ -1,0 +1,23 @@
+<script>
+function fixRadioBackground() {
+    const selectors = [
+        '.gradio-radio', '.gradio-radio *',
+        '.gradio-radio .wrap', '.gradio-radio .wrap-inner',
+        '.gradio-radio label', '.gradio-radio div', '.gradio-radio span',
+        '[class*="radio"]', '[class*="Radio"]'
+    ];
+    selectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+            el.style.background = '#FFFFFF';
+            el.style.backgroundColor = '#FFFFFF';
+        });
+    });
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixRadioBackground);
+} else {
+    fixRadioBackground();
+}
+const observer = new MutationObserver(() => { fixRadioBackground(); });
+observer.observe(document.body, { childList: true, subtree: true });
+</script>

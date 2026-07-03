@@ -1,4 +1,4 @@
-# Prompt 模板 for 11plus
+# Prompt 模板 for 11plus homework generation
 
 # 按科目生成作业的 Prompt 模板
 HOMEWORK_PROMPT = """
