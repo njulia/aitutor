@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homework Magic - AI Tutor</title>
+    <meta name="description" content="AI-powered homework generator and reviewer for UK primary schools">
+    <meta name="keywords" content="homework, AI tutor, UK primary school, KS1, KS2, 11 plus">
+    <meta property="og:title" content="Homework Magic - AI Tutor">
+    <meta property="og:description" content="Generate and review homework with AI">
+    
+    <!-- Markdown to HTML parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links a {
+            margin-left: 20px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            border: none;
+            background: white;
+            color: #666;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: #f0f0f0;
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        /* Main Content */
+        .content {
+            display: none;
+        }
+        
+        .content.active {
+            display: block;
+        }
+        
+        /* Card */
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        /* Form Styles */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .subject-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        
+        .subject-item {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .subject-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .subject-item.selected {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Homework Output */
+        .homework-output {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+        
+        .answer-input {
+            min-height: 200px;
+            font-family: inherit;
+        }
+        
+        .review-output {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            line-height: 1.8;
+        }
+        
+        /* Markdown styles */
+        .question-column h1, .review-output h1 { font-size: 1.8em; margin: 0.8em 0 0.4em 0; color: #333; }
+        .question-column h2, .review-output h2 { font-size: 1.5em; margin: 0.8em 0 0.4em 0; color: #444; }
+        .question-column h3, .review-output h3 { font-size: 1.3em; margin: 0.7em 0 0.35em 0; color: #555; }
+        .question-column p, .review-output p { margin: 0.8em 0; line-height: 1.8; }
+        .question-column ul, .review-output ul, .question-column ol, .review-output ol { margin: 0.8em 0; padding-left: 2em; }
+        .question-column li, .review-output li { margin: 0.4em 0; line-height: 1.7; }
+        .question-column code, .review-output code { background: #f4f4f4; padding: 0.2em 0.5em; border-radius: 4px; font-family: monospace; }
+        .question-column pre, .review-output pre { background: #f4f4f4; padding: 1em; border-radius: 8px; overflow-x: auto; }
+        .question-column pre code, .review-output pre code { background: transparent; padding: 0; }
+        
+        /* Table styles */
+        .homework-output table, .review-output table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        .homework-output th, .review-output th, .homework-output td, .review-output td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .homework-output th, .review-output th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+        .homework-output tr:nth-child(even), .review-output tr:nth-child(even) {
+            background: #f8f9ff;
+        }
+        
+        /* Homework block layout */
+        .homework-block {
+            background: #ffffff;
+            border: 2px solid #f0f0f0;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .subject-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: -20px -20px 20px -20px;
+            font-size: 1.3em;
+        }
+        
+        .homework-content {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 25px;
+        }
+        
+        .question-column {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .answer-column {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .answer-column h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .answer-input-inline {
+            flex-grow: 1;
+            min-height: 200px;
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .answer-input-inline:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        /* Question formatting */
+        .question-number {
+            font-weight: bold;
+            margin-top: 1.2em !important;
+            margin-bottom: 0.6em !important;
+            padding-top: 0.4em;
+            border-top: 1px dashed #ddd;
+        }
+        
+        .question-number:first-of-type {
+            border-top: none;
+            margin-top: 0 !important;
+            padding-top: 0;
+        }
+        
+        .question-item {
+            padding: 0.5em 0;
+            border-bottom: 1px dashed #eee;
+        }
+        
+        .question-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Input method tabs */
+        .input-method-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-method-tab {
+            padding: 12px 24px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .input-method-tab:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .input-method-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .input-method-content {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Upload areas */
+        .upload-placeholder {
+            border: 2px dashed #ccc;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+
+        .upload-placeholder:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        /* Success Message */
+        .success-banner {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            padding: 30px;
+            margin-top: 40px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 900px) {
+            .homework-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .answer-input-inline {
+                min-height: 150px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">✨ Homework Magic</div>
+            <nav class="nav-links">
+                <a href="/">Home</a>
+                <a href="/ks1-homework">KS1</a>
+                <a href="/ks2-homework">KS2</a>
+                <a href="/11-plus-practice">11+</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('quick')">
+                ⚡ Quick Select
+            </button>
+            <button class="tab" onclick="switchTab('custom')">
+                📝 Custom Profile
+            </button>
+            <button class="tab" onclick="switchTab('eleven')">
+                🎯 11+ Practice
+            </button>
+            <button class="tab" onclick="switchTab('review')">
+                ✅ Check Homework
+            </button>
+        </div>
+
+        <!-- Quick Select Tab -->
+        <div id="quick" class="content active">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Quick Homework Generator</h2>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Select year group and subjects to get started!
+                </p>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Year Group</label>
+                        <select id="quick-year">
+                            <option value="1">Year 1 (Age 5)</option>
+                            <option value="2">Year 2 (Age 6)</option>
+                            <option value="3">Year 3 (Age 7)</option>
+                            <option value="4">Year 4 (Age 8)</option>
+                            <option value="5">Year 5 (Age 9)</option>
+                            <option value="6">Year 6 (Age 10)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Subjects</label>
+                    <div class="subject-grid" id="quick-subjects"></div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="generateQuickHomework()">
+                    Generate Homework!
+                </button>
+            </div>
+        </div>
+
+        <!-- Custom Profile Tab -->
+        <div id="custom" class="content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Custom Student Profile</h2>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Describe your child for personalized homework
+                </p>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Describe the Student</label>
+                        <textarea id="custom-profile" rows="6"
+                            placeholder="e.g. Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics...">
+Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is eager to learn both Chinese and Spanish and is committed to spending 15-30 minutes each day practicing these languages as well as developing her maths skills.
+</textarea>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Subjects</label>
+                    <div class="subject-grid" id="custom-subjects"></div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="generateCustomHomework()">
+                    Generate Homework!
+                </button>
+            </div>
+        </div>
+
+        <!-- 11+ Practice Tab -->
+        <div id="eleven" class="content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">11+ Practice</h2>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Prepare for grammar school entrance exams
+                </p>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Describe the Student</label>
+                        <textarea id="eleven-profile" rows="6">
+Ana is a 9 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. She has an Analytical mindset, aided by an early interest in language learning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
+</textarea>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Subjects</label>
+                    <div class="subject-grid" id="eleven-subjects"></div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="generateElevenHomework()">
+                    Generate 11+ Practice!
+                </button>
+            </div>
+        </div>
+
+        <!-- Review Tab -->
+        <div id="review" class="content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Check My Homework</h2>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Get AI-powered feedback on your child's work
+                </p>
+                
+                <!-- Input Method Tabs -->
+                <div style="margin-bottom: 25px;">
+                    <div class="input-method-tabs">
+                        <button class="input-method-tab active" onclick="setInputMethod('text')">
+                            📝 Text Input
+                        </button>
+                        <button class="input-method-tab" onclick="setInputMethod('photo')">
+                            📸 Take Photo
+                        </button>
+                        <button class="input-method-tab" onclick="setInputMethod('file')">
+                            📁 Upload File
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Text Input Method -->
+                <div id="input-text" class="input-method-content">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Homework Questions</label>
+                            <textarea id="review-homework" rows="6" class="answer-input"
+                                placeholder="Paste the homework questions here..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Student's Answers</label>
+                            <textarea id="review-answers" rows="6" class="answer-input"
+                                placeholder="Paste or type the student's answers here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Photo Input Method -->
+                <div id="input-photo" class="input-method-content" style="display: none;">
+                    <div class="form-group">
+                        <label>Take a Photo of Homework</label>
+                        <div class="photo-upload-area">
+                            <input type="file" id="photo-input" accept="image/*" capture="environment"
+                                style="display: none;" onchange="handlePhotoSelect(event)">
+                            <div class="upload-placeholder" onclick="document.getElementById('photo-input').click()">
+                                <div style="font-size: 40px; margin-bottom: 10px;">📸</div>
+                                <div style="font-weight: bold; margin-bottom: 5px;">Click to take a photo</div>
+                                <div style="color: #666; font-size: 0.9em;">Or tap to select from gallery</div>
+                            </div>
+                            <div id="photo-preview" style="display: none; margin-top: 15px;">
+                                <img id="photo-img" style="max-width: 100%; max-height: 300px; border-radius: 10px;">
+                                <div style="margin-top: 10px;">
+                                    <button class="btn btn-secondary" onclick="clearPhoto()">Clear Photo</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Homework Questions (optional if included in photo)</label>
+                        <textarea id="review-homework-photo" rows="4" class="answer-input"
+                            placeholder="If questions not in photo, paste them here..."></textarea>
+                    </div>
+                </div>
+                
+                <!-- File Input Method -->
+                <div id="input-file" class="input-method-content" style="display: none;">
+                    <div class="form-group">
+                        <label>Upload Homework File</label>
+                        <div class="file-upload-area">
+                            <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.heic,.gif,.txt,.md,.csv,.pdf"
+                                style="display: none;" onchange="handleFileSelect(event)">
+                            <div class="upload-placeholder" onclick="document.getElementById('file-input').click()">
+                                <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
+                                <div style="font-weight: bold; margin-bottom: 5px;">Click to upload file</div>
+                                <div style="color: #666; font-size: 0.9em;">Supports: JPG, PNG, HEIC, PDF, TXT, MD, CSV</div>
+                            </div>
+                            <div id="file-info" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                                <div style="font-weight: bold;">Selected: <span id="file-name"></span></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="btn btn-secondary" onclick="clearFile()">Clear File</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Homework Questions (optional if included in file)</label>
+                        <textarea id="review-homework-file" rows="4" class="answer-input"
+                            placeholder="If questions not in file, paste them here..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 25px;">
+                    <label>Subject</label>
+                    <select id="review-subject"></select>
+                </div>
+                
+                <button class="btn btn-primary" onclick="reviewHomework()">
+                    Get Feedback!
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Generating homework with AI... Please wait</p>
+        </div>
+
+        <!-- Results -->
+        <div id="results" style="display: none;">
+            <div class="card">
+                <h2 style="margin-bottom: 25px;">Your Homework</h2>
+                <div id="homework-results"></div>
+                
+                <div style="margin-top: 30px; text-align: center;">
+                    <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
+                        Check Answers
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearResults()">
+                        New Homework
+                    </button>
+                </div>
+                
+                <div id="review-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Made with 💜 Homework Magic © 2026</p>
+    </div>
+
+    <script>
+        let currentHomework = [];
+        let currentSubject = 'Maths';
+        let currentProfile = null;
+        
+        // Configure marked for better line breaks
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
+        // Initialize subjects
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSubjects();
+            loadYearGroups();
+        });
+
+        function loadSubjects() {
+            fetch('/api/subjects')
+                .then(response => response.json())
+                .then(data => {
+                    renderSubjects('quick-subjects', data.primary);
+                    renderSubjects('custom-subjects', data.primary);
+                    renderSubjects('eleven-subjects', data.eleven_plus);
+                    
+                    const reviewSelect = document.getElementById('review-subject');
+                    data.primary.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject;
+                        option.textContent = subject;
+                        reviewSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading subjects:', error));
+        }
+
+        function renderSubjects(containerId, subjects) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = subjects.map(subject => {
+                // 在 quick-subjects 和 eleven-subjects 中默认选中 Maths
+                const isSelected = (containerId === 'quick-subjects' || containerId === 'eleven-subjects') 
+                                    && subject === 'Maths';
+                return `
+                    <div class="subject-item ${isSelected ? 'selected' : ''}" 
+                         data-subject="${subject}"
+                         onclick="toggleSubject(this, '${containerId}')">
+                        ${subject}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleSubject(element, containerId) {
+            element.classList.toggle('selected');
+        }
+
+        function getSelectedSubjects(containerId) {
+            const container = document.getElementById(containerId);
+            const selected = container.querySelectorAll('.subject-item.selected');
+            return Array.from(selected).map(el => el.dataset.subject);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showResults() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('review-result').innerHTML = '';
+        }
+
+        function clearResults() {
+            document.getElementById('results').style.display = 'none';
+            currentHomework = [];
+        }
+
+        function generateQuickHomework() {
+            const year = parseInt(document.getElementById('quick-year').value);
+            const subjects = getSelectedSubjects('quick-subjects');
+            
+            if (subjects.length === 0) {
+                alert('Please select at least one subject!');
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quick_select: true,
+                    year: year,
+                    subjects: subjects
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    displayHomework(data.homework);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function generateCustomHomework() {
+            const profileText = document.getElementById('custom-profile').value;
+            const subjects = getSelectedSubjects('custom-subjects');
+            
+            if (subjects.length === 0) {
+                alert('Please select at least one subject!');
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    profile: { description: profileText },
+                    subjects: subjects
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    displayHomework(data.homework);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function generateElevenHomework() {
+            const profileText = document.getElementById('eleven-profile').value;
+            const subjects = getSelectedSubjects('eleven-subjects');
+            
+            if (subjects.length === 0) {
+                alert('Please select at least one subject!');
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    profile: { description: profileText },
+                    subjects: subjects
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    displayHomework(data.homework);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function formatQuestions(html) {
+            // 在每个问题前后添加更好的间距和格式
+            // 查找编号的问题（如 1.、2.、(1)、(2) 等）
+            let formatted = html
+                // 给编号问题添加间距
+                .replace(/<p>(\d+\.)/g, '<p class="question-number">$1')
+                // 增强列表项
+                .replace(/<li>/g, '<li class="question-item">');
+            
+            return formatted;
+        }
+        
+        function displayHomework(homeworkList) {
+            const container = document.getElementById('homework-results');
+            container.innerHTML = homeworkList.map(hw => `
+                <div class="homework-block">
+                    <h3 class="subject-header">${hw.subject}</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(marked.parse(hw.content))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answer:</h4>
+                            <textarea class="answer-input-inline" 
+                                      placeholder="Write your answer here..."
+                                      data-subject="${hw.subject}"></textarea>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            showResults();
+        }
+
+        function reviewGeneratedHomework() {
+            // 收集所有答案
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+            
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+            
+            const combinedAnswers = allAnswers.join('\n\n');
+            
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+            
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+            
+            currentSubject = subject;
+            reviewHomeworkWithContent(homework, combinedAnswers, subject);
+        }
+
+        function reviewHomework() {
+            const homework = document.getElementById('review-homework').value;
+            const answers = document.getElementById('review-answers').value;
+            const subject = document.getElementById('review-subject').value;
+            
+            if (!homework.trim() || !answers.trim()) {
+                alert('Please enter both homework questions and answers!');
+                return;
+            }
+            
+            // First, display the homework in results section for better UX
+            const homeworkResultsDiv = document.getElementById('homework-results');
+            homeworkResultsDiv.innerHTML = `
+                <div class="homework-output">
+                    <h3 style="margin-bottom: 15px; color: #667eea;">${subject}</h3>
+                    <div>${homework}</div>
+                </div>
+            `;
+            
+            // Also populate the student answers area
+            document.getElementById('student-answers').value = answers;
+            
+            currentSubject = subject;
+            currentHomework = [{ subject: subject, content: homework, doc_id: null }];
+            reviewHomeworkWithContent(homework, answers, subject);
+        }
+
+        function reviewHomeworkWithContent(homework, answers, subject) {
+            console.log("=== Starting Review ===");
+            console.log("Homework:", homework);
+            console.log("Answers:", answers);
+            console.log("Subject:", subject);
+            
+            showLoading();
+            
+            fetch('/api/review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: homework,
+                    answers: answers,
+                    subject: subject,
+                    profile: currentProfile
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Received response from server:", data);
+                if (data.success) {
+                    console.log("Calling displayReview with review:", data.review);
+                    displayReview(data.review);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function displayReview(review) {
+            const container = document.getElementById('review-result');
+            container.innerHTML = `
+                <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
+                <div class="review-output">${marked.parse(review)}</div>
+            `;
+            
+            // Make sure results section is visible
+            document.getElementById('results').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

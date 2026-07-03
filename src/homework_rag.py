@@ -179,9 +179,12 @@ class HomeworkRAGStore:
         """
         where_clause = self._build_where_clause(filters) if filters else None
 
+        # 使用我们自己的嵌入模型来嵌入查询，避免维度不匹配问题
+        query_embedding = self.embeddings.embed_query(query)
+        
         # 使用底层 ChromaDB collection 查询，可以同时获取 ID
         query_kwargs = {
-            "query_texts": [query],
+            "query_embeddings": [query_embedding],
             "n_results": k,
             "include": ["documents", "metadatas", "distances"],
         }

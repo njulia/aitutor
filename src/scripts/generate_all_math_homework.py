@@ -483,8 +483,8 @@ def _generate_year3_homework(topic: str, index: int) -> tuple:
         left_total = have_pound * 100 - spend_total_pence
         answers = [str(pound1 * 100), f"£{pence1//100}" if pence1%100==0 else f"£{pence1/100}", f"£{toy_change//100}.{toy_change%100:02d}", f"£{left_total//100}.{left_total%100:02d}", f"{pencil_cost * 3}p", f"£{book_cost * book_num}", "350p", "£4.50", f"£{save_pound * save_weeks}", f"£{share_pound/share_people:.2f}"]
     elif topic == "Place Value":
-        digit = random.randint(1,9)
         num = random.randint(100,999)
+        digit = int(random.choice(str(num)))
         num2 = random.randint(100,999)
         num3 = random.randint(100,500)
         add_val = random.randint(10,100)
@@ -1393,7 +1393,7 @@ def _generate_year6_homework(topic: str, index: int) -> tuple:
         questions = [f"{i+1}. Year 6 Maths practice question {i+1}" for i in range(10)]
         answers = [f"answer {i+1}" for i in range(10)]
 
-    content = f"MathsHomework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    content = f"Maths Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
 
 

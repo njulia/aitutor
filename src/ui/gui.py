@@ -377,8 +377,10 @@ def _build_gradio_app(
     switch_to_check,
     handle_submit,
     show_photo_input, show_file_input,
+    launch=True,
+    share=True,
 ):
-    """构建并启动 Gradio 应用"""
+    """构建 Gradio 应用，可选是否立即启动"""
 
     DEFAULT_PROFILE_EXAMPLE = (
         "Ana is a 7-year-old student in Year 2 in London. "
@@ -593,4 +595,7 @@ def _build_gradio_app(
                 outputs=[tabs, homework_completed]
             )
 
-    demo.launch(share=True)
+    if launch:
+        demo.launch(share=share)
+    else:
+        return demo

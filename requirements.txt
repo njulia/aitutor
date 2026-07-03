@@ -1,0 +1,14 @@
+# Core dependencies
+flask
+gradio
+langchain-openai
+langchain-core
+langgraph
+pydantic
+chromadb
+
+# Optional but recommended
+python-dotenv
+
+# For image handling
+Pillow
