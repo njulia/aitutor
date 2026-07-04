@@ -40,7 +40,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     Returns:
         作业内容字符串
     """
-    year_group = student_profile.get("year_group", 3)
+    year_group = student_profile.get("year_group", 6)
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
     student_id = student_profile.get("student_id", "")

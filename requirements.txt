@@ -12,3 +12,6 @@ python-dotenv
 
 # For image handling
 Pillow
+
+# For document parsing
+python-docx

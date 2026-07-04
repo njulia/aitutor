@@ -202,7 +202,7 @@ def render_page(page_data, sections, faqs, cta_text, page_path, page_name, json_
   <a href="/">Home</a>
   <a href="/ks1-homework">KS1 Homework</a>
   <a href="/ks2-homework">KS2 Homework</a>
-  <a href="/11-plus-practice">11 Plus Practice</a>
+  <a href="/elevenplus-practice">11 Plus Practice</a>
   <a href="/check-my-homework">Check My Homework</a>
 </div>
 

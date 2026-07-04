@@ -22,20 +22,18 @@ logger = logging.getLogger(__name__)
 AGICTO_API_KEY = os.getenv("AGICTO_API_KEY")
 
 # RAG storage directory
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
 
 
-class HomeworkRAGStore:
-    """RAG store for homework documents with metadata-based search"""
-
+class ElevenPlusRAGStore:
     def __init__(self, persist_directory: str = None):
         self.persist_dir = persist_directory or CHROMA_DB_PATH
         os.makedirs(self.persist_dir, exist_ok=True)
 
         # Initialize embeddings using AGICTO API
         self.embeddings = OpenAIEmbeddings(
-            model=" text-embedding-3-small",
+            model="text-embedding-3-small",
             openai_api_key=AGICTO_API_KEY,
             openai_api_base="https://api.agicto.cn/v1/",
         )
@@ -44,22 +42,19 @@ class HomeworkRAGStore:
         self.db = Chroma(
             persist_directory=self.persist_dir,
             embedding_function=self.embeddings,
-            collection_name="homework_collection",
+            collection_name="elevenplus_collection",
         )
-
-        # Initialize ChromaDB vector store for Chinese textbooks
-        self.chinese_db_path = os.path.join(self.persist_dir, "chinese_textbooks")
-        os.makedirs(self.chinese_db_path, exist_ok=True)
-        self.chinese_db = Chroma(
-            persist_directory=self.chinese_db_path,
-            embedding_function=self.embeddings,
-            collection_name="chinese_collection",
-        )
+        # self.retriever = self.db.as_retriever(
+        #     search_type="mmr",
+        #     search_kwargs={
+        #     "k":5
+        #    }
+        # )
 
     def add_homework(
-        self,
-        homework_content: str,
-        metadata: Dict[str, Any]
+            self,
+            homework_content: str,
+            metadata: Dict[str, Any]
     ) -> str:
         """Add a homework document to the RAG store
 
@@ -97,8 +92,8 @@ class HomeworkRAGStore:
         return doc_id
 
     def add_batch_homework(
-        self,
-        homework_list: List[Dict[str, Any]],
+            self,
+            homework_list: List[Dict[str, Any]],
     ) -> List[str]:
         """Add multiple homework documents in batch
 
@@ -135,10 +130,10 @@ class HomeworkRAGStore:
         return doc_ids
 
     def search(
-        self,
-        query: str,
-        k: int = 5,
-        filters: Optional[Dict[str, Any]] = None,
+            self,
+            query: str,
+            k: int = 5,
+            filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """搜索作业文档
 
@@ -155,7 +150,7 @@ class HomeworkRAGStore:
 
         # 使用我们自己的嵌入模型来嵌入查询，避免维度不匹配问题
         query_embedding = self.embeddings.embed_query(query)
-        
+
         # 使用底层 ChromaDB collection 查询，可以同时获取 ID
         query_kwargs = {
             "query_embeddings": [query_embedding],
@@ -184,9 +179,9 @@ class HomeworkRAGStore:
         return results
 
     def search_by_metadata(
-        self,
-        filters: Dict[str, Any],
-        k: int = 10,
+            self,
+            filters: Dict[str, Any],
+            k: int = 10,
     ) -> List[Dict[str, Any]]:
         """Search homework documents by metadata only (no semantic search)
 
@@ -281,9 +276,9 @@ class HomeworkRAGStore:
         return {}
 
     def get_student_homework_history(
-        self,
-        student_id: str,
-        subject: str = None,
+            self,
+            student_id: str,
+            subject: str = None,
     ) -> List[Dict[str, Any]]:
         """Get all homework previously generated for a student
 
@@ -313,9 +308,9 @@ class HomeworkRAGStore:
         ]
 
     def get_student_previous_topics(
-        self,
-        student_id: str,
-        subject: str,
+            self,
+            student_id: str,
+            subject: str,
     ) -> List[str]:
         """Extract list of topics/areas previously covered for a student in a subject
 
@@ -432,10 +427,10 @@ class HomeworkRAGStore:
         return len(doc_ids)
 
     def search_chinese_textbooks(
-        self,
-        query: str,
-        year_group: int = None,
-        k: int = 5,
+            self,
+            query: str,
+            year_group: int = None,
+            k: int = 5,
     ) -> List[Dict[str, Any]]:
         """Search Chinese textbooks
 
@@ -468,8 +463,8 @@ class HomeworkRAGStore:
         ]
 
     def search_homework_answers(
-        self,
-        doc_id: str,
+            self,
+            doc_id: str,
     ) -> Optional[str]:
         """通过 doc_id 直接获取正确答案
 
@@ -500,26 +495,26 @@ class HomeworkRAGStore:
 
 
 # Convenience functions for direct use
-_homework_rag_store = None
+_elevenplus_rag_store = None
 
 
-def get_homework_rag_store() -> HomeworkRAGStore:
+def get_elevenplus_rag_store():
     """Get or create the singleton RAG store instance"""
-    global _homework_rag_store
-    if _homework_rag_store is None:
-        _homework_rag_store = HomeworkRAGStore()
-    return _homework_rag_store
+    global _elevenplus_rag_store
+    if _elevenplus_rag_store is None:
+        _elevenplus_rag_store = ElevenPlusRAGStore()
+    return _elevenplus_rag_store
 
 
 def store_homework(
-    homework_content: str,
-    year_group: int,
-    subject: str,
-    homework_minutes: str,
-    key_stage: str = None,
-    english_level: str = None,
-    student_id: str = None,
-    correct_answers: str = None,
+        homework_content: str,
+        year_group: int,
+        subject: str,
+        homework_minutes: str,
+        key_stage: str = None,
+        english_level: str = None,
+        student_id: str = None,
+        correct_answers: str = None,
 ) -> str:
     """Store a homework document in the RAG store
 
@@ -536,7 +531,7 @@ def store_homework(
     Returns:
         Document ID
     """
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
 
     metadata = {
         "year_group": year_group,
@@ -558,12 +553,12 @@ def store_homework(
 
 
 def search_homework(
-    query: str,
-    year_group: int = None,
-    subject: str = None,
-    homework_minutes: str = None,
-    study_year_month: str = None,
-    k: int = 5,
+        query: str,
+        year_group: int = None,
+        subject: str = None,
+        homework_minutes: str = None,
+        study_year_month: str = None,
+        k: int = 5,
 ) -> List[Dict[str, Any]]:
     """Search for homework documents
 
@@ -578,7 +573,7 @@ def search_homework(
     Returns:
         List of search results
     """
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
 
     filters = {}
     if year_group is not None:
@@ -595,25 +590,25 @@ def search_homework(
 
 def get_student_homework_history(student_id: str, subject: str = None) -> List[Dict[str, Any]]:
     """Get homework history for a student"""
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     return store.get_student_homework_history(student_id, subject)
 
 
 def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
     """Get previous topics covered for a student in a subject"""
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     return store.get_student_previous_topics(student_id, subject)
 
 
 def ingest_chinese_textbooks(chinese_dir: str = None) -> int:
     """Ingest Chinese textbooks into RAG"""
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     return store.ingest_chinese_textbooks(chinese_dir)
 
 
 def search_chinese_textbooks(query: str, year_group: int = None, k: int = 5) -> List[Dict[str, Any]]:
     """Search Chinese textbooks"""
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     return store.search_chinese_textbooks(query, year_group, k)
 
 
@@ -626,5 +621,5 @@ def search_homework_answers(doc_id: str) -> Optional[str]:
     Returns:
         正确答案字符串，未找到则返回 None
     """
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     return store.search_homework_answers(doc_id)

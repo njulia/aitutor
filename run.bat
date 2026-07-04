@@ -10,9 +10,9 @@ REM Ensure static files are generated
 echo Generating SEO pages...
 python generate_landing_pages.py
 
-REM Copy 11-plus-practice.html if needed
-if exist "templates\11-plus-practice.html" if not exist "static\11-plus-practice.html" (
-    copy "templates\11-plus-practice.html" "static\"
+REM Copy elevenplus-practice.html if needed
+if exist "templates\elevenplus-practice.html" if not exist "static\elevenplus-practice.html" (
+    copy "templates\elevenplus-practice.html" "static\"
 )
 
 echo.

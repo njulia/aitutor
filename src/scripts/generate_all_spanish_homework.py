@@ -240,8 +240,8 @@ def _generate_year1_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(learning)", "(reference)", "(reference)", "(learning)", "Sit down", "Levantate", "Listen", "Mira", "Mira-Look, Escucha-Listen", "Be quiet", "Ven aqui", "(practice)", "drawing", "student's own 3 commands"]
     else:
-        questions = [f"{i+1}. Year 1 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 1 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 1 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -394,8 +394,8 @@ def _generate_year2_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(learning)", "(reference)", "(reference)", "(practice)", "book", "boligrafo", "pencil", "regla", "boligrafo-pen, goma-rubber", "student's own 3 items", "drawing (5 objects labelled)", "bag", "pupitre", "student's own 5 objects"]
     else:
-        questions = [f"{i+1}. Year 2 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 2 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -553,8 +553,8 @@ def _generate_year3_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(learning)", "(reference)", "(reference)", "(reference)", "(learning)", "Por favor", "Gracias", "Sorry", "No entiendo", "Gracias-Thank you, Si-Yes", "student's own dialogue", "Excuse me", "Puedes repetir?", "(oral practice)", "student's own 5 phrases"]
     else:
-        questions = [f"{i+1}. Year 3 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 3 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -714,8 +714,8 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(learning)", "(reference)", "(reference)", "(reference)", "(learning)", "The weather forecast", "Manana", "Hoy va a estar soleado", "temperature", "manana-tomorrow, grados-degrees", "student's own forecast", "student's own answer", "Esta semana va a llover", "drawing (labelled in Spanish)", "student's own 5-sentence forecast"]
     else:
-        questions = [f"{i+1}. Year 4 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 4 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 4 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
     return content, answers
@@ -876,8 +876,8 @@ def _generate_year5_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(learning)", "(reference)", "(reference)", "(learning)", "environment", "reciclar", "pollution", "proteger", "naturaleza-nature, arbol-tree", "student's own 3 points", "We must protect nature", "contaminacion", "student's own 3 problems", "student's own 5 sentences"]
     else:
-        questions = [f"{i+1}. Year 5 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 5 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 5 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
     return content, answers
@@ -1037,8 +1037,8 @@ def _generate_year6_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["(review task)", "(review prompt)", "(review prompt)", "(practice)", "student's own introduction", "uno, dos, tres... veinte", "student's own 10 animals", "student's own 4 sentences", "student's own 4 sentences (past tense)", "student's own 4 sentences (future plans)", "student's own opinion", "student's own 5 translations", "student's own dialogue", "student's own 3 goals"]
     else:
-        questions = [f"{i+1}. Year 6 Spanish practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: Unknown Year 6 topic '{topic}'，Ignored.")
+        return None, None
 
     content = f"Spanish Homework - Year 6 - {topic} (Set {index:03d})\n\n" + "\n".join(questions)
     return content, answers
@@ -1075,6 +1075,9 @@ def generate_year_homework(year_group: int, count: int = 300) -> list:
     for i in range(1, count + 1):
         topic = topics[(i - 1) % len(topics)]
         content, correct_answers = generate_spanish_homework(year_group, topic, i)
+        if content is None or correct_answers is None:
+            print(f"  Year {year_group}: Failed to generate question {i}, skipping...")
+            continue
 
         metadata = {
             "year_group": year_group,

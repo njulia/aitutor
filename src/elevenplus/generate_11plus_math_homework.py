@@ -46,7 +46,7 @@ import random
 # 添加项目根目录到路径 (same pattern as generate_all_math_homework.py)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.homework_rag import get_homework_rag_store
+from src.elevenplus.elevenplus_rag import get_elevenplus_rag_store
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -554,15 +554,15 @@ def _weighted_topic_sequence(count: int) -> list:
 
 def check_11plus_math_exists() -> bool:
     """检查是否已有 11+ 数学练习"""
-    store = get_homework_rag_store()
-    results = store.search(query="11 plus maths", k=1, filters={"subject": "11Plus"})
+    store = get_elevenplus_rag_store()
+    results = store.search(query="maths", k=1, filters={"subject": "Maths"})
     return len(results) > 0
 
 
 def clean_11plus_math() -> int:
     """清理所有已有的 11+ 数学练习"""
-    store = get_homework_rag_store()
-    results = store.search_by_metadata({"subject": "11Plus"})
+    store = get_elevenplus_rag_store()
+    results = store.search_by_metadata({"subject": "Maths"})
 
     if not results:
         print("  没有找到需要清理的 11+ 作业")
@@ -588,7 +588,7 @@ def generate_11plus_batch(count: int = 500) -> list:
 
         metadata = {
             "year_group": YEAR_GROUP,
-            "subject": "11Plus",
+            "subject": "Maths",
             "homework_minutes": HOMEWORK_MINUTES,
             "key_stage": KEY_STAGE,
             "topic": topic,
@@ -614,7 +614,7 @@ def main():
     """主函数：检查 11+ Maths 练习是否存在，缺失则生成"""
     print("检查 11+ Maths 练习是否存在...\n")
 
-    store = get_homework_rag_store()
+    store = get_elevenplus_rag_store()
     exists = check_11plus_math_exists()
     status = "已有" if exists else "缺失"
     print(f"  11+ Maths: {status}")

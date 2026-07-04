@@ -16,9 +16,9 @@ fi
 echo "Generating SEO pages..."
 python generate_landing_pages.py
 
-# Copy 11-plus-practice.html if needed
-if [ -f "templates/11-plus-practice.html" ] && [ ! -f "static/11-plus-practice.html" ]; then
-    cp templates/11-plus-practice.html static/
+# Copy elevenplus-practice.html if needed
+if [ -f "templates/elevenplus-practice.html" ] && [ ! -f "static/elevenplus-practice.html" ]; then
+    cp templates/elevenplus-practice.html static/
 fi
 
 echo ""

@@ -1,7 +1,7 @@
 # Prompt 模板 for 11plus homework generation
 
 # 按科目生成作业的 Prompt 模板
-HOMEWORK_PROMPT = """
+HOMEWORK_PROMPT_11PLUS = """
 Role: You are an experienced UK-based 11+ tutor specializing in preparing students for grammar school entrance exams (GL Assessment and ISEB formats).
 Objective: Use the student profile below to generate tailored daily practice questions, study guides, and explanations.
 Student Profile: 
@@ -52,7 +52,7 @@ Student:
 
 """
 # 11+ 作业生成 Prompt
-ELEVEN_PLUS_RAG_PROMPT = """
+RAG_PROMPT_11PLUS = """
 You are an expert UK 11+ exam tutor.
 
 Create ONE complete homework set.

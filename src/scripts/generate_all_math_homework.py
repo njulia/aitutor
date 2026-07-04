@@ -177,8 +177,8 @@ def _generate_year1_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["1p coin", "2p coin", "5p coin", "10p coin", "20p coin", "5", "5", "7p", "20p", "10p"]
     else:
-        questions = [f"{i+1}. Year 1 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 1 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 1 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -323,8 +323,8 @@ def _generate_year2_homework(topic: str, index: int) -> tuple:
         ]
         answers = ["3", "4", "5", "6", "drawing (rectangle)", "square", "yes", "3", "hexagon", "drawing (octagon)"]
     else:
-        questions = [f"{i+1}. Year 2 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 2 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 2 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -581,8 +581,8 @@ def _generate_year3_homework(topic: str, index: int) -> tuple:
         ]
         answers = [str(apples - eaten), str(box_hold * boxes), f"£{tom_money - tom_spend + tom_get}", f"{(train_h + train_later) % 12 if (train_h + train_later) <= 12 else (train_h + train_later - 12)}:{train_m}", f"{children // teams} teams (remainder {children % teams})", str(2 * (rect_l + rect_w)), str(pages * days), f"{200 // pen_cost} pens", f"{sweets // share_children} each (remainder {sweets % share_children})", f"{(start_h + film_h + (int(start_m) + film_m) // 60) % 12 if (start_h + film_h + (int(start_m) + film_m) // 60) <= 12 else (start_h + film_h + (int(start_m) + film_m) // 60 - 12)}:{(int(start_m) + film_m) % 60:02d}"]
     else:
-        questions = [f"{i+1}. Year 3 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 3 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 3 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -844,8 +844,8 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
         ]
         answers = [f"{sum(nums1)/len(nums1):.1f}", str(sorted(nums2)[2]), str(max(set(mode_nums), key=mode_nums.count)), str(max(range_nums) - min(range_nums)), "drawing (bar chart)", "drawing (pictograph)", str(survey1 + survey2), max([(survey1, "Football"), (survey2, "Tennis"), (swim, "Swimming")], key=lambda x: x[0])[1], f"{like_maths}/20", f"{sum(avg_nums)/len(avg_nums):.1f}"]
     else:
-        questions = [f"{i+1}. Year 4 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 4 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 4 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -1133,8 +1133,8 @@ def _generate_year5_homework(topic: str, index: int) -> tuple:
         end_m = end_total_min % 60
         answers = [str(students * (100 - pct_boys) // 100), str(2 * (length + area // length)), f"£{discount_price//100}.{discount_price%100:02d}", str(speed * (travel_h + travel_m / 60)), f"{rice_g // rice_people}g (remainder {rice_g % rice_people}g)", str(box_l * box_w * box_h), f"{(need_money + save_week - 1) // save_week} weeks", str(ratio_total // 8 * 5), f"{end_h % 12 if end_h <= 12 else end_h - 12}:{end_m:02d}", f"{(pages + read_pages - 1) // read_pages} days"]
     else:
-        questions = [f"{i+1}. Year 5 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 5 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 5 - {topic} (Set {index})\n\n" + "\n".join(questions)
     return content, answers
@@ -1390,10 +1390,11 @@ def _generate_year6_homework(topic: str, index: int) -> tuple:
         ]
         answers = [str(n1 + n2), str(n3 - n4), str(n5 * n6), str(n7 - n8), f"{min([neg1,neg2,pos1,pos2])}, {sorted([neg1,neg2,pos1,pos2])[1]}, {sorted([neg1,neg2,pos1,pos2])[2]}, {max([neg1,neg2,pos1,pos2])}", str(temp1 + temp_rise), str(temp2 - temp_drop), f"£{bank_deposit - bank_neg}", str(neg_mult1 * neg_mult2), "True" if comp1 < comp2 else "False"]
     else:
-        questions = [f"{i+1}. Year 6 Maths practice question {i+1}" for i in range(10)]
-        answers = [f"answer {i+1}" for i in range(10)]
+        print(f"Error: 未知的 Year 6 数学主题 '{topic}'，Ignored.")
+        return None, None
 
     content = f"Maths Homework - Year 6 - {topic} (Set {index})\n\n" + "\n".join(questions)
+    print(content)
     return content, answers
 
 
@@ -1437,6 +1438,7 @@ def check_year_math_exists(year_group: int) -> bool:
 def generate_year_homework(year_group: int, count: int = 500) -> list:
     """为指定年级生成指定数量的数学作业"""
     topics = MATH_TOPICS_BY_YEAR.get(year_group, [])
+    print(topics)
     if not topics:
         print(f"警告：未找到 Year {year_group} 的数学主题")
         return []
@@ -1447,6 +1449,9 @@ def generate_year_homework(year_group: int, count: int = 500) -> list:
     for i in range(1, count + 1):
         topic = topics[(i - 1) % len(topics)]
         content, correct_answers = generate_math_homework(year_group, topic, i)
+        if content is None or correct_answers is None:
+            print(f"  Year {year_group}: Failed to generate question {i}, skipping...")
+            continue
 
         metadata = {
             "year_group": year_group,
@@ -1469,11 +1474,23 @@ def generate_year_homework(year_group: int, count: int = 500) -> list:
 
     return batch_data
 
-def check_year_math_exists(year_group: int) -> bool:
-    """检查指定年级是否已有英语作业"""
+
+def force_delete_year_math(year_group: int):
     store = get_homework_rag_store()
-    results = store.search(query="maths", k=1, filters={"year_group": year_group, "subject": "Maths"})
-    return len(results) > 0
+    where = {
+        "$and": [
+            {"year_group": year_group},
+            {"subject": "Maths"}
+        ]
+    }
+    db = store.db
+    before = db.get(where=where)
+    print(f"Before delete year {year_group}:", len(before["ids"]))
+
+    db.delete(where=where)
+
+    after = db.get(where=where)
+    print(f"After delete year {year_group}:", len(after["ids"]))
 
 
 def main():
@@ -1482,6 +1499,7 @@ def main():
 
     store = get_homework_rag_store()
     years_to_generate = []
+    # force_delete_year_math(6)  # 强制删除 Year 6 的所有数学作业
 
     for year in range(1, 7):
         exists = check_year_math_exists(year)
@@ -1496,24 +1514,13 @@ def main():
 
     print(f"\n需要生成的年级: {', '.join(f'Year {y}' for y in years_to_generate)}")
 
-    for year in years_to_generate:
-        print(f"\n开始生成 Year {year} Math作业...")
-        batch_data = generate_year_homework(year, count=500)
-
-        if batch_data:
-            store.add_batch_homework(batch_data)
-            print(f"成功添加 {len(batch_data)} 份 Year {year} Math作业到 RAG 存储")
-
-    # for i in range(1, 7):
-    #     # 清理 Year 3
-    #     clean_year_math(i)
-    #
-    #     print(f"\n开始生成 Year {i} 数学作业...")
-    #     batch_data = generate_year_homework(i, count=500)
+    # for year in years_to_generate:
+    #     print(f"\n开始生成 Year {year} Math作业...")
+    #     batch_data = generate_year_homework(year, count=500)
     #
     #     if batch_data:
     #         store.add_batch_homework(batch_data)
-    #         print(f"成功添加 {len(batch_data)} 份 Year {i} 数学作业到 RAG 存储")
+    #         print(f"成功添加 {len(batch_data)} 份 Year {year} Math作业到 RAG 存储")
 
     # 显示统计信息
     stats = store.get_stats()

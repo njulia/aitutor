@@ -22,14 +22,14 @@ def generate_seo_pages():
     except Exception as e:
         print(f"Note: Could not regenerate landing pages: {e}")
 
-    # Copy 11-plus-practice.html to static folder
+    # Copy elevenplus-practice.html to static folder
     project_root = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.join(project_root, 'templates', '11-plus-practice.html')
-    dst = os.path.join(project_root, 'static', '11-plus-practice.html')
+    src = os.path.join(project_root, 'templates', 'elevenplus-practice.html')
+    dst = os.path.join(project_root, 'static', 'elevenplus-practice.html')
 
     if os.path.exists(src) and not os.path.exists(dst):
         shutil.copy(src, dst)
-        print("✓ Copied 11-plus-practice.html")
+        print("✓ Copied elevenplus-practice.html")
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
     print("🚀 AI Tutor App:    http://localhost:5000/app")
     print("📚 KS1 Homework:    http://localhost:5000/ks1-homework")
     print("📚 KS2 Homework:    http://localhost:5000/ks2-homework")
-    print("🎯 11+ Practice:    http://localhost:5000/11-plus-practice")
+    print("🎯 11+ Practice:    http://localhost:5000/elevenplus-practice")
     print("✅ Check Homework:  http://localhost:5000/check-my-homework")
     print("\nPress Ctrl+C to stop the server\n")
 

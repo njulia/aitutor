@@ -221,10 +221,10 @@ def ks2_homework():
     return send_from_directory('static', 'ks2-homework.html')
 
 
-@app.route('/11-plus-practice')
+@app.route('/elevenplus-practice')
 def eleven_plus():
     """11+ landing page"""
-    return send_from_directory('static', '11-plus-practice.html')
+    return send_from_directory('static', 'elevenplus-practice.html')
 
 
 @app.route('/check-my-homework')
@@ -443,7 +443,7 @@ Available pages:
   • http://localhost:{port}/
   • http://localhost:{port}/ks1-homework
   • http://localhost:{port}/ks2-homework
-  • http://localhost:{port}/11-plus-practice
+  • http://localhost:{port}/elevenplus-practice
   • http://localhost:{port}/check-my-homework
 
 Press Ctrl+C to stop

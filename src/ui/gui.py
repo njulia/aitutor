@@ -9,13 +9,7 @@ Gradio Web 界面模块
 """
 
 import os
-import json
-import base64
 import logging
-from typing import Optional
-
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 
 from src.models import UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS, SAMPLE_STUDENT_PROFILES
 from src.homework_generator import extract_subjects_from_prompt
@@ -23,7 +17,7 @@ from src.homework_manager import (
     generate_homework_with_custom_profile,
     review_uploaded_homework,
 )
-from src.file_utils import read_text_file, read_pdf_file
+
 from src.ui.shared import display_homeworks, parse_profile_from_natural_language
 
 logger = logging.getLogger(__name__)
@@ -44,6 +38,7 @@ def run_gui(llm):
     html_path = os.path.join(project_dir, "templates", "gui_template.html")
     radio_fix_path = os.path.join(project_dir, "templates", "gui_radio_fix.html")
     seo_head_path = os.path.join(project_dir, "templates", "seo_head.html")
+    check_upload_path = os.path.join(project_dir, "templates", "check_upload.html")
 
     with open(css_path, 'r', encoding='utf-8') as f:
         cute_theme = f.read()
@@ -56,6 +51,9 @@ def run_gui(llm):
 
     with open(seo_head_path, 'r', encoding='utf-8') as f:
         seo_head_html = f.read()
+
+    with open(check_upload_path, 'r', encoding='utf-8') as f:
+        check_upload_html = f.read()
 
     # ========== 业务处理函数 ==========
 
@@ -200,6 +198,29 @@ def run_gui(llm):
         except Exception as e:
             yield f"**Oh no!** Something went wrong: {str(e)}", session_state
 
+    def show_paywall_message():
+        """显示付费墙提示信息"""
+        paywall_html = """
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 15px; color: white; text-align: center; margin: 20px 0;">
+            <h2 style="margin: 0 0 15px 0;">🔒 Premium Feature</h2>
+            <p style="font-size: 16px; margin: 0 0 20px 0;">
+                Customized 11+ Practice is a premium feature that provides personalized homework plans tailored to your child's specific needs.
+            </p>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <p style="margin: 0; font-size: 14px;">
+                    ✓ Personalized learning path<br>
+                    ✓ Adaptive difficulty adjustment<br>
+                    ✓ Detailed progress tracking<br>
+                    ✓ Priority support
+                </p>
+            </div>
+            <p style="font-size: 18px; font-weight: bold; margin: 0;">
+                Please <a href="/register" style="color: #ffd700; text-decoration: underline;">register</a> and <a href="/pricing" style="color: #ffd700; text-decoration: underline;">subscribe</a> to unlock this feature.
+            </p>
+        </div>
+        """
+        return paywall_html
+
     def combine_questions_with_answers(homework_content: str, student_answers: str) -> str:
         """将作业题目和学生答案逐对组合，格式为 question: xxx / answer: xxx"""
         questions = [line.strip() for line in homework_content.strip().split('\n') if line.strip()]
@@ -234,43 +255,25 @@ def run_gui(llm):
 
         return gr.update(selected="check_homework_tab"), combined_assignment
 
-    def handle_submit(photo, file, subject, homework, session_state):
-        """批阅上传的作业"""
+    def handle_submit(upload_content, subject, homework, session_state):
+        """批阅上传的作业 - 从 HTML 控件读取内容"""
         yield "**Reviewing your homework...** Please wait a moment."
 
         student_answers = session_state.get("student_answers", "")
         student_work = ""
-        image_path = None
 
-        # 如果用户在答案框中输入了答案，直接使用
+        # 优先使用 session 中的答案（来自其他 tab 的 Check 按钮）
         if student_answers:
             student_work = student_answers
             logger.info("[Review] Using student typed answers for review")
 
+        # 其次使用 HTML 控件上传的内容
+        if not student_work and upload_content:
+            student_work = upload_content
+            logger.info("[Review] Using uploaded content for review")
+
         if not student_work:
-            if photo:
-                logger.info(f"[Review] Reviewing image directly: {photo}")
-                image_path = photo
-            elif file:
-                file_ext = os.path.splitext(file.name)[1].lower()
-                if file_ext in ['.txt', '.md', '.csv']:
-                    student_work = read_text_file(file.name)
-                elif file_ext in ['.jpg', '.jpeg', '.png', '.heic']:
-                    logger.info(f"[Review] Reviewing image directly: {file.name}")
-                    image_path = file.name
-                elif file_ext in ['.pdf']:
-                    student_work = read_pdf_file(file.name)
-                else:
-                    yield f"**Unsupported file type: {file_ext}**. Please upload .txt, .md, .csv, .pdf files, or take a photo of your homework."
-                    return
-
-                if student_work and not image_path:
-                    if not student_work:
-                        yield "**Failed to read the file content. Please check the file and try again.**"
-                        return
-
-        if not student_work and not image_path:
-            yield "**Please enter your answers or upload a photo/file first.**"
+            yield "**Please enter your answers or upload a file first.**"
             return
 
         student_profile = {
@@ -282,62 +285,22 @@ def run_gui(llm):
         metadata_subject = session_state.get("subject", subject)
         logger.info(f"[Review] Reviewing {subject} homework...")
 
-        if image_path:
-            yield from _review_image_homework(image_path, subject, student_profile, homework)
+        # 将学生作业内容与作业题目合并，传给批阅函数
+        if student_work and homework:
+            combined_homework = f"Homework Assignment:\n{homework}\n\nStudent's Work:\n{student_work}"
+        elif student_work:
+            combined_homework = student_work
         else:
-            review = review_uploaded_homework(
-                student_profile=student_profile,
-                subject=metadata_subject,
-                homework=homework,
-                doc_id=session_state.get("doc_id", ""),
-                llm=llm,
-            )
-            yield review
+            combined_homework = homework
 
-    def _review_image_homework(image_path, subject, student_profile, homework):
-        """使用多模态 LLM 批阅图片格式的作业"""
-        try:
-            with open(image_path, "rb") as f:
-                image_data = base64.b64encode(f.read()).decode("utf-8")
-
-            review_prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are a UK primary school teacher reviewing a student's homework.
-
-Please:
-1. Analyze the student's work shown in the image
-2. Check for correctness in the subject: {subject}
-3. Provide encouraging feedback
-4. Point out any mistakes and explain the correct answers
-5. Give constructive suggestions for improvement
-
-Be warm, encouraging, and age-appropriate in your feedback."""),
-                ("human", [
-                    {"type": "text", "text": """Please review this student's homework.
-
-Subject: {subject}
-Student Profile: {student_profile}
-Homework Assignment (if provided): {homework}
-
-Provide detailed feedback with:
-- What the student did well
-- Areas that need improvement
-- Correct answers for any mistakes
-- Encouraging words"""},
-                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,{image_data}"}}
-                ])
-            ])
-
-            review_chain = review_prompt | llm | StrOutputParser()
-            review = review_chain.invoke({
-                "subject": subject,
-                "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
-                "homework": homework if homework else "Not provided",
-                "image_data": image_data
-            })
-            yield review
-        except Exception as e:
-            logger.error(f"[Review] Failed to review image: {e}")
-            yield f"**Failed to review the image:** {str(e)}"
+        review = review_uploaded_homework(
+            student_profile=student_profile,
+            subject=metadata_subject,
+            homework=combined_homework,
+            doc_id=session_state.get("doc_id", ""),
+            llm=llm,
+        )
+        yield review
 
     # ========== 构建 UI ==========
 
@@ -349,34 +312,27 @@ Provide detailed feedback with:
         """初始化 session 状态"""
         return {"content": ""}
 
-    def show_photo_input():
-        return gr.update(visible=True), gr.update(visible=False)
-
-    def show_file_input():
-        return gr.update(visible=False), gr.update(visible=True)
-
     _build_gradio_app(
         gr, cute_theme, main_title_html, radio_fix_html, seo_head_html,
-        year_options, UK_PRIMARY_SUBJECTS,
+        check_upload_html, year_options, UK_PRIMARY_SUBJECTS,
         init_session_state,
         cp_wrapper_with_storage,
         qs_wrapper_with_storage,
         ep_wrapper_with_storage,
         switch_to_check_with_homework,
         handle_submit,
-        show_photo_input,
-        show_file_input,
+        show_paywall_message,
     )
 
 
 def _build_gradio_app(
     gr, cute_theme, main_title_html, radio_fix_html, seo_head_html,
-    year_options, UK_PRIMARY_SUBJECTS,
+    check_upload_html, year_options, UK_PRIMARY_SUBJECTS,
     init_session_state,
     cp_wrapper, qs_wrapper, ep_wrapper,
     switch_to_check,
     handle_submit,
-    show_photo_input, show_file_input,
+    show_paywall,
     launch=True,
     share=True,
 ):
@@ -434,6 +390,8 @@ def _build_gradio_app(
                         gr.HTML('<div class="step-header"></div>')
                         cp_gen_btn = gr.Button("Generate My Homework!", variant="primary", elem_classes=["btn-blue"])
                         cp_check_btn = gr.Button("Check My Homework!", variant="secondary")
+                        # 付费墙提示区域
+                        cp_paywall_msg = gr.Markdown(value="", visible=False)
 
                 with gr.Row():
                     with gr.Column(scale=1):
@@ -498,8 +456,11 @@ def _build_gradio_app(
                         )
                     with gr.Column(scale=1):
                         gr.HTML('<div class="step-header"></div>')
-                        ep_gen_btn = gr.Button("Generate My Homework!", variant="primary", elem_classes=["btn-blue"])
+                        ep_gen_btn = gr.Button("Generate 11+ Practice", variant="primary", elem_classes=["btn-blue"])
+                        ep_customize_btn = gr.Button("Customize 11+ Practice", variant="secondary")
                         ep_check_btn = gr.Button("Check My Homework!", variant="secondary")
+                        # 付费墙提示区域
+                        ep_paywall_msg = gr.Markdown(value="", visible=False)
 
                 with gr.Row():
                     with gr.Column(scale=1):
@@ -520,17 +481,14 @@ def _build_gradio_app(
                 with gr.Row():
                     with gr.Column(scale=1):
                         gr.HTML('<h2 class="step-header">Upload Your Work</h2>')
-                        take_photo_btn = gr.Button("Take Photo", variant="secondary")
-                        upload_file_btn = gr.Button("Upload File", variant="secondary")
-
-                        with gr.Row(visible=False) as photo_input_row:
-                            photo_input = gr.Image(
-                                label="Take a photo or upload an image",
-                                sources=["webcam", "upload"], type="filepath"
-                            )
-
-                        with gr.Row(visible=False) as file_input_row:
-                            file_input = gr.File(label="Upload your homework file")
+                        # 使用 HTML 控件替代 Gradio 按钮
+                        gr.HTML(check_upload_html)
+                        # 隐藏 Textbox 用于存储上传的文件内容
+                        upload_content_box = gr.Textbox(
+                            visible=False,
+                            value="",
+                            elem_id="upload-content-box"
+                        )
 
                         gr.HTML('<h2 class="step-header">Choose Your Subjects</h2>')
                         check_subject = gr.Radio(
@@ -553,19 +511,16 @@ def _build_gradio_app(
 
             # ========== 事件绑定 ==========
 
-            take_photo_btn.click(fn=show_photo_input, outputs=[photo_input_row, file_input_row])
-            upload_file_btn.click(fn=show_file_input, outputs=[photo_input_row, file_input_row])
-
             check_btn.click(
                 fn=handle_submit,
-                inputs=[photo_input, file_input, check_subject, homework_completed, session_state],
+                inputs=[upload_content_box, check_subject, homework_completed, session_state],
                 outputs=[check_result]
             )
 
             cp_gen_btn.click(
-                fn=cp_wrapper,
-                inputs=[cp_profile, cp_subjects, session_state],
-                outputs=[cp_output, session_state]
+                fn=show_paywall,
+                inputs=[],
+                outputs=[cp_paywall_msg]
             )
             cp_check_btn.click(
                 fn=switch_to_check,
@@ -588,6 +543,11 @@ def _build_gradio_app(
                 fn=ep_wrapper,
                 inputs=[ep_profile, ep_subjects, session_state],
                 outputs=[ep_output, session_state]
+            )
+            ep_customize_btn.click(
+                fn=show_paywall,
+                inputs=[],
+                outputs=[ep_paywall_msg]
             )
             ep_check_btn.click(
                 fn=switch_to_check,

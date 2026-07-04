@@ -72,6 +72,22 @@ def read_image_file(image_path: str) -> str:
         return ""
 
 
+def read_docx_file(docx_path: str) -> str:
+    """从 docx 文件中提取文本内容"""
+    try:
+        from docx import Document
+    except ImportError:
+        logger.error("python-docx not installed. Please run: pip install python-docx")
+        return ""
+    try:
+        doc = Document(docx_path)
+        text_parts = [para.text for para in doc.paragraphs if para.text.strip()]
+        return "\n\n".join(text_parts) if text_parts else ""
+    except Exception as e:
+        logger.error(f"Failed to read docx file: {e}")
+        return ""
+
+
 def read_pdf_file(pdf_path: str) -> str:
     """从 PDF 文件中提取文本内容"""
     try:

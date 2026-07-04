@@ -455,9 +455,9 @@
             <div class="logo">✨ Homework Magic</div>
             <nav class="nav-links">
                 <a href="/">Home</a>
+                <a href="/elevenplus-practice">11+</a>
                 <a href="/ks1-homework">KS1</a>
                 <a href="/ks2-homework">KS2</a>
-                <a href="/11-plus-practice">11+</a>
             </nav>
         </div>
     </div>
@@ -465,14 +465,14 @@
     <div class="container">
         <!-- Tabs -->
         <div class="tabs">
+            <button class="tab" onclick="switchTab('eleven')">
+                🎯 11+ Practice
+            </button>
             <button class="tab active" onclick="switchTab('quick')">
                 ⚡ Quick Select
             </button>
             <button class="tab" onclick="switchTab('custom')">
                 📝 Custom Profile
-            </button>
-            <button class="tab" onclick="switchTab('eleven')">
-                🎯 11+ Practice
             </button>
             <button class="tab" onclick="switchTab('review')">
                 ✅ Check Homework
@@ -491,12 +491,12 @@
                     <div class="form-group">
                         <label>Year Group</label>
                         <select id="quick-year">
-                            <option value="1">Year 1 (Age 5)</option>
-                            <option value="2">Year 2 (Age 6)</option>
-                            <option value="3">Year 3 (Age 7)</option>
-                            <option value="4">Year 4 (Age 8)</option>
-                            <option value="5">Year 5 (Age 9)</option>
-                            <option value="6">Year 6 (Age 10)</option>
+                            <option value="1">Year 1</option>
+                            <option value="2">Year 2</option>
+                            <option value="3">Year 3</option>
+                            <option value="4">Year 4</option>
+                            <option value="5">Year 5</option>
+                            <option value="6">Year 6</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -553,7 +553,14 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                 <p style="color: #666; margin-bottom: 30px;">
                     Prepare for grammar school entrance exams
                 </p>
-                
+                <div class="form-group">
+                    <label>Subjects</label>
+                    <div class="subject-grid" id="eleven-subjects"></div>
+                </div>
+                <button class="btn btn-primary" onclick="generateElevenHomework()">
+                    Generate 11+ Practice!
+                </button>
+
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Describe the Student</label>
@@ -562,14 +569,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 </textarea>
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>Subjects</label>
-                    <div class="subject-grid" id="eleven-subjects"></div>
-                </div>
-                
                 <button class="btn btn-primary" onclick="generateElevenHomework()">
-                    Generate 11+ Practice!
+                    Customize 11+ Practice!
                 </button>
             </div>
         </div>
@@ -588,9 +589,9 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                         <button class="input-method-tab active" onclick="setInputMethod('text')">
                             📝 Text Input
                         </button>
-                        <button class="input-method-tab" onclick="setInputMethod('photo')">
-                            📸 Take Photo
-                        </button>
+<!--                        <button class="input-method-tab" onclick="setInputMethod('photo')">-->
+<!--                            📸 Take Photo-->
+<!--                        </button>-->
                         <button class="input-method-tab" onclick="setInputMethod('file')">
                             📁 Upload File
                         </button>
@@ -645,12 +646,12 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                     <div class="form-group">
                         <label>Upload Homework File</label>
                         <div class="file-upload-area">
-                            <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.heic,.gif,.txt,.md,.csv,.pdf"
+                            <input type="file" id="file-input" accept=".txt, .doc, .docx, .md, .csv, .json, .xml, .yaml, .yml, .rtf"
                                 style="display: none;" onchange="handleFileSelect(event)">
                             <div class="upload-placeholder" onclick="document.getElementById('file-input').click()">
                                 <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
                                 <div style="font-weight: bold; margin-bottom: 5px;">Click to upload file</div>
-                                <div style="color: #666; font-size: 0.9em;">Supports: JPG, PNG, HEIC, PDF, TXT, MD, CSV</div>
+                                <div style="color: #666; font-size: 0.9em;">Supports: .txt, .doc, .docx, .md, .csv, .json, .xml, .yaml, .yml, .rtf</div>
                             </div>
                             <div id="file-info" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
                                 <div style="font-weight: bold;">Selected: <span id="file-name"></span></div>
@@ -981,6 +982,41 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     profile: { description: profileText },
+                    subjects: subjects
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    displayHomework(data.homework);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function generateElevenHomeworkRag() {
+            const subjects = getSelectedSubjects('eleven-subjects');
+
+            if (subjects.length === 0) {
+                alert('Please select at least one subject!');
+                return;
+            }
+
+            showLoading();
+
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quick_select: true,
                     subjects: subjects
                 })
             })
