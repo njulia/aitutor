@@ -1,6 +1,7 @@
 # Core dependencies
-flask
-gradio
+fastapi
+uvicorn[standard]
+python-multipart
 langchain-openai
 langchain-core
 langgraph
@@ -9,6 +10,7 @@ chromadb
 
 # Optional but recommended
 python-dotenv
+jinja2
 
 # For image handling
 Pillow

@@ -3,454 +3,579 @@
 """
 Homework Magic - Complete Web Application
 
-A modern, SEO-friendly Flask web application that replaces Gradio,
-but retains all existing homework generation and review logic.
+FastAPI web application for SEO landing pages, the AI tutor UI, and REST APIs.
 """
 
 import os
 import sys
 import logging
 import base64
+import re
+import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
-from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_cors import CORS
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 
-# Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# Initialize logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Flask app
-app = Flask(__name__, 
-            static_folder='static', 
-            template_folder='templates')
-CORS(app)
+UPLOAD_FOLDER = os.path.join(project_root, "uploads")
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "heic", "gif"}
+ALLOWED_TEXT_EXTENSIONS = {"txt", "md", "csv"}
+ALLOWED_PDF_EXTENSION = {"pdf"}
+MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 
-# File upload configuration
-UPLOAD_FOLDER = os.path.join(project_root, 'uploads')
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'heic', 'gif'}
-ALLOWED_TEXT_EXTENSIONS = {'txt', 'md', 'csv'}
-ALLOWED_PDF_EXTENSION = {'pdf'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize LLM and components
 llm = None
 initialized = False
+tutor_sessions: Dict[str, Dict[str, Any]] = {}
 
 
-def initialize():
-    """Initialize all components"""
+def secure_filename(filename: str) -> str:
+    """Sanitize uploaded filenames (werkzeug replacement)."""
+    filename = re.sub(r"[^\w\s\-_\.]", "", filename)
+    filename = filename.replace(" ", "_").lstrip(".")
+    return filename or "unnamed_file"
+
+
+def initialize() -> None:
+    """Initialize LLM and related components."""
     global llm, initialized
     if initialized:
         return
-    
+
     from src.agent_workflow import init_llm
+
     llm, _, _ = init_llm()
     initialized = True
-    logger.info("✓ Web application initialized")
+    logger.info("Web application initialized")
 
 
-def allowed_file(filename, allowed_extensions):
-    """Check if file extension is allowed"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Warm up LLM on startup."""
+    initialize()
+    yield
 
 
-def process_uploaded_file(file):
-    """Process uploaded file and extract text/content"""
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    
-    file_ext = os.path.splitext(filename)[1].lower().lstrip('.')
-    
+app = FastAPI(
+    title="Homework Magic",
+    description="AI Tutor for UK Primary Schools",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def allowed_file(filename: str, allowed_extensions: set) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
+
+
+def process_uploaded_file(file_path: str):
+    filename = os.path.basename(file_path)
+    file_ext = os.path.splitext(filename)[1].lower().lstrip(".")
+
     content = ""
     is_image = False
-    
+
     if file_ext in ALLOWED_IMAGE_EXTENSIONS:
-        logger.info(f"[File Upload] Processing image: {filename}")
-        content = extract_text_from_image(filepath)
+        logger.info("[File Upload] Processing image: %s", filename)
+        content = extract_text_from_image(file_path)
         is_image = True
     elif file_ext in ALLOWED_TEXT_EXTENSIONS:
-        logger.info(f"[File Upload] Processing text file: {filename}")
-        content = read_text_file(filepath)
+        logger.info("[File Upload] Processing text file: %s", filename)
+        content = read_text_file(file_path)
     elif file_ext in ALLOWED_PDF_EXTENSION:
-        logger.info(f"[File Upload] Processing PDF: {filename}")
-        content = read_pdf_file(filepath)
+        logger.info("[File Upload] Processing PDF: %s", filename)
+        content = read_pdf_file(file_path)
     else:
         raise ValueError(f"Unsupported file type: {file_ext}")
-    
-    # Clean up the file
+
     try:
-        os.remove(filepath)
-    except:
+        os.remove(file_path)
+    except OSError:
         pass
-    
+
     return content, is_image
 
 
-def process_base64_image(data_url):
-    """Process base64 encoded image from camera"""
-    from src.file_utils import extract_text_from_image
+def process_base64_image(data_url: str) -> str:
     import tempfile
-    
-    # Remove data URL prefix
-    if 'base64,' in data_url:
-        data_url = data_url.split('base64,')[1]
-    
-    # Decode base64
+
+    if "base64," in data_url:
+        data_url = data_url.split("base64,", 1)[1]
+
     image_data = base64.b64decode(data_url)
-    
-    # Save to temp file
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         tmp.write(image_data)
         tmp_path = tmp.name
-    
+
     try:
-        content = extract_text_from_image(tmp_path)
+        return extract_text_from_image(tmp_path)
     finally:
         try:
             os.unlink(tmp_path)
-        except:
+        except OSError:
             pass
-    
-    return content
 
 
-# Import core logic
-def generate_homework_with_profile(profile, subjects):
-    """Generate homework using existing logic"""
+def resolve_profile(
+    raw_profile: dict,
+    *,
+    quick_select: bool = False,
+    year: Optional[int] = None,
+    student_id: Optional[str] = None,
+) -> dict:
+    """Build a student profile from quick-select or natural-language input."""
+    if quick_select:
+        year = year or 3
+        profile = {
+            "year_group": year,
+            "age": 5 + (year - 1),
+            "student_id": student_id or f"student_{year}",
+        }
+        return profile
+
+    profile = dict(raw_profile or {})
+    description = profile.get("description")
+
+    if description and not profile.get("year_group"):
+        from src.ui.shared import parse_profile_from_natural_language
+
+        parsed = parse_profile_from_natural_language(description, llm)
+        if parsed:
+            profile = parsed
+        else:
+            profile.setdefault("year_group", 3)
+            profile.setdefault("age", 7)
+            profile.setdefault("student_id", "student_custom")
+
+    if student_id:
+        profile["student_id"] = student_id
+
+    if not profile.get("student_id"):
+        profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
+
+    return profile
+
+
+def generate_homework_with_profile(profile: dict, subjects: list):
     from src.homework_generator import generate_homework_for_subject
-    from src.homework_manager import process_homework_with_review
-    
-    # Ensure student_id exists in profile
-    if 'student_id' not in profile or not profile['student_id']:
-        profile['student_id'] = 'student_' + str(profile.get('year_group', 3)) + '_default'
-    
+
+    if not profile.get("student_id"):
+        profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
+
     results = []
-    
     for subject in subjects:
         try:
             homework_content, doc_id = generate_homework_for_subject(profile, subject, llm)
-            results.append({
-                'subject': subject,
-                'content': homework_content,
-                'doc_id': doc_id
-            })
-            logger.info(f"✓ Generated NEW homework for {subject} for student {profile['student_id']}")
-        except Exception as e:
-            logger.error(f"✗ Error generating {subject}: {e}")
-            results.append({
-                'subject': subject,
-                'content': f"Error generating homework: {str(e)}",
-                'doc_id': None
-            })
-    
+            results.append(
+                {"subject": subject, "content": homework_content, "doc_id": doc_id}
+            )
+            logger.info(
+                "Generated homework for %s (student %s)", subject, profile["student_id"]
+            )
+        except Exception as exc:
+            logger.error("Error generating %s: %s", subject, exc)
+            results.append(
+                {
+                    "subject": subject,
+                    "content": f"Error generating homework: {exc}",
+                    "doc_id": None,
+                }
+            )
+
     return results
 
 
-def review_homework(homework_content, student_answers, subject, profile=None):
-    """Review homework using existing logic"""
-    from src.homework_manager import review_uploaded_homework
+def review_homework(homework_content: str, student_answers: str, subject: str, profile=None):
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import StrOutputParser
     from src.prompts import REVIEW_HOMEWORK_PROMPT
-    from datetime import datetime
-    
+
     if profile is None:
-        profile = {
-            'year_group': 3,
-            'age': 7
-        }
-    
+        profile = {"year_group": 3, "age": 7}
+
     try:
         prompt = ChatPromptTemplate.from_template(REVIEW_HOMEWORK_PROMPT)
         chain = prompt | llm | StrOutputParser()
-        
-        # Format the day properly
         current_day = datetime.now().strftime("%A, %B %d, %Y")
-        
-        result = chain.invoke({
-            'day': current_day,
-            'homework_content': homework_content,
-            'student_answer': student_answers,  # Use singular as in prompt
-            'subject': subject,
-            'student_profile': str(profile)
-        })
-        
-        return {
-            'success': True,
-            'review': result
-        }
-    except Exception as e:
-        logger.error(f"✗ Error reviewing homework: {e}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
 
-
-# --- Web Routes ---
-
-@app.route('/')
-def index():
-    """Homepage"""
-    return send_from_directory('static', 'index.html')
-
-
-@app.route('/ks1-homework')
-def ks1_homework():
-    """KS1 landing page"""
-    return send_from_directory('static', 'ks1-homework.html')
-
-
-@app.route('/ks2-homework')
-def ks2_homework():
-    """KS2 landing page"""
-    return send_from_directory('static', 'ks2-homework.html')
-
-
-@app.route('/elevenplus-practice')
-def eleven_plus():
-    """11+ landing page"""
-    return send_from_directory('static', 'elevenplus-practice.html')
-
-
-@app.route('/check-my-homework')
-def check_homework():
-    """Homework checking page"""
-    return send_from_directory('static', 'check-my-homework.html')
-
-
-@app.route('/app')
-def app_page():
-    """Main application page"""
-    return render_template('app.html')
-
-
-# --- API Endpoints ---
-
-@app.route('/api/subjects', methods=['GET'])
-def get_subjects():
-    """Get list of available subjects"""
-    from src.models import UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS
-    
-    return jsonify({
-        'primary': UK_PRIMARY_SUBJECTS,
-        'eleven_plus': ELEVEN_PLUS_SUBJECTS
-    })
-
-
-@app.route('/api/year-groups', methods=['GET'])
-def get_year_groups():
-    """Get year group options"""
-    return jsonify({
-        'year_groups': [1, 2, 3, 4, 5, 6],
-        'quick_select': [
-            {'year': 1, 'age': 5, 'stage': 'KS1'},
-            {'year': 2, 'age': 6, 'stage': 'KS1'},
-            {'year': 3, 'age': 7, 'stage': 'KS2'},
-            {'year': 4, 'age': 8, 'stage': 'KS2'},
-            {'year': 5, 'age': 9, 'stage': 'KS2'},
-            {'year': 6, 'age': 10, 'stage': 'KS2'}
-        ]
-    })
-
-
-@app.route('/api/generate', methods=['POST'])
-def api_generate():
-    """Generate homework via API"""
-    try:
-        data = request.json
-        
-        # Initialize if needed
-        initialize()
-        
-        # Parse profile
-        profile = data.get('profile', {})
-        subjects = data.get('subjects', [])
-        
-        # Handle quick select mode
-        if data.get('quick_select'):
-            year = data.get('year')
-            profile = {
-                'year_group': year,
-                'age': 5 + (year - 1),
-                'student_id': f'student_{year}'
+        result = chain.invoke(
+            {
+                "day": current_day,
+                "homework_content": homework_content,
+                "student_answer": student_answers,
+                "subject": subject,
+                "student_profile": str(profile),
             }
-        
-        # Generate homework
+        )
+
+        return {"success": True, "review": result}
+    except Exception as exc:
+        logger.error("Error reviewing homework: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+def _static_page(*parts: str) -> FileResponse:
+    path = os.path.join(project_root, *parts)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Page not found")
+    return FileResponse(path)
+
+
+class ProfileRequest(BaseModel):
+    profile: dict = Field(default_factory=dict)
+    subjects: list = Field(default_factory=list)
+    quick_select: bool = False
+    year: Optional[int] = None
+    student_id: Optional[str] = None
+
+
+class ReviewRequest(BaseModel):
+    homework: str
+    answers: str
+    subject: str = "Maths"
+    profile: Optional[dict] = None
+    session_id: Optional[str] = None
+
+
+class PhotoRequest(BaseModel):
+    photo: str
+
+
+class SessionUpdateRequest(BaseModel):
+    homework: Optional[list] = None
+    profile: Optional[dict] = None
+    student_answers: Optional[str] = None
+    doc_id: Optional[str] = None
+    year_group: Optional[int] = None
+    subject: Optional[str] = None
+
+
+# --- Web routes ---
+
+
+@app.get("/")
+async def index():
+    return _static_page("static", "index.html")
+
+
+@app.get("/ks1-homework")
+async def ks1_homework():
+    return _static_page("static", "ks1-homework.html")
+
+
+@app.get("/ks2-homework")
+async def ks2_homework():
+    return _static_page("static", "ks2-homework.html")
+
+
+@app.get("/elevenplus-practice")
+async def eleven_plus():
+    return _static_page("static", "elevenplus-practice.html")
+
+
+@app.get("/check-my-homework")
+async def check_homework():
+    return _static_page("static", "check-my-homework.html")
+
+
+@app.get("/app")
+async def app_page():
+    return _static_page("templates", "app.html")
+
+
+@app.get("/year-{year}-homework")
+async def year_homework_page(year: int):
+    if year < 1 or year > 6:
+        raise HTTPException(status_code=404, detail="Page not found")
+    seo_path = os.path.join(
+        project_root, "static", "--seo", f"year-{year}-homework.html"
+    )
+    if os.path.isfile(seo_path):
+        return FileResponse(seo_path)
+    raise HTTPException(status_code=404, detail="Page not found")
+
+
+@app.get("/sitemap.xml")
+async def sitemap():
+    seo_sitemap = os.path.join(project_root, "static", "--seo", "sitemap.xml")
+    if os.path.isfile(seo_sitemap):
+        return FileResponse(seo_sitemap, media_type="application/xml")
+    raise HTTPException(status_code=404, detail="Sitemap not found")
+
+
+@app.get("/elevenplus/articles")
+async def elevenplus_articles():
+    return _static_page("static", "elevenplus", "articles.html")
+
+
+@app.get("/elevenplus/uk-grammar-guide")
+async def elevenplus_grammar_guide():
+    return _static_page("static", "elevenplus", "uk_grammar_guide.html")
+
+
+@app.get("/elevenplus/uk-11plus-vocabulary-list")
+async def elevenplus_vocabulary_list():
+    return _static_page("static", "elevenplus", "uk_11plus_vocabulary_list.html")
+
+
+# --- API endpoints ---
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "initialized": initialized}
+
+
+@app.get("/api/subjects")
+async def get_subjects():
+    from src.models import UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS
+
+    return {"primary": UK_PRIMARY_SUBJECTS, "eleven_plus": ELEVEN_PLUS_SUBJECTS}
+
+
+@app.get("/api/year-groups")
+async def get_year_groups():
+    return {
+        "year_groups": [1, 2, 3, 4, 5, 6],
+        "quick_select": [
+            {"year": 1, "age": 5, "stage": "KS1"},
+            {"year": 2, "age": 6, "stage": "KS1"},
+            {"year": 3, "age": 7, "stage": "KS2"},
+            {"year": 4, "age": 8, "stage": "KS2"},
+            {"year": 5, "age": 9, "stage": "KS2"},
+            {"year": 6, "age": 10, "stage": "KS2"},
+        ],
+    }
+
+
+@app.post("/api/generate")
+async def api_generate(request: ProfileRequest):
+    try:
+        initialize()
+
+        profile = resolve_profile(
+            request.profile,
+            quick_select=request.quick_select,
+            year=request.year,
+            student_id=request.student_id
+            or request.profile.get("student_id"),
+        )
+        subjects = request.subjects
+        if not subjects:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "No subjects selected"},
+            )
+
         results = generate_homework_with_profile(profile, subjects)
-        
-        return jsonify({
-            'success': True,
-            'homework': results,
-            'profile': profile
-        })
-        
-    except Exception as e:
-        logger.error(f"Error generating homework: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+
+        return {"success": True, "homework": results, "profile": profile}
+    except Exception as exc:
+        logger.error("Error generating homework: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
 
 
-@app.route('/api/review', methods=['POST'])
-def api_review():
-    """Review homework via API"""
+@app.post("/api/review")
+async def api_review(request: ReviewRequest):
     try:
-        data = request.json
-        
-        # Initialize if needed
         initialize()
-        
-        homework_content = data.get('homework', '')
-        student_answers = data.get('answers', '')
-        subject = data.get('subject', 'Maths')
-        profile = data.get('profile', None)
-        
-        result = review_homework(homework_content, student_answers, subject, profile)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        logger.error(f"Error reviewing homework: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+
+        profile = request.profile
+        if request.session_id and request.session_id in tutor_sessions:
+            session = tutor_sessions[request.session_id]
+            profile = profile or session.get("profile")
+
+        result = review_homework(
+            request.homework, request.answers, request.subject, profile
+        )
+        return result
+    except Exception as exc:
+        logger.error("Error reviewing homework: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
 
 
-@app.route('/api/quick-profile/<int:year>', methods=['GET'])
-def get_quick_profile(year):
-    """Get a quick student profile for a given year"""
+@app.get("/api/quick-profile/{year}")
+async def get_quick_profile(year: int):
     from src.models import SAMPLE_STUDENT_PROFILES
-    
-    student_id = f'student_{year}'
-    profile = SAMPLE_STUDENT_PROFILES.get(student_id, {
-        'year_group': year,
-        'age': 5 + (year - 1),
-        'student_id': student_id
-    })
-    
-    return jsonify({
-        'success': True,
-        'profile': profile
-    })
+
+    student_id = f"student_{year}"
+    profile = SAMPLE_STUDENT_PROFILES.get(
+        student_id,
+        {"year_group": year, "age": 5 + (year - 1), "student_id": student_id},
+    )
+    return {"success": True, "profile": profile}
 
 
-@app.route('/api/upload-file', methods=['POST'])
-def upload_file():
-    """Upload and process file for homework review"""
+@app.post("/api/sessions")
+async def create_session():
+    """Create a tutoring session (replaces Gradio gr.State)."""
+    session_id = str(uuid.uuid4())
+    tutor_sessions[session_id] = {
+        "homework": [],
+        "profile": {},
+        "student_answers": "",
+        "doc_id": "",
+        "year_group": 3,
+        "subject": "Maths",
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    return {"success": True, "session_id": session_id}
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    session = tutor_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"success": True, "session": session}
+
+
+@app.put("/api/sessions/{session_id}")
+async def update_session(session_id: str, request: SessionUpdateRequest):
+    if session_id not in tutor_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session = tutor_sessions[session_id]
+    updates = request.model_dump(exclude_unset=True)
+    session.update(updates)
+    session["updated_at"] = datetime.utcnow().isoformat()
+    return {"success": True, "session": session}
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    if session_id not in tutor_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    del tutor_sessions[session_id]
+    return {"success": True}
+
+
+@app.post("/api/upload-file")
+async def upload_file(file: UploadFile = File(...)):
     try:
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'}), 400
-        
-        # Initialize if needed
         initialize()
-        
-        allowed_all = ALLOWED_IMAGE_EXTENSIONS.union(ALLOWED_TEXT_EXTENSIONS).union(ALLOWED_PDF_EXTENSION)
-        
-        if file and allowed_file(file.filename, allowed_all):
-            content, is_image = process_uploaded_file(file)
-            
-            return jsonify({
-                'success': True,
-                'content': content,
-                'is_image': is_image
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Unsupported file type. Please upload .jpg, .jpeg, .png, .heic, .gif, .txt, .md, .csv, or .pdf files.'
-            }), 400
-            
-    except Exception as e:
-        logger.error(f"Error uploading file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file selected")
+
+        allowed_all = (
+            ALLOWED_IMAGE_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS | ALLOWED_PDF_EXTENSION
+        )
+        if not allowed_file(file.filename, allowed_all):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Unsupported file type. Please upload .jpg, .jpeg, .png, "
+                    ".heic, .gif, .txt, .md, .csv, or .pdf files."
+                ),
+            )
+
+        raw = await file.read()
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File too large (max 16 MB)")
+
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        with open(filepath, "wb") as handle:
+            handle.write(raw)
+
+        content, is_image = process_uploaded_file(filepath)
+        return {"success": True, "content": content, "is_image": is_image}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error uploading file: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.route('/api/upload-photo', methods=['POST'])
-def upload_photo():
-    """Upload and process base64 encoded photo from camera"""
+@app.post("/api/upload-photo")
+async def upload_photo(request: PhotoRequest):
     try:
-        data = request.json
-        photo_data = data.get('photo', '')
-        
-        if not photo_data:
-            return jsonify({'success': False, 'error': 'No photo data'}), 400
-        
-        # Initialize if needed
         initialize()
-        
-        content = process_base64_image(photo_data)
-        
-        return jsonify({
-            'success': True,
-            'content': content
-        })
-        
-    except Exception as e:
-        logger.error(f"Error uploading photo: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+
+        if not request.photo:
+            raise HTTPException(status_code=400, detail="No photo data")
+
+        content = process_base64_image(request.photo)
+        return {"success": True, "content": content}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error uploading photo: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.route('/static/<path:path>')
-def serve_static(path):
-    """Serve static files"""
-    return send_from_directory('static', path)
+static_path = os.path.join(project_root, "static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 
 def main():
-    """Main entry point"""
-    print("""
-╔═══════════════════════════════════════════════════════════════╗
-║                    Homework Magic                             ║
-║             AI Tutor for UK Primary Schools                   ║
-╚═══════════════════════════════════════════════════════════════╝
-    """)
-    
-    # Initialize
+    print(
+        """
+===============================================================
+                    Homework Magic
+             AI Tutor for UK Primary Schools
+                  (FastAPI + Uvicorn)
+===============================================================
+    """
+    )
+
     initialize()
-    
-    # Start server
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('DEBUG', 'True').lower() == 'true'
-    
-    print(f"""
-🚀 Starting server...
-📱 Homepage:         http://localhost:{port}
-✨ Main App:         http://localhost:{port}/app
+
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 5000))
+    print(
+        f"""
+Starting server...
+Homepage:         http://localhost:{port}
+Main App:         http://localhost:{port}/app
 
 Available pages:
-  • http://localhost:{port}/
-  • http://localhost:{port}/ks1-homework
-  • http://localhost:{port}/ks2-homework
-  • http://localhost:{port}/elevenplus-practice
-  • http://localhost:{port}/check-my-homework
+  - http://localhost:{port}/
+  - http://localhost:{port}/ks1-homework
+  - http://localhost:{port}/ks2-homework
+  - http://localhost:{port}/elevenplus-practice
+  - http://localhost:{port}/check-my-homework
+  - http://localhost:{port}/app
 
 Press Ctrl+C to stop
-    """)
-    
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    """
+    )
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

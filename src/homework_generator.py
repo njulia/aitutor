@@ -101,19 +101,19 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         "previous_topics": previous_context,
     })
 
-    # 4. 生成正确答案（针对有唯一答案的作业）
-    correct_answers = None
-    try:
-        answer_prompt = ChatPromptTemplate.from_template(HOMEWORK_ANSWER_PROMPT)
-        answer_chain = answer_prompt | llm | StrOutputParser()
-        correct_answers = answer_chain.invoke({
-            "homework_content": result,
-            "subject": subject,
-            "year_group": year_group,
-        })
-        logger.info(f"[RAG] Generated correct answers for {subject} (Year {year_group})")
-    except Exception as e:
-        logger.warning(f"[RAG] Failed to generate correct answers for {subject}: {e}")
+    # # 4. 生成正确答案（针对有唯一答案的作业）
+    # correct_answers = None
+    # try:
+    #     answer_prompt = ChatPromptTemplate.from_template(HOMEWORK_ANSWER_PROMPT)
+    #     answer_chain = answer_prompt | llm | StrOutputParser()
+    #     correct_answers = answer_chain.invoke({
+    #         "homework_content": result,
+    #         "subject": subject,
+    #         "year_group": year_group,
+    #     })
+    #     logger.info(f"[RAG] Generated correct answers for {subject} (Year {year_group})")
+    # except Exception as e:
+    #     logger.warning(f"[RAG] Failed to generate correct answers for {subject}: {e}")
 
     # 5. 将新生成的作业存储到 RAG 中（包含正确答案）
     try:
@@ -125,7 +125,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             key_stage=KEY_STAGES.get(year_group, "KS2"),
             english_level=student_profile.get("english_level", "Beginner"),
             student_id=student_id,
-            correct_answers=correct_answers,
+            # correct_answers=correct_answers,
         )
         logger.info(f"[RAG] Stored NEW homework for {student_id} in {subject} (Year {year_group}), doc_id: {doc_id}")
     except Exception as e:

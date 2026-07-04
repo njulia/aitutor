@@ -50,7 +50,7 @@ def init_llm():
     # 检查是否启用 LangSmith
     global LANGSMITH_ENABLED, LANGSMITH_PROJECT
     LANGSMITH_ENABLED = os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true"
-    LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "english-tutor-hybrid-agent")
+    LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "english-tutor-agent")
 
     llm = ChatOpenAI(
         model=LLM_MODEL,
