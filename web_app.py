@@ -15,6 +15,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
+from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 
 # Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))

@@ -43,7 +43,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     year_group = student_profile.get("year_group", 3)
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
-    student_id = student_profile.get("student_id", "student_1")
+    student_id = student_profile.get("student_id", "")
 
     # 1. 获取该学生该科目的历史作业，用于避免重复
     try:
@@ -54,7 +54,31 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         logger.warning(f"[RAG] Failed to get previous topics: {e}")
         previous_topics = []
 
-    # 2. 构建避免重复的上下文
+    # 2. 使用学习目标和弱项构建查询，搜索 RAG 中是否有相关作业
+    learning_goals = student_profile.get("learning_goals", [])
+    weak_areas = student_profile.get("weak_areas", [])
+    search_query = " ".join(learning_goals + weak_areas + [subject])
+
+    try:
+        rag_results = search_homework(
+            query=search_query,
+            year_group=year_group,
+            subject=subject,
+            k=1,
+        )
+
+        # 如果 RAG 中有相关作业，直接返回
+        if rag_results:
+            homework_content = rag_results[0]["content"]
+            doc_id = rag_results[0]["doc_id"]
+            logger.info(f"[RAG] Found matching homework in RAG for {subject} (Year {year_group})")
+            return homework_content, doc_id
+    except Exception as e:
+        logger.warning(f"[RAG] Failed to search homework: {e}")
+
+    # 3. RAG 中没有相关作业，生成新作业
+    logger.info(f"[RAG] No matching homework found in RAG, generating new homework for {student_id} in {subject}")
+    # Build previous topics context to avoid duplicates
     previous_context = ""
     if previous_topics:
         previous_context = "\n\nIMPORTANT - Previously covered topics (DO NOT repeat ANY of these):\n"
