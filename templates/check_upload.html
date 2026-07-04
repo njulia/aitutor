@@ -1,0 +1,155 @@
+<div class="upload-controls">
+    <div class="upload-tabs">
+        <button class="upload-tab active" onclick="switchUploadTab('text')">Text Input</button>
+        <button class="upload-tab" onclick="switchUploadTab('file')">Upload File</button>
+    </div>
+
+    <!-- Text Input -->
+    <div id="upload-text-panel" class="upload-panel">
+        <textarea id="upload-text-input" class="upload-textarea"
+            placeholder="Paste or type your homework answers here..."></textarea>
+    </div>
+
+    <!-- File Upload -->
+    <div id="upload-file-panel" class="upload-panel" style="display:none;">
+        <input type="file" id="upload-file-input"
+            accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.ini,.cfg,.log,.rtf,.doc,.docx"
+            style="display:none;" onchange="handleFileUpload(event)">
+        <div class="upload-placeholder" onclick="document.getElementById('upload-file-input').click()">
+            <div style="font-size:32px;margin-bottom:8px;">📁</div>
+            <div style="font-weight:bold;margin-bottom:4px;">Click to upload file</div>
+            <div style="color:#888;font-size:0.85em;">Supports: .txt, .md, .csv, .docx, .doc, .json, .xml, .yaml, .yml, .rtf</div>
+        </div>
+        <div id="upload-file-info" style="display:none;margin-top:10px;padding:8px 12px;background:#f0f0ff;border-radius:6px;">
+            <span style="font-weight:600;">Selected: </span><span id="upload-file-name"></span>
+            <button class="upload-clear-btn" onclick="clearUploadedFile()">Clear</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-controls { margin-bottom: 12px; }
+.upload-tabs { display:flex; gap:8px; margin-bottom:12px; }
+.upload-tab {
+    padding:8px 18px; border:2px solid #e0e0e0; background:white;
+    border-radius:20px; cursor:pointer; font-size:14px; font-weight:500;
+    transition:all 0.2s;
+}
+.upload-tab:hover { border-color:#667eea; background:#f8f9ff; }
+.upload-tab.active {
+    background:linear-gradient(135deg,#667eea,#764ba2);
+    color:white; border-color:transparent;
+}
+.upload-panel { animation:fadeIn 0.2s ease; }
+.upload-textarea {
+    width:100%; min-height:120px; padding:12px; border:2px solid #e0e0e0;
+    border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;
+    transition:border-color 0.2s;
+}
+.upload-textarea:focus { outline:none; border-color:#667eea; }
+.upload-placeholder {
+    border:2px dashed #ccc; border-radius:12px; padding:24px 16px;
+    text-align:center; cursor:pointer; transition:all 0.2s; background:#fafafa;
+}
+.upload-placeholder:hover { border-color:#667eea; background:#f8f9ff; }
+.upload-clear-btn {
+    margin-left:12px; padding:4px 12px; border:1px solid #ccc;
+    background:white; border-radius:12px; cursor:pointer; font-size:12px;
+}
+.upload-clear-btn:hover { background:#f0f0f0; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+</style>
+
+<script>
+(function() {
+    // 切换上传方式 tab
+    window.switchUploadTab = function(method) {
+        document.querySelectorAll('.upload-tab').forEach(function(t) { t.classList.remove('active'); });
+        event.target.classList.add('active');
+        document.getElementById('upload-text-panel').style.display = method === 'text' ? 'block' : 'none';
+        document.getElementById('upload-file-panel').style.display = method === 'file' ? 'block' : 'none';
+    };
+
+    // 处理文件上传：读取文件内容并写入 Gradio Textbox
+    window.handleFileUpload = function(event) {
+        var file = event.target.files[0];
+        if (!file) return;
+
+        // 显示文件信息
+        document.getElementById('upload-file-name').textContent = file.name;
+        document.getElementById('upload-file-info').style.display = 'block';
+        document.querySelector('#upload-file-panel .upload-placeholder').style.display = 'none';
+
+        var ext = file.name.split('.').pop().toLowerCase();
+
+        // docx 文件需要特殊处理
+        if (ext === 'docx') {
+            readDocxFile(file);
+        } else {
+            // 纯文本文件直接读取
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                syncToGradio(e.target.result);
+            };
+            reader.onerror = function() {
+                alert('Failed to read file. Please try another format.');
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    // 读取 docx 文件
+    function readDocxFile(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                // 使用 mammoth.js 解析 docx (如果可用)
+                if (typeof mammoth !== 'undefined') {
+                    mammoth.extractRawText({arrayBuffer: e.target.result})
+                        .then(function(result) {
+                            syncToGradio(result.value);
+                        })
+                        .catch(function(err) {
+                            alert('Failed to parse docx: ' + err.message);
+                        });
+                } else {
+                    // mammoth 不可用，提示用户
+                    alert('docx parsing requires mammoth.js library. Please convert to .txt or paste content directly.');
+                }
+            } catch(err) {
+                alert('Failed to read docx file.');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // 清除已上传的文件
+    window.clearUploadedFile = function() {
+        document.getElementById('upload-file-info').style.display = 'none';
+        document.querySelector('#upload-file-panel .upload-placeholder').style.display = 'block';
+        document.getElementById('upload-file-input').value = '';
+        syncToGradio('');
+    };
+
+    // 同步内容到 Gradio Textbox
+    function syncToGradio(content) {
+        var gradioTextbox = document.querySelector('#upload-content-box textarea');
+        if (gradioTextbox) {
+            // 触发 Gradio 的 input 事件以更新状态
+            var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            nativeInputValueSetter.call(gradioTextbox, content);
+            gradioTextbox.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    // 监听文本输入框的变化，同步到 Gradio
+    document.addEventListener('DOMContentLoaded', function() {
+        var textInput = document.getElementById('upload-text-input');
+        if (textInput) {
+            textInput.addEventListener('input', function() {
+                syncToGradio(textInput.value);
+            });
+        }
+    });
+})();
+</script>
