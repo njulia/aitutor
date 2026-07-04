@@ -5,12 +5,9 @@ generate_11plus_page.py
 
 Generates a static, SEO-optimised landing page for 11+ preparation content.
 
-Why a separate static page instead of the Gradio app:
-Gradio serves the whole tool from one client-rendered URL, so a tab inside it
-can never be independently indexed by Google. This script produces a real,
-crawlable HTML page with actual body content targeting "11 plus" search
-terms, which then links through to the interactive Gradio tool
-(e.g. mounted at /app?tab=eleven_plus).
+This script produces a real, crawlable HTML page with actual body content
+targeting "11 plus" search terms, which then links through to the interactive
+AI tutor tool (mounted at /app).
 
 Content is kept as structured Python data (PAGE, SECTIONS, FAQS) rather than
 hardcoded HTML strings, so the same render_page() function can be reused to
@@ -32,7 +29,7 @@ import os
 SITE_NAME = "Homework Magic"
 SITE_URL = "https://your-domain.example"          # TODO: replace with real domain
 PAGE_PATH = "/elevenplus-practice"                     # final URL path for this page
-TOOL_URL = "/app?tab=eleven_plus_tab"               # where the Gradio tool lives
+TOOL_URL = "/app"                                    # AI tutor application
 project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUTPUT_DIR = os.path.join(project_dir, "static")
 OUTPUT_FILENAME = "elevenplus-practice.html"

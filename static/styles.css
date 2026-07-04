@@ -10,15 +10,7 @@ Google Green#34A853 rgb(52, 168, 83)
 
 body {
     background: #FFFFFF !important;
-}
-.gradio-container {
-    background: #FFFFFF !important;
     font-family: 'Google Sans', sans-serif !important;
-}
-/* Gradio 内部容器白色背景 */
-.form, .gradio-column, .gap, .col {
-    background: #FFFFFF !important;
-    background-color: #FFFFFF !important;
 }
 /* 主标题 - 黑色大字 */
 .cute-title {
@@ -45,78 +37,6 @@ body {
     margin-bottom: 10px;
     text-align: center;
 }
-/* 按钮样式 - 大圆角、薄荷绿 */
-.gr-button-primary {
-    background: #FFFFFF !important;
-    border: none !important;
-    border-radius: 30px !important;
-    font-size: 1.3em !important;
-    font-weight: bold !important;
-    color: #34A853 !important;
-    padding: 14px 32px !important;
-    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3) !important;
-    transition: all 0.3s ease !important;
-}
-/* 蓝色按钮 - Check My Homework / Submit for Review */
-.btn-blue {
-    background: #4285F4 !important;
-    color: #FFFFFF !important;
-    border-color: #4285F4 !important;
-}
-
-.gr-button-primary:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.4) !important;
-}
-/* Tab 标签文字 - 黑色加粗，边框清晰 */
-.tabs .tab-nav {
-    border: 2px solid #FFFFFF !important;
-    border-radius: 16px 16px 0 0 !important;
-    background: #FFFFFF !important;
-}
-/* Tab 标签文字 - 选中 #34A853，未选中 #222222 */
-.main-tabs .tab-nav button,
-.main-tabs button[role="tab"],
-.main-tabs nav button,
-.tabs .tab-nav button {
-    color: #222222 !important;
-    font-weight: bold !important;
-    font-size: 1.2em !important;
-    border-radius: 12px !important;
-    border: 2px solid transparent !important;
-    background: #FFFFFF !important;
-}
-.main-tabs .tab-nav button.selected,
-.main-tabs button[role="tab"][aria-selected="true"],
-.main-tabs nav button.selected,
-.tabs .tab-nav button.selected {
-    border: 2px solid #34A853 !important;
-    background: #FFFFFF !important;
-    color: #34A853 !important;
-}
-.main-tabs .tab-nav button.gr-button-primary,
-.tabs .tab-nav button.gr-button-primary {
-    color: #222222 !important;
-    background: #FFFFFF !important;
-}
-.main-tabs .tab-nav button.selected.gr-button-primary,
-.tabs .tab-nav button.selected.gr-button-primary {
-    color: #34A853 !important;
-    background: #FFFFFF !important;
-}
-/* Tab 内容区域边框 - 移除边框 */
-.tabs .tabitem {
-    border: none !important;
-    background: #FFFFFF !important;
-    padding: 20px !important;
-}
-/* 卡片容器 - 白色带圆角阴影 */
-.gr-box, .gr-panel {
-    border-radius: 20px !important;
-    border: 2px solid #ffffff !important;
-    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.06) !important;
-    background: #FFFFFF !important;
-}
 /* 输入框圆角 */
 input, textarea {
     border-radius: 15px !important;
@@ -128,105 +48,6 @@ input, textarea {
 #cp_profile textarea {
     background: #FFFFFF !important;
     color: #222222 !important;
-}
-/* 复选框标签加大 */
-.gr-checkbox-group label {
-    font-size: 1.05em !important;
-    padding: 4px 8px !important;
-}
-/* 单选框标签加大 */
-.gr-radio label {
-    font-size: 1.05em !important;
-    padding: 4px 8px !important;
-}
-
-/* Radio 组件所有元素白色背景 - 最高优先级 */
-html body .gradio-radio,
-html body .gradio-radio *,
-html body .gradio-radio .wrap,
-html body .gradio-radio .wrap-inner,
-html body .gradio-radio fieldset,
-html body .gradio-radio .gr-block,
-html body .gradio-radio .form,
-html body .gradio-radio label,
-html body .gradio-radio div,
-html body .gradio-radio span,
-html body .gradio-radio button,
-html body .gradio-radio input,
-html body .gradio-container .gradio-radio,
-html body .gradio-container .gradio-radio *,
-html body .gradio-container .gradio-radio .wrap,
-html body .gradio-container .gradio-radio .wrap-inner,
-html body .gradio-container .gradio-radio label,
-html body .gradio-container .gradio-radio div,
-html body .gradio-container .gradio-radio span,
-html body .gradio-container .gradio-radio button,
-html body .gradio-container .gradio-radio input,
-.gradio-radio,
-.gradio-radio *,
-.gradio-radio .wrap,
-.gradio-radio .wrap-inner,
-.gradio-radio fieldset,
-.gradio-radio .gr-block,
-.gradio-radio .form,
-.gradio-radio label,
-.gradio-radio div,
-.gradio-radio span,
-.gradio-radio button,
-.gradio-radio input,
-[class*="radio"] {
-    background: #FFFFFF !important;
-    background-color: #FFFFFF !important;
-}
-
-/* 强制覆盖所有可能的深色背景 */
-.gradio-container [class*="wrap"],
-.gradio-container [class*="radio"] div,
-.gradio-container [class*="radio"] span,
-.gradio-container [class*="radio"] label {
-    background: #FFFFFF !important;
-    background-color: #FFFFFF !important;
-}
-
-/* 单选框和复选框容器背景 */
-.gr-radio, .gr-checkbox-group {
-    background: #FFFFFF !important;
-}
-
-.gr-radio label, .gr-checkbox-group label {
-    background: #FFFFFF !important;
-    color: #222222 !important;
-}
-
-/* Radio 和 Checkbox 输入框背景 */
-input[type="radio"], input[type="checkbox"] {
-    background: #FFFFFF !important;
-}
-
-/* Radio 选中状态 - 黑色边框 */
-input[type="radio"]:checked {
-    background: #34A853 !important;
-    border-color: #34A853 !important;
-    accent-color: #34A853 !important;
-}
-
-/* Radio 选中状态的标签高亮 - 黑色 */
-input[type="radio"]:checked + span {
-    color: #34A853 !important;
-    font-weight: bold !important;
-}
-
-/* Checkbox 选中状态 - 显示 Google Green */
-input[type="checkbox"]:checked {
-    background: #34A853 !important;
-    border-color: #34A853 !important;
-    accent-color: #34A853 !important;
-}
-
-/* Checkbox 选中状态的标签高亮 - Google Green */
-input[type="checkbox"]:checked + span {
-    color: #34A853 !important;
-    font-weight: bold !important;
 }
 
 /* ===== 作业 HTML 显示样式 ===== */
@@ -408,57 +229,39 @@ input[type="checkbox"]:checked + span {
 }
 
 /* ===== 批阅反馈区域样式 ===== */
-.gr-markdown, .prose {
+.prose {
     color: #000000 !important;
     font-family: 'Google Sans', sans-serif !important;
     font-size: 16px !important;
     line-height: 1.6 !important;
 }
 
-.gr-markdown h1, .prose h1 {
+.prose h1 {
     color: #4285F4 !important;
 }
 
-.gr-markdown h2, .gr-markdown h3, .gr-markdown h4,
 .prose h2, .prose h3, .prose h4 {
     color: #000000 !important;
 }
 
-.gr-markdown p, .gr-markdown li, .gr-markdown td, .gr-markdown th,
 .prose p, .prose li, .prose td, .prose th {
     color: #000000 !important;
 }
 
-.gr-markdown strong, .prose strong {
+.prose strong {
     color: #000000 !important;
 }
 
-.gr-markdown code, .prose code {
+.prose code {
     color: #000000 !important;
     background: #ffffff !important;
 }
 
-/* 批阅反馈中的绿色对勾和红色叉号样式 */
-.gr-markdown span[style*="color: green"],
-.prose span[style*="color: green"] {
-    font-size: 1.2em !important;
-}
-
-.gr-markdown span[style*="color: red"],
-.prose span[style*="color: red"] {
-    font-size: 1.2em !important;
-}
-
-/* 批阅反馈区域的问题和答案样式 */
-.gr-markdown strong, .prose strong {
-    color: #000000 !important;
-}
-
-.gr-markdown ul, .prose ul {
+.prose ul {
     padding-left: 20px !important;
 }
 
-.gr-markdown ul li, .prose ul li {
+.prose ul li {
     margin-bottom: 12px !important;
     line-height: 1.6 !important;
 }

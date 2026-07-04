@@ -456,6 +456,7 @@
             <nav class="nav-links">
                 <a href="/">Home</a>
                 <a href="/elevenplus-practice">11+</a>
+                <a href="/elevenplus/articles">11+ Articles</a>
                 <a href="/ks1-homework">KS1</a>
                 <a href="/ks2-homework">KS2</a>
             </nav>
@@ -718,15 +719,32 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         let currentFileData = null;
         let extractedContent = '';
         
-        // Configure marked for better line breaks
+        // Configure marked for better line breaks and open links in new tab
+        const renderer = new marked.Renderer();
+        renderer.link = function(href, title, text) {
+            let link = '<a href="' + href + '" target="_blank" rel="noopener noreferrer"';
+            if (title) {
+                link += ' title="' + title + '"';
+            }
+            link += '>' + text + '</a>';
+            return link;
+        };
         marked.setOptions({
             breaks: true,
-            gfm: true
+            gfm: true,
+            renderer: renderer
         });
 
         // Initialize subjects
         document.addEventListener('DOMContentLoaded', function() {
             loadSubjects();
+            
+            // Check for tab parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam) {
+                setTimeout(() => switchTab(tabParam), 100);
+            }
         });
         
         // Input method handling
@@ -905,7 +923,14 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
             
-            event.target.classList.add('active');
+            // Find the tab button - either from event or by onclick attribute
+            let tabButton = event && event.target ? event.target : null;
+            if (!tabButton) {
+                tabButton = document.querySelector(`.tab[onclick*="${tabId}"]`);
+            }
+            if (tabButton) {
+                tabButton.classList.add('active');
+            }
             document.getElementById(tabId).classList.add('active');
         }
 
@@ -940,13 +965,16 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             
             showLoading();
             
+            const studentId = document.getElementById('quick-student-id').value.trim();
+
             fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     quick_select: true,
                     year: year,
-                    subjects: subjects
+                    subjects: subjects,
+                    student_id: studentId || undefined
                 })
             })
             .then(response => response.json())
@@ -1185,9 +1213,6 @@ ${answers}
                     </div>
                 </div>
             `;
-            
-            // Also populate the student answers area
-            document.getElementById('student-answers').value = answers;
             
             currentSubject = subject;
             currentHomework = [{ subject: subject, content: homework, doc_id: null }];

@@ -4,21 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Check My Homework — Instant AI Homework Marking | Homework Magic</title>
-<meta name="description" content="Get instant AI marking for your child's homework. Upload handwritten work or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
-<meta name="keywords" content="homework checker, AI homework marking, mark my homework, homework feedback, homework help, primary school homework review, mark maths homework">
+<meta name="description" content="Get instant AI marking for your child's homework. Upload handwritten work, submit files, or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
+<meta name="keywords" content="homework checker, AI homework marking, mark my homework, homework feedback, homework help, primary school homework review, mark maths homework, upload homework photo">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://your-domain.example/check-my-homework">
 
 <meta property="og:type" content="article">
 <meta property="og:title" content="Check My Homework — Instant AI Homework Marking | Homework Magic">
-<meta property="og:description" content="Get instant AI marking for your child's homework. Upload handwritten work or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
+<meta property="og:description" content="Get instant AI marking for your child's homework. Upload handwritten work, submit files, or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
 <meta property="og:url" content="https://your-domain.example/check-my-homework">
 <meta property="og:site_name" content="Homework Magic">
 <meta property="og:locale" content="en_GB">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Check My Homework — Instant AI Homework Marking | Homework Magic">
-<meta name="twitter:description" content="Get instant AI marking for your child's homework. Upload handwritten work or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
+<meta name="twitter:description" content="Get instant AI marking for your child's homework. Upload handwritten work, submit files, or type in answers, and receive friendly, detailed feedback aligned to the UK National Curriculum.">
 
 <script type="application/ld+json">
 {
@@ -37,10 +37,18 @@
         },
         {
           "@type": "Question",
+          "name": "What file formats are supported?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You can upload images (JPG, PNG, HEIC, GIF), PDF files, or text files (TXT, MD, CSV). The AI will extract and review the content automatically."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "What subjects can it mark?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "All UK primary school subjects including Maths, English, Science, History, Geography, and more."
+            "text": "All UK primary school subjects including Maths, English, Science, History, Geography, and 11+ preparation subjects."
           }
         },
         {
@@ -101,6 +109,116 @@
   nav.breadcrumb a { color: #4285F4; text-decoration: none; }
   .nav-links { margin-top: 2em; padding-top: 2em; border-top: 1px solid #eee; }
   .nav-links a { margin-right: 1em; color: #4285F4; }
+
+  /* Feature cards */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .feature-card {
+    background: #F8F9FA;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #E0E0E0;
+    text-align: center;
+  }
+  .feature-card .icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+  .feature-card h4 {
+    margin: 0 0 8px 0;
+    color: #222222;
+    font-size: 1em;
+  }
+  .feature-card p {
+    margin: 0;
+    font-size: 0.9em;
+    color: #555;
+  }
+
+  /* Steps */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 24px 0;
+  }
+  .steps li {
+    counter-increment: step;
+    padding: 16px 16px 16px 60px;
+    position: relative;
+    margin-bottom: 12px;
+    background: #F8F9FA;
+    border-radius: 12px;
+    border: 1px solid #E0E0E0;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    background: #4285F4;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  .steps li strong {
+    color: #222222;
+  }
+
+  /* Feedback list */
+  .feedback-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+  }
+  .feedback-list li {
+    padding: 12px 16px 12px 48px;
+    position: relative;
+    margin-bottom: 8px;
+    background: #F8F9FA;
+    border-radius: 8px;
+  }
+  .feedback-list li::before {
+    content: "";
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    background: #34A853;
+    border-radius: 50%;
+  }
+  .feedback-list li strong {
+    color: #222222;
+  }
+
+  /* Format tags */
+  .format-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .format-tag {
+    background: #E8F0FE;
+    color: #4285F4;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.9em;
+    font-weight: 500;
+  }
 </style>
 </head>
 <body>
@@ -110,32 +228,82 @@
 </nav>
 
 <h1>Check My Homework — Instant AI Marking</h1>
-<p class="intro">Upload a photo of your child's handwritten homework or type in their answers, and Homework Magic will mark it instantly. You'll get detailed, encouraging feedback that explains what they did well, where mistakes happened, and how to improve.</p>
+<p class="intro">Upload a photo of your child's handwritten homework, submit a file, or type in their answers directly. Homework Magic will mark it instantly and provide detailed, encouraging feedback that explains what they did well, where mistakes happened, and how to improve.</p>
 
 <a class="cta" href="/app">Try the Homework Checker</a>
 
-<h2>How the homework checker works</h2>
-<p>1. Generate some homework with Homework Magic first (or use your own).</p>
-<p>2. Have your child complete the work on paper or type answers into the box.</p>
-<p>3. Upload a photo of their work, or paste in their answers.</p>
-<p>4. Click 'Submit for Review' and get instant, detailed feedback.</p>
-<h2>What the feedback includes</h2>
-<ul>
-<li><strong>Encouragement:</strong> Positive feedback on what your child did well.</li>
-<li><strong>Explanations:</strong> Clear explanations of any mistakes, in language children understand.</li>
-<li><strong>Correct answers:</strong> The right approach or answer shown clearly.</li>
-<li><strong>Next steps:</strong> Suggestions for what to practice next.</li>
+<h2>How It Works</h2>
+<ol class="steps">
+  <li><strong>Generate or bring your own homework</strong> — Use Homework Magic to create personalised questions, or use work from school.</li>
+  <li><strong>Have your child complete the work</strong> — On paper, digitally, or any format they prefer.</li>
+  <li><strong>Submit for marking</strong> — Upload a photo, submit a file, or type answers directly into the text box.</li>
+  <li><strong>Get instant feedback</strong> — Receive detailed, encouraging review with scores, explanations, and next steps.</li>
+</ol>
+
+<h2>Three Ways to Submit</h2>
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="icon">📝</div>
+    <h4>Text Input</h4>
+    <p>Type or paste homework questions and answers directly into the form.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">📁</div>
+    <h4>File Upload</h4>
+    <p>Upload documents in TXT, MD, CSV, or PDF format for automatic review.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">📸</div>
+    <h4>Photo Upload</h4>
+    <p>Take a photo of handwritten work — the AI reads and marks it automatically.</p>
+  </div>
+</div>
+
+<h2>What the Feedback Includes</h2>
+<ul class="feedback-list">
+  <li><strong>Encouragement:</strong> Positive feedback on what your child did well.</li>
+  <li><strong>Score:</strong> A clear score out of 10 to track progress.</li>
+  <li><strong>Explanations:</strong> Clear explanations of any mistakes, in language children understand.</li>
+  <li><strong>Correct answers:</strong> The right approach or answer shown clearly.</li>
+  <li><strong>Next steps:</strong> Suggestions for what to practice next.</li>
 </ul>
-<h2>Supported formats</h2>
-<p>You can upload photos (JPG, PNG, HEIC), PDF files, or simply type answers directly into the text box. Handwritten work works best when the photo is well-lit and the writing is clear.</p>
+
+<h2>Supported File Formats</h2>
+<p>Upload homework in any of these formats:</p>
+<div class="format-tags">
+  <span class="format-tag">JPG</span>
+  <span class="format-tag">PNG</span>
+  <span class="format-tag">HEIC</span>
+  <span class="format-tag">GIF</span>
+  <span class="format-tag">PDF</span>
+  <span class="format-tag">TXT</span>
+  <span class="format-tag">MD</span>
+  <span class="format-tag">CSV</span>
+</div>
+<p>Handwritten work works best when the photo is well-lit and the writing is clear. Maximum file size: 16 MB.</p>
+
+<h2>Subjects Covered</h2>
+<p>The homework checker supports all UK primary school subjects:</p>
+<ul>
+  <li><strong>Mathematics:</strong> Arithmetic, fractions, geometry, problem-solving</li>
+  <li><strong>English:</strong> Comprehension, grammar, punctuation, vocabulary, creative writing</li>
+  <li><strong>Science:</strong> Biology, chemistry, physics topics</li>
+  <li><strong>Humanities:</strong> History, Geography, RE</li>
+  <li><strong>Languages:</strong> Spanish, French, Latin, Chinese</li>
+  <li><strong>11+ Preparation:</strong> Verbal Reasoning, Non-Verbal Reasoning, Maths, English</li>
+</ul>
 
 <h2>Frequently Asked Questions</h2>
 <h3>Can it mark handwritten work?</h3>
-<p>Yes! Just take a clear photo of your child's homework and upload it — the AI will read and review it.</p>
+<p>Yes! Just take a clear photo of your child's homework and upload it — the AI will read and review it using advanced OCR technology.</p>
+<h3>What file formats are supported?</h3>
+<p>You can upload images (JPG, PNG, HEIC, GIF), PDF files, or text files (TXT, MD, CSV). The AI will extract and review the content automatically.</p>
 <h3>What subjects can it mark?</h3>
-<p>All UK primary school subjects including Maths, English, Science, History, Geography, and more.</p>
+<p>All UK primary school subjects including Maths, English, Science, History, Geography, and 11+ preparation subjects.</p>
 <h3>Does it replace a teacher?</h3>
 <p>No — Homework Magic is a supplementary tool to support home learning, not a replacement for school teaching.</p>
+<h3>Is the feedback encouraging?</h3>
+<p>Yes! All feedback is designed to be positive and constructive, focusing on what the child did well while clearly explaining areas for improvement.</p>
 
 <p><a class="cta" href="/app">Try the Homework Checker</a></p>
 
@@ -144,6 +312,7 @@
   <a href="/ks1-homework">KS1 Homework</a>
   <a href="/ks2-homework">KS2 Homework</a>
   <a href="/elevenplus-practice">11 Plus Practice</a>
+  <a href="/elevenplus/articles">11+ Articles</a>
   <a href="/check-my-homework">Check My Homework</a>
 </div>
 

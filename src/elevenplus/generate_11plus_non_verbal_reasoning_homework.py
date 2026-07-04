@@ -19,8 +19,7 @@ from two standard, universally-rendering symbol sets:
 
   - Colour-block emoji for shape + colour (e.g. 🔴 red circle, 🟩 green
     square) — these display as real, distinguishable coloured shapes in
-    any modern browser/app (Gradio, FastAPI + HTML, etc.), unlike plain
-    black-and-white unicode glyphs.
+    any modern browser/app, unlike plain black-and-white unicode glyphs.
   - Compass-direction arrows (⬆️ ↗️ ➡️ ↘️ ⬇️ ↙️ ⬅️ ↖️) as a stand-in for
     rotation/orientation, since 8 evenly-spaced directions behave exactly
     like a rotating shape for reasoning purposes.
