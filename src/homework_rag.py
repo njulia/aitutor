@@ -8,6 +8,7 @@ Stores generated homework with metadata in a vector database for future search a
 Metadata includes: year_group, subject, homework_minutes, study_year_month, etc.
 """
 import os
+import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -17,6 +18,10 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)
+
+# RAG 存储重试配置：API 负载高时自动重试
+RAG_MAX_RETRIES = 3
+RAG_RETRY_DELAY = 2  # 秒
 
 # AGICTO API Key for embeddings
 AGICTO_API_KEY = os.getenv("AGICTO_API_KEY")
@@ -92,9 +97,17 @@ class HomeworkRAGStore:
             metadata=metadata,
         )
 
-        self.db.add_documents([document], ids=[doc_id])
-        logger.info(f"[RAG] Added homework document: {doc_id}")
-        return doc_id
+        for attempt in range(1, RAG_MAX_RETRIES + 1):
+            try:
+                self.db.add_documents([document], ids=[doc_id])
+                logger.info(f"[RAG] Added homework document: {doc_id}")
+                return doc_id
+            except Exception as e:
+                if attempt < RAG_MAX_RETRIES:
+                    logger.warning(f"[RAG] Store attempt {attempt} failed for {doc_id}: {e}, retrying in {RAG_RETRY_DELAY}s...")
+                    time.sleep(RAG_RETRY_DELAY)
+                else:
+                    raise
 
     def add_batch_homework(
         self,
