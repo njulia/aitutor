@@ -5,6 +5,10 @@ python-multipart
 pydantic
 chromadb
 requests
+stripe
+
+# Observability (self-hosted Langfuse)
+langfuse>=2.0.0
 
 # Optional but recommended
 python-dotenv

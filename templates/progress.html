@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress - Homework Magic</title>
+    <meta name="description" content="Track your child's learning progress">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links a {
+            margin-left: 20px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .student-selector {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .progress-dashboard {
+            margin-top: 30px;
+        }
+        
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .stat-card.green {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+        }
+        
+        .stat-card.orange {
+            background: linear-gradient(135deg, #ee0979, #ff6a00);
+        }
+        
+        .stat-card.blue {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.95em;
+            opacity: 0.9;
+        }
+        
+        .chart-container {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            position: relative;
+            height: 350px;
+        }
+        
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .no-data h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 1.5em;
+        }
+        
+        .no-data p {
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        
+        .topics-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .topics-table th,
+        .topics-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .topics-table th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .topics-table tr:hover {
+            background: #f8f9ff;
+        }
+        
+        .accuracy-bar {
+            display: inline-block;
+            width: 100px;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        .accuracy-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+        }
+        
+        .sessions-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .session-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .session-item:last-child {
+            border-bottom: none;
+        }
+        
+        .session-info {
+            flex: 1;
+        }
+        
+        .session-subject {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+        
+        .session-date {
+            font-size: 0.85em;
+            color: #888;
+        }
+        
+        .session-score {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .section-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .student-selector {
+                flex-direction: column;
+            }
+            
+            .form-group {
+                width: 100%;
+            }
+            
+            .progress-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">Homework Magic</div>
+            <nav class="nav-links">
+                <a href="/">Home</a>
+                <a href="/app">Tutor</a>
+                <a href="/elevenplus-practice">11+</a>
+                <a href="/ks1-homework">KS1</a>
+                <a href="/ks2-homework">KS2</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2 class="section-title">Track Your Progress</h2>
+            <p style="color: #666; margin-bottom: 25px;">
+                Enter your student ID to view your learning progress and performance over time.
+            </p>
+            
+            <div class="student-selector">
+                <div class="form-group">
+                    <label for="student-id">Student ID</label>
+                    <input type="text" id="student-id" placeholder="e.g. student_3, emma_year3" value="">
+                </div>
+                <button class="btn btn-primary" onclick="loadProgress()">Load Progress</button>
+            </div>
+        </div>
+
+        <div id="progress-content" class="hidden">
+            <div class="progress-dashboard">
+                <div class="progress-stats" id="stats-container"></div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Score Trend Over Time</div>
+                    <canvas id="scoreTrendChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Accuracy by Subject</div>
+                    <canvas id="subjectChart"></canvas>
+                </div>
+
+                <div class="card">
+                    <h3 class="section-title">Topic Progress</h3>
+                    <div id="topics-container"></div>
+                </div>
+
+                <div class="card">
+                    <h3 class="section-title">Recent Sessions</h3>
+                    <div class="sessions-list" id="sessions-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="no-data" class="card hidden">
+            <div class="no-data">
+                <h3>No Progress Data Yet</h3>
+                <p>Complete some homework and check your answers to start tracking your progress!</p>
+                <p style="margin-top: 20px;">
+                    <a href="/app" style="color: #667eea; text-decoration: none; font-weight: 600;">Start practising now</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = [];
+
+        // 从 URL 参数读取 student_id
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const studentId = params.get('student_id');
+            if (studentId) {
+                document.getElementById('student-id').value = studentId;
+                loadProgress();
+            }
+        })();
+
+        async function loadProgress() {
+            const studentId = document.getElementById('student-id').value.trim();
+            
+            if (!studentId) {
+                alert('Please enter a student ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/progress/${encodeURIComponent(studentId)}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayProgress(data);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to load progress'));
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Failed to load progress data');
+            }
+        }
+
+        function displayProgress(data) {
+            const summary = data.summary;
+            const scoreHistory = data.score_history;
+            const topics = data.topics;
+            const overall = summary.overall;
+
+            // 销毁旧图表
+            charts.forEach(c => c.destroy());
+            charts = [];
+
+            if (overall.total_sessions === 0) {
+                document.getElementById('progress-content').classList.add('hidden');
+                document.getElementById('no-data').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('no-data').classList.add('hidden');
+            document.getElementById('progress-content').classList.remove('hidden');
+
+            // 渲染统计卡片
+            const statsContainer = document.getElementById('stats-container');
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${overall.total_sessions}</div>
+                    <div class="stat-label">Homework Completed</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-value">${overall.avg_accuracy}%</div>
+                    <div class="stat-label">Average Score</div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="stat-value">${summary.by_subject.length}</div>
+                    <div class="stat-label">Subjects Practised</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-value">${topics.length}</div>
+                    <div class="stat-label">Topics Covered</div>
+                </div>
+            `;
+
+            // 渲染分数趋势图
+            renderScoreTrendChart(scoreHistory);
+
+            // 渲染科目正确率图
+            renderSubjectChart(summary.by_subject);
+
+            // 渲染主题进度表
+            renderTopicsTable(topics);
+
+            // 渲染最近会话列表
+            renderSessionsList(scoreHistory);
+        }
+
+        function renderScoreTrendChart(scoreHistory) {
+            const ctx = document.getElementById('scoreTrendChart');
+            if (!ctx || scoreHistory.length === 0) return;
+
+            const sorted = [...scoreHistory].sort((a, b) =>
+                new Date(a.created_at) - new Date(b.created_at)
+            );
+
+            const labels = sorted.map(s => {
+                const d = new Date(s.created_at);
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            });
+            const scores = sorted.map(s => Math.round((s.score / s.max_score) * 100));
+
+            const subjectColors = {
+                'Maths': '#667eea',
+                'English': '#ee0979',
+                'Science': '#11998e',
+                'Spanish': '#ff6a00',
+            };
+            const bgColors = sorted.map(s => subjectColors[s.subject] || '#764ba2');
+
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Score (%)',
+                        data: scores,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: bgColors,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        fill: true,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const item = sorted[ctx.dataIndex];
+                                    return `${item.subject}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
+                }
+            });
+            charts.push(chart);
+        }
+
+        function renderSubjectChart(bySubject) {
+            const ctx = document.getElementById('subjectChart');
+            if (!ctx || bySubject.length === 0) return;
+
+            const labels = bySubject.map(s => s.subject);
+            const accuracies = bySubject.map(s => s.avg_accuracy);
+            const sessions = bySubject.map(s => s.total_sessions);
+
+            const colors = ['#667eea', '#ee0979', '#11998e', '#ff6a00', '#764ba2', '#00b4d8'];
+
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Accuracy (%)',
+                        data: accuracies,
+                        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                        borderRadius: 8,
+                        barThickness: 60,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(ctx) {
+                                    return `Sessions: ${sessions[ctx.dataIndex]}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
+                }
+            });
+            charts.push(chart);
+        }
+
+        function renderTopicsTable(topics) {
+            const container = document.getElementById('topics-container');
+            
+            if (topics.length === 0) {
+                container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No topic data available yet</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="topics-table">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Subject</th>
+                            <th>Questions</th>
+                            <th>Correct</th>
+                            <th>Accuracy</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${topics.map(t => `
+                            <tr>
+                                <td>${t.topic}</td>
+                                <td>${t.subject || '-'}</td>
+                                <td>${t.questions_attempted}</td>
+                                <td>${t.questions_correct}</td>
+                                <td>
+                                    <span class="accuracy-bar">
+                                        <span class="accuracy-fill" style="width: ${t.accuracy}%"></span>
+                                    </span>
+                                    ${t.accuracy}%
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderSessionsList(scoreHistory) {
+            const container = document.getElementById('sessions-container');
+            
+            if (scoreHistory.length === 0) {
+                container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No sessions recorded yet</p>';
+                return;
+            }
+
+            const sorted = [...scoreHistory].sort((a, b) =>
+                new Date(b.created_at) - new Date(a.created_at)
+            );
+
+            container.innerHTML = sorted.map(s => {
+                const date = new Date(s.created_at);
+                const dateStr = date.toLocaleDateString('en-GB', { 
+                    day: 'numeric', 
+                    month: 'short', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const percentage = Math.round((s.score / s.max_score) * 100);
+                
+                return `
+                    <div class="session-item">
+                        <div class="session-info">
+                            <div class="session-subject">${s.subject}</div>
+                            <div class="session-date">${dateStr}</div>
+                        </div>
+                        <div class="session-score">${percentage}%</div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>

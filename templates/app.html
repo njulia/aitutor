@@ -11,8 +11,6 @@
     
     <!-- Markdown to HTML parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-    <!-- Chart.js for progress graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -519,6 +517,7 @@
                 <a href="/elevenplus/articles">11+ Articles</a>
                 <a href="/ks1-homework">KS1</a>
                 <a href="/ks2-homework">KS2</a>
+                <a href="/progress">Progress</a>
             </nav>
         </div>
     </div>
@@ -1385,203 +1384,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         }
 
         // ---- 学习进度追踪 ----
-        let progressCharts = [];
 
         function TrackProgress() {
             const studentId = currentProfile?.student_id || 'anonymous';
-
-            fetch(`/api/progress/${encodeURIComponent(studentId)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    displayProgress(data);
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Failed to load progress');
-            });
-        }
-
-        function displayProgress(data) {
-            // 销毁旧的图表实例
-            progressCharts.forEach(c => c.destroy());
-            progressCharts = [];
-
-            const container = document.getElementById('review-result');
-            const summary = data.summary;
-            const scoreHistory = data.score_history;
-            const overall = summary.overall;
-
-            if (overall.total_sessions === 0) {
-                container.innerHTML = `
-                    <div class="progress-dashboard">
-                        <h3 style="margin-top: 30px; margin-bottom: 20px;">Your Progress</h3>
-                        <div class="no-progress-message">
-                            <h3>No progress data yet</h3>
-                            <p>Complete some homework and check your answers to start tracking your progress!</p>
-                        </div>
-                    </div>
-                `;
-                document.getElementById('results').style.display = 'block';
-                return;
-            }
-
-            // 构建统计卡片和图表容器
-            container.innerHTML = `
-                <div class="progress-dashboard">
-                    <h3 style="margin-top: 30px; margin-bottom: 20px;">Your Progress</h3>
-
-                    <div class="progress-stats">
-                        <div class="stat-card">
-                            <div class="stat-value">${overall.total_sessions}</div>
-                            <div class="stat-label">Homework Completed</div>
-                        </div>
-                        <div class="stat-card" style="background: linear-gradient(135deg, #11998e, #38ef7d);">
-                            <div class="stat-value">${overall.avg_accuracy}%</div>
-                            <div class="stat-label">Average Score</div>
-                        </div>
-                        <div class="stat-card" style="background: linear-gradient(135deg, #ee0979, #ff6a00);">
-                            <div class="stat-value">${summary.by_subject.length}</div>
-                            <div class="stat-label">Subjects Practised</div>
-                        </div>
-                    </div>
-
-                    <div class="chart-container">
-                        <div class="chart-title">Score Trend</div>
-                        <canvas id="scoreTrendChart"></canvas>
-                    </div>
-
-                    <div class="chart-container">
-                        <div class="chart-title">Accuracy by Subject</div>
-                        <canvas id="subjectChart"></canvas>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('results').style.display = 'block';
-
-            // 渲染分数趋势折线图
-            renderScoreTrendChart(scoreHistory);
-
-            // 渲染科目正确率柱状图
-            renderSubjectChart(summary.by_subject);
-        }
-
-        function renderScoreTrendChart(scoreHistory) {
-            const ctx = document.getElementById('scoreTrendChart');
-            if (!ctx || scoreHistory.length === 0) return;
-
-            // 按时间排序并计算百分比
-            const sorted = [...scoreHistory].sort((a, b) =>
-                new Date(a.created_at) - new Date(b.created_at)
-            );
-
-            const labels = sorted.map(s => {
-                const d = new Date(s.created_at);
-                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            });
-            const scores = sorted.map(s => Math.round((s.score / s.max_score) * 100));
-
-            // 按科目分组的颜色
-            const subjectColors = {
-                'Maths': '#667eea',
-                'English': '#ee0979',
-                'Science': '#11998e',
-                'Spanish': '#ff6a00',
-            };
-            const bgColors = sorted.map(s => subjectColors[s.subject] || '#764ba2');
-
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Score (%)',
-                        data: scores,
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        pointBackgroundColor: bgColors,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        fill: true,
-                        tension: 0.3,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) {
-                                    const item = sorted[ctx.dataIndex];
-                                    return `${item.subject}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { callback: v => v + '%' }
-                        }
-                    }
-                }
-            });
-            progressCharts.push(chart);
-        }
-
-        function renderSubjectChart(bySubject) {
-            const ctx = document.getElementById('subjectChart');
-            if (!ctx || bySubject.length === 0) return;
-
-            const labels = bySubject.map(s => s.subject);
-            const accuracies = bySubject.map(s => s.avg_accuracy);
-            const sessions = bySubject.map(s => s.total_sessions);
-
-            const colors = ['#667eea', '#ee0979', '#11998e', '#ff6a00', '#764ba2', '#00b4d8'];
-
-            const chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Average Accuracy (%)',
-                        data: accuracies,
-                        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
-                        borderRadius: 8,
-                        barThickness: 50,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                afterLabel: function(ctx) {
-                                    return `Sessions: ${sessions[ctx.dataIndex]}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { callback: v => v + '%' }
-                        }
-                    }
-                }
-            });
-            progressCharts.push(chart);
+            window.location.href = `/progress?student_id=${encodeURIComponent(studentId)}`;
         }
     </script>
 </body>

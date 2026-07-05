@@ -13,8 +13,9 @@ import logging
 import base64
 import re
 import uuid
+import stripe
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -27,6 +28,10 @@ from src.file_utils import read_text_file, read_pdf_file, extract_text_from_imag
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
+
+# Stripe configuration
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "sk_test_...")
+stripe.api_key = STRIPE_SECRET_KEY
 
 logging.basicConfig(
     level=logging.INFO,
@@ -404,6 +409,26 @@ class SessionUpdateRequest(BaseModel):
     subject: Optional[str] = None
 
 
+class FeedbackRequest(BaseModel):
+    trace_id: Optional[str] = None
+    score: float = Field(..., description="评分: 1.0 = thumbs up, 0.0 = thumbs down")
+    name: str = Field(default="user_feedback", description="评分类型")
+    comment: Optional[str] = Field(default=None, description="可选文字反馈")
+
+
+class AdminUserUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    year_group: Optional[int] = None
+    age: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class SubscriptionRequest(BaseModel):
+    email: str
+    name: str
+    duration: str  # "5_days" or "30_days"
+
+
 # --- Web routes ---
 
 
@@ -435,6 +460,11 @@ async def check_homework():
 @app.get("/pricing")
 async def pricing():
     return _static_page("static", "pricing.html")
+
+
+@app.get("/progress")
+async def progress_page():
+    return _static_page("templates", "progress.html")
 
 
 @app.get("/app")
@@ -596,11 +626,51 @@ async def api_get_progress(student_id: str, subject: Optional[str] = None):
     """获取学生的学习进度汇总数据"""
     try:
         from src.progress_db import get_progress_summary, get_score_history, get_topic_progress
+
+        # 获取原始数据
+        raw_summary = get_progress_summary(student_id)
+        score_history = get_score_history(student_id, subject)
+        topics = get_topic_progress(student_id, subject)
+
+        # 转换为前端期望的格式
+        # 前端期望: summary.overall.total_sessions, summary.overall.avg_accuracy
+        # 前端期望: summary.by_subject[{subject, avg_accuracy, total_sessions}]
+        # 前端期望: score_history[{subject, score, max_score, created_at}]
+
+        total_sessions = raw_summary.get("total_sessions", 0)
+        avg_score = raw_summary.get("average_score")
+
+        # 转换科目数据：subjects -> by_subject，添加 avg_accuracy 和 total_sessions
+        by_subject = []
+        for subj in raw_summary.get("subjects", []):
+            by_subject.append({
+                "subject": subj["subject"],
+                "avg_accuracy": round(subj["avg_score"] * 10, 1) if subj.get("avg_score") else 0,  # 转换为百分比
+                "total_sessions": subj["count"],
+            })
+
+        # 转换分数历史：添加 max_score（假设满分10分）
+        score_history_formatted = []
+        for s in score_history:
+            score_val = s.get("score", 0) or 0
+            score_history_formatted.append({
+                "subject": s.get("subject", ""),
+                "score": score_val,
+                "max_score": 10,  # 满分10分
+                "created_at": s.get("created_at", ""),
+            })
+
         return {
             "success": True,
-            "summary": get_progress_summary(student_id),
-            "score_history": get_score_history(student_id, subject),
-            "topics": get_topic_progress(student_id, subject),
+            "summary": {
+                "overall": {
+                    "total_sessions": total_sessions,
+                    "avg_accuracy": round(avg_score * 10, 1) if avg_score else 0,  # 转换为百分比
+                },
+                "by_subject": by_subject,
+            },
+            "score_history": score_history_formatted,
+            "topics": topics,
         }
     except Exception as exc:
         logger.error("Error getting progress: %s", exc)
@@ -665,6 +735,53 @@ async def delete_session(session_id: str):
     return {"success": True}
 
 
+@app.post("/api/create-subscription")
+async def create_subscription(request: SubscriptionRequest):
+    try:
+        # Create Stripe customer
+        customer = stripe.Customer.create(
+            email=request.email,
+            name=request.name,
+        )
+        
+        # Determine plan based on duration
+        if request.duration == "5_days":
+            # Create 5-day subscription plan
+            plan_id = "price_5day_subscription"
+            product_name = "5-Day Premium Access"
+            description = "Access to all premium features for 5 days"
+        elif request.duration == "30_days":
+            # Create 30-day subscription plan
+            plan_id = "price_30day_subscription"
+            product_name = "30-Day Premium Access"
+            description = "Access to all premium features for 30 days"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid duration")
+        
+        # Create subscription
+        subscription = stripe.Subscription.create(
+            customer=customer.id,
+            items=[{"price": plan_id}],
+            payment_behavior="default_incomplete",
+            expand=["latest_invoice.payment_intent"]
+        )
+        
+        return {
+            "success": True,
+            "subscription_id": subscription.id,
+            "client_secret": subscription.latest_invoice.payment_intent.client_secret,
+            "customer_id": customer.id,
+            "product_name": product_name,
+            "description": description,
+            "duration": request.duration
+        }
+    except Exception as exc:
+        logger.error("Error creating subscription: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
+
+
 @app.post("/api/upload-file")
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -718,6 +835,114 @@ async def upload_photo(request: PhotoRequest):
     except Exception as exc:
         logger.error("Error uploading photo: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/feedback")
+async def api_feedback(request: FeedbackRequest):
+    """记录用户反馈评分（thumbs up/down）到 Langfuse"""
+    from src.observability import record_score
+
+    trace_id = request.trace_id or ""
+    ok = record_score(
+        trace_id=trace_id,
+        name=request.name,
+        value=request.score,
+        comment=request.comment,
+    )
+    return {
+        "success": ok,
+        "message": "Feedback recorded" if ok else "Langfuse not available, feedback not persisted",
+    }
+
+
+# --- Admin routes ---
+
+
+@app.get("/admin")
+async def admin_page():
+    return _static_page("static", "admin.html")
+
+
+@app.get("/api/admin/overview")
+async def admin_overview():
+    """管理后台概览数据"""
+    from src.admin import get_ai_metrics, get_subscription_overview, _check_langfuse
+    from src.progress_db import list_all_students, get_all_sessions_summary
+
+    metrics = get_ai_metrics()
+    students = list_all_students(limit=1)  # 只取数量
+    return {
+        "sessions": metrics["sessions"],
+        "total_students": len(list_all_students(limit=10000)),
+        "langfuse_enabled": _check_langfuse(),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/api/admin/users")
+async def admin_list_users(limit: int = 100, offset: int = 0):
+    """列出所有学生"""
+    from src.progress_db import list_all_students
+    users = list_all_students(limit=limit, offset=offset)
+    return {"success": True, "users": users}
+
+
+@app.get("/api/admin/users/{student_id}")
+async def admin_get_user(student_id: str):
+    """获取学生详细信息"""
+    from src.progress_db import get_student_detail
+    detail = get_student_detail(student_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Student not found")
+    return {"success": True, "student": detail}
+
+
+@app.put("/api/admin/users/{student_id}")
+async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
+    """更新学生信息"""
+    from src.progress_db import update_student
+    updates = request.model_dump(exclude_unset=True)
+    if request.is_active is not None:
+        updates["is_active"] = 1 if request.is_active else 0
+    ok = update_student(student_id, **updates)
+    return {"success": ok}
+
+
+@app.delete("/api/admin/users/{student_id}")
+async def admin_delete_user(student_id: str):
+    """删除学生及所有相关数据（UK GDPR 被遗忘权）"""
+    from src.progress_db import delete_student
+    ok = delete_student(student_id)
+    return {"success": ok, "message": "Student and all related data deleted (GDPR erasure)"}
+
+
+@app.get("/api/admin/subscriptions")
+async def admin_subscriptions():
+    """获取订阅概览"""
+    from src.admin import get_subscription_overview
+    return get_subscription_overview()
+
+
+@app.get("/api/admin/ai-metrics")
+async def admin_ai_metrics():
+    """获取 AI 系统运行指标"""
+    from src.admin import get_ai_metrics
+    return get_ai_metrics()
+
+
+@app.get("/api/admin/ai-evaluation")
+async def admin_ai_evaluation():
+    """获取 AI 质量评估汇总"""
+    from src.admin import get_evaluation_summary
+    return get_evaluation_summary()
+
+
+@app.post("/api/admin/cache/clear")
+async def admin_clear_cache():
+    """清空所有缓存"""
+    from src.admin import clear_all_caches
+    cleared = clear_all_caches()
+    return {"success": True, "cleared": cleared}
 
 
 static_path = os.path.join(project_root, "static")

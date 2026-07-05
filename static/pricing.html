@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Homework Magic</title>
+    <meta name="description" content="Affordable subscription plans for AI-powered homework help">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links a {
+            margin-left: 20px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        .pricing-section {
+            margin: 40px 0;
+        }
+        
+        .section-title {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        .pricing-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .pricing-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pricing-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+        
+        .pricing-card.popular {
+            border: 3px solid #667eea;
+            transform: scale(1.05);
+        }
+        
+        .popular-badge {
+            position: absolute;
+            top: 20px;
+            right: -30px;
+            background: #667eea;
+            color: white;
+            padding: 8px 40px;
+            transform: rotate(45deg);
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .card-header {
+            margin-bottom: 30px;
+        }
+        
+        .card-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .card-price {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .card-duration {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .card-features {
+            text-align: left;
+            margin-bottom: 30px;
+        }
+        
+        .feature {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        
+        .feature:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-check {
+            color: #4caf50;
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .footer {
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            padding: 30px;
+            margin-top: 40px;
+        }
+        
+        @media (max-width: 768px) {
+            .pricing-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .section-title {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">✨ Homework Magic</div>
+            <nav class="nav-links">
+                <a href="/">Home</a>
+                <a href="/elevenplus-practice">11+</a>
+                <a href="/elevenplus/articles">11+ Articles</a>
+                <a href="/ks1-homework">KS1</a>
+                <a href="/ks2-homework">KS2</a>
+                <a href="/progress">Progress</a>
+                <a href="/pricing">Pricing</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="pricing-section">
+            <h1 class="section-title">Simple, Affordable Pricing</h1>
+            
+            <p style="text-align: center; color: white; font-size: 1.2em; max-width: 800px; margin: 0 auto 40px;">
+                Get unlimited access to AI-powered homework generation and review with our flexible subscription plans.
+            </p>
+            
+            <div class="pricing-cards">
+                <!-- 5-Day Plan -->
+                <div class="pricing-card">
+                    <div class="card-header">
+                        <h2 class="card-title">5-Day Trial</h2>
+                        <div class="card-price">£4.99</div>
+                        <div class="card-duration">One-time payment</div>
+                    </div>
+                    <div class="card-features">
+                        <div class="feature"><span class="feature-check">✓</span> Unlimited homework generation</div>
+                        <div class="feature"><span class="feature-check">✓</span> AI-powered homework review</div>
+                        <div class="feature"><span class="feature-check">✓</span> Detailed explanations</div>
+                        <div class="feature"><span class="feature-check">✓</span> Progress tracking</div>
+                        <div class="feature"><span class="feature-check">✓</span> 11+ practice materials</div>
+                        <div class="feature"><span class="feature-check">✓</span> Priority support</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectPlan('5_days')">
+                        Start 5-Day Trial
+                    </button>
+                </div>
+                
+                <!-- 30-Day Plan -->
+                <div class="pricing-card popular">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <div class="card-header">
+                        <h2 class="card-title">30-Day Subscription</h2>
+                        <div class="card-price">£14.99</div>
+                        <div class="card-duration">One-time payment</div>
+                    </div>
+                    <div class="card-features">
+                        <div class="feature"><span class="feature-check">✓</span> Unlimited homework generation</div>
+                        <div class="feature"><span class="feature-check">✓</span> AI-powered homework review</div>
+                        <div class="feature"><span class="feature-check">✓</span> Detailed explanations</div>
+                        <div class="feature"><span class="feature-check">✓</span> Progress tracking</div>
+                        <div class="feature"><span class="feature-check">✓</span> 11+ practice materials</div>
+                        <div class="feature"><span class="feature-check">✓</span> Priority support</div>
+                        <div class="feature"><span class="feature-check">✓</span> Bonus: 10% discount on renewal</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="selectPlan('30_days')">
+                        Start 30-Day Subscription
+                    </button>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 40px; color: white; font-size: 1.1em;">
+                <p>All plans include secure payment processing and automatic cancellation.</p>
+                <p>No credit card required for trial. Cancel anytime.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Made with 💜 Homework Magic © 2026</p>
+    </div>
+
+    <script src="https://js.stripe.com/v3/"></script>
+    <script>
+        // Initialize Stripe
+        const stripe = Stripe('pk_test_...'); // Replace with your publishable key
+        
+        function selectPlan(duration) {
+            // Get user info
+            const name = prompt('Please enter your name:', 'John Doe');
+            if (!name) return;
+            
+            const email = prompt('Please enter your email:', 'john@example.com');
+            if (!email) return;
+            
+            // Show loading
+            document.body.style.cursor = 'wait';
+            
+            // Create subscription
+            fetch('/api/create-subscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    name: name,
+                    duration: duration
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Confirm subscription details
+                    const planName = duration === '5_days' ? '5-Day Trial' : '30-Day Subscription';
+                    const price = duration === '5_days' ? '£4.99' : '£14.99';
+                    
+                    if (confirm(`You are about to purchase the ${planName} for ${price}.\n\nClick OK to proceed with payment.`)) {
+                        // Redirect to Stripe Checkout
+                        stripe.confirmCardPayment(data.client_secret)
+                            .then(function(result) {
+                                if (result.error) {
+                                    alert('Payment failed: ' + result.error.message);
+                                } else {
+                                    // The payment has been processed!
+                                    if (result.paymentIntent.status === 'succeeded') {
+                                        alert('Payment successful! Your subscription is active.');
+                                        window.location.href = '/app';
+                                    }
+                                }
+                            });
+                    }
+                } else {
+                    alert('Error creating subscription: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while processing your request.');
+            })
+            .finally(() => {
+                document.body.style.cursor = 'default';
+            });
+        }
+        
+        // Add navigation to pricing page from app.html
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add pricing link to header if not present
+            const navLinks = document.querySelector('.nav-links');
+            if (navLinks && !navLinks.querySelector('a[href="/pricing"]')) {
+                const pricingLink = document.createElement('a');
+                pricingLink.href = '/pricing';
+                pricingLink.textContent = 'Pricing';
+                navLinks.appendChild(pricingLink);
+            }
+        });
+    </script>
+</body>
+</html>

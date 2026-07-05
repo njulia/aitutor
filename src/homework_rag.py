@@ -23,7 +23,7 @@ RAG_MAX_RETRIES = 3
 RAG_RETRY_DELAY = 2  # 秒
 
 # AGICTO API Key for embeddings
-AGICTO_API_KEY = os.getenv("AGICTO_API_KEY")
+QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 
 # RAG storage directory
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,7 +43,7 @@ class HomeworkRAGStore:
         # 使用 AGICTO API 的嵌入函数
         self.embedding_function = OpenAIEmbeddingFunction(
             model_name="text-embedding-3-small",
-            api_key=AGICTO_API_KEY,
+            api_key=QWEN_API_KEY,
             api_base="https://api.agicto.cn/v1/",
         )
 

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Homework Magic</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+        /* Header */
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 22px; font-weight: 600; }
+        .header .status { font-size: 13px; opacity: 0.85; }
+
+        /* Tabs */
+        .tabs { display: flex; background: white; border-bottom: 1px solid #e0e0e0; padding: 0 32px; }
+        .tab { padding: 14px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: #667eea; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; }
+
+        /* Content */
+        .content { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Cards */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+        .stat-card .sub { font-size: 12px; color: #999; margin-top: 4px; }
+
+        /* Table */
+        .table-container { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 24px; }
+        .table-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .table-header h3 { font-size: 16px; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+        td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid #f5f5f5; }
+        tr:hover td { background: #f8f9ff; }
+
+        /* Badges */
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .badge-green { background: #e6f7ee; color: #1a8a4a; }
+        .badge-red { background: #fde8e8; color: #c53030; }
+        .badge-blue { background: #e8f0fe; color: #1a73e8; }
+        .badge-yellow { background: #fff8e1; color: #f59e0b; }
+
+        /* Buttons */
+        .btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-danger { background: #fee; color: #c53030; }
+        .btn-danger:hover { background: #fdd; }
+        .btn-sm { padding: 4px 12px; font-size: 12px; }
+
+        /* Chart placeholder */
+        .chart-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .chart-container h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 16px; }
+        .bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+        .bar { width: 100%; max-width: 40px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 4px 4px 0 0; transition: height 0.5s ease; }
+        .bar-label { font-size: 10px; color: #888; margin-top: 6px; text-align: center; }
+        .bar-value { font-size: 11px; font-weight: 600; color: #333; margin-bottom: 4px; }
+
+        /* Cache stats */
+        .cache-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .cache-card { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .cache-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .cache-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+        .cache-row .label { color: #888; }
+        .cache-row .val { font-weight: 500; }
+        .hit-rate-bar { height: 6px; background: #f0f0f0; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+        .hit-rate-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; transition: width 0.5s; }
+
+        /* Search */
+        .search-box { padding: 10px 16px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; width: 260px; outline: none; }
+        .search-box:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+
+        /* Loading */
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #e0e0e0; border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .modal h3 { font-size: 18px; margin-bottom: 16px; }
+        .modal .form-group { margin-bottom: 12px; }
+        .modal label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+        .modal input, .modal select { width: 100%; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; }
+        .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Homework Magic - Admin Dashboard</h1>
+            <div class="status" id="headerStatus">Loading...</div>
+        </div>
+        <div>
+            <button class="btn btn-primary" onclick="refreshAll()">Refresh</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('overview')">Overview</div>
+        <div class="tab" onclick="switchTab('users')">Users</div>
+        <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
+        <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
+        <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
+    </div>
+
+    <div class="content">
+        <!-- Overview Panel -->
+        <div class="panel active" id="panel-overview">
+            <div class="stats-grid" id="overviewStats">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <div class="chart-container">
+                <h3>Daily Activity (Last 30 Days)</h3>
+                <div class="bar-chart" id="dailyChart"></div>
+            </div>
+        </div>
+
+        <!-- Users Panel -->
+        <div class="panel" id="panel-users">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Students</h3>
+                    <input class="search-box" type="text" placeholder="Search students..." id="userSearch" oninput="filterUsers()">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Year</th>
+                            <th>Age</th>
+                            <th>Sessions</th>
+                            <th>Avg Score</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Subscriptions Panel -->
+        <div class="panel" id="panel-subscriptions">
+            <div class="stats-grid" id="subStats">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Active Subscriptions</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Subscription ID</th>
+                            <th>Customer</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- AI Monitor Panel -->
+        <div class="panel" id="panel-ai-monitor">
+            <div class="stats-grid" id="aiStats">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <h3 style="margin-bottom: 16px; font-size: 16px;">Cache Performance</h3>
+            <div class="cache-grid" id="cacheGrid">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <div style="margin-top: 24px; text-align: right;">
+                <button class="btn btn-danger" onclick="clearCaches()">Clear All Caches</button>
+            </div>
+        </div>
+
+        <!-- AI Evaluation Panel -->
+        <div class="panel" id="panel-ai-eval">
+            <div class="stats-grid" id="evalStats">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <div class="chart-container">
+                <h3>Score Distribution</h3>
+                <div class="bar-chart" id="scoreDistChart"></div>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Performance by Subject</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Reviews</th>
+                            <th>Avg Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="evalSubjectsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h3>Edit Student</h3>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="editName">
+            </div>
+            <div class="form-group">
+                <label>Year Group</label>
+                <select id="editYear">
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                    <option value="5">Year 5</option>
+                    <option value="6">Year 6</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="editAge" min="5" max="11">
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveUser()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/admin';
+        let allUsers = [];
+        let editingUserId = null;
+
+        // Tab switching
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            loadTabData(name);
+        }
+
+        function loadTabData(name) {
+            switch(name) {
+                case 'overview': loadOverview(); break;
+                case 'users': loadUsers(); break;
+                case 'subscriptions': loadSubscriptions(); break;
+                case 'ai-monitor': loadAIMonitor(); break;
+                case 'ai-eval': loadAIEval(); break;
+            }
+        }
+
+        function refreshAll() {
+            const active = document.querySelector('.tab.active');
+            if (active) loadTabData(active.textContent.toLowerCase().replace(' ', '-').replace('ai ', 'ai-'));
+        }
+
+        // API helper
+        async function api(path) {
+            const resp = await fetch(API + path);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        }
+
+        // Overview
+        async function loadOverview() {
+            try {
+                const data = await api('/overview');
+                const s = data.sessions || {};
+                document.getElementById('overviewStats').innerHTML = `
+                    <div class="stat-card"><div class="label">Total Sessions</div><div class="value">${s.total_sessions || 0}</div></div>
+                    <div class="stat-card"><div class="label">Average Score</div><div class="value">${s.average_score || 'N/A'}</div><div class="sub">out of 10</div></div>
+                    <div class="stat-card"><div class="label">Total Students</div><div class="value">${data.total_students || 0}</div></div>
+                    <div class="stat-card"><div class="label">Langfuse</div><div class="value">${data.langfuse_enabled ? 'Active' : 'Off'}</div><div class="sub">${data.langfuse_enabled ? 'Tracing enabled' : 'Not configured'}</div></div>
+                `;
+                renderBarChart('dailyChart', s.daily_activity || [], 'date', 'count');
+            } catch(e) {
+                document.getElementById('overviewStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+            }
+        }
+
+        // Users
+        async function loadUsers() {
+            try {
+                const data = await api('/users');
+                allUsers = data.users || [];
+                renderUsers(allUsers);
+            } catch(e) {
+                document.getElementById('usersTable').innerHTML = `<tr><td colspan="8" style="color:#c53030">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        function renderUsers(users) {
+            document.getElementById('usersTable').innerHTML = users.map(u => `
+                <tr>
+                    <td><code>${u.student_id}</code></td>
+                    <td>${u.name || 'Student'}</td>
+                    <td>Year ${u.year_group}</td>
+                    <td>${u.age}</td>
+                    <td>${u.total_sessions || 0}</td>
+                    <td>${u.avg_score ? u.avg_score.toFixed(1) : '-'}</td>
+                    <td><span class="badge ${u.is_active ? 'badge-green' : 'badge-red'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="editUser('${u.student_id}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.student_id}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterUsers() {
+            const q = document.getElementById('userSearch').value.toLowerCase();
+            renderUsers(allUsers.filter(u =>
+                (u.student_id || '').toLowerCase().includes(q) ||
+                (u.name || '').toLowerCase().includes(q)
+            ));
+        }
+
+        function editUser(id) {
+            const u = allUsers.find(x => x.student_id === id);
+            if (!u) return;
+            editingUserId = id;
+            document.getElementById('editName').value = u.name || '';
+            document.getElementById('editYear').value = u.year_group || 3;
+            document.getElementById('editAge').value = u.age || 7;
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('show');
+            editingUserId = null;
+        }
+
+        async function saveUser() {
+            if (!editingUserId) return;
+            try {
+                await fetch(API + '/users/' + editingUserId, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name: document.getElementById('editName').value,
+                        year_group: parseInt(document.getElementById('editYear').value),
+                        age: parseInt(document.getElementById('editAge').value),
+                    })
+                });
+                closeModal();
+                loadUsers();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Delete student ' + id + '? This will remove all their data (GDPR right to erasure).')) return;
+            try {
+                await fetch(API + '/users/' + id, { method: 'DELETE' });
+                loadUsers();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        // Subscriptions
+        async function loadSubscriptions() {
+            try {
+                const data = await api('/subscriptions');
+                document.getElementById('subStats').innerHTML = `
+                    <div class="stat-card"><div class="label">Active Subscriptions</div><div class="value">${data.active_subscriptions || 0}</div></div>
+                    <div class="stat-card"><div class="label">Est. Revenue</div><div class="value">&pound;${data.estimated_revenue_gbp || 0}</div><div class="sub">GBP</div></div>
+                `;
+                const subs = data.subscriptions || [];
+                document.getElementById('subsTable').innerHTML = subs.length ? subs.map(s => `
+                    <tr>
+                        <td><code>${s.id}</code></td>
+                        <td>${s.customer}</td>
+                        <td><span class="badge badge-green">${s.status}</span></td>
+                        <td>${new Date(s.created).toLocaleDateString()}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="4" style="text-align:center;color:#888">No subscriptions found</td></tr>';
+            } catch(e) {
+                document.getElementById('subStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+            }
+        }
+
+        // AI Monitor
+        async function loadAIMonitor() {
+            try {
+                const data = await api('/ai-metrics');
+                const s = data.sessions || {};
+                const c = data.cache || {};
+                document.getElementById('aiStats').innerHTML = `
+                    <div class="stat-card"><div class="label">Total LLM Sessions</div><div class="value">${s.total_sessions || 0}</div></div>
+                    <div class="stat-card"><div class="label">Avg Score</div><div class="value">${s.average_score || 'N/A'}</div></div>
+                    <div class="stat-card"><div class="label">Cache Entries</div><div class="value">${c.total ? c.total.size : 0}</div></div>
+                    <div class="stat-card"><div class="label">Langfuse</div><div class="value">${data.system && data.system.langfuse_enabled ? 'Active' : 'Off'}</div></div>
+                `;
+                const cacheNames = ['homework', 'review', 'explain', 'practice', 'subject_extraction', 'profile_parse'];
+                document.getElementById('cacheGrid').innerHTML = cacheNames.map(name => {
+                    const cs = c[name] || {};
+                    const hitRate = cs.hit_rate || 'N/A';
+                    const pct = hitRate !== 'N/A' ? parseFloat(hitRate) : 0;
+                    return `
+                        <div class="cache-card">
+                            <h4>${name.replace('_', ' ')}</h4>
+                            <div class="cache-row"><span class="label">Size</span><span class="val">${cs.size || 0}</span></div>
+                            <div class="cache-row"><span class="label">Hits</span><span class="val">${cs.hits || 0}</span></div>
+                            <div class="cache-row"><span class="label">Misses</span><span class="val">${cs.misses || 0}</span></div>
+                            <div class="cache-row"><span class="label">Hit Rate</span><span class="val">${hitRate}</span></div>
+                            <div class="hit-rate-bar"><div class="hit-rate-fill" style="width: ${pct}%"></div></div>
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                document.getElementById('aiStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+            }
+        }
+
+        async function clearCaches() {
+            if (!confirm('Clear all caches? This will not affect stored data.')) return;
+            try {
+                const resp = await fetch(API + '/cache/clear', { method: 'POST' });
+                const data = await resp.json();
+                alert('Caches cleared: ' + JSON.stringify(data.cleared));
+                loadAIMonitor();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        // AI Evaluation
+        async function loadAIEval() {
+            try {
+                const data = await api('/ai-evaluation');
+                document.getElementById('evalStats').innerHTML = `
+                    <div class="stat-card"><div class="label">Total Reviews</div><div class="value">${data.total_reviews || 0}</div></div>
+                    <div class="stat-card"><div class="label">Average Score</div><div class="value">${data.average_score || 'N/A'}</div><div class="sub">out of 10</div></div>
+                `;
+                renderBarChart('scoreDistChart', data.score_distribution || [], 'range_name', 'count');
+                const subjects = data.by_subject || [];
+                document.getElementById('evalSubjectsTable').innerHTML = subjects.map(s => `
+                    <tr>
+                        <td>${s.subject}</td>
+                        <td>${s.count}</td>
+                        <td>${s.avg_score ? s.avg_score.toFixed(1) : '-'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="3" style="text-align:center;color:#888">No data</td></tr>';
+            } catch(e) {
+                document.getElementById('evalStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+            }
+        }
+
+        // Chart rendering
+        function renderBarChart(containerId, data, labelKey, valueKey) {
+            const container = document.getElementById(containerId);
+            if (!data.length) {
+                container.innerHTML = '<div style="text-align:center;color:#888;padding:40px">No data available</div>';
+                return;
+            }
+            const maxVal = Math.max(...data.map(d => d[valueKey] || 0), 1);
+            container.innerHTML = data.slice(-14).map(d => {
+                const val = d[valueKey] || 0;
+                const pct = (val / maxVal) * 100;
+                const label = (d[labelKey] || '').slice(5); // trim "YYYY-" from date
+                return `
+                    <div class="bar-item">
+                        <div class="bar-value">${val}</div>
+                        <div class="bar" style="height: ${Math.max(pct, 2)}%"></div>
+                        <div class="bar-label">${label}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Init
+        document.getElementById('headerStatus').textContent = 'Last updated: ' + new Date().toLocaleString();
+        loadOverview();
+    </script>
+</body>
+</html>

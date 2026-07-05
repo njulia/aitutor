@@ -369,7 +369,6 @@ Return ONLY a valid JSON object with these fields:
 - age: integer 5-11
 - english_level: one of "Beginner", "Elementary", "Intermediate", "Advanced"
 - learning_goals: list of strings
-- weak_areas: list of strings
 - learning_style: one of "Visual", "Auditory", "Kinesthetic", "Reading/Writing"
 - vocabulary_count: integer
 - extracted_subjects: list of strings (subjects mentioned in the description, must be from the available subjects list, map similar terms to exact names like "maths" -> "Maths")
@@ -410,11 +409,6 @@ For EACH question in the homework:
 3. Explain WHY this is the correct answer (the underlying concept or rule)
 4. If the student's answer was wrong, explain "Why did I get this wrong?" - identify the specific misconception or mistake
 5. Give a real-life example or analogy to help the concept stick
-
-## Weakness Analysis
-- Based on the student's answers, identify specific weak areas
-- Explain the pattern of mistakes (e.g., "You tend to forget to carry the one in addition")
-- Show which DfE Programme of Study objectives need more practice
 
 ## Key Concepts to Remember
 - Summarise the 3-5 most important concepts or skills tested in this homework

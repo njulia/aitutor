@@ -32,7 +32,7 @@ FastAPI web application with:
 
 ```bash
 # Set API Key
-export AGICTO_API_KEY="your-api-key"
+export QWEN_API_KEY="your-api-key"
 
 # (Optional) Enable LangSmith tracing for debugging
 export LANGCHAIN_TRACING_V2="true"
