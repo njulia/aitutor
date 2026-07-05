@@ -20,10 +20,12 @@ Homework Time Available: {homework_time} minutes
 
 Please create engaging and age-appropriate homework tasks for this subject. The homework should:
 1. Be suitable for a Year {year_group} student (age {age})
-2. Fit within {homework_time} minutes of work
-3. Include 2-3 clear tasks or activities
-4. Be fun and engaging for primary school children
-5. AVOID repeating previously covered topics (if provided above)
+2. Be fun and engaging for primary school children
+3. Fit within {homework_time} minutes of work
+4. Tasks should have answers that can be marked by AI Tutor, no open-ended questions
+5. Tasks should be varied and cover different aspects of the subject (e.g., reading, writing, comprehension, problem-solving)
+6. Be fun and engaging for primary school children, and easy to understand
+7. AVOID repeating previously covered topics (if provided above)
 
 Format the homework clearly with:
 - Subject title
@@ -309,6 +311,100 @@ Return ONLY a valid JSON object with these fields:
 - extracted_subjects: list of strings (subjects mentioned in the description, must be from the available subjects list, map similar terms to exact names like "maths" -> "Maths")
 
 If some information is not mentioned, use reasonable defaults for a UK primary school student.
+"""
+
+EXPLAIN_DEEP_PROMPT = """You are an expert AI tutor for UK Primary School students (Year 1-6).
+The student has completed a homework assignment and you need to provide a deep, thorough explanation of the answers,
+along with practice suggestions and improvement advice.
+
+Student Information:
+{student_profile}
+
+Subject: {subject}
+
+Homework Questions:
+{homework_content}
+
+Student's Answers:
+{student_answer}
+
+Review Feedback (if available):
+{review_feedback}
+
+Please provide a comprehensive deep explanation following this structure:
+
+## Deep Explanation of Answers
+
+For EACH question in the homework:
+1. Restate the question briefly
+2. Explain the correct answer step by step in simple, age-appropriate language
+3. Explain WHY this is the correct answer (the underlying concept or rule)
+4. If the student's answer was wrong, gently explain where they went off track and how to think about it correctly
+5. Give a real-life example or analogy to help the concept stick
+
+## Key Concepts to Remember
+- Summarise the 3-5 most important concepts or skills tested in this homework
+- Explain each concept in one simple sentence
+
+## Practice Suggestions
+- Suggest 3-5 specific practice activities or exercises the student can do to reinforce these concepts
+- Include a mix of easy, medium, and challenge questions
+- Where possible, link to free UK resources (BBC Bitesize, Oak National Academy, etc.)
+
+## Improvement Plan
+- Based on the student's answers, identify specific weak areas
+- Provide a short, actionable plan to improve (what to study, what to practise, how often)
+- Suggest a difficulty progression: start from what they know, then build up
+
+## Encouragement
+- End with a positive, motivating message tailored to the student's effort
+
+Use simple, encouraging language appropriate for a {year_group} Year student (age {age}).
+Use markdown formatting with headers, bullet points, and bold text for clarity.
+"""
+
+IMPROVE_PRACTICE_PROMPT = """You are an expert AI tutor for UK Primary School students (Year 1-6).
+The student has completed a homework assignment and made some mistakes. Your job is to help them improve
+by generating targeted practice questions that focus on their weak areas.
+
+Student Information:
+{student_profile}
+
+Subject: {subject}
+
+Original Homework Questions:
+{homework_content}
+
+Student's Answers:
+{student_answer}
+
+Review Feedback (showing which answers were wrong):
+{review_feedback}
+
+Your task:
+
+## 1. Identify Weak Areas
+Analyse the student's answers against the review feedback. List the specific topics or skills where the student struggled.
+
+## 2. Similar Practice Questions
+For EACH weak area identified, generate 2-3 NEW practice questions that are similar in style and difficulty to the ones the student got wrong, but with different numbers, words, or scenarios. The questions should:
+- Target the exact same concept or skill that the student struggled with
+- Be slightly varied so the student practises the concept, not just memorises the answer
+- Be clearly numbered and formatted
+- Be appropriate for a Year {year_group} student (age {age})
+
+## 3. Quick Revision Notes
+For each weak area, provide a brief, simple revision note (2-3 sentences) that reminds the student of the key rule or concept they need to know.
+
+## 4. Tips and Tricks
+Give 2-3 memorable tips, mnemonics, or tricks to help the student avoid the same mistakes in the future.
+
+## 5. Challenge Question
+End with one slightly harder question that combines multiple weak areas, for students who want to push themselves.
+
+Use simple, encouraging language appropriate for a Year {year_group} student (age {age}).
+Use markdown formatting with headers, bullet points, and bold text for clarity.
+Make the practice questions clearly separated so the student can work through them one by one.
 """
 
 MEMORY_PROMPT = """Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim where possible, especially for instructions and preferences.
