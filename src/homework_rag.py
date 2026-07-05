@@ -13,9 +13,8 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-from langchain_openai import OpenAIEmbeddings
-from langchain_chroma import Chroma
-from langchain_core.documents import Document
+import chromadb
+from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
@@ -38,27 +37,28 @@ class HomeworkRAGStore:
         self.persist_dir = persist_directory or CHROMA_DB_PATH
         os.makedirs(self.persist_dir, exist_ok=True)
 
-        # Initialize embeddings using AGICTO API
-        self.embeddings = OpenAIEmbeddings(
-            model=" text-embedding-3-small",
-            openai_api_key=AGICTO_API_KEY,
-            openai_api_base="https://api.agicto.cn/v1/",
+        # 初始化 ChromaDB 客户端
+        self.client = chromadb.PersistentClient(path=self.persist_dir)
+
+        # 使用 AGICTO API 的嵌入函数
+        self.embedding_function = OpenAIEmbeddingFunction(
+            model_name="text-embedding-3-small",
+            api_key=AGICTO_API_KEY,
+            api_base="https://api.agicto.cn/v1/",
         )
 
-        # Initialize ChromaDB vector store for homework
-        self.db = Chroma(
-            persist_directory=self.persist_dir,
-            embedding_function=self.embeddings,
-            collection_name="homework_collection",
+        # 作业集合
+        self.collection = self.client.get_or_create_collection(
+            name="homework_collection",
+            embedding_function=self.embedding_function,
+            metadata={"hnsw:space": "cosine"},
         )
 
-        # Initialize ChromaDB vector store for Chinese textbooks
-        self.chinese_db_path = os.path.join(self.persist_dir, "chinese_textbooks")
-        os.makedirs(self.chinese_db_path, exist_ok=True)
-        self.chinese_db = Chroma(
-            persist_directory=self.chinese_db_path,
-            embedding_function=self.embeddings,
-            collection_name="chinese_collection",
+        # 中文教材集合
+        self.chinese_collection = self.client.get_or_create_collection(
+            name="chinese_collection",
+            embedding_function=self.embedding_function,
+            metadata={"hnsw:space": "cosine"},
         )
 
     def add_homework(
@@ -92,14 +92,13 @@ class HomeworkRAGStore:
         # Ensure metadata has required fields
         metadata.setdefault("created_at", now.isoformat())
 
-        document = Document(
-            page_content=homework_content,
-            metadata=metadata,
-        )
-
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
-                self.db.add_documents([document], ids=[doc_id])
+                self.collection.add(
+                    documents=[homework_content],
+                    metadatas=[metadata],
+                    ids=[doc_id],
+                )
                 logger.info(f"[RAG] Added homework document: {doc_id}")
                 return doc_id
             except Exception as e:
@@ -124,7 +123,8 @@ class HomeworkRAGStore:
         Returns:
             List of document IDs
         """
-        documents = []
+        texts = []
+        metadatas = []
         doc_ids = []
 
         for item in homework_list:
@@ -140,10 +140,11 @@ class HomeworkRAGStore:
             metadata.setdefault("created_at", now.isoformat())
             metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
 
-            documents.append(Document(page_content=content, metadata=metadata))
+            texts.append(content)
+            metadatas.append(metadata)
             doc_ids.append(doc_id)
 
-        self.db.add_documents(documents, ids=doc_ids)
+        self.collection.add(documents=texts, metadatas=metadatas, ids=doc_ids)
         logger.info(f"[RAG] Added {len(doc_ids)} homework documents in batch")
         return doc_ids
 
@@ -166,19 +167,16 @@ class HomeworkRAGStore:
         """
         where_clause = self._build_where_clause(filters) if filters else None
 
-        # 使用我们自己的嵌入模型来嵌入查询，避免维度不匹配问题
-        query_embedding = self.embeddings.embed_query(query)
-        
-        # 使用底层 ChromaDB collection 查询，可以同时获取 ID
+        # 直接使用 collection 的 query 方法，嵌入由 embedding_function 自动处理
         query_kwargs = {
-            "query_embeddings": [query_embedding],
+            "query_texts": [query],
             "n_results": k,
             "include": ["documents", "metadatas", "distances"],
         }
         if where_clause:
             query_kwargs["where"] = where_clause
 
-        raw = self.db._collection.query(**query_kwargs)
+        raw = self.collection.query(**query_kwargs)
 
         results = []
         if raw and raw.get("ids") and raw["ids"][0]:
@@ -212,7 +210,7 @@ class HomeworkRAGStore:
             List of dicts with 'content' and 'metadata'
         """
         where_clause = self._build_where_clause(filters)
-        results = self.db.get(where=where_clause)
+        results = self.collection.get(where=where_clause)
 
         if not results or not results.get("ids"):
             return []
@@ -236,7 +234,7 @@ class HomeworkRAGStore:
             True if deleted, False otherwise
         """
         try:
-            self.db.delete([doc_id])
+            self.collection.delete(ids=[doc_id])
             logger.info(f"[RAG] Deleted homework document: {doc_id}")
             return True
         except Exception as e:
@@ -249,14 +247,14 @@ class HomeworkRAGStore:
         Returns:
             Dictionary with collection stats
         """
-        collection = self.db.get()
-        total_docs = len(collection["ids"]) if collection.get("ids") else 0
+        all_docs = self.collection.get()
+        total_docs = len(all_docs["ids"]) if all_docs.get("ids") else 0
 
         # Count by subject
         subject_counts = {}
         year_counts = {}
-        if collection.get("metadatas"):
-            for meta in collection["metadatas"]:
+        if all_docs.get("metadatas"):
+            for meta in all_docs["metadatas"]:
                 subject = meta.get("subject", "Unknown")
                 year_group = meta.get("year_group", "Unknown")
                 subject_counts[subject] = subject_counts.get(subject, 0) + 1
@@ -311,7 +309,7 @@ class HomeworkRAGStore:
         if subject:
             filters["subject"] = subject
 
-        results = self.db.get(where=self._build_where_clause(filters))
+        results = self.collection.get(where=self._build_where_clause(filters))
 
         if not results or not results.get("ids"):
             return []
@@ -384,7 +382,8 @@ class HomeworkRAGStore:
             "第九册": 9,
         }
 
-        documents = []
+        texts = []
+        metadatas_list = []
         doc_ids = []
 
         # Iterate through each volume folder
@@ -415,7 +414,7 @@ class HomeworkRAGStore:
 
                     # Skip if already ingested
                     try:
-                        existing = self.chinese_db.get(ids=[doc_id])
+                        existing = self.chinese_collection.get(ids=[doc_id])
                         if existing and existing.get("ids"):
                             logger.debug(f"[RAG] Already ingested: {doc_id}")
                             continue
@@ -435,11 +434,12 @@ class HomeworkRAGStore:
                     # Use filename and path as content (PDF parsing would need additional library)
                     content = f"Chinese Textbook - Year {year_group}\nVolume: {volume_folder}\nFile: {filename}\nPath: {filepath}"
 
-                    documents.append(Document(page_content=content, metadata=metadata))
+                    texts.append(content)
+                    metadatas_list.append(metadata)
                     doc_ids.append(doc_id)
 
-        if documents:
-            self.chinese_db.add_documents(documents, ids=doc_ids)
+        if texts:
+            self.chinese_collection.add(documents=texts, metadatas=metadatas_list, ids=doc_ids)
             logger.info(f"[RAG] Ingested {len(doc_ids)} Chinese textbook documents")
 
         return len(doc_ids)
@@ -466,19 +466,26 @@ class HomeworkRAGStore:
 
         where_clause = self._build_where_clause(filters) if filters else None
 
+        query_kwargs = {
+            "query_texts": [query],
+            "n_results": k,
+            "include": ["documents", "metadatas", "distances"],
+        }
         if where_clause:
-            results = self.chinese_db.similarity_search_with_score(query, k=k, filter=where_clause)
-        else:
-            results = self.chinese_db.similarity_search_with_score(query, k=k)
+            query_kwargs["where"] = where_clause
 
-        return [
-            {
-                "content": doc.page_content,
-                "metadata": doc.metadata,
-                "score": score,
-            }
-            for doc, score in results
-        ]
+        raw = self.chinese_collection.query(**query_kwargs)
+
+        results = []
+        if raw and raw.get("ids") and raw["ids"][0]:
+            for i in range(len(raw["ids"][0])):
+                results.append({
+                    "content": raw["documents"][0][i],
+                    "metadata": raw["metadatas"][0][i],
+                    "score": raw["distances"][0][i],
+                })
+
+        return results
 
     def search_homework_answers(
         self,
@@ -497,7 +504,7 @@ class HomeworkRAGStore:
             return None
 
         try:
-            result = self.db.get(ids=[doc_id])
+            result = self.collection.get(ids=[doc_id])
             if not result or not result.get("ids"):
                 logger.warning(f"[RAG] 未找到 doc_id={doc_id} 对应的文档")
                 return None

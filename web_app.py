@@ -4,6 +4,7 @@
 Homework Magic - Complete Web Application
 
 FastAPI web application for SEO landing pages, the AI tutor UI, and REST APIs.
+已移除 LangChain 依赖，使用轻量级 LLMClient 和缓存。
 """
 
 import os
@@ -59,9 +60,9 @@ def initialize() -> None:
     if initialized:
         return
 
-    from src.agent_workflow import init_llm
+    from src.llm_client import LLMClient
 
-    llm, _, _ = init_llm()
+    llm = LLMClient()
     initialized = True
     logger.info("Web application initialized")
 
@@ -212,31 +213,142 @@ def generate_homework_with_profile(profile: dict, subjects: list):
 
 
 def review_homework(homework_content: str, student_answers: str, subject: str, profile=None):
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_core.output_parsers import StrOutputParser
+    """批改作业 - 使用 REVIEW_HOMEWORK_PROMPT 生成简洁答案和基本解释"""
+    from src.llm_client import format_prompt, build_messages
     from src.prompts import REVIEW_HOMEWORK_PROMPT
+    from src.cache import review_cache, make_cache_key
 
     if profile is None:
         profile = {"year_group": 3, "age": 7}
 
-    try:
-        prompt = ChatPromptTemplate.from_template(REVIEW_HOMEWORK_PROMPT)
-        chain = prompt | llm | StrOutputParser()
-        current_day = datetime.now().strftime("%A, %B %d, %Y")
+    # 检查缓存
+    cache_key = make_cache_key("review", subject, str(profile.get("year_group", 3)),
+                               homework_content[:200], student_answers[:200])
+    cached = review_cache.get(cache_key)
+    if cached:
+        logger.info("[Cache] 命中批改缓存")
+        return {"success": True, "review": cached, "from_cache": True}
 
-        result = chain.invoke(
-            {
-                "day": current_day,
-                "homework_content": homework_content,
-                "student_answer": student_answers,
-                "subject": subject,
-                "student_profile": str(profile),
-            }
+    try:
+        prompt_text = format_prompt(
+            REVIEW_HOMEWORK_PROMPT,
+            student_profile=str(profile),
+            subject=subject,
+            day=datetime.now().strftime("%A, %B %d, %Y"),
+            homework_content=homework_content,
+            student_answer=student_answers,
         )
+        messages = build_messages(prompt_text)
+        result = llm.complete(messages)
+
+        # 写入缓存
+        review_cache.set(cache_key, result)
+
+        # 保存进度到数据库
+        try:
+            from src.progress_db import save_homework_session
+            # 从 review 文本中提取分数（如 "Score: 7/10" 或 "7/10"）
+            score_match = re.search(r"(\d+(?:\.\d+)?)\s*/\s*(\d+)", result)
+            score = float(score_match.group(1)) if score_match else None
+
+            student_id = profile.get("student_id", "anonymous")
+            save_homework_session(
+                student_id=student_id,
+                subject=subject,
+                year_group=profile.get("year_group", 3),
+                homework_content=homework_content,
+                student_answers=student_answers,
+                score=score,
+                review_text=result,
+            )
+        except Exception as db_exc:
+            logger.warning("Failed to save progress: %s", db_exc)
 
         return {"success": True, "review": result}
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+def explain_deep(homework_content: str, student_answers: str, subject: str,
+                 profile=None, review_feedback: str = ""):
+    """深度解释作业答案 - 使用 EXPLAIN_DEEP_PROMPT 生成逐步解释、薄弱点分析等"""
+    from src.llm_client import format_prompt, build_messages
+    from src.prompts import EXPLAIN_DEEP_PROMPT
+    from src.cache import explain_cache, make_cache_key
+
+    if profile is None:
+        profile = {"year_group": 3, "age": 7}
+
+    # 检查缓存
+    cache_key = make_cache_key("explain", subject, str(profile.get("year_group", 3)),
+                               homework_content[:200], student_answers[:200])
+    cached = explain_cache.get(cache_key)
+    if cached:
+        logger.info("[Cache] 命中深度解释缓存")
+        return {"success": True, "explanation": cached, "from_cache": True}
+
+    try:
+        prompt_text = format_prompt(
+            EXPLAIN_DEEP_PROMPT,
+            homework_content=homework_content,
+            student_answer=student_answers,
+            subject=subject,
+            student_profile=str(profile),
+            review_feedback=review_feedback or "No review feedback available",
+            year_group=profile.get("year_group", 3),
+            age=profile.get("age", 7),
+        )
+        messages = build_messages(prompt_text)
+        result = llm.complete(messages)
+
+        # 写入缓存
+        explain_cache.set(cache_key, result)
+
+        return {"success": True, "explanation": result}
+    except Exception as exc:
+        logger.error("Error in explain_deep: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+def improve_practice(homework_content: str, student_answers: str, subject: str,
+                     profile=None, review_feedback: str = ""):
+    """根据学生的弱项生成针对性练习 - 使用 IMPROVE_PRACTICE_PROMPT"""
+    from src.llm_client import format_prompt, build_messages
+    from src.prompts import IMPROVE_PRACTICE_PROMPT
+    from src.cache import practice_cache, make_cache_key
+
+    if profile is None:
+        profile = {"year_group": 3, "age": 7}
+
+    # 检查缓存
+    cache_key = make_cache_key("practice", subject, str(profile.get("year_group", 3)),
+                               homework_content[:200], student_answers[:200])
+    cached = practice_cache.get(cache_key)
+    if cached:
+        logger.info("[Cache] 命中练习生成缓存")
+        return {"success": True, "practice": cached, "from_cache": True}
+
+    try:
+        prompt_text = format_prompt(
+            IMPROVE_PRACTICE_PROMPT,
+            homework_content=homework_content,
+            student_answer=student_answers,
+            subject=subject,
+            student_profile=str(profile),
+            review_feedback=review_feedback or "No review feedback available",
+            year_group=profile.get("year_group", 3),
+            age=profile.get("age", 7),
+        )
+        messages = build_messages(prompt_text)
+        result = llm.complete(messages)
+
+        # 写入缓存
+        practice_cache.set(cache_key, result)
+
+        return {"success": True, "practice": result}
+    except Exception as exc:
+        logger.error("Error in improve_practice: %s", exc)
         return {"success": False, "error": str(exc)}
 
 
@@ -261,6 +373,22 @@ class ReviewRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     session_id: Optional[str] = None
+
+
+class ExplainDeepRequest(BaseModel):
+    homework: str
+    answers: str
+    subject: str = "Maths"
+    profile: Optional[dict] = None
+    review_feedback: Optional[str] = None
+
+
+class ImprovePracticeRequest(BaseModel):
+    homework: str
+    answers: str
+    subject: str = "Maths"
+    profile: Optional[dict] = None
+    review_feedback: Optional[str] = None
 
 
 class PhotoRequest(BaseModel):
@@ -302,6 +430,11 @@ async def eleven_plus():
 @app.get("/check-my-homework")
 async def check_homework():
     return _static_page("static", "check-my-homework.html")
+
+
+@app.get("/pricing")
+async def pricing():
+    return _static_page("static", "pricing.html")
 
 
 @app.get("/app")
@@ -419,6 +552,58 @@ async def api_review(request: ReviewRequest):
         return result
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
+
+
+@app.post("/api/explain-deep")
+async def api_explain_deep(request: ExplainDeepRequest):
+    try:
+        initialize()
+
+        result = explain_deep(
+            request.homework, request.answers, request.subject,
+            request.profile, request.review_feedback
+        )
+        return result
+    except Exception as exc:
+        logger.error("Error in explain_deep endpoint: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
+
+
+@app.post("/api/improve-practice")
+async def api_improve_practice(request: ImprovePracticeRequest):
+    try:
+        initialize()
+
+        result = improve_practice(
+            request.homework, request.answers, request.subject,
+            request.profile, request.review_feedback
+        )
+        return result
+    except Exception as exc:
+        logger.error("Error in improve_practice endpoint: %s", exc)
+        return JSONResponse(
+            status_code=500, content={"success": False, "error": str(exc)}
+        )
+
+
+@app.get("/api/progress/{student_id}")
+async def api_get_progress(student_id: str, subject: Optional[str] = None):
+    """获取学生的学习进度汇总数据"""
+    try:
+        from src.progress_db import get_progress_summary, get_score_history, get_topic_progress
+        return {
+            "success": True,
+            "summary": get_progress_summary(student_id),
+            "score_history": get_score_history(student_id, subject),
+            "topics": get_topic_progress(student_id, subject),
+        }
+    except Exception as exc:
+        logger.error("Error getting progress: %s", exc)
         return JSONResponse(
             status_code=500, content={"success": False, "error": str(exc)}
         )

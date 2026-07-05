@@ -11,13 +11,13 @@ from src.models import (
     UK_PRIMARY_SUBJECTS, SAMPLE_STUDENT_PROFILES, get_homework_time_by_age,
 )
 from src.homework_manager import generate_homework_with_custom_profile
-from src.ui.shared import LLM_MODEL
 
 
 def run_tui(llm):
     """Terminal interactive mode - 作业生成器"""
+    model_name = getattr(llm, "model", "unknown")
     print("=== AI Homework Generator for UK Primary School Students (Year 1-6) ===\n")
-    print(f"Using Model: AGICTO ({LLM_MODEL})\n")
+    print(f"Using Model: {model_name}\n")
 
     # 步骤1: 选择年级
     print("\nStep 1: Select Year Group\n")

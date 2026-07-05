@@ -5,6 +5,7 @@
 UI 共享工具模块
 
 包含 display_homeworks、parse_profile_from_natural_language 等被 TUI 和 GUI 共用的函数。
+已移除 LangChain 依赖，使用轻量级 LLMClient 和缓存。
 """
 
 import os
@@ -13,17 +14,13 @@ import logging
 from typing import Dict, Any, Optional
 from jinja2 import Template
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-
+from src.llm_client import LLMClient, format_prompt, build_messages
+from src.cache import profile_parse_cache, make_cache_key
 from src.models import (
     UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS, YEAR_GROUP_AGE, KEY_STAGES,
     get_homework_time_by_age,
 )
 from src.prompts import PROFILE_PARSE_PROMPT
-
-LLM_MODEL = "qwen3.5-plus"
-AGICTO_API_KEY = os.getenv("AGICTO_API_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +60,7 @@ def display_homeworks(sections) -> str:
     with open(output_path, mode='w', encoding='utf-8') as output_file:
         output_file.write(rendered_html)
 
-    logger.debug(f"Generated {output_path}")
+    logger.debug("Generated %s", output_path)
 
     # 返回 iframe 用于 Gradio 显示
     html_base64 = base64.b64encode(rendered_html.encode('utf-8')).decode('utf-8')
@@ -71,23 +68,31 @@ def display_homeworks(sections) -> str:
     return iframe_html
 
 
-def parse_profile_from_natural_language(description: str, llm) -> Optional[Dict[str, Any]]:
-    """用 LLM 将自然语言描述解析为学生档案，并从中提取科目
+def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Optional[Dict[str, Any]]:
+    """用 LLM 将自然语言描述解析为学生档案，并从中提取科目（带缓存）
 
     Args:
         description: 自然语言描述的学生信息
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
 
     Returns:
         学生档案字典或 None
     """
+    # 检查缓存
+    cache_key = make_cache_key("profile_parse", description)
+    cached = profile_parse_cache.get(cache_key)
+    if cached is not None:
+        logger.info("[Cache] 命中学生档案解析缓存")
+        return cached
+
     try:
-        prompt = ChatPromptTemplate.from_template(PROFILE_PARSE_PROMPT)
-        chain = prompt | llm | JsonOutputParser()
-        result = chain.invoke({
-            "description": description,
-            "available_subjects": ", ".join(UK_PRIMARY_SUBJECTS),
-        })
+        prompt_text = format_prompt(
+            PROFILE_PARSE_PROMPT,
+            description=description,
+            available_subjects=", ".join(UK_PRIMARY_SUBJECTS),
+        )
+        messages = build_messages(prompt_text)
+        result = llm.complete_json(messages)
 
         year_num = result.get("year_group", 1)
         age_num = result.get("age", YEAR_GROUP_AGE.get(year_num, 5))
@@ -97,10 +102,10 @@ def parse_profile_from_natural_language(description: str, llm) -> Optional[Dict[
         if not isinstance(extracted_subjects, list):
             extracted_subjects = []
         extracted_subjects = [s for s in extracted_subjects if s in UK_PRIMARY_SUBJECTS]
-        print(
-            f"[Profile Parse] Extracted subjects: {', '.join(extracted_subjects) if extracted_subjects else 'None'}")
+        logger.info("[Profile Parse] Extracted subjects: %s",
+                     ', '.join(extracted_subjects) if extracted_subjects else 'None')
 
-        return {
+        profile = {
             "student_id": f"custom_{result.get('name', 'student').strip()}",
             "year_group": year_num,
             "age": age_num,
@@ -113,6 +118,10 @@ def parse_profile_from_natural_language(description: str, llm) -> Optional[Dict[
             "recommended_homework_minutes": hw_info["daily_homework_minutes"],
             "extracted_subjects": extracted_subjects,
         }
+
+        # 写入缓存
+        profile_parse_cache.set(cache_key, profile)
+        return profile
     except Exception as e:
-        print(f"[Profile Parse Error] {e}")
+        logger.error("[Profile Parse Error] %s", e)
         return None

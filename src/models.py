@@ -4,14 +4,14 @@
 """
 数据模型和工具定义
 
-包含学生档案模型、UK 小学年级/学段映射、以及 LangChain 工具定义。
+包含学生档案模型、UK 小学年级/学段映射、以及工具函数定义。
+已移除 LangChain 依赖，工具函数改为纯 Python 实现。
 """
 
 from typing import Dict, List, Any, Literal
 import logging
 
 from pydantic import BaseModel, Field
-from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +48,13 @@ UK_PRIMARY_SUBJECTS = [
 ]
 
 ELEVEN_PLUS_SUBJECTS = [
-    "Maths", 
-    "English", 
-    "Verbal Reasoning", 
+    "Maths",
+    "English",
+    "Verbal Reasoning",
     "Non-Verbal Reasoning"
-    ]
+]
 
-# 科目对应的可爱图标
+# 科目对应的图标
 SUBJECT_ICONS = {
     "English": "ABC",
     "Mathematics": "123",
@@ -202,41 +202,43 @@ SAMPLE_STUDENT_PROFILES = {
 }
 
 
-# Define tools
-@tool
+# ============================================================
+# 工具函数（纯 Python 实现，移除 LangChain @tool 装饰器）
+# ============================================================
+
 def lookup_word_definition(word: str) -> str:
-    """Look up the definition, pronunciation, and example sentences of an English word
+    """查单词定义、发音和例句
 
     Args:
-        word: The English word to look up
+        word: 要查的英语单词
     """
     dictionary = {
         "apple": {
-            "pronunciation": "/ˈæpl/",
+            "pronunciation": "/\u00e6pl/",
             "definition": "A round fruit with red or green skin and a firm white flesh",
             "example": "I eat an apple every day.",
             "level": "Elementary"
         },
         "beautiful": {
-            "pronunciation": "/ˈbjuːtɪfl/",
+            "pronunciation": "/\u02c8bju\u02d0t\u026afl/",
             "definition": "Very attractive or pleasant to look at",
             "example": "What a beautiful flower!",
             "level": "Elementary"
         },
         "happy": {
-            "pronunciation": "/ˈhæpi/",
+            "pronunciation": "/\u00e6h\u00e6pi/",
             "definition": "Feeling or showing pleasure or contentment",
             "example": "She is very happy today.",
             "level": "Beginner"
         },
         "run": {
-            "pronunciation": "/rʌn/",
+            "pronunciation": "/r\u028cn/",
             "definition": "To move at a speed faster than walking by moving your legs more quickly",
             "example": "The children run to the playground.",
             "level": "Beginner"
         },
         "elephant": {
-            "pronunciation": "/ˈelɪfənt/",
+            "pronunciation": "/\u02c8el\u026af\u0259nt/",
             "definition": "A very large gray animal with a long trunk and tusks",
             "example": "The elephant is the largest land animal.",
             "level": "Elementary"
@@ -250,28 +252,26 @@ def lookup_word_definition(word: str) -> str:
     else:
         result = f"Word: {word}\nDefinition: (Looking up...)\nThis word is not in the basic dictionary. Let me explain it in a simple way."
 
-    logger.info(f"[Tool Call] {result}")
+    logger.info("[Tool Call] %s", result)
     return result
 
 
-@tool
 def check_grammar(sentence: str) -> str:
-    """Check the grammar of an English sentence and provide corrections
+    """检查英语句子的语法并提供纠正建议
 
     Args:
-        sentence: The English sentence to check
+        sentence: 要检查的英语句子
     """
     result = f"Original Sentence: {sentence}\n\nGrammar Analysis:\n- The sentence structure is analyzed.\n- Suggestions for improvement will be provided.\n\nLet me help you make this sentence better!"
-    logger.info(f"[Tool Call] Check grammar for: {sentence}")
+    logger.info("[Tool Call] Check grammar for: %s", sentence)
     return result
 
 
-@tool
 def get_year_group_vocabulary(year_group: int) -> str:
-    """Get the vocabulary list for a specific UK school year group (Year 1 to Year 6)
+    """获取英国特定年级 (Year 1-6) 的词汇表
 
     Args:
-        year_group: UK school year group (1-6)
+        year_group: 英国学校年级 (1-6)
     """
     vocabulary_by_year = {
         1: ["cat", "dog", "book", "pen", "apple", "happy", "run", "big", "small", "red"],
@@ -284,16 +284,15 @@ def get_year_group_vocabulary(year_group: int) -> str:
 
     vocab_list = vocabulary_by_year.get(year_group, [])
     result = f"Year {year_group} Vocabulary List:\n" + ", ".join(vocab_list)
-    logger.info(f"[Tool Call] {result}")
+    logger.info("[Tool Call] %s", result)
     return result
 
 
-@tool
 def get_homework_time(year_group: int) -> str:
-    """Get the recommended daily English homework time for a UK primary school student based on their year group/age
+    """获取英国小学生基于年级的每日推荐英语作业时间
 
     Args:
-        year_group: UK school year group (1-6)
+        year_group: 英国学校年级 (1-6)
     """
     info = get_homework_time_by_age(year_group)
     result = (
@@ -302,22 +301,17 @@ def get_homework_time(year_group: int) -> str:
         f"- Weekly: {info['weekly_homework_minutes']} minutes\n"
         f"- Focus: {info['focus_areas']}"
     )
-    logger.info(f"[Tool Call] {result}")
+    logger.info("[Tool Call] %s", result)
     return result
 
 
-@tool
-def search_homework_by_topic(
-    query: str,
-    year_group: int = None,
-    subject: str = None,
-) -> str:
-    """Search for previously generated homework by topic and optional filters
+def search_homework_by_topic(query: str, year_group: int = None, subject: str = None) -> str:
+    """按主题搜索之前生成的作业
 
     Args:
-        query: Search query (e.g., "fractions exercise", "grammar past tense")
-        year_group: Optional UK year group filter (1-6)
-        subject: Optional subject filter (e.g., "Maths, "English")
+        query: 搜索关键词
+        year_group: 可选的年级过滤 (1-6)
+        subject: 可选的科目过滤
     """
     from src.homework_rag import search_homework
 
@@ -348,12 +342,8 @@ def search_homework_by_topic(
         return f"Error searching homework: {str(e)}"
 
 
-@tool
 def load_chinese_textbooks() -> str:
-    """Load Chinese textbooks into the RAG system for future reference.
-    Textbooks are mapped by volume: 第一册=Year1, 第二册=Year2, etc.
-    Call this once to make textbooks searchable.
-    """
+    """将中文教材加载到 RAG 系统中以供未来参考"""
     from src.homework_rag import ingest_chinese_textbooks
 
     try:
@@ -366,13 +356,12 @@ def load_chinese_textbooks() -> str:
         return f"Error loading Chinese textbooks: {str(e)}"
 
 
-@tool
 def search_chinese_resources(query: str, year_group: int = None) -> str:
-    """Search Chinese textbooks by topic
+    """按主题搜索中文教材
 
     Args:
-        query: Search query (e.g., "生字", "识字", "拼音")
-        year_group: Optional year group filter (1-6)
+        query: 搜索关键词
+        year_group: 可选的年级过滤 (1-6)
     """
     from src.homework_rag import search_chinese_textbooks
 
@@ -400,9 +389,139 @@ def search_chinese_resources(query: str, year_group: int = None) -> str:
         return f"Error searching Chinese textbooks: {str(e)}"
 
 
-# Tool list
-tools = [
-    lookup_word_definition, check_grammar, get_year_group_vocabulary,
-    get_homework_time, search_homework_by_topic,
-    load_chinese_textbooks, search_chinese_resources,
+# ============================================================
+# 工具注册表（OpenAI function calling 格式）
+# ============================================================
+
+# 工具函数映射表
+TOOL_FUNCTIONS = {
+    "lookup_word_definition": lookup_word_definition,
+    "check_grammar": check_grammar,
+    "get_year_group_vocabulary": get_year_group_vocabulary,
+    "get_homework_time": get_homework_time,
+    "search_homework_by_topic": search_homework_by_topic,
+    "load_chinese_textbooks": load_chinese_textbooks,
+    "search_chinese_resources": search_chinese_resources,
+}
+
+# OpenAI function calling 格式的工具定义
+tools_schema = [
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_word_definition",
+            "description": "Look up the definition, pronunciation, and example sentences of an English word",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "word": {"type": "string", "description": "The English word to look up"}
+                },
+                "required": ["word"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_grammar",
+            "description": "Check the grammar of an English sentence and provide corrections",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sentence": {"type": "string", "description": "The English sentence to check"}
+                },
+                "required": ["sentence"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_year_group_vocabulary",
+            "description": "Get the vocabulary list for a specific UK school year group (Year 1 to Year 6)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "year_group": {"type": "integer", "description": "UK school year group (1-6)"}
+                },
+                "required": ["year_group"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_homework_time",
+            "description": "Get the recommended daily English homework time for a UK primary school student",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "year_group": {"type": "integer", "description": "UK school year group (1-6)"}
+                },
+                "required": ["year_group"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_homework_by_topic",
+            "description": "Search for previously generated homework by topic and optional filters",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (e.g., 'fractions exercise', 'grammar past tense')"},
+                    "year_group": {"type": "integer", "description": "Optional UK year group filter (1-6)"},
+                    "subject": {"type": "string", "description": "Optional subject filter (e.g., 'Maths', 'English')"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_chinese_textbooks",
+            "description": "Load Chinese textbooks into the RAG system for future reference",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_chinese_resources",
+            "description": "Search Chinese textbooks by topic",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (e.g., 'shengzi', 'pinyin')"},
+                    "year_group": {"type": "integer", "description": "Optional year group filter (1-6)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
+
+
+def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    """执行工具函数
+
+    Args:
+        tool_name: 工具名称
+        arguments: 工具参数字典
+
+    Returns:
+        工具执行结果的字符串
+    """
+    func = TOOL_FUNCTIONS.get(tool_name)
+    if not func:
+        return f"Error: Unknown tool '{tool_name}'"
+    try:
+        return func(**arguments)
+    except Exception as e:
+        logger.error("[Tool] Error executing %s: %s", tool_name, e)
+        return f"Error executing {tool_name}: {str(e)}"

@@ -38,11 +38,11 @@ def main():
 
     try:
         if args.tui:
-            llm, _, _ = init_llm()
+            llm = init_llm()
             run_tui(llm)
         elif args.prompt:
-            llm, _, _ = init_llm()
-            filepath = process_homework_with_review(args.prompt, "student1")
+            llm = init_llm()
+            filepath = process_homework_with_review(args.prompt, "student1", llm=llm)
             logger.info("Done! Homework with review saved to: %s", filepath)
         else:
             from web_app import main as run_web

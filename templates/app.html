@@ -11,6 +11,8 @@
     
     <!-- Markdown to HTML parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <!-- Chart.js for progress graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -447,6 +449,64 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Progress dashboard */
+        .progress-dashboard {
+            margin-top: 30px;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .chart-container {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .no-progress-message {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .no-progress-message h3 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
     </style>
 </head>
 <body>
@@ -558,7 +618,7 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                     <label>Subjects</label>
                     <div class="subject-grid" id="eleven-subjects"></div>
                 </div>
-                <button class="btn btn-primary" onclick="generateElevenHomework()">
+                <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
                     Generate 11+ Practice!
                 </button>
 
@@ -570,7 +630,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 </textarea>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="generateElevenHomework()">
+                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
                     Customize 11+ Practice!
                 </button>
             </div>
@@ -698,6 +758,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                     </button>
                     <button class="btn btn-secondary" onclick="clearResults()">
                         New Homework
+                    </button>
+                    <button class="btn btn-secondary" onclick="ExplainDeep()">
+                        Explain in Detail
+                    </button>
+                    <button class="btn btn-secondary" onclick="ImprovePractice()">
+                        Help me improve
+                    </button>
+                    <button class="btn btn-secondary" onclick="TrackProgress()">
+                        Track Progress
                     </button>
                 </div>
                 
@@ -995,42 +1064,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         }
 
         function generateCustomHomework() {
-            const profileText = document.getElementById('custom-profile').value;
-            const subjects = getSelectedSubjects('custom-subjects');
-            
-            if (subjects.length === 0) {
-                alert('Please select at least one subject!');
-                return;
-            }
-            
-            showLoading();
-            
-            fetch('/api/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    profile: { description: profileText },
-                    subjects: subjects
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    currentHomework = data.homework;
-                    currentProfile = data.profile;
-                    displayHomework(data.homework);
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred');
-            })
-            .finally(() => hideLoading());
+            window.location.href = '/pricing';
         }
 
-        function generateElevenHomeworkRag() {
+        function generateQuickHomeworkEleven() {
             const subjects = getSelectedSubjects('eleven-subjects');
 
             if (subjects.length === 0) {
@@ -1065,15 +1102,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             .finally(() => hideLoading());
         }
 
-        function generateElevenHomework() {
+        function generateCustomHomeworkEleven() {
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
             
-            if (subjects.length === 0) {
-                alert('Please select at least one subject!');
-                return;
-            }
-            
+<!--            if (subjects.length === 0) {-->
+<!--                alert('Please select at least one subject!');-->
+<!--                return;-->
+<!--            }-->
+<!--            -->
             showLoading();
             
             fetch('/api/generate', {
@@ -1163,60 +1200,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         }
 
         function reviewHomework() {
-            let homework = '';
-            let answers = '';
-            const subject = document.getElementById('review-subject').value;
-            
-            if (currentInputMethod === 'text') {
-                homework = document.getElementById('review-homework').value;
-                answers = document.getElementById('review-answers').value;
-                
-                if (!homework.trim() || !answers.trim()) {
-                    alert('Please enter both homework questions and answers!');
-                    return;
-                }
-            } else if (currentInputMethod === 'photo' || currentInputMethod === 'file') {
-                // Use extracted content from photo/file
-                answers = extractedContent;
-                
-                // Check if user provided additional homework questions
-                const extraHomeworkId = currentInputMethod === 'photo' ? 
-                    'review-homework-photo' : 'review-homework-file';
-                homework = document.getElementById(extraHomeworkId).value;
-                
-                if (!answers.trim()) {
-                    alert('No content extracted from ' + currentInputMethod + '. Please try again or use text input.');
-                    return;
-                }
-                
-                // If no separate homework provided, use the extracted content as both
-                if (!homework.trim()) {
-                    homework = 'Homework content (from ' + currentInputMethod + '):';
-                }
-            }
-            
-            // First, display the homework in results section for better UX
-            const homeworkResultsDiv = document.getElementById('homework-results');
-            homeworkResultsDiv.innerHTML = `
-                <div class="homework-block">
-                    <h3 class="subject-header">${subject}</h3>
-                    <div class="homework-content">
-                        <div class="question-column">
-                            ${formatQuestions(marked.parse(homework))}
-                        </div>
-                        <div class="answer-column">
-                            <h4>Your Answers:</h4>
-                            <textarea class="answer-input-inline" readonly style="background: #fafafa; border-color: #ccc;">
-${answers}
-                            </textarea>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            currentSubject = subject;
-            currentHomework = [{ subject: subject, content: homework, doc_id: null }];
-            reviewHomeworkWithContent(homework, answers, subject);
+            window.location.href = '/pricing';
         }
 
         function reviewHomeworkWithContent(homework, answers, subject) {
@@ -1260,9 +1244,344 @@ ${answers}
                 <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
                 <div class="review-output">${marked.parse(review)}</div>
             `;
-            
+
             // Make sure results section is visible
             document.getElementById('results').style.display = 'block';
+        }
+
+        function ExplainDeep() {
+            // 收集所有答案
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            const combinedAnswers = allAnswers.join('\n\n');
+
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+
+            // 获取已有的 review feedback（如果已经 check 过答案）
+            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewFeedback = reviewEl ? reviewEl.innerText : '';
+
+            showLoading();
+
+            fetch('/api/explain-deep', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: homework,
+                    answers: combinedAnswers,
+                    subject: subject,
+                    profile: currentProfile,
+                    review_feedback: reviewFeedback
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayExplainDeep(data.explanation);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function displayExplainDeep(explanation) {
+            const container = document.getElementById('review-result');
+            container.innerHTML = `
+                <h3 style="margin-top: 30px; margin-bottom: 20px;">Deep Explanation</h3>
+                <div class="review-output">${marked.parse(explanation)}</div>
+            `;
+
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function ImprovePractice() {
+            // 收集所有答案
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            const combinedAnswers = allAnswers.join('\n\n');
+
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+
+            // 获取已有的 review feedback（需要知道哪些题做错了）
+            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewFeedback = reviewEl ? reviewEl.innerText : '';
+
+            if (!reviewFeedback) {
+                alert('Please click "Check Answers" first so we know which questions you need to practise!');
+                return;
+            }
+
+            showLoading();
+
+            fetch('/api/improve-practice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: homework,
+                    answers: combinedAnswers,
+                    subject: subject,
+                    profile: currentProfile,
+                    review_feedback: reviewFeedback
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayImprovePractice(data.practice);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function displayImprovePractice(practice) {
+            const container = document.getElementById('review-result');
+            container.innerHTML = `
+                <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice to Improve</h3>
+                <div class="review-output">${marked.parse(practice)}</div>
+            `;
+
+            document.getElementById('results').style.display = 'block';
+        }
+
+        // ---- 学习进度追踪 ----
+        let progressCharts = [];
+
+        function TrackProgress() {
+            const studentId = currentProfile?.student_id || 'anonymous';
+
+            fetch(`/api/progress/${encodeURIComponent(studentId)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayProgress(data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to load progress');
+            });
+        }
+
+        function displayProgress(data) {
+            // 销毁旧的图表实例
+            progressCharts.forEach(c => c.destroy());
+            progressCharts = [];
+
+            const container = document.getElementById('review-result');
+            const summary = data.summary;
+            const scoreHistory = data.score_history;
+            const overall = summary.overall;
+
+            if (overall.total_sessions === 0) {
+                container.innerHTML = `
+                    <div class="progress-dashboard">
+                        <h3 style="margin-top: 30px; margin-bottom: 20px;">Your Progress</h3>
+                        <div class="no-progress-message">
+                            <h3>No progress data yet</h3>
+                            <p>Complete some homework and check your answers to start tracking your progress!</p>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('results').style.display = 'block';
+                return;
+            }
+
+            // 构建统计卡片和图表容器
+            container.innerHTML = `
+                <div class="progress-dashboard">
+                    <h3 style="margin-top: 30px; margin-bottom: 20px;">Your Progress</h3>
+
+                    <div class="progress-stats">
+                        <div class="stat-card">
+                            <div class="stat-value">${overall.total_sessions}</div>
+                            <div class="stat-label">Homework Completed</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #11998e, #38ef7d);">
+                            <div class="stat-value">${overall.avg_accuracy}%</div>
+                            <div class="stat-label">Average Score</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #ee0979, #ff6a00);">
+                            <div class="stat-value">${summary.by_subject.length}</div>
+                            <div class="stat-label">Subjects Practised</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Score Trend</div>
+                        <canvas id="scoreTrendChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Accuracy by Subject</div>
+                        <canvas id="subjectChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('results').style.display = 'block';
+
+            // 渲染分数趋势折线图
+            renderScoreTrendChart(scoreHistory);
+
+            // 渲染科目正确率柱状图
+            renderSubjectChart(summary.by_subject);
+        }
+
+        function renderScoreTrendChart(scoreHistory) {
+            const ctx = document.getElementById('scoreTrendChart');
+            if (!ctx || scoreHistory.length === 0) return;
+
+            // 按时间排序并计算百分比
+            const sorted = [...scoreHistory].sort((a, b) =>
+                new Date(a.created_at) - new Date(b.created_at)
+            );
+
+            const labels = sorted.map(s => {
+                const d = new Date(s.created_at);
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            });
+            const scores = sorted.map(s => Math.round((s.score / s.max_score) * 100));
+
+            // 按科目分组的颜色
+            const subjectColors = {
+                'Maths': '#667eea',
+                'English': '#ee0979',
+                'Science': '#11998e',
+                'Spanish': '#ff6a00',
+            };
+            const bgColors = sorted.map(s => subjectColors[s.subject] || '#764ba2');
+
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Score (%)',
+                        data: scores,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: bgColors,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        fill: true,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const item = sorted[ctx.dataIndex];
+                                    return `${item.subject}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
+                }
+            });
+            progressCharts.push(chart);
+        }
+
+        function renderSubjectChart(bySubject) {
+            const ctx = document.getElementById('subjectChart');
+            if (!ctx || bySubject.length === 0) return;
+
+            const labels = bySubject.map(s => s.subject);
+            const accuracies = bySubject.map(s => s.avg_accuracy);
+            const sessions = bySubject.map(s => s.total_sessions);
+
+            const colors = ['#667eea', '#ee0979', '#11998e', '#ff6a00', '#764ba2', '#00b4d8'];
+
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Accuracy (%)',
+                        data: accuracies,
+                        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                        borderRadius: 8,
+                        barThickness: 50,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(ctx) {
+                                    return `Sessions: ${sessions[ctx.dataIndex]}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
+                }
+            });
+            progressCharts.push(chart);
         }
     </script>
 </body>

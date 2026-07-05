@@ -2,11 +2,9 @@
 fastapi
 uvicorn[standard]
 python-multipart
-langchain-openai
-langchain-core
-langgraph
 pydantic
 chromadb
+requests
 
 # Optional but recommended
 python-dotenv

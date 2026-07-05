@@ -1,48 +1,77 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Prompt templates for the AI English Tutor."""
+"""AI Tutor 的 Prompt 模板
 
-# 按科目生成作业的 Prompt 模板
-from chromadb.types import MetadataEmbeddingRecord
+各 Prompt 的职责分工：
+- HOMEWORK_PROMPT: 按 DfE Programme of Study 生成作业，题目符合小学生偏好
+- REVIEW_HOMEWORK_PROMPT / REVIEW_UPLOADED_HOMEWORK_PROMPT: 快速批改，给出简洁答案和基本解释
+- EXPLAIN_DEEP_PROMPT: 详细解释，包含逐步分析、薄弱点分析、"为什么错了"
+- IMPROVE_PRACTICE_PROMPT: 针对性练习，包含类似题目和适应性辅导
+"""
 
 
-HOMEWORK_PROMPT = """You are an AI Homework Generator for UK Primary School Students. Create age-appropriate homework for the following subject.
+# ============================================================
+# 作业生成 Prompt - 对齐 DfE National Curriculum Programme of Study
+# ============================================================
+
+HOMEWORK_PROMPT = """You are an AI Homework Generator for UK Primary School Students.
+Create homework that follows the DfE National Curriculum Programme of Study for the specified subject and year group.
 
 Student Information:
 {student_profile}
 
 Subject: {subject}
-
 Homework Time Available: {homework_time} minutes
 
 {previous_topics}
 
-Please create engaging and age-appropriate homework tasks for this subject. The homework should:
-1. Be suitable for a Year {year_group} student (age {age})
-2. Be fun and engaging for primary school children
-3. Fit within {homework_time} minutes of work
-4. Tasks should have answers that can be marked by AI Tutor, no open-ended questions
-5. Tasks should be varied and cover different aspects of the subject (e.g., reading, writing, comprehension, problem-solving)
-6. Be fun and engaging for primary school children, and easy to understand
-7. AVOID repeating previously covered topics (if provided above)
+## DfE Programme of Study Alignment
 
-Format the homework clearly with:
+Generate homework that covers the relevant Programme of Study objectives for Year {year_group} (age {age}):
+
+**Maths:**
+- KS1 (Year 1-2): Number (counting, place value, +-, x/div), Measurement, Geometry (shapes), Statistics
+- KS2 (Year 3-4): Number (larger numbers, written methods, fractions, decimals), Measurement, Geometry (angles, symmetry, coordinates), Statistics (bar charts, time graphs)
+- KS2 (Year 5-6): Number (large numbers, long multiplication/division, fractions/decimals/%, ratio), Algebra (simple formulae, missing values), Measurement, Geometry (area, volume, coordinate geometry), Statistics (mean, mode, pie charts)
+
+**English:**
+- KS1 (Year 1-2): Reading (word decoding, comprehension), Writing (sentence construction, basic punctuation, spelling), SPaG (capital letters, full stops, basic tense)
+- KS2 (Year 3-4): Reading (inference, main ideas, dictionary skills), Writing (paragraphs, fronted adverbials, expanded noun phrases), SPaG (comma for lists, apostrophes, relative clauses)
+- KS2 (Year 5-6): Reading (compare texts, evidence-based inference, vocabulary in context), Writing (cohesion, passive voice, dashes/brackets, formal features), SPaG (modal verbs, subjunctive, ellipsis, semi-colons)
+
+**Other subjects:** Follow the DfE Programme of Study for the relevant Key Stage.
+
+## Requirements
+
+1. Create {homework_time} minutes of engaging homework suitable for Year {year_group} (age {age})
+2. ALL tasks must have clear, markable answers - no open-ended questions
+3. Cover 2-3 different areas of the Programme of Study for this subject
+4. Keep individual questions SHORT and VARIED - primary students have short attention spans
+5. Use fun, relatable contexts (games, animals, food, sports, friends)
+6. AVOID repeating previously covered topics listed above
+7. Mix easy and challenging questions to build confidence then stretch
+
+## Format
+
 - Subject title
-- List of tasks (numbered)
-- Any helpful tips or examples
+- Numbered tasks, each clearly worded
+- Brief examples where helpful
 
-Use the following resources first, link to the resources if available, otherwise provide the information directly:
--BBC Bitesize: The gold standard for UK curriculum support. It offers free games, videos, and study guides for primary, secondary, and exam-level students.
--Oak National Academy: A completely free classroom hub created during remote learning that offers full video lessons across all subjects and ages.
--Times Tables Rock Stars: A highly engaging, game-based website designed to help pupils master multiplication.
--Twinkl: A massive library of printable worksheets and learning hubs for every single school subject.
--National Geographic Kids: Packed with colourful resources, games, and primary-school-friendly information about history, science, and geography.
+## Resources (link where relevant):
+- BBC Bitesize: https://www.bbc.co.uk/bitesize
+- Oak National Academy: https://www.thenational.academy
+- Times Tables Rock Stars: https://ttrockstars.com
+- Twinkl: https://www.twinkl.co.uk
 
 Return the homework in natural language text.
 """
 
-# 从用户提示词中提取科目的 Prompt 模板
+
+# ============================================================
+# 科目提取 Prompt
+# ============================================================
+
 SUBJECT_EXTRACTION_PROMPT = """You are a subject extractor. Analyze the following user input and extract the subjects mentioned.
 
 Available subjects: {available_subjects}
@@ -59,7 +88,11 @@ Return ONLY a JSON list, nothing else.
 Example: ["Maths", "English"]
 """
 
-# 点评作业的 Prompt 模板
+
+# ============================================================
+# 作业批改 Prompt - 快速批改，简洁答案和基本解释
+# ============================================================
+
 REVIEW_HOMEWORK_PROMPT = """You are an AI tutor reviewing homework for a UK Primary School student (Year 1-6).
 
 Student Information:
@@ -85,7 +118,11 @@ Please review the student's work and provide:
 Return the review in a clear, encouraging format appropriate for a primary school student.
 """
 
-# 生成作业正确答案的 Prompt（针对有唯一答案的题目）
+
+# ============================================================
+# 作业正确答案生成 Prompt
+# ============================================================
+
 HOMEWORK_ANSWER_PROMPT = """You are an AI tutor generating correct answers for homework.
 
 Homework Content:
@@ -107,7 +144,11 @@ Format the answers clearly:
 Return ONLY the answers, no explanations.
 """
 
-# 批阅上传作业的 Prompt（无结构化作业计划时使用）
+
+# ============================================================
+# 上传作业批改 Prompt - 简洁答案和基本解释
+# ============================================================
+
 REVIEW_UPLOADED_HOMEWORK_PROMPT = """You are an AI tutor reviewing homework submitted by a UK Primary School student (Year 1-6).
 
 Student Information:
@@ -167,7 +208,11 @@ Important:
 - Use simple, encouraging language appropriate for a primary school student
 """
 
+
+# ============================================================
 # 协调层评估 Prompt - 判断查询类型和处理模式
+# ============================================================
+
 ASSESSMENT_PROMPT = """You are the coordination layer of an AI Tutor for UK Primary School Students (Year 1 to Year 6). Evaluate the following student query to determine its type and the processing mode that should be used.
 
 Student Query: {user_query}
@@ -191,7 +236,11 @@ Return the result in JSON format with the following fields:
 - reasoning: Brief explanation of the decision rationale
 """
 
+
+# ============================================================
 # 数据收集 Prompt
+# ============================================================
+
 DATA_COLLECTION_PROMPT = """You are the data collection module of an AI English Tutor for UK Primary School Students (Year 1-6). Based on the following student query, determine what learning information needs to be collected for personalized tutoring.
 
 Student Query: {user_query}
@@ -214,7 +263,11 @@ Return the result in JSON format with the following fields:
 - collected_data: Simulated collected data (for simplicity, generate reasonable mock data appropriate for UK primary school students)
 """
 
+
+# ============================================================
 # 深度分析 Prompt
+# ============================================================
+
 ANALYSIS_PROMPT = """You are the analysis engine of an AI English Tutor for UK Primary School Students (Year 1-6). Please conduct an in-depth analysis of the student's learning situation based on the collected data.
 
 Student Query: {user_query}
@@ -241,7 +294,11 @@ Return the analysis results in JSON format with the following fields:
 - learning_milestones: Expected learning milestones
 """
 
+
+# ============================================================
 # 推荐生成 Prompt
+# ============================================================
+
 RECOMMENDATION_PROMPT = """You are an AI Tutor for UK Primary School Students (Year 1 to Year 6). Based on the in-depth analysis results, prepare the final tutoring response for the student.
 
 Student Query: {user_query}
@@ -269,7 +326,11 @@ The response should include:
 Return in natural language text suitable for direct presentation to a UK primary school student.
 """
 
-# Reactive 模式下 LLM 的 System Prompt 模板
+
+# ============================================================
+# Reactive 模式下 LLM 的 System Prompt
+# ============================================================
+
 REACTIVE_SYSTEM_PROMPT = """You are a friendly AI Tutor for UK Primary School Students (Year 1 to Year 6). Please provide clear, simple, and encouraging answers based on the student's questions.
 
 Student Information:
@@ -284,14 +345,17 @@ You can use the following tools to help the student:
 Please determine whether to call tools based on the student's question. Always be encouraging and use simple language appropriate for the student's age and year group.
 
 Use the following resources only, link to the resources:
--BBC Bitesize: The gold standard for UK curriculum support. It offers free games, videos, and study guides for primary, secondary, and exam-level students.
--Oak National Academy: A completely free classroom hub created during remote learning that offers full video lessons across all subjects and ages.
--Times Tables Rock Stars: A highly engaging, game-based website designed to help pupils master multiplication.
--Twinkl: A massive library of printable worksheets and learning hubs for every single school subject.
--National Geographic Kids: Packed with colourful resources, games, and primary-school-friendly information about history, science, and geography.
+- BBC Bitesize: https://www.bbc.co.uk/bitesize
+- Oak National Academy: https://www.thenational.academy
+- Times Tables Rock Stars: https://ttrockstars.com
+- Twinkl: https://www.twinkl.co.uk
 """
 
+
+# ============================================================
 # 自然语言学生档案解析 Prompt
+# ============================================================
+
 PROFILE_PARSE_PROMPT = """You are a student profile parser. Parse the following natural language description into a structured student profile for UK Primary School.
 
 Available subjects: {available_subjects}
@@ -312,6 +376,11 @@ Return ONLY a valid JSON object with these fields:
 
 If some information is not mentioned, use reasonable defaults for a UK primary school student.
 """
+
+
+# ============================================================
+# 深度解释 Prompt - 逐步解释、薄弱点分析、"为什么错了"
+# ============================================================
 
 EXPLAIN_DEEP_PROMPT = """You are an expert AI tutor for UK Primary School students (Year 1-6).
 The student has completed a homework assignment and you need to provide a deep, thorough explanation of the answers,
@@ -339,8 +408,13 @@ For EACH question in the homework:
 1. Restate the question briefly
 2. Explain the correct answer step by step in simple, age-appropriate language
 3. Explain WHY this is the correct answer (the underlying concept or rule)
-4. If the student's answer was wrong, gently explain where they went off track and how to think about it correctly
+4. If the student's answer was wrong, explain "Why did I get this wrong?" - identify the specific misconception or mistake
 5. Give a real-life example or analogy to help the concept stick
+
+## Weakness Analysis
+- Based on the student's answers, identify specific weak areas
+- Explain the pattern of mistakes (e.g., "You tend to forget to carry the one in addition")
+- Show which DfE Programme of Study objectives need more practice
 
 ## Key Concepts to Remember
 - Summarise the 3-5 most important concepts or skills tested in this homework
@@ -352,16 +426,20 @@ For EACH question in the homework:
 - Where possible, link to free UK resources (BBC Bitesize, Oak National Academy, etc.)
 
 ## Improvement Plan
-- Based on the student's answers, identify specific weak areas
 - Provide a short, actionable plan to improve (what to study, what to practise, how often)
 - Suggest a difficulty progression: start from what they know, then build up
 
 ## Encouragement
 - End with a positive, motivating message tailored to the student's effort
 
-Use simple, encouraging language appropriate for a {year_group} Year student (age {age}).
+Use simple, encouraging language appropriate for a Year {year_group} student (age {age}).
 Use markdown formatting with headers, bullet points, and bold text for clarity.
 """
+
+
+# ============================================================
+# 提升练习 Prompt - 类似题目和适应性辅导
+# ============================================================
 
 IMPROVE_PRACTICE_PROMPT = """You are an expert AI tutor for UK Primary School students (Year 1-6).
 The student has completed a homework assignment and made some mistakes. Your job is to help them improve
@@ -406,6 +484,11 @@ Use simple, encouraging language appropriate for a Year {year_group} student (ag
 Use markdown formatting with headers, bullet points, and bold text for clarity.
 Make the practice questions clearly separated so the student can work through them one by one.
 """
+
+
+# ============================================================
+# 记忆导出 Prompt
+# ============================================================
 
 MEMORY_PROMPT = """Export all of my stored memories and any context you've learned about me from past conversations. Preserve my words verbatim where possible, especially for instructions and preferences.
 

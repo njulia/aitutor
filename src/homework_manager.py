@@ -5,6 +5,7 @@
 作业管理模块
 
 负责作业的保存、加载、检查完成情况、点评等功能。
+已移除 LangChain 依赖，使用轻量级 LLMClient。
 """
 
 import csv
@@ -15,9 +16,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
+from src.llm_client import LLMClient, format_prompt, build_messages
 from src.models import get_homework_time_by_age
 from src.homework_generator import generate_homework_for_subject
 from src.homework_rag import search_homework_answers
@@ -28,6 +27,8 @@ from src.prompts import (
 logger = logging.getLogger(__name__)
 
 TEST_MODE = False
+
+
 def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: str, num_days: int, output_dir: str = "homework_output") -> str:
     """将指定天数的作业保存到本地文件
 
@@ -61,7 +62,7 @@ def save_homework_to_file(homework_plan: Dict[int, Dict[str, str]], student_id: 
                 f.write(f"{content}\n\n")
                 f.write(f"{'~'*40}\n\n")
 
-    logger.info(f"[Save] Homework saved to: {filename}")
+    logger.info("[Save] Homework saved to: %s", filename)
     return filename
 
 
@@ -89,7 +90,7 @@ def load_latest_homework(student_id: str, output_dir: str = "homework_output") -
     files.sort(key=os.path.getmtime, reverse=True)
     latest_file = files[0]
 
-    logger.info(f"[Load] Found latest homework file: {latest_file}")
+    logger.info("[Load] Found latest homework file: %s", latest_file)
 
     # 解析文件内容
     homework_plan = {}
@@ -170,7 +171,7 @@ def check_homework_completion(homework_plan: Dict[int, Dict[str, str]], student_
     return incomplete
 
 
-def review_day_homework(student_profile: Dict[str, Any], day: int, subjects_homework: Dict[str, str], student_answers: Dict[str, str], llm) -> str:
+def review_day_homework(student_profile: Dict[str, Any], day: int, subjects_homework: Dict[str, str], student_answers: Dict[str, str], llm: LLMClient) -> str:
     """点评某一天的作业
 
     Args:
@@ -178,7 +179,7 @@ def review_day_homework(student_profile: Dict[str, Any], day: int, subjects_home
         day: 天数
         subjects_homework: {科目: 作业内容}
         student_answers: {科目: 学生答案}
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
 
     Returns:
         点评内容
@@ -188,16 +189,16 @@ def review_day_homework(student_profile: Dict[str, Any], day: int, subjects_home
     for subject, homework in subjects_homework.items():
         student_answer = student_answers.get(subject, "Not submitted")
 
-        prompt = ChatPromptTemplate.from_template(REVIEW_HOMEWORK_PROMPT)
-        chain = prompt | llm | StrOutputParser()
-
-        review = chain.invoke({
-            "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
-            "subject": subject,
-            "day": day,
-            "homework_content": homework,
-            "student_answer": student_answer,
-        })
+        prompt_text = format_prompt(
+            REVIEW_HOMEWORK_PROMPT,
+            student_profile=json.dumps(student_profile, ensure_ascii=False, indent=2),
+            subject=subject,
+            day=day,
+            homework_content=homework,
+            student_answer=student_answer,
+        )
+        messages = build_messages(prompt_text)
+        review = llm.complete(messages)
 
         reviews.append(f"### {subject}\n\n{review}\n")
 
@@ -244,18 +245,18 @@ def save_review_with_homework(homework_plan: Dict[int, Dict[str, str]], reviews:
             f.write(f"{day_review}\n\n")
             f.write(f"{'~'*40}\n\n")
 
-    logger.info(f"[Save] Review saved to: {filename}")
+    logger.info("[Save] Review saved to: %s", filename)
     return filename
 
 
-def regenerate_multiday_homework(student_profile: Dict[str, Any], subjects: List[str], num_days: int, llm, output_dir: str = "homework_output") -> tuple:
+def regenerate_multiday_homework(student_profile: Dict[str, Any], subjects: List[str], num_days: int, llm: LLMClient, output_dir: str = "homework_output") -> tuple:
     """重新生成指定天数的作业并检查完成情况
 
     Args:
         student_profile: 学生档案
         subjects: 科目列表
         num_days: 天数
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
         output_dir: 输出目录
 
     Returns:
@@ -268,20 +269,20 @@ def regenerate_multiday_homework(student_profile: Dict[str, Any], subjects: List
 
     if latest:
         homework_plan, filepath = latest
-        logger.info(f"[Load] Loaded existing homework plan from: {filepath}")
+        logger.info("[Load] Loaded existing homework plan from: %s", filepath)
 
         # 检查完成情况
         incomplete = check_homework_completion(homework_plan, student_profile["student_id"], output_dir)
 
         if not incomplete:
-            logger.info(f"[Info] All homework completed! Generating new {num_days}-day plan...")
+            logger.info("[Info] All homework completed! Generating new %d-day plan...", num_days)
             homework_plan = generate_multiday_homework(student_profile, subjects, num_days, llm)
             filepath = save_homework_to_file(homework_plan, student_profile["student_id"], num_days, output_dir)
             incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
         else:
-            logger.info(f"[Info] Found incomplete days: {list(incomplete.keys())}")
+            logger.info("[Info] Found incomplete days: %s", list(incomplete.keys()))
     else:
-        logger.info(f"[Info] No existing homework found. Generating new {num_days}-day plan...")
+        logger.info("[Info] No existing homework found. Generating new %d-day plan...", num_days)
         homework_plan = generate_multiday_homework(student_profile, subjects, num_days, llm)
         filepath = save_homework_to_file(homework_plan, student_profile["student_id"], num_days, output_dir)
         incomplete = {day: list(subjects_homework.keys()) for day, subjects_homework in homework_plan.items()}
@@ -317,18 +318,18 @@ def load_homework_from_file(filepath: str = None) -> List[Dict[str, str]]:
                     'subject': subject,
                     'homework': homework
                 })
-        logger.info(f"[Load] Loaded existing homework plan from {rag_path}")
+        logger.info("[Load] Loaded existing homework plan from %s", rag_path)
         logger.debug(sections)
     return sections
 
 
-def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subjects: List[str], llm) -> list:
+def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subjects: List[str], llm: LLMClient) -> list:
     """使用自定义学生档案生成作业
 
     Args:
         student_profile: 学生信息字典
         subjects: 选中的科目列表
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
 
     Returns:
         包含科目和作业字典的列表
@@ -338,41 +339,28 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
         return load_homework_from_file()
 
     # Generate new homework
-    sections = []  # 数据文件在父目录的 data/ 文件夹
+    sections = []
     for subject in subjects:
-        logger.info(f"[Homework] Generating homework for {subject}...")
+        logger.info("[Homework] Generating homework for %s...", subject)
         homework, doc_id = generate_homework_for_subject(student_profile, subject, llm)
         sections.append({
             'subject': subject,
             'homework': homework,
             'doc_id': doc_id
         })
-        logger.debug(f"==============={subject}===================\n{homework}")
-
-    # project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # rag_path = os.path.join(project_dir, "data", "homework.csv")
-    # os.makedirs(os.path.dirname(rag_path), exist_ok=True)
-    # with open(rag_path, "w", newline="", encoding="utf-8") as f:
-    #     writer = csv.DictWriter(f, fieldnames=["Subject", "Homework"])
-    #     writer.writeheader()
-    #     for section in sections:
-    #         writer.writerow({
-    #             "Subject": section["subject"],
-    #             "Homework": section["homework"]
-    #         })
+        logger.debug("===============%s===================\n%s", subject, homework)
 
     return sections
 
 
-
-def process_homework_with_review(user_input: str, student_id: str = "student1", student_answers: Dict[int, Dict[str, str]] = None, llm = None, output_dir: str = "homework_output") -> str:
+def process_homework_with_review(user_input: str, student_id: str = "student1", student_answers: Dict[int, Dict[str, str]] = None, llm: LLMClient = None, output_dir: str = "homework_output") -> str:
     """完整的作业处理流程：导入/生成 -> 点评 -> 保存
 
     Args:
         user_input: 用户提示词（包含科目信息）
         student_id: 学生ID
         student_answers: 学生答案 {day: {subject: answer}}
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
         output_dir: 输出目录
 
     Returns:
@@ -389,12 +377,12 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         subjects = profile["extracted_subjects"]
     elif profile and profile.get("learning_goals"):
         subjects = extract_subjects_from_prompt(profile["learning_goals"], llm)
-        logger.info(f"[Extracted Subjects from Learning Goals] {', '.join(subjects)}")
+        logger.info("[Extracted Subjects from Learning Goals] %s", ', '.join(subjects))
     else:
         logger.warning("[Warning] No subjects found in input. Using default subjects: English, Maths")
         subjects = ["English", "Maths"]
 
-    logger.info(f"[Extracted Subjects] {', '.join(subjects)}")
+    logger.info("[Extracted Subjects] %s", ', '.join(subjects))
 
     # 3. 加载或重新生成作业
     num_days = 5
@@ -408,7 +396,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
         # 使用提供的答案或默认"未提交"
         day_answers = student_answers.get(day, {s: "Not submitted" for s in day_subjects}) if student_answers else {s: "Not submitted" for s in day_subjects}
 
-        logger.info(f"[Review] Reviewing Day {day} homework...")
+        logger.info("[Review] Reviewing Day %d homework...", day)
         review = review_day_homework(profile, day, day_homework, day_answers, llm)
         reviews[day] = review
 
@@ -418,7 +406,7 @@ def process_homework_with_review(user_input: str, student_id: str = "student1", 
     return final_filepath
 
 
-def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework: str, doc_id, llm) -> str:
+def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, homework: str, doc_id, llm: LLMClient) -> str:
     """批阅上传的作业
 
     Args:
@@ -426,12 +414,11 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
         subject: 科目
         homework: 学生提交的作业内容
         doc_id: 原始作业文档ID（如果有）
-        llm: LangChain LLM 实例
+        llm: LLMClient 实例
 
     Returns:
         批阅结果
     """
-    prompt_template = REVIEW_UPLOADED_HOMEWORK_PROMPT
     correct_answers_section = ""
 
     if doc_id:
@@ -440,11 +427,11 @@ def review_uploaded_homework(student_profile: Dict[str, Any], subject: str, home
         try:
             correct_answers = search_homework_answers(doc_id=doc_id)
             if correct_answers:
-                logger.info(f"[RAG] Found correct answers in RAG for {subject} review")
+                logger.info("[RAG] Found correct answers in RAG for %s review", subject)
             else:
-                logger.info(f"[RAG] No matching answers found in RAG, using LLM for review")
+                logger.info("[RAG] No matching answers found in RAG, using LLM for review")
         except Exception as e:
-            logger.warning(f"[RAG] Failed to search answers for review: {e}")
+            logger.warning("[RAG] Failed to search answers for review: %s", e)
 
         # 2. 构建正确答案区块
         if correct_answers:
@@ -457,13 +444,14 @@ Note: Answers marked as "student's own..." or "(writing/drawing/learning task)" 
 """
 
     # 3. 调用 LLM 进行批阅
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-    chain = prompt | llm | StrOutputParser()
-    review = chain.invoke({
-        "student_profile": json.dumps(student_profile, ensure_ascii=False, indent=2),
-        "subject": subject,
-        "homework": homework,
-        "correct_answers_section": correct_answers_section,
-    })
+    prompt_text = format_prompt(
+        REVIEW_UPLOADED_HOMEWORK_PROMPT,
+        student_profile=json.dumps(student_profile, ensure_ascii=False, indent=2),
+        subject=subject,
+        homework=homework,
+        correct_answers_section=correct_answers_section,
+    )
+    messages = build_messages(prompt_text)
+    review = llm.complete(messages)
 
     return review
