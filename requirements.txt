@@ -7,6 +7,9 @@ chromadb
 requests
 stripe
 
+# Local embedding model (zero API cost for RAG)
+sentence-transformers
+
 # Observability (self-hosted Langfuse)
 langfuse>=2.0.0
 

@@ -19,6 +19,13 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 
+# ---- 开发模式判断 ----
+
+def is_dev_mode() -> bool:
+    """判断是否处于开发模式（绕过 Stripe）"""
+    return os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
+
+
 # ---- 缓存统计 ----
 
 def get_cache_stats() -> Dict[str, Any]:
@@ -136,14 +143,20 @@ def get_evaluation_summary() -> Dict[str, Any]:
 # ---- 订阅管理 ----
 
 def get_subscription_overview() -> Dict[str, Any]:
-    """获取订阅概览（从 Stripe 获取数据）"""
+    """获取订阅概览
+
+    开发模式：从本地数据库读取，不依赖 Stripe。
+    生产模式：从 Stripe 获取数据。
+    """
+    if is_dev_mode():
+        from src.progress_db import get_local_subscription_stats
+        return get_local_subscription_stats()
+
     try:
         import stripe
-        # 获取活跃订阅数量
         subscriptions = stripe.Subscription.list(limit=100, status="active")
         active_count = len(subscriptions.data)
 
-        # 获取总收入估算
         total_revenue = sum(
             sub.items.data[0].price.unit_amount * 0.01
             for sub in subscriptions.data
@@ -159,6 +172,8 @@ def get_subscription_overview() -> Dict[str, Any]:
                     "customer": sub.customer,
                     "status": sub.status,
                     "created": datetime.fromtimestamp(sub.created).isoformat(),
+                    "trial_end": datetime.fromtimestamp(sub.trial_end).isoformat() if sub.trial_end else None,
+                    "current_period_end": datetime.fromtimestamp(sub.current_period_end).isoformat() if sub.current_period_end else None,
                 }
                 for sub in subscriptions.data[:20]
             ],
@@ -168,6 +183,69 @@ def get_subscription_overview() -> Dict[str, Any]:
     except Exception as e:
         logger.warning("[Admin] Stripe 查询失败: %s", e)
         return {"error": str(e), "active_subscriptions": 0}
+
+
+def create_admin_subscription(email: str, name: str, duration: str) -> Dict[str, Any]:
+    """管理员手动创建订阅
+
+    开发模式：直接写入本地数据库，不依赖 Stripe。
+    生产模式：通过 Stripe 创建客户和订阅。
+
+    Args:
+        email: 客户邮箱
+        name: 客户姓名
+        duration: "5_days" 或 "30_days"
+
+    Returns:
+        包含订阅信息的字典
+    """
+    duration_days = {"5_days": 5, "30_days": 30}
+    if duration not in duration_days:
+        raise ValueError("Invalid duration, must be '5_days' or '30_days'")
+
+    product_name = (
+        "5-Day Premium Access" if duration == "5_days" else "30-Day Premium Access"
+    )
+
+    # 开发模式：直接写入本地数据库
+    if is_dev_mode():
+        from src.progress_db import create_local_subscription
+        return create_local_subscription(
+            customer_email=email,
+            customer_name=name,
+            product_name=product_name,
+            duration_days=duration_days[duration],
+        )
+
+    # 生产模式：通过 Stripe 创建
+    import stripe
+
+    trial_end = datetime.utcnow() + timedelta(days=duration_days[duration])
+    trial_end_ts = int(trial_end.timestamp())
+
+    customer = stripe.Customer.create(email=email, name=name)
+
+    price_map = {
+        "5_days": "price_5day_subscription",
+        "30_days": "price_30day_subscription",
+    }
+
+    subscription = stripe.Subscription.create(
+        customer=customer.id,
+        items=[{"price": price_map[duration]}],
+        trial_end=trial_end_ts,
+    )
+
+    return {
+        "subscription_id": subscription.id,
+        "customer_id": customer.id,
+        "customer_email": email,
+        "customer_name": name,
+        "status": subscription.status,
+        "product_name": product_name,
+        "duration": duration,
+        "trial_end": trial_end.isoformat(),
+    }
 
 
 # ---- 管理员认证（简单 token 验证） ----

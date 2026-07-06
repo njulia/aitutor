@@ -6,6 +6,10 @@ Homework RAG (Retrieval-Augmented Generation) System
 
 Stores generated homework with metadata in a vector database for future search and retrieval.
 Metadata includes: year_group, subject, homework_minutes, study_year_month, etc.
+
+嵌入模型配置：
+  - EMBEDDING_PROVIDER=local（默认）：使用 sentence-transformers 本地模型，零 API 费用
+  - EMBEDDING_PROVIDER=api：使用 OpenAI 兼容 API（AGICTO）
 """
 import os
 import time
@@ -14,20 +18,67 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 
 import chromadb
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
-# RAG 存储重试配置：API 负载高时自动重试
+# RAG 存储重试配置
 RAG_MAX_RETRIES = 3
 RAG_RETRY_DELAY = 2  # 秒
 
-# AGICTO API Key for embeddings
+# 嵌入模型配置
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+
+# API 嵌入（生产环境备用）
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 
-# RAG storage directory
+# RAG 存储目录
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
+
+
+def _create_embedding_function():
+    """根据配置创建嵌入函数
+
+    优先使用本地模型（零费用），回退到 API 嵌入。
+
+    Returns:
+        ChromaDB 嵌入函数实例
+    """
+    if EMBEDDING_PROVIDER == "local":
+        try:
+            from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+            ef = SentenceTransformerEmbeddingFunction(model_name=LOCAL_EMBEDDING_MODEL)
+            logger.info("[RAG] 使用本地嵌入模型: %s", LOCAL_EMBEDDING_MODEL)
+            return ef
+        except ImportError:
+            logger.warning(
+                "[RAG] sentence-transformers 未安装，回退到 API 嵌入。"
+                "请运行: pip install sentence-transformers"
+            )
+        except Exception as e:
+            logger.warning("[RAG] 本地嵌入模型加载失败: %s，回退到 API 嵌入", e)
+
+    # 回退到 API 嵌入
+    if QWEN_API_KEY:
+        from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+        ef = OpenAIEmbeddingFunction(
+            model_name="text-embedding-3-small",
+            api_key=QWEN_API_KEY,
+            api_base="https://api.agicto.cn/v1/",
+        )
+        logger.info("[RAG] 使用 API 嵌入模型 (text-embedding-3-small)")
+        return ef
+
+    # 最终回退：使用 ChromaDB 默认的 ONNX 嵌入
+    try:
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        ef = DefaultEmbeddingFunction()
+        logger.info("[RAG] 使用 ChromaDB 默认嵌入函数")
+        return ef
+    except Exception as e:
+        logger.error("[RAG] 无法创建任何嵌入函数: %s", e)
+        raise
 
 
 class HomeworkRAGStore:
@@ -40,12 +91,8 @@ class HomeworkRAGStore:
         # 初始化 ChromaDB 客户端
         self.client = chromadb.PersistentClient(path=self.persist_dir)
 
-        # 使用 AGICTO API 的嵌入函数
-        self.embedding_function = OpenAIEmbeddingFunction(
-            model_name="text-embedding-3-small",
-            api_key=QWEN_API_KEY,
-            api_base="https://api.agicto.cn/v1/",
-        )
+        # 创建嵌入函数（本地或 API）
+        self.embedding_function = _create_embedding_function()
 
         # 作业集合
         self.collection = self.client.get_or_create_collection(
@@ -54,12 +101,37 @@ class HomeworkRAGStore:
             metadata={"hnsw:space": "cosine"},
         )
 
-        # 中文教材集合
-        self.chinese_collection = self.client.get_or_create_collection(
-            name="chinese_collection",
-            embedding_function=self.embedding_function,
-            metadata={"hnsw:space": "cosine"},
-        )
+        # # 中文教材集合
+        # self.chinese_collection = self.client.get_or_create_collection(
+        #     name="chinese_collection",
+        #     embedding_function=self.embedding_function,
+        #     metadata={"hnsw:space": "cosine"},
+        # )
+
+    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert metadata to ChromaDB-compatible format (JSON-serializable)"""
+        if not isinstance(metadata, dict):
+            return {}
+        
+        sanitized = {}
+        for key, value in metadata.items():
+            if value is None:
+                # Skip None values - ChromaDB doesn't accept them
+                continue
+            elif isinstance(value, (str, int, float, bool)):
+                sanitized[key] = value
+            elif isinstance(value, datetime):
+                sanitized[key] = value.isoformat()
+            elif isinstance(value, (list, dict)):
+                # Convert lists and dicts to JSON strings
+                try:
+                    import json
+                    sanitized[key] = json.dumps(value)
+                except (TypeError, ValueError):
+                    sanitized[key] = str(value)
+            else:
+                sanitized[key] = str(value)
+        return sanitized
 
     def add_homework(
         self,
@@ -89,14 +161,17 @@ class HomeworkRAGStore:
         # 用毫秒时间戳生成唯一 ID
         doc_id = str(int(now.timestamp() * 1000))
 
+        # Sanitize metadata to ensure JSON-serializable
+        sanitized_metadata = self._sanitize_metadata(metadata)
+        
         # Ensure metadata has required fields
-        metadata.setdefault("created_at", now.isoformat())
+        sanitized_metadata.setdefault("created_at", now.isoformat())
 
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
                 self.collection.add(
                     documents=[homework_content],
-                    metadatas=[metadata],
+                    metadatas=[sanitized_metadata],
                     ids=[doc_id],
                 )
                 logger.info(f"[RAG] Added homework document: {doc_id}")
@@ -137,11 +212,14 @@ class HomeworkRAGStore:
                 # 用毫秒时间戳生成唯一 ID
                 doc_id = str(int(now.timestamp() * 1000))
 
-            metadata.setdefault("created_at", now.isoformat())
-            metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
+            # Sanitize metadata to ensure JSON-serializable
+            sanitized_metadata = self._sanitize_metadata(metadata)
+            
+            sanitized_metadata.setdefault("created_at", now.isoformat())
+            sanitized_metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
 
             texts.append(content)
-            metadatas.append(metadata)
+            metadatas.append(sanitized_metadata)
             doc_ids.append(doc_id)
 
         self.collection.add(documents=texts, metadatas=metadatas, ids=doc_ids)
@@ -490,14 +568,14 @@ class HomeworkRAGStore:
     def search_homework_answers(
         self,
         doc_id: str,
-    ) -> Optional[str]:
+    ) -> Optional[list]:
         """通过 doc_id 直接获取正确答案
 
         Args:
             doc_id: 作业文档 ID
 
         Returns:
-            正确答案字符串，未找到则返回 None
+            正确答案列表，未找到则返回 None
         """
         if not doc_id:
             logger.warning("[RAG] doc_id 为空")
@@ -512,7 +590,13 @@ class HomeworkRAGStore:
             metadata = result["metadatas"][0]
             correct_answers = metadata.get("correct_answers")
             if correct_answers:
-                logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
+                # Parse JSON string back to list
+                try:
+                    import json
+                    correct_answers = json.loads(correct_answers)
+                    logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(f"[RAG] doc_id={doc_id} 的正确答案格式错误，返回原始字符串")
             return correct_answers
         except Exception as e:
             logger.error(f"[RAG] 获取正确答案失败: {e}")

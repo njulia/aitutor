@@ -9,13 +9,20 @@ FastAPI web application for SEO landing pages, the AI tutor UI, and REST APIs.
 
 import os
 import sys
+
+# 加载 .env 环境变量（必须在其他 import 之前）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except ImportError:
+    pass
+
 import logging
 import base64
 import re
 import uuid
-import stripe
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, UTC
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -29,9 +36,16 @@ from src.file_utils import read_text_file, read_pdf_file, extract_text_from_imag
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# Stripe configuration
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "sk_test_...")
-stripe.api_key = STRIPE_SECRET_KEY
+# Stripe configuration（开发模式下可跳过）
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+_dev_mode = os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
+
+if not _dev_mode and STRIPE_SECRET_KEY:
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+elif not _dev_mode:
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("STRIPE_SECRET_KEY not set and DEV_MODE is off. Subscription creation will fail.")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -188,33 +202,14 @@ def resolve_profile(
     return profile
 
 
-def generate_homework_with_profile(profile: dict, subjects: list):
-    from src.homework_generator import generate_homework_for_subject
+def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
+    """为多个科目生成作业（并行执行以降低延迟）"""
+    from src.homework_generator import generate_homework_parallel
 
     if not profile.get("student_id"):
         profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
 
-    results = []
-    for subject in subjects:
-        try:
-            homework_content, doc_id = generate_homework_for_subject(profile, subject, llm)
-            results.append(
-                {"subject": subject, "content": homework_content, "doc_id": doc_id}
-            )
-            logger.info(
-                "Generated homework for %s (student %s)", subject, profile["student_id"]
-            )
-        except Exception as exc:
-            logger.error("Error generating %s: %s", subject, exc)
-            results.append(
-                {
-                    "subject": subject,
-                    "content": f"Error generating homework: {exc}",
-                    "doc_id": None,
-                }
-            )
-
-    return results
+    return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
 
 
 def review_homework(homework_content: str, student_answers: str, subject: str, profile=None):
@@ -370,6 +365,7 @@ class ProfileRequest(BaseModel):
     quick_select: bool = False
     year: Optional[int] = None
     student_id: Optional[str] = None
+    is_eleven_plus: bool = False
 
 
 class ReviewRequest(BaseModel):
@@ -414,6 +410,20 @@ class FeedbackRequest(BaseModel):
     score: float = Field(..., description="评分: 1.0 = thumbs up, 0.0 = thumbs down")
     name: str = Field(default="user_feedback", description="评分类型")
     comment: Optional[str] = Field(default=None, description="可选文字反馈")
+
+
+class AdminUserCreateRequest(BaseModel):
+    """管理员创建学生请求"""
+    name: str
+    year_group: int = 3
+    age: int = 7
+
+
+class AdminSubscriptionCreateRequest(BaseModel):
+    """管理员创建订阅请求"""
+    email: str
+    name: str
+    duration: str  # "5_days" 或 "30_days"
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -556,7 +566,7 @@ async def api_generate(request: ProfileRequest):
                 content={"success": False, "error": "No subjects selected"},
             )
 
-        results = generate_homework_with_profile(profile, subjects)
+        results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
 
         return {"success": True, "homework": results, "profile": profile}
     except Exception as exc:
@@ -738,34 +748,53 @@ async def delete_session(session_id: str):
 @app.post("/api/create-subscription")
 async def create_subscription(request: SubscriptionRequest):
     try:
-        # Create Stripe customer
+        duration_days = {"5_days": 5, "30_days": 30}
+        if request.duration not in duration_days:
+            raise HTTPException(status_code=400, detail="Invalid duration")
+
+        product_name = (
+            "5-Day Premium Access" if request.duration == "5_days" else "30-Day Premium Access"
+        )
+
+        # 开发模式：直接写入本地数据库
+        if _dev_mode:
+            from src.progress_db import create_local_subscription
+            result = create_local_subscription(
+                customer_email=request.email,
+                customer_name=request.name,
+                product_name=product_name,
+                duration_days=duration_days[request.duration],
+            )
+            return {
+                "success": True,
+                "subscription_id": result["subscription_id"],
+                "customer_id": "dev_customer",
+                "product_name": product_name,
+                "description": f"Dev mode: {product_name}",
+                "duration": request.duration,
+            }
+
+        # 生产模式：通过 Stripe 创建
+        import stripe
         customer = stripe.Customer.create(
             email=request.email,
             name=request.name,
         )
-        
-        # Determine plan based on duration
+
         if request.duration == "5_days":
-            # Create 5-day subscription plan
             plan_id = "price_5day_subscription"
-            product_name = "5-Day Premium Access"
             description = "Access to all premium features for 5 days"
-        elif request.duration == "30_days":
-            # Create 30-day subscription plan
-            plan_id = "price_30day_subscription"
-            product_name = "30-Day Premium Access"
-            description = "Access to all premium features for 30 days"
         else:
-            raise HTTPException(status_code=400, detail="Invalid duration")
-        
-        # Create subscription
+            plan_id = "price_30day_subscription"
+            description = "Access to all premium features for 30 days"
+
         subscription = stripe.Subscription.create(
             customer=customer.id,
             items=[{"price": plan_id}],
             payment_behavior="default_incomplete",
             expand=["latest_invoice.payment_intent"]
         )
-        
+
         return {
             "success": True,
             "subscription_id": subscription.id,
@@ -775,6 +804,8 @@ async def create_subscription(request: SubscriptionRequest):
             "description": description,
             "duration": request.duration
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error creating subscription: %s", exc)
         return JSONResponse(
@@ -875,7 +906,7 @@ async def admin_overview():
         "sessions": metrics["sessions"],
         "total_students": len(list_all_students(limit=10000)),
         "langfuse_enabled": _check_langfuse(),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -885,6 +916,24 @@ async def admin_list_users(limit: int = 100, offset: int = 0):
     from src.progress_db import list_all_students
     users = list_all_students(limit=limit, offset=offset)
     return {"success": True, "users": users}
+
+
+@app.post("/api/admin/users")
+async def admin_create_user(request: AdminUserCreateRequest):
+    """管理员创建新学生"""
+    from src.progress_db import create_student
+    if not request.name or not request.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    if not (1 <= request.year_group <= 6):
+        raise HTTPException(status_code=400, detail="Year group must be 1-6")
+    if not (5 <= request.age <= 11):
+        raise HTTPException(status_code=400, detail="Age must be 5-11")
+    student = create_student(
+        name=request.name.strip(),
+        year_group=request.year_group,
+        age=request.age,
+    )
+    return {"success": True, "student": student}
 
 
 @app.get("/api/admin/users/{student_id}")
@@ -921,6 +970,30 @@ async def admin_subscriptions():
     """获取订阅概览"""
     from src.admin import get_subscription_overview
     return get_subscription_overview()
+
+
+@app.post("/api/admin/subscriptions")
+async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
+    """管理员手动创建订阅"""
+    from src.admin import create_admin_subscription
+    if not request.email or not request.email.strip():
+        raise HTTPException(status_code=400, detail="Email is required")
+    if not request.name or not request.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    if request.duration not in ("5_days", "30_days"):
+        raise HTTPException(status_code=400, detail="Duration must be '5_days' or '30_days'")
+    try:
+        result = create_admin_subscription(
+            email=request.email.strip(),
+            name=request.name.strip(),
+            duration=request.duration,
+        )
+        return {"success": True, "subscription": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("[Admin] 创建订阅失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/admin/ai-metrics")

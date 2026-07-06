@@ -5,13 +5,13 @@
 检查各年级数学作业是否存在，缺失则生成 500 份作业并添加到 RAG 存储
 支持 Year 1-6 所有年级
 
-Curriculum alignment note (Year 5 & Year 6 only)
---------------------------------------------------
-Year 5 and Year 6 topics below have been checked against the statutory
-National Curriculum in England: Mathematics programmes of study (DfE,
-2013, updated 2021) - https://www.gov.uk/government/publications/national-
-curriculum-in-england-mathematics-programmes-of-study - and updated to
-fix two misalignments:
+Curriculum alignment note (Years 4, 5 & 6)
+--------------------------------------------
+Year 4, Year 5 and Year 6 topics below have been checked against the
+statutory National Curriculum in England: Mathematics programmes of study
+(DfE, 2013, updated 2021) - https://www.gov.uk/government/publications/
+national-curriculum-in-england-mathematics-programmes-of-study - and
+updated to fix several misalignments:
 
 1. "Ratio and Proportion" and "Algebra Basics" are NOT Year 5 curriculum
    content - both strands are statutory ONLY from Year 6 onwards. They
@@ -22,15 +22,32 @@ fix two misalignments:
    1,000, and reflection & translation.
 2. Probability, scatter graphs/correlation, and box plots are NOT part of
    the KS1/KS2 maths curriculum at all (they first appear at KS3/GCSE).
-   These have been removed from the Year 5 and Year 6 Statistics topics
-   and replaced with the genuine DfE content for each year: line graphs
-   and tables (Year 5), and pie charts and mean (Year 6).
+   These have been removed from the Year 4, Year 5 and Year 6 Statistics
+   topics and replaced with the genuine DfE content for each year: bar
+   charts and time graphs (Year 4), line graphs and tables (Year 5), and
+   pie charts and mean (Year 6). Mean/median/mode/range are not named DfE
+   content at Year 4 or Year 5 either - mean is first introduced
+   explicitly in Year 6.
+3. Position & Direction (coordinates in the first quadrant) is a Year 4
+   requirement that was previously missing entirely - added as its own
+   topic.
+4. Year 4's Place Value now includes Roman numerals to 100 (I-C) and
+   counting backwards through zero into negative numbers, both statutory
+   Year 4 content that was previously absent.
+5. Pre-existing bug (not related to curriculum alignment, found during
+   testing): Year 6's "SATs Preparation" and "Complex Problem Solving"
+   topics were listed above but had no matching generator logic in the
+   original file, so they silently fell back to placeholder text
+   ("Year 6 Maths practice question 1... answer 1..."). Both now generate
+   real content - a mixed arithmetic/reasoning set (SATs Preparation) and
+   multi-step cross-strand word problems (Complex Problem Solving).
 
-Years 1-4 are unchanged from the previous version of this file.
+Years 1-3 are unchanged from the previous version of this file.
 """
 import sys
 import os
 import random
+import json
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -38,6 +55,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.homework_rag import get_homework_rag_store
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+HOMEWORK_COUNT={1:960,2:1120,3:1500,4:1980,5:2400,6:2640}
+
 # 各年级数学主题（英国小学课程）
 MATH_TOPICS_BY_YEAR = {
     1: [
@@ -73,16 +93,18 @@ MATH_TOPICS_BY_YEAR = {
         "Problem Solving",
     ],
     4: [
-        "Multiplication and Division",
-        "Fractions and Decimals",
-        "Measurement and Conversion",
-        "Geometry and Angles",
-        "Time and Duration",
-        "Money and Budgeting",
-        "Place Value and Rounding",
-        "Addition and Subtraction (4-digit)",
-        "Area and Perimeter",
-        "Data and Statistics",
+        "Multiplication and Division",  # Multiplication & division
+        "Fractions and Decimals",  # Fractions incl. decimals
+        "Measurement and Conversion",  # Measurement
+        "Properties of Shapes and Angles",  # Geometry: properties of shapes (was "Geometry and Angles")
+        "Position and Direction (Coordinates)",  # Geometry: position & direction (NEW - was missing for Y4)
+        "Time and Duration",  # Measurement: time
+        "Money and Budgeting",  # Measurement: money
+        "Place Value and Rounding",  # Number & place value (incl. Roman numerals to 100, negative numbers)
+        "Addition and Subtraction (4-digit)",  # Addition & subtraction
+        "Area and Perimeter",  # Measurement
+        "Statistics (Bar Charts and Time Graphs)",
+        # Statistics (was "Data and Statistics" - mean/median/mode/range removed, not Y4 content)
     ],
     5: [
         "Large Numbers and Place Value",  # Number & place value (incl. Roman numerals to 1,000)
@@ -714,27 +736,60 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
                    f"{m_compare} km" if m_compare * 1000 > m_compare2 else f"{m_compare2} m",
                    str(jug_l * 1000 + jug_ml), f"{ml_val // 1000} L" if ml_val % 1000 == 0 else f"{ml_val / 1000} L",
                    str(bag_kg * 1000 + bag_g), "depends on values"]
-    elif topic == "Geometry and Angles":
+    elif topic == "Properties of Shapes and Angles":
+        # DfE Year 4: compare and classify geometric shapes, including
+        # quadrilaterals and triangles, based on their properties and
+        # sizes; identify acute and obtuse angles and compare/order angles
+        # up to two right angles by size; identify lines of symmetry in 2D
+        # shapes presented in different orientations.
         shape = "hexagon" if random.choice([True, False]) else "pentagon"
         angle = random.choice([45, 60, 90, 120, 135])
         sym_shape = "square" if random.choice([True, False]) else "equilateral triangle"
+        quad = random.choice(["rectangle", "rhombus", "trapezium", "parallelogram"])
+        tri = random.choice(["scalene", "isosceles", "equilateral"])
         questions = [
             "1. What is a right angle in degrees?",
             "2. How many degrees in a straight line?",
-            "3. How many degrees in a full turn?",
-            f"4. How many sides does a {shape} have?",
-            "5. Name a shape with 8 sides.",
-            f"6. Is {angle} degrees acute, obtuse, or right?",
-            "7. Draw an acute angle.",
-            "8. How many pairs of parallel sides in a rectangle?",
-            "9. Name a shape with rotational symmetry.",
-            f"10. How many lines of symmetry in a {sym_shape}?",
+            f"3. How many sides does a {shape} have?",
+            "4. Name a shape with 8 sides.",
+            f"5. Is {angle} degrees acute, obtuse, or right?",
+            f"6. How many lines of symmetry in a {sym_shape}?",
+            "7. How many pairs of parallel sides in a rectangle?",
+            f"8. A {quad} is a type of quadrilateral. How many sides does any quadrilateral have?",
+            f"9. A {tri} triangle - does it have any equal sides, and if so how many?",
+            "10. How many lines of symmetry in a rectangle (not a square)?",
         ]
         shape_sides = 6 if shape == "hexagon" else 5
         angle_type = "right" if angle == 90 else "acute" if angle < 90 else "obtuse"
         sym_lines = 4 if sym_shape == "square" else 3
-        answers = ["90", "180", "360", str(shape_sides), "octagon", angle_type, "drawing (< 90 degrees)", "2",
-                   "square (or rectangle, equilateral triangle, etc.)", str(sym_lines)]
+        tri_equal_sides = {"scalene": "no equal sides", "isosceles": "2 equal sides", "equilateral": "3 equal sides"}[
+            tri]
+        answers = ["90", "180", str(shape_sides), "octagon", angle_type, str(sym_lines), "2", "4", tri_equal_sides, "2"]
+    elif topic == "Position and Direction (Coordinates)":
+        # DfE Year 4: describe positions on a 2D coordinate grid as
+        # coordinates in the first quadrant; describe movements between
+        # positions as translations; plot points and draw sides to
+        # complete a given polygon.
+        x1, y1 = random.randint(1, 8), random.randint(1, 8)
+        move_right = random.randint(1, 4)
+        move_up = random.randint(1, 4)
+        x2, y2 = random.randint(1, 6), random.randint(1, 6)
+        x3, y3 = random.randint(1, 6), random.randint(1, 6)
+        questions = [
+            f"1. Plot the point ({x1}, {y1}) on a coordinate grid.",
+            f"2. What are the coordinates of a point {move_right} units right and {move_up} units up from ({x1}, {y1})?",
+            "3. In coordinates (x, y), which number tells you how far along (horizontal)?",
+            "4. In coordinates (x, y), which number tells you how far up (vertical)?",
+            f"5. A shape is translated 3 right and 2 up from ({x2}, {y2}). What are the new coordinates?",
+            "6. Does translating a shape change its size or shape?",
+            "7. Three corners of a square are at (1,1), (1,4) and (4,4). What is the fourth corner?",
+            "8. What are the coordinates of the point where the x-axis and y-axis cross?",
+            f"9. Which point is further right: ({x2}, {y2}) or ({x3}, {y3})?",
+            "10. If you move a point left and down, do both coordinates increase or decrease?",
+        ]
+        answers = [f"plotted at ({x1}, {y1})", f"({x1 + move_right}, {y1 + move_up})", "the x (first) number",
+                   "the y (second) number", f"({x2 + 3}, {y2 + 2})", "no - only its position changes", "(4, 1)",
+                   "(0, 0)", f"({x2}, {y2})" if x2 > x3 else f"({x3}, {y3})", "both decrease"]
     elif topic == "Time and Duration":
         start_h = random.randint(1, 11)
         start_m = random.choice(['00', '15', '30', '45'])
@@ -821,8 +876,12 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
                    f"£{save_amt * save_weeks}", f"£{item_orig * 90 // 100}.{item_orig * 90 % 100:02d}",
                    f"£{budget - cost1 - cost2 - cost3}"]
     elif topic == "Place Value and Rounding":
-        digit = random.randint(1, 9)
+        # DfE Year 4: round any number to the nearest 10, 100 or 1000;
+        # count backwards through zero to include negative numbers; read
+        # Roman numerals to 100 (I to C).
         num = random.randint(1000, 9999)
+        num_str = str(num)
+        digit = int(random.choice(num_str))
         num2 = random.randint(1000, 9999)
         num3 = random.randint(1000, 9999)
         num4 = random.randint(1000, 5000)
@@ -830,10 +889,10 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
         num5 = random.randint(3000, 9000)
         sub_val = random.randint(100, 1000)
         partition = random.randint(1000, 9999)
-        o1 = random.randint(1000, 5000)
-        o2 = random.randint(1000, 5000)
-        o3 = random.randint(1000, 5000)
-        plus1000 = random.randint(1000, 8000)
+        start_temp = random.randint(2, 6)
+        drop = random.randint(4, 9)
+        roman_val = random.choice([40, 50, 60, 90, 100])
+        roman_map = {40: "XL", 50: "L", 60: "LX", 90: "XC", 100: "C"}
         questions = [
             f"1. Value of digit {digit} in {num}?",
             f"2. Round {num2} to nearest 100.",
@@ -842,18 +901,16 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
             f"5. What is {add_val} more than {num4}?",
             f"6. What is {sub_val} less than {num5}?",
             f"7. Partition {partition} into thousands, hundreds, tens, ones.",
-            f"8. Order: {o1}, {o2}, {o3}",
-            "9. Largest 4-digit number?",
-            f"10. 1000 more than {plus1000}?",
+            f"8. The temperature is {start_temp}°C and drops by {drop}°C. What is the new temperature?",
+            "9. Count backwards from 3 to -3. What is 2 less than -1?",
+            f"10. What number does the Roman numeral {roman_map[roman_val]} represent?",
         ]
-        num_str = str(num)
-        digit_pos = num_str.index(str(digit)) if str(digit) in num_str else 3
+        digit_pos = num_str.index(str(digit))
         place_val = digit * (10 ** (3 - digit_pos))
         answers = [str(place_val), str(round(num2, -2)), str(round(num3, -3)), str(num), str(num4 + add_val),
                    str(num5 - sub_val),
                    f"{partition // 1000} thousands, {(partition // 100) % 10} hundreds, {(partition // 10) % 10} tens, {partition % 10} ones",
-                   f"{sorted([o1, o2, o3])[0]}, {sorted([o1, o2, o3])[1]}, {sorted([o1, o2, o3])[2]}", "9999",
-                   str(plus1000 + 1000)]
+                   f"{start_temp - drop}°C", "-3", str(roman_val)]
     elif topic == "Addition and Subtraction (4-digit)":
         questions = []
         answers = []
@@ -896,34 +953,43 @@ def _generate_year4_homework(topic: str, index: int) -> tuple:
         answers = [str(l1 * w1), str(2 * (l2 + w2)), str(side1 * side1), str(4 * side2),
                    str(area_given // length_given), str(perimeter_given // 4), "drawing (e.g., 3x4)", "5 cm",
                    str(room_l * room_w), str((garden_perim - 2 * garden_l) // 2)]
-    elif topic == "Data and Statistics":
-        nums1 = [random.randint(1, 10) for _ in range(4)]
-        nums2 = [random.randint(1, 10) for _ in range(5)]
-        mode_nums = [random.choice([1, 2, 3]) for _ in range(5)]
-        range_nums = [random.randint(1, 10) for _ in range(4)]
+    elif topic == "Statistics (Bar Charts and Time Graphs)":
+        # DfE Year 4: interpret and present discrete and continuous data
+        # using appropriate graphical methods, including bar charts and
+        # time graphs; solve comparison, sum and difference problems using
+        # information presented in bar charts, pictograms, tables and
+        # other graphs. (Mean/median/mode/range are not Year 4 curriculum
+        # content - mean first appears explicitly in Year 6.)
         survey1 = random.randint(10, 30)
         survey2 = random.randint(5, 20)
-        like_maths = random.randint(10, 30)
-        like_english = random.randint(5, 25)
         swim = random.randint(8, 28)
-        avg_nums = [random.randint(1, 10) for _ in range(3)]
+        temps = [random.randint(5, 20) for _ in range(4)]
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday"]
+        temp_lines = "; ".join(f"{d}={t}°C" for d, t in zip(days, temps))
+        max_day = days[temps.index(max(temps))]
+        rise = temps[-1] - temps[0]
+        bar_scale = random.choice([2, 5, 10])
+        bar_gridlines = random.randint(3, 6)
+        _ordinal_suffix = {1: "st", 2: "nd", 3: "rd"}.get(bar_gridlines if bar_gridlines < 10 else bar_gridlines % 10,
+                                                          "th")
         questions = [
-            f"1. Find the mean of: {', '.join(map(str, nums1))}",
-            f"2. Find the median of: {', '.join(map(str, nums2))}",
-            f"3. What is the mode of: {', '.join(map(str, mode_nums))}?",
-            f"4. Range of: {', '.join(map(str, range_nums))}?",
-            "5. Draw a bar chart for: Apples=5, Bananas=3, Oranges=7.",
-            "6. Draw a pictograph for: Mon=10, Tue=15, Wed=8.",
-            f"7. Survey: {survey1} like football, {survey2} like tennis. Total surveyed?",
-            f"8. Which is most popular: Football ({survey1}), Tennis ({survey2}), Swimming ({swim})?",
-            f"9. Interpret: 20 students, {like_maths} like maths, {like_english} like English. Fraction like maths?",
-            f"10. Average of {', '.join(map(str, avg_nums))}?",
+            "1. Draw a bar chart for: Apples=5, Bananas=3, Oranges=7.",
+            f"2. A time graph shows temperature over 4 days: {temp_lines}. Which day was warmest?",
+            f"3. Using the same time graph ({temp_lines}), did the temperature rise or fall from Monday to Thursday, and by how much?",
+            f"4. Survey: {survey1} like football, {survey2} like tennis. How many more like football than tennis?",
+            f"5. Which is most popular: Football ({survey1}), Tennis ({survey2}), Swimming ({swim})?",
+            f"6. Survey: {survey1} like football, {survey2} like tennis, {swim} like swimming. How many children were surveyed in total?",
+            f"7. A bar chart's scale goes up in {bar_scale}s. If a bar reaches the {bar_gridlines}{_ordinal_suffix} gridline, what value does it show?",
+            "8. What is the difference between a bar chart and a time graph?",
+            "9. Why does a time graph usually use a line instead of separate bars?",
+            "10. If a bar chart compares 5 fruits, what's the quickest way to find the least popular fruit?",
         ]
-        answers = [f"{sum(nums1) / len(nums1):.1f}", str(sorted(nums2)[2]),
-                   str(max(set(mode_nums), key=mode_nums.count)), str(max(range_nums) - min(range_nums)),
-                   "drawing (bar chart)", "drawing (pictograph)", str(survey1 + survey2),
+        answers = ["drawing (bar chart)", max_day, ("rose" if rise > 0 else "fell") + f" by {abs(rise)}°C",
+                   str(survey1 - survey2),
                    max([(survey1, "Football"), (survey2, "Tennis"), (swim, "Swimming")], key=lambda x: x[0])[1],
-                   f"{like_maths}/20", f"{sum(avg_nums) / len(avg_nums):.1f}"]
+                   str(survey1 + survey2 + swim), str(bar_scale * bar_gridlines),
+                   "a time graph shows change over a continuous period; a bar chart compares separate categories",
+                   "to show how a value changes continuously over time", "find the shortest bar"]
     else:
         questions = [f"{i + 1}. Year 4 Maths practice question {i + 1}" for i in range(10)]
         answers = [f"answer {i + 1}" for i in range(10)]
@@ -1617,6 +1683,96 @@ def _generate_year6_homework(topic: str, index: int) -> tuple:
                    f"{min([neg1, neg2, pos1, pos2])}, {sorted([neg1, neg2, pos1, pos2])[1]}, {sorted([neg1, neg2, pos1, pos2])[2]}, {max([neg1, neg2, pos1, pos2])}",
                    str(temp1 + temp_rise), str(temp2 - temp_drop), f"£{bank_deposit - bank_neg}",
                    str(neg_mult1 * neg_mult2), "True" if comp1 < comp2 else "False"]
+    elif topic == "SATs Preparation":
+        # Not a DfE strand - the KS2 SATs arithmetic and reasoning papers
+        # draw on all Year 6 strands at once, so this is a deliberate mix
+        # of quick-fire arithmetic (as in the real SATs Arithmetic paper)
+        # and short reasoning items (as in the Reasoning papers), rather
+        # than one strand in depth.
+        a1, b1 = random.randint(100, 999), random.randint(100, 999)
+        a2, b2 = random.randint(10, 50), random.randint(2, 9)
+        frac_denom = random.choice([4, 5, 8, 10])
+        frac_num = random.randint(1, frac_denom - 1)
+        frac_whole = frac_denom * random.randint(2, 6)
+        pct = random.choice([10, 20, 25, 50])
+        pct_of = random.choice([40, 60, 80, 120])
+        square_n = random.randint(2, 10)
+        seq_start, seq_step = random.randint(2, 10), random.randint(2, 6)
+        perim_l, perim_w = random.randint(4, 12), random.randint(3, 9)
+        div_b, div_result = random.randint(6, 12), random.randint(20, 80)
+        questions = [
+            f"1. {a1} + {b1} = ?",
+            f"2. {a2} × {b2} = ?",
+            f"3. What is {frac_num}/{frac_denom} of {frac_whole}?",
+            f"4. What is {pct}% of {pct_of}?",
+            f"5. What is {square_n} squared?",
+            f"6. Find the next number in the sequence: {seq_start}, {seq_start + seq_step}, {seq_start + 2 * seq_step}, __",
+            f"7. A rectangle has length {perim_l} cm and width {perim_w} cm. What is its perimeter?",
+            f"8. {div_b * div_result} ÷ {div_b} = ?",
+            "9. Write 0.6 as a fraction in its simplest form.",
+            "10. What is the order of operations for 3 + 4 × 2? What is the answer?",
+        ]
+        answers = [str(a1 + b1), str(a2 * b2), str(frac_whole * frac_num // frac_denom), str(pct * pct_of // 100),
+                   str(square_n ** 2), str(seq_start + 3 * seq_step), str(2 * (perim_l + perim_w)), str(div_result),
+                   "3/5", "multiply before add - 3 + 8 = 11"]
+    elif topic == "Complex Problem Solving":
+        # Cross-strand multi-step word problems, combining two or more
+        # operations in a single question - the style used throughout KS2
+        # SATs Reasoning papers.
+        ticket_price = random.choice([8, 12, 15])
+        num_people = random.randint(3, 6)
+        discount_pct = random.choice([10, 20])
+        recipe_g = random.choice([150, 200, 250])
+        recipe_serves = random.choice([4, 6])
+        want_serves = random.choice([10, 12, 18])
+        speed = random.randint(40, 70)
+        travel_h = random.choice([1.5, 2, 2.5])
+        fuel_cost_per_mile = random.choice([10, 15, 20])
+        tank_start = random.randint(200, 300)
+        tank_used = random.randint(10, 40)
+        shelf_items = random.randint(6, 10)
+        shelf_count = random.randint(3, 6)
+        pocket_money = random.randint(5, 15)
+        weeks_saving = random.randint(4, 10)
+        spent_amount = random.randint(5, 20)
+        questions = [
+            f"1. {num_people} people buy cinema tickets at £{ticket_price} each, with a {discount_pct}% group discount on the total. How much do they pay altogether?",
+            f"2. A recipe for {recipe_serves} people uses {recipe_g}g of rice. How much rice is needed for {want_serves} people?",
+            f"3. A car travels at {speed} mph for {travel_h} hours, then costs {fuel_cost_per_mile}p per mile in fuel. What is the total fuel cost, in pounds?",
+            f"4. A fuel tank starts with {tank_start} litres. {tank_used} litres are used each day for 3 days. How much fuel is left?",
+            f"5. A shop has {shelf_count} shelves with {shelf_items} items on each. If 5 items are sold, how many are left in total?",
+            f"6. Saving £{pocket_money} a week for {weeks_saving} weeks, then spending £{spent_amount}, how much money is left?",
+            "7. A school has 240 pupils. 3/8 walk to school, and the rest come by car or bus in equal numbers. How many come by car?",
+            "8. A book has 360 pages. Maya reads 1/4 on Monday and 1/3 of what remains on Tuesday. How many pages has she read in total?",
+            "9. Two numbers have a sum of 84 and a difference of 12. What are the two numbers?",
+            "10. A tank is 1/3 full. 30 litres are added, making it 2/3 full. What is the tank's total capacity?",
+        ]
+        ticket_total = ticket_price * num_people
+        ticket_after_discount = ticket_total * (100 - discount_pct) // 100
+        rice_needed = recipe_g * want_serves // recipe_serves
+        fuel_cost = round(speed * travel_h * fuel_cost_per_mile / 100, 2)
+        tank_left = tank_start - tank_used * 3
+        shelf_total = shelf_count * shelf_items - 5
+        saved_left = pocket_money * weeks_saving - spent_amount
+        car_pupils = (240 - 240 * 3 // 8) // 2
+        monday_pages = 360 // 4
+        tuesday_pages = (360 - monday_pages) // 3
+        total_read = monday_pages + tuesday_pages
+        num_a = (84 + 12) // 2
+        num_b = 84 - num_a
+        tank_capacity = 30 * 3
+        answers = [
+            f"£{ticket_after_discount}",
+            f"{rice_needed}g",
+            f"£{fuel_cost}",
+            f"{tank_left} litres",
+            str(shelf_total),
+            f"£{saved_left}",
+            str(car_pupils),
+            str(total_read),
+            f"{num_a} and {num_b}",
+            f"{tank_capacity} litres",
+        ]
     else:
         questions = [f"{i + 1}. Year 6 Maths practice question {i + 1}" for i in range(10)]
         answers = [f"answer {i + 1}" for i in range(10)]
@@ -1683,7 +1839,7 @@ def generate_year_homework(year_group: int, count: int = 500) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
-            "correct_answers": correct_answers
+            "correct_answers": json.dumps(correct_answers) # Convert list to JSON string for ChromaDB
         }
         doc_id = f"math_y{year_group}_{i:03d}"
         batch_data.append({
@@ -1727,7 +1883,8 @@ def main():
 
     for year in years_to_generate:
         print(f"\n开始生成 Year {year} Math作业...")
-        batch_data = generate_year_homework(year, count=500)
+        count=HOMEWORK_COUNT.get(year, 1000)
+        batch_data = generate_year_homework(year, count=count)
 
         if batch_data:
             store.add_batch_homework(batch_data)

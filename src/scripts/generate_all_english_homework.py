@@ -968,7 +968,7 @@ def generate_year_homework(year_group: int, count: int = 500) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
-            "correct_answers": correct_answers
+            "correct_answers": json.dumps(correct_answers)  # Convert list to JSON string for ChromaDB
         }
 
         doc_id = f"english_y{year_group}_{i:03d}"

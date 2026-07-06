@@ -8,6 +8,7 @@
 import sys
 import os
 import random
+import json
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -1086,7 +1087,7 @@ def generate_year_homework(year_group: int, count: int = 300) -> list:
             "key_stage": config["key_stage"],
             "topic": topic,
             "student_id": None,
-            "correct_answers": correct_answers
+            "correct_answers": json.dumps(correct_answers)  # Convert list to JSON string for ChromaDB
         }
 
         doc_id = f"spanish_y{year_group}_{i:03d}"

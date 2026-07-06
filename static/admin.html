@@ -130,7 +130,10 @@
             <div class="table-container">
                 <div class="table-header">
                     <h3>Students</h3>
-                    <input class="search-box" type="text" placeholder="Search students..." id="userSearch" oninput="filterUsers()">
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input class="search-box" type="text" placeholder="Search students..." id="userSearch" oninput="filterUsers()">
+                        <button class="btn btn-primary" onclick="openAddUserModal()">+ Add User</button>
+                    </div>
                 </div>
                 <table>
                     <thead>
@@ -158,6 +161,7 @@
             <div class="table-container">
                 <div class="table-header">
                     <h3>Active Subscriptions</h3>
+                    <button class="btn btn-primary" onclick="openAddSubModal()">+ Add Subscription</button>
                 </div>
                 <table>
                     <thead>
@@ -166,6 +170,7 @@
                             <th>Customer</th>
                             <th>Status</th>
                             <th>Created</th>
+                            <th>Expires</th>
                         </tr>
                     </thead>
                     <tbody id="subsTable"></tbody>
@@ -240,6 +245,62 @@
             <div class="actions">
                 <button class="btn" onclick="closeModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveUser()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal-overlay" id="addUserModal">
+        <div class="modal">
+            <h3>Add New Student</h3>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="addUserName" placeholder="Enter student name">
+            </div>
+            <div class="form-group">
+                <label>Year Group</label>
+                <select id="addUserYear">
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3" selected>Year 3</option>
+                    <option value="4">Year 4</option>
+                    <option value="5">Year 5</option>
+                    <option value="6">Year 6</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="addUserAge" min="5" max="11" value="7">
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="closeAddUserModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createUser()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Subscription Modal -->
+    <div class="modal-overlay" id="addSubModal">
+        <div class="modal">
+            <h3>Add Subscription</h3>
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input type="text" id="addSubName" placeholder="Enter customer name">
+            </div>
+            <div class="form-group">
+                <label>Customer Email</label>
+                <input type="email" id="addSubEmail" placeholder="Enter customer email">
+            </div>
+            <div class="form-group">
+                <label>Plan</label>
+                <select id="addSubDuration">
+                    <option value="5_days">5-Day Premium Access</option>
+                    <option value="30_days">30-Day Premium Access</option>
+                </select>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="closeAddSubModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createSubscription()">Create</button>
             </div>
         </div>
     </div>
@@ -374,6 +435,36 @@
             } catch(e) { alert('Error: ' + e.message); }
         }
 
+        // Add User
+        function openAddUserModal() {
+            document.getElementById('addUserName').value = '';
+            document.getElementById('addUserYear').value = '3';
+            document.getElementById('addUserAge').value = '7';
+            document.getElementById('addUserModal').classList.add('show');
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').classList.remove('show');
+        }
+
+        async function createUser() {
+            const name = document.getElementById('addUserName').value.trim();
+            const yearGroup = parseInt(document.getElementById('addUserYear').value);
+            const age = parseInt(document.getElementById('addUserAge').value);
+            if (!name) { alert('Please enter a name'); return; }
+            try {
+                const resp = await fetch(API + '/users', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: name, year_group: yearGroup, age: age })
+                });
+                const data = await resp.json();
+                if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }
+                closeAddUserModal();
+                loadUsers();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
         // Subscriptions
         async function loadSubscriptions() {
             try {
@@ -383,17 +474,51 @@
                     <div class="stat-card"><div class="label">Est. Revenue</div><div class="value">&pound;${data.estimated_revenue_gbp || 0}</div><div class="sub">GBP</div></div>
                 `;
                 const subs = data.subscriptions || [];
-                document.getElementById('subsTable').innerHTML = subs.length ? subs.map(s => `
+                document.getElementById('subsTable').innerHTML = subs.length ? subs.map(s => {
+                    const expires = s.trial_end || s.current_period_end;
+                    return `
                     <tr>
                         <td><code>${s.id}</code></td>
                         <td>${s.customer}</td>
                         <td><span class="badge badge-green">${s.status}</span></td>
                         <td>${new Date(s.created).toLocaleDateString()}</td>
+                        <td>${expires ? new Date(expires).toLocaleDateString() : '-'}</td>
                     </tr>
-                `).join('') : '<tr><td colspan="4" style="text-align:center;color:#888">No subscriptions found</td></tr>';
+                `;}).join('') : '<tr><td colspan="5" style="text-align:center;color:#888">No subscriptions found</td></tr>';
             } catch(e) {
                 document.getElementById('subStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
             }
+        }
+
+        // Add Subscription
+        function openAddSubModal() {
+            document.getElementById('addSubName').value = '';
+            document.getElementById('addSubEmail').value = '';
+            document.getElementById('addSubDuration').value = '5_days';
+            document.getElementById('addSubModal').classList.add('show');
+        }
+
+        function closeAddSubModal() {
+            document.getElementById('addSubModal').classList.remove('show');
+        }
+
+        async function createSubscription() {
+            const name = document.getElementById('addSubName').value.trim();
+            const email = document.getElementById('addSubEmail').value.trim();
+            const duration = document.getElementById('addSubDuration').value;
+            if (!name) { alert('Please enter a customer name'); return; }
+            if (!email) { alert('Please enter a customer email'); return; }
+            try {
+                const resp = await fetch(API + '/subscriptions', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: name, email: email, duration: duration })
+                });
+                const data = await resp.json();
+                if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }
+                closeAddSubModal();
+                loadSubscriptions();
+            } catch(e) { alert('Error: ' + e.message); }
         }
 
         // AI Monitor

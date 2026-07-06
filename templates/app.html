@@ -751,7 +751,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 <h2 style="margin-bottom: 25px;">Your Homework</h2>
                 <div id="homework-results"></div>
                 
-                <div style="margin-top: 30px; text-align: center;">
+                <div id="homework-buttons" style="margin-top: 30px; text-align: center;">
                     <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
                         Check Answers
                     </button>
@@ -786,6 +786,47 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         let currentPhotoData = null;
         let currentFileData = null;
         let extractedContent = '';
+        // 练习模式状态
+        let isPracticeMode = false;
+        let currentPracticeContent = '';
+        let currentPracticeSubject = 'Maths';
+
+        // 状态保存（用于在功能切换时保留答案和批改结果）
+        let savedHomeworkState = null;
+        let savedButtonsHTML = null;
+
+        function saveCurrentState() {
+            // 只保存一次，避免后续操作覆盖原始状态
+            if (savedHomeworkState) return;
+            savedHomeworkState = {
+                answers: {},
+                reviewHTML: document.getElementById('review-result').innerHTML,
+            };
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                savedHomeworkState.answers[input.dataset.subject] = input.value;
+            });
+            // 保存按钮区域 HTML
+            const btnArea = document.getElementById('homework-buttons');
+            if (btnArea) savedButtonsHTML = btnArea.innerHTML;
+        }
+
+        function restoreSavedState() {
+            if (!savedHomeworkState) return false;
+            // 恢复答案
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                if (savedHomeworkState.answers[input.dataset.subject] !== undefined) {
+                    input.value = savedHomeworkState.answers[input.dataset.subject];
+                }
+            });
+            // 恢复批改结果
+            document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML || '';
+            return true;
+        }
+
+        function clearSavedState() {
+            savedHomeworkState = null;
+            savedButtonsHTML = null;
+        }
         
         // Configure marked for better line breaks and open links in new tab
         const renderer = new marked.Renderer();
@@ -812,6 +853,36 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             const tabParam = urlParams.get('tab');
             if (tabParam) {
                 setTimeout(() => switchTab(tabParam), 100);
+            }
+
+            // 从 sessionStorage 恢复状态（Track Progress 返回时）
+            try {
+                const savedStr = sessionStorage.getItem('homeworkState');
+                if (savedStr) {
+                    sessionStorage.removeItem('homeworkState');
+                    const state = JSON.parse(savedStr);
+                    if (state.homework && state.homework.length > 0) {
+                        setTimeout(() => {
+                            currentHomework = state.homework;
+                            currentProfile = state.profile;
+                            currentSubject = state.subject || 'Maths';
+                            displayHomework(state.homework);
+                            // 恢复答案
+                            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                                if (state.answers && state.answers[input.dataset.subject] !== undefined) {
+                                    input.value = state.answers[input.dataset.subject];
+                                }
+                            });
+                            // 恢复批改结果
+                            if (state.reviewHTML) {
+                                document.getElementById('review-result').innerHTML = state.reviewHTML;
+                            }
+                        }, 300);
+                    }
+                }
+            } catch(e) {
+                console.error('Failed to restore state from sessionStorage:', e);
+                sessionStorage.removeItem('homeworkState');
             }
         });
         
@@ -1020,6 +1091,9 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         function clearResults() {
             document.getElementById('results').style.display = 'none';
             currentHomework = [];
+            isPracticeMode = false;
+            currentPracticeContent = '';
+            clearSavedState();
         }
 
         function generateQuickHomework() {
@@ -1031,6 +1105,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 return;
             }
             
+            clearSavedState();
             showLoading();
             
             const studentId = document.getElementById('quick-student-id').value.trim();
@@ -1074,6 +1149,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 return;
             }
 
+            clearSavedState();
             showLoading();
 
             fetch('/api/generate', {
@@ -1081,7 +1157,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     quick_select: true,
-                    subjects: subjects
+                    subjects: subjects,
+                    is_eleven_plus: true
                 })
             })
             .then(response => response.json())
@@ -1110,6 +1187,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 <!--                return;-->
 <!--            }-->
 <!--            -->
+            clearSavedState();
             showLoading();
             
             fetch('/api/generate', {
@@ -1117,7 +1195,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     profile: { description: profileText },
-                    subjects: subjects
+                    subjects: subjects,
+                    is_eleven_plus: true
                 })
             })
             .then(response => response.json())
@@ -1249,6 +1328,9 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         }
 
         function ExplainDeep() {
+            // 保存当前状态（答案 + 批改结果），以便返回时恢复
+            saveCurrentState();
+
             // 收集所有答案
             const answerInputs = document.querySelectorAll('.answer-input-inline');
             let allAnswers = [];
@@ -1305,15 +1387,26 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 
         function displayExplainDeep(explanation) {
             const container = document.getElementById('review-result');
+            const hasSavedReview = savedHomeworkState && savedHomeworkState.reviewHTML && savedHomeworkState.reviewHTML.trim();
             container.innerHTML = `
-                <h3 style="margin-top: 30px; margin-bottom: 20px;">Deep Explanation</h3>
+                ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
+                <h3 style="margin-top: 20px; margin-bottom: 20px;">Deep Explanation</h3>
                 <div class="review-output">${marked.parse(explanation)}</div>
             `;
 
             document.getElementById('results').style.display = 'block';
         }
 
+        function backToReview() {
+            if (savedHomeworkState && savedHomeworkState.reviewHTML) {
+                document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML;
+            }
+        }
+
         function ImprovePractice() {
+            // 保存当前状态（答案 + 批改结果），以便返回时恢复
+            saveCurrentState();
+
             // 收集所有答案
             const answerInputs = document.querySelectorAll('.answer-input-inline');
             let allAnswers = [];
@@ -1336,14 +1429,9 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             const homework = currentHomework.map(h => h.content).join('\n\n');
             const subject = currentHomework[0]?.subject || 'Maths';
 
-            // 获取已有的 review feedback（需要知道哪些题做错了）
+            // 获取已有的 review feedback（如果已经 check 过答案）
             const reviewEl = document.querySelector('#review-result .review-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
-
-            if (!reviewFeedback) {
-                alert('Please click "Check Answers" first so we know which questions you need to practise!');
-                return;
-            }
 
             showLoading();
 
@@ -1361,7 +1449,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    displayImprovePractice(data.practice);
+                    displayPracticeQuestions(data.practice, subject);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1373,21 +1461,130 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             .finally(() => hideLoading());
         }
 
-        function displayImprovePractice(practice) {
-            const container = document.getElementById('review-result');
+        function displayPracticeQuestions(practiceContent, subject) {
+            // 将练习内容显示在题目区域，学生可以在旁边输入答案
+            const container = document.getElementById('homework-results');
+
+            // 保存练习内容用于后续批改
+            currentPracticeContent = practiceContent;
+            currentPracticeSubject = subject;
+            isPracticeMode = true;
+
             container.innerHTML = `
-                <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice to Improve</h3>
-                <div class="review-output">${marked.parse(practice)}</div>
+                <div class="homework-block">
+                    <h3 class="subject-header" style="background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);">
+                        Practice - ${subject}
+                    </h3>
+                    <div class="homework-content">
+                        <div class="question-column" style="border-left-color: #f57c00;">
+                            ${marked.parse(practiceContent)}
+                        </div>
+                        <div class="answer-column">
+                            <h4 style="color: #f57c00;">Your Answers:</h4>
+                            <textarea class="answer-input-inline"
+                                      id="practice-answer-input"
+                                      style="border-color: #f57c00;"
+                                      placeholder="Work through the practice questions above and write your answers here..."></textarea>
+                        </div>
+                    </div>
+                </div>
             `;
 
+            // 更新按钮区域
+            const resultsCard = document.querySelector('#results .card');
+            const buttonArea = resultsCard.querySelector('div[style*="text-align: center"]');
+            if (buttonArea) {
+                buttonArea.innerHTML = `
+                    <button class="btn btn-primary" onclick="checkPracticeAnswers()" style="background: linear-gradient(135deg, #f57c00, #ff9800);">
+                        Check Answers
+                    </button>
+                    <button class="btn btn-secondary" onclick="exitPracticeMode()">
+                        Back to Homework
+                    </button>
+                `;
+            }
+
+            // 清空之前的批改结果
+            document.getElementById('review-result').innerHTML = '';
             document.getElementById('results').style.display = 'block';
+        }
+
+        function checkPracticeAnswers() {
+            const answerInput = document.getElementById('practice-answer-input');
+            const answers = answerInput ? answerInput.value.trim() : '';
+
+            if (!answers) {
+                alert('Please write your answers first!');
+                return;
+            }
+
+            showLoading();
+
+            fetch('/api/review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: currentPracticeContent,
+                    answers: answers,
+                    subject: currentPracticeSubject,
+                    profile: currentProfile
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const container = document.getElementById('review-result');
+                    container.innerHTML = `
+                        <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice Feedback</h3>
+                        <div class="review-output" style="border-left-color: #f57c00;">${marked.parse(data.review)}</div>
+                    `;
+                    document.getElementById('results').style.display = 'block';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function exitPracticeMode() {
+            isPracticeMode = false;
+            currentPracticeContent = '';
+            // 重新显示原始作业
+            displayHomework(currentHomework);
+            // 恢复之前保存的答案和批改结果
+            restoreSavedState();
+            // 恢复原始按钮区域
+            if (savedButtonsHTML) {
+                const btnArea = document.getElementById('homework-buttons');
+                if (btnArea) btnArea.innerHTML = savedButtonsHTML;
+            }
+            clearSavedState();
         }
 
         // ---- 学习进度追踪 ----
 
         function TrackProgress() {
-            const studentId = currentProfile?.student_id || 'anonymous';
-            window.location.href = `/progress?student_id=${encodeURIComponent(studentId)}`;
+            // 保存当前状态到 sessionStorage，以便从定价页返回时恢复
+            const state = {
+                homework: currentHomework,
+                profile: currentProfile,
+                subject: currentSubject,
+                answers: {},
+                reviewHTML: document.getElementById('review-result').innerHTML,
+            };
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                state.answers[input.dataset.subject] = input.value;
+            });
+            try {
+                sessionStorage.setItem('homeworkState', JSON.stringify(state));
+            } catch(e) {
+                console.error('Failed to save state to sessionStorage:', e);
+            }
+            window.location.href = '/pricing';
         }
     </script>
 </body>

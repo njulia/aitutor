@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Homework RAG (Retrieval-Augmented Generation) System
+11+ RAG (Retrieval-Augmented Generation) System
 
 Stores generated homework with metadata in a vector database for future search and retrieval.
-Metadata includes: year_group, subject, homework_minutes, study_year_month, etc.
+使用与 homework_rag 相同的本地嵌入策略，零 API 费用。
 """
 import os
 import logging
@@ -13,16 +13,12 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 
 import chromadb
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
-# RAG 存储重试配置：API 负载高时自动重试
+# RAG 存储重试配置
 RAG_MAX_RETRIES = 3
 RAG_RETRY_DELAY = 2  # 秒
-
-# AGICTO API Key for embeddings
-QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 
 # RAG storage directory
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,12 +33,9 @@ class ElevenPlusRAGStore:
         # 初始化 ChromaDB 客户端
         self.client = chromadb.PersistentClient(path=self.persist_dir)
 
-        # 使用 AGICTO API 的嵌入函数
-        self.embedding_function = OpenAIEmbeddingFunction(
-            model_name="text-embedding-3-small",
-            api_key=QWEN_API_KEY,
-            api_base="https://api.agicto.cn/v1/",
-        )
+        # 复用 homework_rag 的嵌入函数创建逻辑
+        from src.homework_rag import _create_embedding_function
+        self.embedding_function = _create_embedding_function()
 
         # 作业集合
         self.collection = self.client.get_or_create_collection(
@@ -86,14 +79,20 @@ class ElevenPlusRAGStore:
         # 用毫秒时间戳生成唯一 ID
         doc_id = str(int(now.timestamp() * 1000))
 
+        # Import sanitize_metadata from homework_rag
+        from src.homework_rag import HomeworkRAGStore
+        
+        # Sanitize metadata to ensure JSON-serializable
+        sanitized_metadata = HomeworkRAGStore._sanitize_metadata(self, metadata)
+        
         # Ensure metadata has required fields
-        metadata.setdefault("created_at", now.isoformat())
+        sanitized_metadata.setdefault("created_at", now.isoformat())
 
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
                 self.collection.add(
                     documents=[homework_content],
-                    metadatas=[metadata],
+                    metadatas=[sanitized_metadata],
                     ids=[doc_id],
                 )
                 logger.info(f"[RAG] Added homework document: {doc_id}")
@@ -487,14 +486,14 @@ class ElevenPlusRAGStore:
     def search_homework_answers(
             self,
             doc_id: str,
-    ) -> Optional[str]:
+    ) -> Optional[list]:
         """通过 doc_id 直接获取正确答案
 
         Args:
             doc_id: 作业文档 ID
 
         Returns:
-            正确答案字符串，未找到则返回 None
+            正确答案列表，未找到则返回 None
         """
         if not doc_id:
             logger.warning("[RAG] doc_id 为空")
@@ -509,7 +508,13 @@ class ElevenPlusRAGStore:
             metadata = result["metadatas"][0]
             correct_answers = metadata.get("correct_answers")
             if correct_answers:
-                logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
+                # Parse JSON string back to list
+                try:
+                    import json
+                    correct_answers = json.loads(correct_answers)
+                    logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(f"[RAG] doc_id={doc_id} 的正确答案格式错误，返回原始字符串")
             return correct_answers
         except Exception as e:
             logger.error(f"[RAG] 获取正确答案失败: {e}")
