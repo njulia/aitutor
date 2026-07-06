@@ -13,7 +13,10 @@ import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-import chromadb
+try:
+    import chromadb
+except ImportError:
+    chromadb = None
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,15 @@ CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
 class ElevenPlusRAGStore:
     def __init__(self, persist_directory: str = None):
         self.persist_dir = persist_directory or CHROMA_DB_PATH
+
+        if chromadb is None:
+            logger.warning("[RAG] chromadb is not installed. ChromaDB capabilities will be disabled.")
+            self.client = None
+            self.embedding_function = None
+            self.collection = None
+
+            return
+
         os.makedirs(self.persist_dir, exist_ok=True)
 
         # 初始化 ChromaDB 客户端
@@ -48,6 +60,25 @@ class ElevenPlusRAGStore:
             embedding_function=self.embedding_function,
             metadata={"hnsw:space": "cosine"},
         )
+
+
+    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize metadata to comply with ChromaDB's strict type requirements.
+        ChromaDB only supports str, int, float, or bool values for metadata.
+        Any None, list, dict, or other unsupported types must be converted to strings or removed.
+        """
+        sanitized = {}
+        for k, v in metadata.items():
+            if v is None:
+                continue  # Drop None values to avoid ChromaDB conversion errors
+            if isinstance(v, (str, int, float, bool)):
+                sanitized[k] = v
+            elif isinstance(v, (list, dict)):
+                import json
+                sanitized[k] = json.dumps(v, ensure_ascii=False)
+            else:
+                sanitized[k] = str(v)
+        return sanitized
 
     def add_homework(
             self,
@@ -73,6 +104,10 @@ class ElevenPlusRAGStore:
         Returns:
             The document ID
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. add_homework bypassed.")
+            return str(int(datetime.now().timestamp() * 1000))
+
         now = datetime.now()
         # 用毫秒时间戳生成唯一 ID
         doc_id = str(int(now.timestamp() * 1000))
@@ -99,24 +134,6 @@ class ElevenPlusRAGStore:
                 else:
                     raise
 
-    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Sanitize metadata to comply with ChromaDB's strict type requirements.
-        ChromaDB only supports str, int, float, or bool values for metadata.
-        Any None, list, dict, or other unsupported types must be converted to strings or removed.
-        """
-        sanitized = {}
-        for k, v in metadata.items():
-            if v is None:
-                continue  # Drop None values to avoid ChromaDB conversion errors
-            if isinstance(v, (str, int, float, bool)):
-                sanitized[k] = v
-            elif isinstance(v, (list, dict)):
-                import json
-                sanitized[k] = json.dumps(v, ensure_ascii=False)
-            else:
-                sanitized[k] = str(v)
-        return sanitized
-
     def add_batch_homework(
             self,
             homework_list: List[Dict[str, Any]],
@@ -132,6 +149,11 @@ class ElevenPlusRAGStore:
         Returns:
             List of document IDs
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. add_batch_homework bypassed.")
+            return [item.get("doc_id") or str(int(datetime.now().timestamp() * 1000) + i) for i, item in
+                    enumerate(homework_list)]
+
         texts = []
         metadatas = []
         doc_ids = []
@@ -174,6 +196,10 @@ class ElevenPlusRAGStore:
         Returns:
             包含 'doc_id', 'content', 'metadata', 'score' 的字典列表
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. search bypassed.")
+            return []
+
         where_clause = self._build_where_clause(filters) if filters else None
 
         # 直接使用 collection 的 query 方法，嵌入由 embedding_function 自动处理
@@ -218,6 +244,10 @@ class ElevenPlusRAGStore:
         Returns:
             List of dicts with 'content' and 'metadata'
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. search_by_metadata bypassed.")
+            return []
+
         where_clause = self._build_where_clause(filters)
         results = self.collection.get(where=where_clause)
 
@@ -242,6 +272,10 @@ class ElevenPlusRAGStore:
         Returns:
             True if deleted, False otherwise
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. delete_homework bypassed.")
+            return False
+
         try:
             self.collection.delete(ids=[doc_id])
             logger.info(f"[RAG] Deleted homework document: {doc_id}")
@@ -256,6 +290,14 @@ class ElevenPlusRAGStore:
         Returns:
             Dictionary with collection stats
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. get_stats bypassed.")
+            return {
+                "total_documents": 0,
+                "by_subject": {},
+                "by_year_group": {},
+            }
+
         all_docs = self.collection.get()
         total_docs = len(all_docs["ids"]) if all_docs.get("ids") else 0
 
@@ -314,6 +356,10 @@ class ElevenPlusRAGStore:
         Returns:
             List of homework documents with metadata
         """
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. get_student_homework_history bypassed.")
+            return []
+
         filters = {"student_id": student_id}
         if subject:
             filters["subject"] = subject
@@ -357,6 +403,7 @@ class ElevenPlusRAGStore:
             topics.append(content)
         return topics
 
+
     def search_homework_answers(
             self,
             doc_id: str,
@@ -371,6 +418,10 @@ class ElevenPlusRAGStore:
         """
         if not doc_id:
             logger.warning("[RAG] doc_id 为空")
+            return None
+
+        if self.collection is None:
+            logger.warning("[RAG] ChromaDB disabled. search_homework_answers bypassed.")
             return None
 
         try:
@@ -499,6 +550,7 @@ def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
     """Get previous topics covered for a student in a subject"""
     store = get_elevenplus_rag_store()
     return store.get_student_previous_topics(student_id, subject)
+
 
 def search_homework_answers(doc_id: str) -> Optional[str]:
     """通过 doc_id 获取正确答案
