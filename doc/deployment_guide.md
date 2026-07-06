@@ -16,7 +16,8 @@ This setup uses Ollama for LLM and sentence-transformers for embeddings. Zero AP
 # Download from https://ollama.com
 
 # Pull required models
-ollama pull qwen2.5:7b       # Main LLM for homework generation/review
+ollama pull qwen2.5:7b        # Main LLM for homework generation/review
+ollama pull qwen3.6:35b       # AI coding (optional)
 ollama pull llava:7b          # Vision model for OCR (optional)
 ollama pull nomic-embed-text  # Embedding model (optional, fallback)
 ```
