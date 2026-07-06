@@ -633,54 +633,76 @@ async def api_improve_practice(request: ImprovePracticeRequest):
 
 @app.get("/api/progress/{student_id}")
 async def api_get_progress(student_id: str, subject: Optional[str] = None):
-    """获取学生的学习进度汇总数据"""
+    """获取学生的学习进度汇总数据（含每日目标、正确率、连续天数、鼓励反馈）"""
     try:
-        from src.progress_db import get_progress_summary, get_score_history, get_topic_progress
+        from src.progress_db import (
+            get_progress_summary,
+            get_score_history,
+            get_topic_progress,
+            get_daily_goal_stats,
+            get_streak_info,
+            get_accuracy_rate,
+            generate_progress_feedback,
+        )
 
         # 获取原始数据
         raw_summary = get_progress_summary(student_id)
         score_history = get_score_history(student_id, subject)
         topics = get_topic_progress(student_id, subject)
 
-        # 转换为前端期望的格式
-        # 前端期望: summary.overall.total_sessions, summary.overall.avg_accuracy
-        # 前端期望: summary.by_subject[{subject, avg_accuracy, total_sessions}]
-        # 前端期望: score_history[{subject, score, max_score, created_at}]
+        # 新增指标
+        daily_goal = get_daily_goal_stats(student_id)
+        streak = get_streak_info(student_id)
+        accuracy = get_accuracy_rate(student_id)
 
+        # 转换为前端期望的格式
         total_sessions = raw_summary.get("total_sessions", 0)
         avg_score = raw_summary.get("average_score")
+        avg_accuracy_pct = round(avg_score * 10, 1) if avg_score else 0
 
-        # 转换科目数据：subjects -> by_subject，添加 avg_accuracy 和 total_sessions
+        # 转换科目数据
         by_subject = []
         for subj in raw_summary.get("subjects", []):
             by_subject.append({
                 "subject": subj["subject"],
-                "avg_accuracy": round(subj["avg_score"] * 10, 1) if subj.get("avg_score") else 0,  # 转换为百分比
+                "avg_accuracy": round(subj["avg_score"] * 10, 1) if subj.get("avg_score") else 0,
                 "total_sessions": subj["count"],
             })
 
-        # 转换分数历史：添加 max_score（假设满分10分）
+        # 转换分数历史
         score_history_formatted = []
         for s in score_history:
             score_val = s.get("score", 0) or 0
             score_history_formatted.append({
                 "subject": s.get("subject", ""),
                 "score": score_val,
-                "max_score": 10,  # 满分10分
+                "max_score": 10,
                 "created_at": s.get("created_at", ""),
             })
+
+        # 生成鼓励性反馈
+        feedback = generate_progress_feedback(
+            total_sessions=total_sessions,
+            avg_accuracy=avg_accuracy_pct,
+            current_streak=streak["current_streak"],
+            daily_goal_rate=daily_goal["daily_goal_rate"],
+        )
 
         return {
             "success": True,
             "summary": {
                 "overall": {
                     "total_sessions": total_sessions,
-                    "avg_accuracy": round(avg_score * 10, 1) if avg_score else 0,  # 转换为百分比
+                    "avg_accuracy": avg_accuracy_pct,
                 },
                 "by_subject": by_subject,
             },
             "score_history": score_history_formatted,
             "topics": topics,
+            "daily_goal": daily_goal,
+            "streak": streak,
+            "accuracy_rate": accuracy,
+            "feedback": feedback,
         }
     except Exception as exc:
         logger.error("Error getting progress: %s", exc)
@@ -811,6 +833,52 @@ async def create_subscription(request: SubscriptionRequest):
         return JSONResponse(
             status_code=500, content={"success": False, "error": str(exc)}
         )
+
+
+@app.get("/api/check-subscription")
+async def check_subscription():
+    """检查是否有活跃的订阅
+
+    开发模式：检查本地数据库中的订阅。
+    生产模式：检查 Stripe 订阅。
+    """
+    try:
+        if _dev_mode:
+            from src.progress_db import list_local_subscriptions
+            from datetime import datetime
+            subscriptions = list_local_subscriptions()
+            now = datetime.utcnow()
+            for sub in subscriptions:
+                if sub.get("status") == "active":
+                    expires_at = sub.get("expires_at")
+                    if expires_at:
+                        try:
+                            exp_date = datetime.fromisoformat(expires_at.replace("Z", "+00:00").replace("+00:00", ""))
+                            if exp_date > now:
+                                return {
+                                    "has_subscription": True,
+                                    "subscription_id": sub.get("id"),
+                                    "product_name": sub.get("product_name"),
+                                    "expires_at": expires_at,
+                                }
+                        except Exception:
+                            pass
+            return {"has_subscription": False}
+
+        # 生产模式：检查 Stripe
+        import stripe
+        subscriptions = stripe.Subscription.list(limit=100, status="active")
+        if subscriptions.data:
+            sub = subscriptions.data[0]
+            return {
+                "has_subscription": True,
+                "subscription_id": sub.id,
+                "status": sub.status,
+            }
+        return {"has_subscription": False}
+    except Exception as exc:
+        logger.error("Error checking subscription: %s", exc)
+        return {"has_subscription": False, "error": str(exc)}
 
 
 @app.post("/api/upload-file")
@@ -1016,6 +1084,63 @@ async def admin_clear_cache():
     from src.admin import clear_all_caches
     cleared = clear_all_caches()
     return {"success": True, "cleared": cleared}
+
+
+# ---- AI 监控 API ----
+
+@app.get("/api/admin/ai-monitor/stats")
+async def admin_ai_monitor_stats(hours: int = 24):
+    """获取 AI 系统统计信息"""
+    from src.ai_monitor import get_ai_stats
+    return get_ai_stats(hours=hours)
+
+
+@app.get("/api/admin/ai-monitor/requests")
+async def admin_ai_monitor_requests(
+    limit: int = 100,
+    offset: int = 0,
+    provider: str = None,
+    model: str = None,
+    status: str = None,
+    student_id: str = None,
+    subject: str = None,
+    operation: str = None,
+):
+    """获取 LLM 请求记录（支持筛选）"""
+    from src.ai_monitor import get_requests_by_filter
+    return get_requests_by_filter(
+        provider=provider,
+        model=model,
+        status=status,
+        student_id=student_id,
+        subject=subject,
+        operation=operation,
+        limit=limit,
+    )
+
+
+@app.get("/api/admin/ai-monitor/request/{request_id}")
+async def admin_ai_monitor_request_detail(request_id: str):
+    """获取单个请求的详细信息"""
+    from src.ai_monitor import get_request_detail
+    detail = get_request_detail(request_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return detail
+
+
+@app.get("/api/admin/ai-monitor/models")
+async def admin_ai_monitor_models():
+    """获取模型对比数据"""
+    from src.ai_monitor import get_model_comparison
+    return get_model_comparison()
+
+
+@app.get("/api/admin/ai-monitor/conversations")
+async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50):
+    """获取对话历史"""
+    from src.ai_monitor import get_conversations
+    return get_conversations(student_id=student_id, limit=limit)
 
 
 static_path = os.path.join(project_root, "static")

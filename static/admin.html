@@ -180,15 +180,115 @@
 
         <!-- AI Monitor Panel -->
         <div class="panel" id="panel-ai-monitor">
-            <div class="stats-grid" id="aiStats">
-                <div class="loading"><div class="spinner"></div></div>
+            <!-- Sub-tabs for AI Monitor -->
+            <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #e0e0e0;padding-bottom:12px;">
+                <button class="btn btn-primary" onclick="switchAIMonitorTab('overview')" id="ai-tab-overview">Overview</button>
+                <button class="btn" onclick="switchAIMonitorTab('requests')" id="ai-tab-requests">Live Requests</button>
+                <button class="btn" onclick="switchAIMonitorTab('models')" id="ai-tab-models">Models</button>
+                <button class="btn" onclick="switchAIMonitorTab('conversations')" id="ai-tab-conversations">Conversations</button>
             </div>
-            <h3 style="margin-bottom: 16px; font-size: 16px;">Cache Performance</h3>
-            <div class="cache-grid" id="cacheGrid">
-                <div class="loading"><div class="spinner"></div></div>
+
+            <!-- Overview Sub-panel -->
+            <div id="ai-subpanel-overview">
+                <div class="stats-grid" id="aiStats">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Hourly Request Volume (Last 24h)</h3>
+                    <div class="bar-chart" id="hourlyChart"></div>
+                </div>
+                <h3 style="margin-bottom: 16px; font-size: 16px;">Cache Performance</h3>
+                <div class="cache-grid" id="cacheGrid">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <div style="margin-top: 24px; text-align: right;">
+                    <button class="btn btn-danger" onclick="clearCaches()">Clear All Caches</button>
+                </div>
             </div>
-            <div style="margin-top: 24px; text-align: right;">
-                <button class="btn btn-danger" onclick="clearCaches()">Clear All Caches</button>
+
+            <!-- Live Requests Sub-panel -->
+            <div id="ai-subpanel-requests" style="display:none;">
+                <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                    <select id="filterProvider" onchange="loadAIRequests()" style="padding:8px;border:1px solid #e0e0e0;border-radius:8px;">
+                        <option value="">All Providers</option>
+                        <option value="ollama">Ollama</option>
+                        <option value="api">API</option>
+                    </select>
+                    <select id="filterStatus" onchange="loadAIRequests()" style="padding:8px;border:1px solid #e0e0e0;border-radius:8px;">
+                        <option value="">All Status</option>
+                        <option value="success">Success</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <select id="filterOperation" onchange="loadAIRequests()" style="padding:8px;border:1px solid #e0e0e0;border-radius:8px;">
+                        <option value="">All Operations</option>
+                        <option value="homework">Homework</option>
+                        <option value="review">Review</option>
+                        <option value="explain">Explain</option>
+                        <option value="practice">Practice</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Provider</th>
+                                <th>Model</th>
+                                <th>Operation</th>
+                                <th>Tokens</th>
+                                <th>Latency</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requestsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Models Sub-panel -->
+            <div id="ai-subpanel-models" style="display:none;">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Model Performance Comparison</h3>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Requests</th>
+                                <th>Avg Latency</th>
+                                <th>Min/Max Latency</th>
+                                <th>Total Tokens</th>
+                                <th>Avg Tokens</th>
+                                <th>Success Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Conversations Sub-panel -->
+            <div id="ai-subpanel-conversations" style="display:none;">
+                <div style="margin-bottom:16px;">
+                    <input type="text" id="filterStudentId" placeholder="Filter by Student ID..." style="padding:8px;border:1px solid #e0e0e0;border-radius:8px;width:250px;" oninput="loadConversations()">
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Student</th>
+                                <th>Subject</th>
+                                <th>Operation</th>
+                                <th>Model</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversationsTable"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -522,17 +622,54 @@
         }
 
         // AI Monitor
+        let currentAISubTab = 'overview';
+
+        function switchAIMonitorTab(tab) {
+            currentAISubTab = tab;
+            // Update button styles
+            ['overview', 'requests', 'models', 'conversations'].forEach(t => {
+                const btn = document.getElementById('ai-tab-' + t);
+                if (t === tab) {
+                    btn.className = 'btn btn-primary';
+                } else {
+                    btn.className = 'btn';
+                }
+            });
+            // Show/hide sub-panels
+            ['overview', 'requests', 'models', 'conversations'].forEach(t => {
+                const panel = document.getElementById('ai-subpanel-' + t);
+                panel.style.display = t === tab ? 'block' : 'none';
+            });
+            // Load data for the selected tab
+            if (tab === 'overview') loadAIMonitorOverview();
+            else if (tab === 'requests') loadAIRequests();
+            else if (tab === 'models') loadAIModels();
+            else if (tab === 'conversations') loadConversations();
+        }
+
         async function loadAIMonitor() {
+            // Default to overview tab
+            switchAIMonitorTab('overview');
+        }
+
+        async function loadAIMonitorOverview() {
             try {
-                const data = await api('/ai-metrics');
-                const s = data.sessions || {};
-                const c = data.cache || {};
+                // Load AI stats from new endpoint
+                const stats = await fetch('/api/admin/ai-monitor/stats?hours=24').then(r => r.json());
+                const metrics = await api('/ai-metrics');
+                const c = metrics.cache || {};
+
                 document.getElementById('aiStats').innerHTML = `
-                    <div class="stat-card"><div class="label">Total LLM Sessions</div><div class="value">${s.total_sessions || 0}</div></div>
-                    <div class="stat-card"><div class="label">Avg Score</div><div class="value">${s.average_score || 'N/A'}</div></div>
-                    <div class="stat-card"><div class="label">Cache Entries</div><div class="value">${c.total ? c.total.size : 0}</div></div>
-                    <div class="stat-card"><div class="label">Langfuse</div><div class="value">${data.system && data.system.langfuse_enabled ? 'Active' : 'Off'}</div></div>
+                    <div class="stat-card"><div class="label">Total Requests (24h)</div><div class="value">${stats.total_requests || 0}</div><div class="sub">${stats.success_count || 0} success, ${stats.error_count || 0} errors</div></div>
+                    <div class="stat-card"><div class="label">Success Rate</div><div class="value">${stats.success_rate || 0}%</div></div>
+                    <div class="stat-card"><div class="label">Avg Latency</div><div class="value">${stats.avg_latency_ms ? stats.avg_latency_ms.toFixed(0) : 0}ms</div></div>
+                    <div class="stat-card"><div class="label">Total Tokens</div><div class="value">${stats.total_tokens || 0}</div><div class="sub">${stats.total_prompt_tokens || 0} prompt + ${stats.total_completion_tokens || 0} completion</div></div>
                 `;
+
+                // Render hourly chart
+                renderBarChart('hourlyChart', stats.hourly_requests || [], 'hour', 'count');
+
+                // Render cache performance
                 const cacheNames = ['homework', 'review', 'explain', 'practice', 'subject_extraction', 'profile_parse'];
                 document.getElementById('cacheGrid').innerHTML = cacheNames.map(name => {
                     const cs = c[name] || {};
@@ -551,6 +688,85 @@
                 }).join('');
             } catch(e) {
                 document.getElementById('aiStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+            }
+        }
+
+        async function loadAIRequests() {
+            try {
+                const provider = document.getElementById('filterProvider').value;
+                const status = document.getElementById('filterStatus').value;
+                const operation = document.getElementById('filterOperation').value;
+
+                let url = '/api/admin/ai-monitor/requests?limit=100';
+                if (provider) url += '&provider=' + provider;
+                if (status) url += '&status=' + status;
+                if (operation) url += '&operation=' + operation;
+
+                const requests = await fetch(url).then(r => r.json());
+                document.getElementById('requestsTable').innerHTML = requests.length ? requests.map(r => `
+                    <tr>
+                        <td>${new Date(r.timestamp).toLocaleString()}</td>
+                        <td><span class="badge badge-blue">${r.provider}</span></td>
+                        <td>${r.model}</td>
+                        <td>${r.operation || '-'}</td>
+                        <td>${r.total_tokens || '-'}</td>
+                        <td>${r.latency_ms ? r.latency_ms.toFixed(0) + 'ms' : '-'}</td>
+                        <td><span class="badge ${r.status === 'success' ? 'badge-green' : 'badge-red'}">${r.status}</span></td>
+                        <td><button class="btn btn-sm" onclick="viewRequestDetail('${r.request_id}')">View</button></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="8" style="text-align:center;color:#888">No requests found</td></tr>';
+            } catch(e) {
+                document.getElementById('requestsTable').innerHTML = `<tr><td colspan="8" style="color:#c53030">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        async function viewRequestDetail(requestId) {
+            try {
+                const detail = await fetch('/api/admin/ai-monitor/request/' + requestId).then(r => r.json());
+                alert(JSON.stringify(detail, null, 2));
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadAIModels() {
+            try {
+                const models = await fetch('/api/admin/ai-monitor/models').then(r => r.json());
+                document.getElementById('modelsTable').innerHTML = models.length ? models.map(m => `
+                    <tr>
+                        <td><strong>${m.model}</strong></td>
+                        <td>${m.request_count}</td>
+                        <td>${m.avg_latency ? m.avg_latency.toFixed(0) + 'ms' : '-'}</td>
+                        <td>${m.min_latency ? m.min_latency.toFixed(0) : '-'} / ${m.max_latency ? m.max_latency.toFixed(0) : '-'}ms</td>
+                        <td>${m.total_tokens || 0}</td>
+                        <td>${m.avg_tokens ? m.avg_tokens.toFixed(0) : '-'}</td>
+                        <td><span class="badge badge-green">${m.success_count}/${m.request_count} (${((m.success_count/m.request_count)*100).toFixed(1)}%)</span></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="7" style="text-align:center;color:#888">No model data available</td></tr>';
+            } catch(e) {
+                document.getElementById('modelsTable').innerHTML = `<tr><td colspan="7" style="color:#c53030">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        async function loadConversations() {
+            try {
+                const studentId = document.getElementById('filterStudentId').value;
+                let url = '/api/admin/ai-monitor/conversations?limit=50';
+                if (studentId) url += '&student_id=' + encodeURIComponent(studentId);
+
+                const conversations = await fetch(url).then(r => r.json());
+                document.getElementById('conversationsTable').innerHTML = conversations.length ? conversations.map(c => `
+                    <tr>
+                        <td>${new Date(c.timestamp).toLocaleString()}</td>
+                        <td><code>${c.student_id}</code></td>
+                        <td>${c.subject || '-'}</td>
+                        <td>${c.operation || '-'}</td>
+                        <td>${c.model}</td>
+                        <td><button class="btn btn-sm" onclick="viewRequestDetail('${c.request_id}')">View</button></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888">No conversations found</td></tr>';
+            } catch(e) {
+                document.getElementById('conversationsTable').innerHTML = `<tr><td colspan="6" style="color:#c53030">Error: ${e.message}</td></tr>`;
             }
         }
 

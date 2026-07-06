@@ -120,10 +120,10 @@ TOPIC_ORDER_PRIORITY = {
 }
 DEFAULT_ORDER_PRIORITY = 2
 
-EXAM_STYLE = "GL Assessment"          # exam board most top grammar schools use
-HOMEWORK_MINUTES = "45-50"            # matches the real GL maths paper length
+EXAM_STYLE = "GL Assessment"  # exam board most top grammar schools use
+HOMEWORK_MINUTES = "45-50"  # matches the real GL maths paper length
 KEY_STAGE = "11+"
-YEAR_GROUP = 6                        # 11+ is sat at the start of Year 6 (some in Year 5)
+YEAR_GROUP = 6  # 11+ is sat at the start of Year 6 (some in Year 5)
 
 
 # ---------------------------------------------------------------------------
@@ -206,31 +206,65 @@ def _gen_arithmetic(index: int) -> tuple:
         if op == "+":
             a, b = random.randint(100, 9999), random.randint(100, 9999)
             correct = a + b
-            text = f"{a} + {b} = ?"
-            explanation = f"{a} + {b} = {correct}."
+            text = f"Calculate the sum: {a} + {b} = ?"
+            explanation = (
+                f"Use column addition to add the numbers:\n"
+                f"  {a:4d}\n"
+                f"+ {b:4d}\n"
+                f"------\n"
+                f"  {correct:4d}\n"
+                f"------\n"
+                f"Align the place values (ones, tens, hundreds, thousands) and add from right to left, carrying over to the next column where necessary."
+            )
         elif op == "-":
             a = random.randint(500, 9999)
             b = random.randint(100, a)
             correct = a - b
-            text = f"{a} - {b} = ?"
-            explanation = f"{a} - {b} = {correct}."
+            text = f"Calculate the difference: {a} - {b} = ?"
+            explanation = (
+                f"Use column subtraction to subtract the numbers:\n"
+                f"  {a:4d}\n"
+                f"- {b:4d}\n"
+                f"------\n"
+                f"  {correct:4d}\n"
+                f"------\n"
+                f"Align the place values and subtract from right to left, borrowing/exchanging from the left column when a top digit is smaller than the bottom one."
+            )
         elif op == "×":
             a, b = random.randint(12, 99), random.randint(2, 12)
             correct = a * b
-            text = f"{a} × {b} = ?"
-            explanation = f"{a} × {b} = {correct}."
+            text = f"Solve the multiplication: {a} × {b} = ?"
+            explanation = (
+                f"To calculate {a} × {b}:\n"
+                f"1) Partition {a} into tens and ones: {a} = {a - a % 10} + {a % 10}.\n"
+                f"2) Multiply each part by {b}:\n"
+                f"   - {a - a % 10} × {b} = {(a - a % 10) * b}\n"
+                f"   - {a % 10} × {b} = {a % 10 * b}\n"
+                f"3) Add the results together: {(a - a % 10) * b} + {a % 10 * b} = {correct}."
+            )
         elif op == "÷":
             b = random.randint(2, 12)
             result = random.randint(10, 99)
             a = b * result
             correct = result
-            text = f"{a} ÷ {b} = ?"
-            explanation = f"{a} ÷ {b} = {correct}, since {b} × {correct} = {a}."
+            text = f"Solve the division: {a} ÷ {b} = ?"
+            explanation = (
+                f"To solve {a} ÷ {b}, find how many times {b} goes into {a}:\n"
+                f"1) {b} goes into {a - a % 10} exactly {(a - a % 10) // b} times.\n"
+                f"2) This leaves a remainder of {a % 10}.\n"
+                f"3) {b} goes into {a % 10} exactly {(a % 10) // b} times.\n"
+                f"Combining these, {a} ÷ {b} = {correct}.\n"
+                f"You can double check your answer by multiplying: {b} × {correct} = {a}."
+            )
         else:
             a, b, c = random.randint(10, 50), random.randint(2, 9), random.randint(5, 40)
             correct = a * b - c
-            text = f"({a} × {b}) - {c} = ?"
-            explanation = f"First {a} × {b} = {a * b}, then {a * b} - {c} = {correct}."
+            text = f"Solve the multi-step equation: ({a} × {b}) - {c} = ?"
+            explanation = (
+                f"Following the BIDMAS/BODMAS order of operations (Brackets, Indices, Division/Multiplication, Addition/Subtraction):\n"
+                f"1) Solve the multiplication inside the brackets first: {a} × {b} = {a * b}.\n"
+                f"2) Next, perform the subtraction outside the brackets: {a * b} - {c} = {correct}."
+            )
         distractors = _make_distractors(correct)
         block, record = _build_question(i, text, correct, distractors, explanation)
         blocks.append(block)
@@ -248,24 +282,68 @@ def _gen_fdp(index: int) -> tuple:
             num = random.randint(1, denom - 1)
             correct = whole * num // denom
             text = f"What is {num}/{denom} of {whole}?"
-            explanation = f"{whole} ÷ {denom} = {whole // denom}, then × {num} = {correct}."
+            explanation = (
+                f"To find a fraction of a quantity, divide the quantity by the denominator, then multiply by the numerator:\n"
+                f"1) Divide by the denominator: {whole} ÷ {denom} = {whole // denom}.\n"
+                f"2) Multiply by the numerator: {whole // denom} × {num} = {correct}.\n"
+                f"Therefore, {num}/{denom} of {whole} is {correct}."
+            )
+            distractors = _make_distractors(correct, spread=max(1, abs(correct) * 0.15))
         elif kind == "pct_of":
             pct = random.choice([10, 15, 20, 25, 30, 40, 60, 75])
             whole = random.choice([40, 60, 80, 120, 160, 200, 240])
             correct = pct * whole // 100
             text = f"What is {pct}% of {whole}?"
-            explanation = f"{pct}% of {whole} = ({pct}/100) × {whole} = {correct}."
+            if pct == 10:
+                shortcut = f"Find 10% by dividing by 10: {whole} ÷ 10 = {correct}."
+            elif pct == 20:
+                shortcut = f"Find 10% first: {whole} ÷ 10 = {whole // 10}.\nThen multiply by 2 for 20%: {whole // 10} × 2 = {correct}."
+            elif pct == 30:
+                shortcut = f"Find 10% first: {whole} ÷ 10 = {whole // 10}.\nThen multiply by 3 for 30%: {whole // 10} × 3 = {correct}."
+            elif pct == 40:
+                shortcut = f"Find 10% first: {whole} ÷ 10 = {whole // 10}.\nThen multiply by 4 for 40%: {whole // 10} × 4 = {correct}."
+            elif pct == 60:
+                shortcut = f"Find 50% (half of {whole}): {whole // 2}.\nFind 10% of {whole}: {whole // 10}.\nAdd them together for 60%: {whole // 2} + {whole // 10} = {correct}."
+            elif pct == 25:
+                shortcut = f"Find 25% by dividing by 4 (halving and halving again): {whole} ÷ 4 = {correct}."
+            elif pct == 75:
+                shortcut = f"Find 25% first by dividing by 4: {whole} ÷ 4 = {whole // 4}.\nMultiply by 3 for 75%: {whole // 4} × 3 = {correct}."
+            elif pct == 15:
+                shortcut = f"Find 10% first: {whole} ÷ 10 = {whole // 10}.\nFind 5% by halving the 10% value: {whole // 10} ÷ 2 = {whole // 20}.\nAdd them together for 15%: {whole // 10} + {whole // 20} = {correct}."
+            else:
+                shortcut = f"Multiply by the fraction: ({pct}/100) × {whole} = {correct}."
+            explanation = (
+                f"To find {pct}% of {whole}, use a smart mental method:\n"
+                f"{shortcut}\n"
+                f"Therefore, {pct}% of {whole} is {correct}."
+            )
+            distractors = _make_distractors(correct, spread=max(1, abs(correct) * 0.15))
         elif kind == "dec_to_pct":
             dec = random.choice([0.05, 0.1, 0.15, 0.2, 0.25, 0.4, 0.6, 0.75])
-            correct = round(dec * 100)
-            text = f"Write {dec} as a percentage."
-            explanation = f"Multiply by 100 to convert a decimal to a percentage: {dec} × 100 = {correct}%."
+            correct_val = round(dec * 100)
+            correct = f"{correct_val}%"
+            text = f"Express {dec} as a percentage."
+            explanation = (
+                f"To convert a decimal to a percentage, multiply by 100 and add the % sign:\n"
+                f"{dec} × 100 = {correct_val}%."
+            )
+            # Custom distractors for percentages to avoid numeric formatting issues
+            distractors = [f"{correct_val // 10}%", f"{correct_val * 10}%", f"{correct_val + 5}%",
+                           f"{correct_val - 2 if correct_val > 2 else correct_val + 15}%"]
+            # Ensure unique options
+            distractors = list(set(distractors) - {correct})[:4]
+            while len(distractors) < 4:
+                distractors.append(f"{correct_val + len(distractors) + 1}%")
         elif kind == "frac_to_dec":
             pairs = {2: 0.5, 4: 0.25, 5: 0.2, 8: 0.125, 10: 0.1, 20: 0.05}
             denom = random.choice(list(pairs.keys()))
             correct = pairs[denom]
             text = f"Write 1/{denom} as a decimal."
-            explanation = f"1 ÷ {denom} = {correct}."
+            explanation = (
+                f"To write a fraction as a decimal, divide the numerator by the denominator:\n"
+                f"1 ÷ {denom} = {correct}."
+            )
+            distractors = _make_distractors(correct, spread=max(1, abs(correct) * 0.15))
         else:
             start = random.choice([40, 60, 80, 100, 120])
             pct = random.choice([10, 20, 25, 50])
@@ -273,12 +351,20 @@ def _gen_fdp(index: int) -> tuple:
             if direction == "increase":
                 correct = start + start * pct // 100
                 text = f"Increase {start} by {pct}%."
-                explanation = f"{pct}% of {start} = {start * pct // 100}. Add this on: {start} + {start * pct // 100} = {correct}."
+                explanation = (
+                    f"First calculate {pct}% of {start}:\n"
+                    f"1) {pct}% of {start} = {start * pct // 100}.\n"
+                    f"2) Add this increase to the original amount: {start} + {start * pct // 100} = {correct}."
+                )
             else:
                 correct = start - start * pct // 100
                 text = f"Decrease {start} by {pct}%."
-                explanation = f"{pct}% of {start} = {start * pct // 100}. Take this away: {start} - {start * pct // 100} = {correct}."
-        distractors = _make_distractors(correct, spread=max(1, abs(correct) * 0.15))
+                explanation = (
+                    f"First calculate {pct}% of {start}:\n"
+                    f"1) {pct}% of {start} = {start * pct // 100}.\n"
+                    f"2) Subtract this decrease from the original amount: {start} - {start * pct // 100} = {correct}."
+                )
+            distractors = _make_distractors(correct, spread=max(1, abs(correct) * 0.15))
         block, record = _build_question(i, text, correct, distractors, explanation)
         blocks.append(block)
         records.append(record)
@@ -300,28 +386,57 @@ def _gen_primes_factors(index: int) -> tuple:
             while len(distractors) < 4:
                 distractors.append(random.choice(["Sometimes", "Only if odd"]))
             if is_p:
-                explanation = f"{n} is prime - it has no factors other than 1 and itself."
+                explanation = (
+                    f"{n} is a prime number because it has exactly two factors: 1 and itself.\n"
+                    f"It cannot be divided exactly by any other whole number."
+                )
             else:
                 factor = next(p for p in range(2, n) if n % p == 0)
-                explanation = f"{n} is not prime - it can be divided exactly by {factor} (and others), so it has more than two factors."
+                explanation = (
+                    f"{n} is NOT a prime number (it is a composite number) because it has more than two factors.\n"
+                    f"For example, it can be divided exactly by {factor}: {n} ÷ {factor} = {n // factor}."
+                )
         elif kind == "hcf":
             a, b = random.choice([(12, 18), (24, 36), (15, 25), (16, 40), (20, 30), (18, 24)])
             correct = math.gcd(a, b)
             text = f"What is the Highest Common Factor (HCF) of {a} and {b}?"
+            factors_a = [x for x in range(1, a + 1) if a % x == 0]
+            factors_b = [x for x in range(1, b + 1) if b % x == 0]
+            common = sorted(list(set(factors_a) & set(factors_b)))
+            explanation = (
+                f"To find the Highest Common Factor (HCF) of {a} and {b}:\n"
+                f"1) List the factors of {a}: {', '.join(map(str, factors_a))}.\n"
+                f"2) List the factors of {b}: {', '.join(map(str, factors_b))}.\n"
+                f"3) Identify the common factors: {', '.join(map(str, common))}.\n"
+                f"4) Choose the largest number that appears in both lists, which is {correct}.\n"
+                f"Therefore, the HCF of {a} and {b} is {correct}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.5))
-            explanation = f"The largest number that divides exactly into both {a} and {b} is {correct}."
         elif kind == "lcm":
             a, b = random.choice([(4, 6), (3, 5), (6, 8), (4, 10), (5, 6), (8, 12)])
             correct = a * b // math.gcd(a, b)
             text = f"What is the Lowest Common Multiple (LCM) of {a} and {b}?"
+            multiples_a = [a * x for x in range(1, 7)]
+            multiples_b = [b * x for x in range(1, 7)]
+            explanation = (
+                f"To find the Lowest Common Multiple (LCM) of {a} and {b}:\n"
+                f"1) List the first few multiples of {a}: {', '.join(map(str, multiples_a))}...\n"
+                f"2) List the first few multiples of {b}: {', '.join(map(str, multiples_b))}...\n"
+                f"3) Find the smallest multiple that is in both lists, which is {correct}.\n"
+                f"Therefore, the LCM of {a} and {b} is {correct}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.4))
-            explanation = f"The smallest number that both {a} and {b} divide into exactly is {correct}."
         elif kind == "factor_count":
             n = random.choice([12, 16, 18, 20, 24, 28, 30, 36])
             correct = sum(1 for d in range(1, n + 1) if n % d == 0)
-            text = f"How many factors does {n} have?"
+            text = f"How many factors does the number {n} have?"
+            factors = [x for x in range(1, n + 1) if n % x == 0]
+            explanation = (
+                f"To find how many factors {n} has, we find all the whole numbers that divide into {n} exactly:\n"
+                f"The factors of {n} are: {', '.join(map(str, factors))}.\n"
+                f"Counting them, there are exactly {correct} factors."
+            )
             distractors = _make_distractors(correct, spread=2)
-            explanation = f"Checking every whole number from 1 to {n} that divides exactly, {n} has {correct} factors."
         else:
             n = random.choice([12, 18, 20, 28, 30, 45, 50])
             factors = []
@@ -338,7 +453,15 @@ def _gen_primes_factors(index: int) -> tuple:
                 " × ".join(str(f) for f in factors[:-1]) if len(factors) > 1 else "2 × 3",
                 " × ".join(str(f) for f in factors) + " × 1",
             ]
-            explanation = f"Dividing {n} repeatedly by prime numbers gives {correct}."
+            explanation = (
+                    f"To write {n} as a product of prime factors, we perform repeated division by prime numbers:\n"
+                    f"1) {n} ÷ {factors[0]} = {n // factors[0]}\n"
+                    + "\n".join(
+                f"2) {n // np} ÷ {nf} = {n // np // nf}" for np, nf in zip([1] + factors[:-2], factors[1:-1]) if
+                len(factors) > 2) + "\n"
+                                    f"The prime factors are: {', '.join(map(str, factors))}.\n"
+                                    f"Multiplying them together gives: {correct} = {n}."
+            )
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -354,33 +477,57 @@ def _gen_ratio(index: int) -> tuple:
             k = random.randint(2, 8)
             a, b = base_a * k, base_b * k
             correct = f"{base_a}:{base_b}"
-            text = f"Simplify the ratio {a}:{b}."
-            distractors = [f"{base_a+1}:{base_b}", f"{base_a}:{base_b+1}", f"{a}:{b}", f"{base_b}:{base_a}"]
-            explanation = f"Divide both parts of {a}:{b} by their highest common factor ({k}) to get {correct}."
+            text = f"Simplify the ratio {a}:{b} to its simplest form."
+            distractors = [f"{base_a + 1}:{base_b}", f"{base_a}:{base_b + 1}", f"{a}:{b}", f"{base_b}:{base_a}"]
+            explanation = (
+                f"To simplify the ratio {a}:{b}:\n"
+                f"1) Find the Highest Common Factor (HCF) of {a} and {b}, which is {k}.\n"
+                f"2) Divide both parts of the ratio by {k}:\n"
+                f"   - {a} ÷ {k} = {base_a}\n"
+                f"   - {b} ÷ {k} = {base_b}\n"
+                f"The simplified ratio is {correct}."
+            )
         elif kind == "share":
             r1, r2 = random.choice([(2, 3), (1, 4), (3, 5), (2, 5), (1, 2)])
             total = (r1 + r2) * random.randint(3, 12)
             per_part = total // (r1 + r2)
             correct = per_part * r1
-            text = f"Share £{total} in the ratio {r1}:{r2}. How much is the first share?"
+            text = f"Share £{total} in the ratio {r1}:{r2}. How much is the first (smaller) share?"
+            explanation = (
+                f"To share £{total} in the ratio {r1}:{r2}:\n"
+                f"1) Find the total number of parts: {r1} + {r2} = {r1 + r2} parts.\n"
+                f"2) Find the value of one part: £{total} ÷ {r1 + r2} = £{per_part}.\n"
+                f"3) Find the first share ({r1} parts): {r1} × £{per_part} = £{correct}.\n"
+                f"4) Find the second share ({r2} parts): {r2} × £{per_part} = £{per_part * r2}.\n"
+                f"The shares are £{correct} and £{per_part * r2}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.3))
-            explanation = f"Total parts = {r1}+{r2} = {r1+r2}. Each part = £{total}÷{r1+r2} = £{per_part}. First share = {r1} × £{per_part} = £{correct}."
         elif kind == "scale_recipe":
             people_from = random.choice([2, 4, 5])
             people_to = random.choice([6, 8, 10, 12])
             amount = random.choice([100, 150, 200, 250, 300])
             correct = amount * people_to // people_from
-            text = f"A recipe for {people_from} people needs {amount}g of flour. How much is needed for {people_to} people?"
+            text = f"A baking recipe for {people_from} people requires {amount}g of flour. How much flour is needed to make the same recipe for {people_to} people?"
+            explanation = (
+                f"To scale the recipe from {people_from} people to {people_to} people:\n"
+                f"1) Find the scaling factor: {people_to} ÷ {people_from} = {people_to / people_from}.\n"
+                f"2) Multiply the amount of flour by the scaling factor: {amount}g × {people_to / people_from} = {correct}g.\n"
+                f"Therefore, {correct}g of flour is needed."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.2))
-            explanation = f"Scale factor = {people_to}÷{people_from}. {amount}g × ({people_to}÷{people_from}) = {correct}g."
         else:
             scale = random.choice([10000, 25000, 50000])
             cm = random.randint(2, 15)
             correct_m = cm * scale // 100
             correct = f"{correct_m} m"
-            text = f"A map has a scale of 1:{scale}. Two towns are {cm} cm apart on the map. What is the real distance?"
+            text = f"On a map with a scale of 1:{scale}, two school fields are {cm} cm apart. What is the actual distance in metres?"
             distractors = [f"{correct_m + 50} m", f"{correct_m - 50} m", f"{correct_m * 10} m", f"{correct_m // 10} m"]
-            explanation = f"{cm} cm on the map = {cm} × {scale} = {cm*scale} cm in real life = {correct}."
+            explanation = (
+                f"To find the actual distance from the map scale of 1:{scale}:\n"
+                f"1) Multiply the map distance by the scale factor: {cm} cm × {scale} = {cm * scale} cm.\n"
+                f"2) Convert the real distance from cm to metres (divide by 100): {cm * scale} ÷ 100 = {correct_m} m.\n"
+                f"Therefore, the real distance is {correct}."
+            )
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -397,9 +544,17 @@ def _gen_algebra(index: int) -> tuple:
             add = random.randint(1, 30)
             result = coeff * x + add
             correct = x
-            text = f"Solve for x: {coeff}x + {add} = {result}"
+            text = f"Find the value of x: {coeff}x + {add} = {result}"
+            explanation = (
+                f"To solve the equation {coeff}x + {add} = {result} for x:\n"
+                f"1) Subtract {add} from both sides to isolate the term with x:\n"
+                f"   {coeff}x = {result} - {add}\n"
+                f"   {coeff}x = {result - add}\n"
+                f"2) Divide both sides by {coeff} to find x:\n"
+                f"   x = {result - add} ÷ {coeff}\n"
+                f"   x = {correct}"
+            )
             distractors = _make_distractors(correct, spread=2)
-            explanation = f"{coeff}x = {result} - {add} = {result-add}, so x = {result-add} ÷ {coeff} = {correct}."
         elif kind == "substitute":
             a_val, b_val = random.randint(2, 10), random.randint(2, 10)
             expr_choice = random.choice(["2a + b", "a - b", "a × b", "3a - 2b"])
@@ -411,29 +566,50 @@ def _gen_algebra(index: int) -> tuple:
                 correct = a_val * b_val
             else:
                 correct = 3 * a_val - 2 * b_val
-            text = f"If a = {a_val} and b = {b_val}, find {expr_choice}."
+            text = f"If a = {a_val} and b = {b_val}, evaluate the algebraic expression: {expr_choice}"
+            explanation = (
+                f"Substitute a = {a_val} and b = {b_val} into the expression '{expr_choice}':\n"
+                f"We replace 'a' with {a_val} and 'b' with {b_val}:\n"
+                f"   - Expression: {expr_choice}\n"
+                f"   - Calculation: {correct}\n"
+                f"Therefore, the value of the expression is {correct}."
+            )
             distractors = _make_distractors(correct, spread=3)
-            explanation = f"Substitute a={a_val}, b={b_val} into {expr_choice}: {correct}."
         elif kind == "sequence_nth":
             start = random.randint(1, 10)
             step = random.randint(2, 8)
             correct = f"{step}n + {start - step}"
             terms = [start + step * k for k in range(4)]
-            text = f"Find the nth term of the sequence: {', '.join(map(str, terms))}, ..."
+            text = f"Find the general nth term expression for this sequence: {', '.join(map(str, terms))}, ..."
             distractors = [
                 f"{step}n + {start}",
                 f"{step + 1}n + {start - step}",
                 f"n + {step}",
                 f"{step}n - {start}",
             ]
-            explanation = f"The sequence goes up by {step} each time, and the 1st term is {start}, so the nth term is {step}n + {start - step}."
+            explanation = (
+                f"To find the nth term of the sequence {', '.join(map(str, terms))}:\n"
+                f"1) Find the common difference between consecutive terms: {terms[1]} - {terms[0]} = {step}.\n"
+                f"   This tells us the rule involves '{step}n'.\n"
+                f"2) Test the first term (n = 1) with '{step}n': {step} × 1 = {step}.\n"
+                f"3) Find the adjustment needed to reach the actual first term ({start}):\n"
+                f"   We need to go from {step} to {start}, which is an adjustment of: {start - step}.\n"
+                f"4) Combine these into the formula: {correct}."
+            )
         else:
             mult = random.randint(2, 6)
             add = random.randint(1, 10)
             correct = f"{mult}x + {mult * add}"
-            text = f"Expand: {mult}(x + {add})"
-            distractors = [f"{mult}x + {add}", f"x + {mult * add}", f"{mult}x + {add * 2}", f"{mult + 1}x + {mult * add}"]
-            explanation = f"Multiply {mult} by each term inside the brackets: {mult}×x + {mult}×{add} = {correct}."
+            text = f"Expand the single bracket: {mult}(x + {add})"
+            distractors = [f"{mult}x + {add}", f"x + {mult * add}", f"{mult}x + {add * 2}",
+                           f"{mult + 1}x + {mult * add}"]
+            explanation = (
+                f"To expand {mult}(x + {add}):\n"
+                f"Multiply the number outside the bracket ({mult}) by each term inside the bracket:\n"
+                f"1) Multiply by x: {mult} × x = {mult}x.\n"
+                f"2) Multiply by {add}: {mult} × {add} = {mult * add}.\n"
+                f"Combining these gives: {correct}."
+            )
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -447,38 +623,59 @@ def _gen_shape_space_measures(index: int) -> tuple:
         if kind == "area_rect":
             l, w = random.randint(4, 20), random.randint(3, 15)
             correct = l * w
-            text = f"A rectangle has length {l} cm and width {w} cm. What is its area?"
-            distractors = _make_distractors(correct, spread=max(1, correct * 0.15))
-            explanation = f"Area = length × width = {l} × {w} = {correct} cm²."
+            text = f"A rectangular playground measures {l}m by {w}m. What is its total area in square metres?"
+            explanation = (
+                f"To find the area of a rectangle:\n"
+                f"Area = Length × Width\n"
+                f"Area = {l} m × {w} m = {correct} m²."
+            )
         elif kind == "perimeter_rect":
             l, w = random.randint(4, 20), random.randint(3, 15)
             correct = 2 * (l + w)
-            text = f"A rectangle has length {l} cm and width {w} cm. What is its perimeter?"
-            distractors = _make_distractors(correct, spread=4)
-            explanation = f"Perimeter = 2 × (length + width) = 2 × ({l} + {w}) = {correct} cm."
+            text = f"A rectangle has a length of {l}cm and a width of {w}cm. What is its perimeter in centimetres?"
+            explanation = (
+                f"To find the perimeter of a rectangle:\n"
+                f"Perimeter = 2 × (Length + Width)\n"
+                f"Perimeter = 2 × ({l} cm + {w} cm) = 2 × {l + w} cm = {correct} cm."
+            )
         elif kind == "angle_triangle":
             a1 = random.randint(30, 100)
             a2 = random.randint(30, 100)
             while a1 + a2 >= 170:
                 a2 = random.randint(20, 80)
             correct = 180 - a1 - a2
-            text = f"A triangle has angles of {a1}° and {a2}°. What is the third angle?"
-            distractors = _make_distractors(correct, spread=5)
-            explanation = f"Angles in a triangle add up to 180°: 180 - {a1} - {a2} = {correct}°."
+            text = f"Two angles in a triangle measure {a1}° and {a2}°. Calculate the size of the third missing angle."
+            explanation = (
+                f"To find the third angle of a triangle:\n"
+                f"1) The sum of all angles in any triangle is always 180°.\n"
+                f"2) Add the two known angles: {a1}° + {a2}° = {a1 + a2}°.\n"
+                f"3) Subtract the sum from 180°: 180° - {a1 + a2}° = {correct}°.\n"
+                f"Therefore, the third angle is {correct}°."
+            )
         elif kind == "area_triangle":
             base, height = random.randint(4, 20), random.randint(3, 16)
+            # Ensure area is a clean integer or at most ends in .5, but base*height//2 is fine here
             correct = base * height // 2
-            text = f"A triangle has a base of {base} cm and a height of {height} cm. What is its area?"
-            distractors = _make_distractors(correct, spread=max(1, correct * 0.2))
-            explanation = f"Area = (base × height) ÷ 2 = ({base} × {height}) ÷ 2 = {correct} cm²."
+            text = f"A triangle has a base of {base}cm and a vertical height of {height}cm. What is its area in cm²?"
+            explanation = (
+                f"To find the area of a triangle:\n"
+                f"Area = (Base × Height) ÷ 2\n"
+                f"Area = ({base} cm × {height} cm) ÷ 2 = {base * height} cm² ÷ 2 = {correct} cm²."
+            )
         else:
             unit_pairs = [("cm", "m", 100), ("m", "km", 1000), ("g", "kg", 1000), ("ml", "l", 1000)]
             frm, to, factor = random.choice(unit_pairs)
             value = random.choice([1, 2, 3, 4, 5]) * factor
             correct = value // factor
-            text = f"Convert {value} {frm} to {to}."
-            distractors = _make_distractors(correct, spread=2)
-            explanation = f"{value} {frm} ÷ {factor} = {correct} {to}."
+            text = f"Convert {value} {frm} into {to}."
+            explanation = (
+                f"To convert {value} {frm} to {to}:\n"
+                f"1) We know that 1 {to} is equal to {factor} {frm}.\n"
+                f"2) Since we are converting from a smaller unit ({frm}) to a larger unit ({to}), we divide:\n"
+                f"   {value} ÷ {factor} = {correct}.\n"
+                f"Therefore, {value} {frm} = {correct} {to}."
+            )
+        distractors = _make_distractors(correct, spread=max(2, correct * 0.15))
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -492,34 +689,63 @@ def _gen_data_handling(index: int) -> tuple:
         nums = [random.randint(5, 50) for _ in range(random.choice([4, 5, 6]))]
         if kind == "mean":
             correct = round(sum(nums) / len(nums), 1)
-            text = f"Find the mean of: {', '.join(map(str, nums))}"
+            text = f"Calculate the mean (average) of these test scores: {', '.join(map(str, nums))}"
+            explanation = (
+                f"To find the mean of the scores: {', '.join(map(str, nums))}:\n"
+                f"1) Find the sum of all values: {' + '.join(map(str, nums))} = {sum(nums)}.\n"
+                f"2) Divide the sum by the total count of values ({len(nums)}):\n"
+                f"   {sum(nums)} ÷ {len(nums)} = {correct}.\n"
+                f"Therefore, the mean is {correct}."
+            )
             distractors = _make_distractors(correct, spread=3)
-            explanation = f"Add the numbers ({sum(nums)}) and divide by how many there are ({len(nums)}): {correct}."
         elif kind == "mode":
             nums = [random.choice([3, 5, 7, 9]) for _ in range(6)]
             correct = max(set(nums), key=nums.count)
-            text = f"Find the mode of: {', '.join(map(str, nums))}"
+            text = f"Find the mode of the following data set: {', '.join(map(str, nums))}"
+            explanation = (
+                    f"To find the mode of the numbers: {', '.join(map(str, nums))}:\n"
+                    f"The mode is the number that appears most frequently.\n"
+                    f"Count of occurrences:\n"
+                    + "\n".join(f"  - {val}: {nums.count(val)} time(s)" for val in sorted(list(set(nums)))) + "\n"
+                                                                                                              f"The number with the highest count is {correct}, which appears {nums.count(correct)} times."
+            )
             distractors = _make_distractors(correct, spread=2)
-            explanation = f"{correct} appears more often than any other number in the list."
         elif kind == "median":
             display_nums = sorted(nums, key=lambda x: random.random())
             correct = sorted(nums)[len(nums) // 2]
-            text = f"Find the median of: {', '.join(map(str, display_nums))}"
+            sorted_nums = sorted(nums)
+            text = f"What is the median of this data set: {', '.join(map(str, display_nums))}?"
+            explanation = (
+                f"To find the median of the numbers: {', '.join(map(str, display_nums))}:\n"
+                f"1) Arrange the numbers in ascending order: {', '.join(map(str, sorted_nums))}.\n"
+                f"2) Locate the middle value. Since there are {len(nums)} numbers (an odd number), the middle position is at index {len(nums) // 2 + 1}.\n"
+                f"The number at this middle position is {correct}."
+            )
             distractors = _make_distractors(correct, spread=3)
-            explanation = f"Arranged in order: {', '.join(map(str, sorted(nums)))}. The middle value is {correct}."
         elif kind == "range":
             correct = max(nums) - min(nums)
-            text = f"Find the range of: {', '.join(map(str, nums))}"
+            text = f"What is the range of this data set: {', '.join(map(str, nums))}?"
+            explanation = (
+                f"To find the range of the numbers: {', '.join(map(str, nums))}:\n"
+                f"1) Identify the largest value: {max(nums)}.\n"
+                f"2) Identify the smallest value: {min(nums)}.\n"
+                f"3) Subtract the smallest from the largest: {max(nums)} - {min(nums)} = {correct}.\n"
+                f"Therefore, the range is {correct}."
+            )
             distractors = _make_distractors(correct, spread=3)
-            explanation = f"Range = largest - smallest = {max(nums)} - {min(nums)} = {correct}."
         else:
             total = random.choice([200, 240, 300, 360])
             pct = random.choice([10, 20, 25, 30, 40])
             correct = total * pct // 100
-            text = (f"A pie chart shows survey results from {total} people. "
-                    f"One sector represents {pct}% of the total. How many people does that sector represent?")
+            text = (f"A school pie chart surveys {total} children. "
+                    f"One sector representing 'Cycling to School' measures {pct}% of the total. How many children cycle to school?")
+            explanation = (
+                f"To find how many people are represented by {pct}% of a pie chart of {total} people:\n"
+                f"1) Calculate {pct}% of {total}:\n"
+                f"   ({pct} ÷ 100) × {total} = {correct} children.\n"
+                f"Therefore, that sector represents {correct} children."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.2))
-            explanation = f"{pct}% of {total} = ({pct}/100) × {total} = {correct} people."
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -531,37 +757,60 @@ def _gen_word_problems(index: int) -> tuple:
     for i in range(1, 11):
         kind = random.choice(["multi_step_money", "multi_step_sharing", "leftover", "comparison"])
         if kind == "multi_step_money":
-            price = random.choice([250, 320, 450, 599, 750])
+            price = random.choice([250, 320, 450, 500, 750])
             qty = random.randint(2, 6)
             discount_pct = random.choice([10, 20, 25])
             subtotal = price * qty
             discount_amt = subtotal * discount_pct // 100
             correct = subtotal - discount_amt
-            text = (f"A shop sells pens for {price}p each. Priya buys {qty} pens and gets a "
-                    f"{discount_pct}% discount on the total. How much does she pay, in pence?")
+            text = (f"A shop sells geometry sets for {price}p each. Priya buys {qty} sets and receives a "
+                    f"bulk discount of {discount_pct}% off. How much does she pay in total (in pence)?")
+            explanation = (
+                f"Let's calculate the total cost step-by-step:\n"
+                f"1) Cost of {qty} sets before discount: {qty} × {price}p = {subtotal}p.\n"
+                f"2) Find the discount amount ({discount_pct}% of {subtotal}p):\n"
+                f"   ({discount_pct} ÷ 100) × {subtotal}p = {discount_amt}p.\n"
+                f"3) Subtract the discount from the subtotal: {subtotal}p - {discount_amt}p = {correct}p.\n"
+                f"Therefore, Priya pays {correct}p."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.15))
-            explanation = f"{qty} pens cost {qty} × {price}p = {subtotal}p. {discount_pct}% off = {discount_amt}p, leaving {correct}p."
         elif kind == "multi_step_sharing":
             total = random.choice([144, 180, 216, 252, 288])
             people = random.randint(3, 8)
             correct = total // people
-            text = f"{total} sweets are shared equally between {people} children. How many does each child get?"
+            text = f"A box containing {total} marbles is shared equally among {people} children. How many marbles does each child receive?"
+            explanation = (
+                f"To share {total} marbles equally between {people} children:\n"
+                f"We divide the total number of marbles by the number of children:\n"
+                f"   {total} ÷ {people} = {correct}.\n"
+                f"Therefore, each child gets {correct} marbles."
+            )
             distractors = _make_distractors(correct, spread=3)
-            explanation = f"{total} ÷ {people} = {correct} each."
         elif kind == "leftover":
             total = random.randint(50, 300)
             group = random.randint(6, 15)
             correct = total % group
-            text = f"{total} pupils need to be put into groups of {group}. How many pupils are left over after making full groups?"
+            text = f"A group of {total} students are divided into sports teams of exactly {group} students. How many students will be left over without a full team?"
+            explanation = (
+                f"To find how many pupils are left over when putting {total} pupils into groups of {group}:\n"
+                f"1) Perform division: {total} ÷ {group} = {total // group} groups.\n"
+                f"2) Find the total number of pupils in these groups: {total // group} × {group} = {total - total % group} pupils.\n"
+                f"3) Subtract from the starting total to find the remainder: {total} - {total - total % group} = {correct} leftover pupils.\n"
+                f"Therefore, {correct} pupils are left over."
+            )
             distractors = _make_distractors(correct, spread=2)
-            explanation = f"{total} ÷ {group} = {total // group} remainder {correct}, so {correct} pupils are left over."
         else:
             a = random.randint(100, 500)
             b = random.randint(100, 500)
             correct = abs(a - b)
-            text = f"School A raised £{a} for charity and School B raised £{b}. What is the difference between the two amounts?"
+            text = f"School A raised £{a} for a charity run, and School B raised £{b}. What is the absolute difference between the amounts raised?"
+            explanation = (
+                f"To find the difference between School A (£{a}) and School B (£{b}):\n"
+                f"Subtract the smaller amount from the larger amount:\n"
+                f"   £{max(a, b)} - £{min(a, b)} = £{correct}.\n"
+                f"Therefore, the difference is £{correct}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.2))
-            explanation = f"Difference = larger - smaller = £{max(a,b)} - £{min(a,b)} = £{correct}."
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -575,24 +824,40 @@ def _gen_speed_distance_time(index: int) -> tuple:
         if kind == "find_time":
             speed = random.choice([40, 50, 60, 80])
             distance = speed * random.choice([1, 2, 3, 4])
-            correct = distance / speed
-            text = f"A car travels {distance} miles at a speed of {speed} mph. How many hours does the journey take?"
+            correct = distance // speed
+            text = f"A delivery van travels {distance} miles at an average constant speed of {speed} mph. How many hours does the journey take?"
+            explanation = (
+                f"To find the journey time:\n"
+                f"Formula: Time = Distance ÷ Speed\n"
+                f"Time = {distance} miles ÷ {speed} mph = {correct} hour(s).\n"
+                f"Therefore, the journey takes {correct} hour(s)."
+            )
             distractors = _make_distractors(correct, spread=1)
-            explanation = f"Time = distance ÷ speed = {distance} ÷ {speed} = {correct} hours."
         elif kind == "find_distance":
             speed = random.choice([30, 40, 50, 60])
             time_h = random.choice([1, 1.5, 2, 3])
-            correct = speed * time_h
-            text = f"A train travels at {speed} mph for {time_h} hours. How far does it travel?"
+            # Keep distance as clean integer if possible, speed * time_h is clean since speeds are multiples of 10
+            correct = int(speed * time_h)
+            text = f"A high-speed train travels at a constant velocity of {speed} km/h for exactly {time_h} hours. What total distance does it cover?"
+            explanation = (
+                f"To find the distance travelled:\n"
+                f"Formula: Distance = Speed × Time\n"
+                f"Distance = {speed} km/h × {time_h} hours = {correct} km.\n"
+                f"Therefore, the distance is {correct} km."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.15))
-            explanation = f"Distance = speed × time = {speed} × {time_h} = {correct} miles."
         else:
             distance = random.choice([60, 90, 120, 150, 200])
             time_h = random.choice([1, 2, 3])
-            correct = distance / time_h
-            text = f"A cyclist travels {distance} km in {time_h} hours. What is their average speed in km/h?"
+            correct = distance // time_h
+            text = f"A marathon cyclist covers a distance of {distance} km in exactly {time_h} hours. What was their average speed in km/h?"
+            explanation = (
+                f"To find the average speed:\n"
+                f"Formula: Speed = Distance ÷ Time\n"
+                f"Speed = {distance} km ÷ {time_h} hours = {correct} km/h.\n"
+                f"Therefore, the average speed is {correct} km/h."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.15))
-            explanation = f"Speed = distance ÷ time = {distance} ÷ {time_h} = {correct} km/h."
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -608,17 +873,27 @@ def _gen_sequences(index: int) -> tuple:
             step = random.randint(2, 12)
             terms = [start + step * k for k in range(5)]
             correct = start + step * 5
-            text = f"What is the next number in the sequence: {', '.join(map(str, terms))}, ?"
+            text = f"What is the next consecutive term in this sequence: {', '.join(map(str, terms))}, ?"
+            explanation = (
+                f"To find the next number in the arithmetic sequence {', '.join(map(str, terms))}:\n"
+                f"1) Find the common difference between consecutive terms: {terms[1]} - {terms[0]} = {step}.\n"
+                f"2) Add this difference to the last term: {terms[-1]} + {step} = {correct}.\n"
+                f"Therefore, the next number is {correct}."
+            )
             distractors = _make_distractors(correct, spread=step)
-            explanation = f"Each term increases by {step}, so the next term is {terms[-1]} + {step} = {correct}."
         elif kind == "geometric_next":
             start = random.choice([1, 2, 3])
             ratio_val = random.choice([2, 3])
             terms = [start * (ratio_val ** k) for k in range(4)]
             correct = start * (ratio_val ** 4)
-            text = f"What is the next number in the sequence: {', '.join(map(str, terms))}, ?"
+            text = f"What is the next term in this multiplicative sequence: {', '.join(map(str, terms))}, ?"
+            explanation = (
+                f"To find the next number in the geometric sequence {', '.join(map(str, terms))}:\n"
+                f"1) Find the common ratio by dividing consecutive terms: {terms[1]} ÷ {terms[0]} = {ratio_val}.\n"
+                f"2) Multiply the last term by this ratio: {terms[-1]} × {ratio_val} = {correct}.\n"
+                f"Therefore, the next number is {correct}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.3))
-            explanation = f"Each term is multiplied by {ratio_val}, so the next term is {terms[-1]} × {ratio_val} = {correct}."
         else:
             start = random.randint(1, 15)
             step = random.randint(2, 10)
@@ -627,9 +902,15 @@ def _gen_sequences(index: int) -> tuple:
             correct = terms[gap_index]
             display = terms.copy()
             display[gap_index] = "?"
-            text = f"Find the missing number: {', '.join(map(str, display))}"
+            text = f"Find the missing term '?' in this arithmetic progression: {', '.join(map(str, display))}"
+            explanation = (
+                f"To find the missing term in the sequence {', '.join(map(str, display))}:\n"
+                f"1) Find the common difference between adjacent known terms: {terms[gap_index + 1]} - {terms[gap_index - 1]} = {2 * step}, which is 2 × {step}.\n"
+                f"2) This tells us the progression increases by {step} each time.\n"
+                f"3) Add the difference of {step} to the preceding term: {terms[gap_index - 1]} + {step} = {correct}.\n"
+                f"Therefore, the missing number is {correct}."
+            )
             distractors = _make_distractors(correct, spread=step)
-            explanation = f"The sequence increases by {step} each time, so the missing term is {correct}."
         block, record = _build_question(i, text, correct, distractors[:4], explanation)
         blocks.append(block)
         records.append(record)
@@ -658,46 +939,99 @@ def _gen_top_school_reasoning(index: int) -> tuple:
             diff = reversed_num - original
             digit_sum = t + u
             correct = original
-            text = (f"I am a two-digit number. My digits add up to {digit_sum}. When my digits "
-                    f"are reversed, the new number is {diff} more than me. What number am I?")
+            text = (f"I am a two-digit whole number. My digits add up to {digit_sum}. When my digits "
+                    f"are reversed to form a new number, the new number is exactly {diff} greater than me. What number am I?")
             distractors = list({reversed_num, original + 9, original - 9, digit_sum * 10} - {correct})
             while len(distractors) < 4:
                 distractors.append(original + len(distractors) + 1)
-            explanation = (f"Let the tens digit be {t} and units digit be {u} (they add to {digit_sum}). "
-                            f"The number is {original}; reversed it's {reversed_num}, which is {diff} more. "
-                            f"So the number is {correct}.")
+            explanation = (
+                f"Let the tens digit be T and the units digit be U.\n"
+                f"1) The sum of the digits is: T + U = {digit_sum}.\n"
+                f"2) The value of the original number is 10*T + U.\n"
+                f"3) The value of the reversed number is 10*U + T.\n"
+                f"4) We are told: (10*U + T) - (10*T + U) = {diff}, which simplifies to: 9*(U - T) = {diff}.\n"
+                f"5) Dividing by 9, we get: U - T = {diff} // 9 = {u - t}.\n"
+                f"6) Now we have a system of two simple equations:\n"
+                f"   - U + T = {digit_sum}\n"
+                f"   - U - T = {u - t}\n"
+                f"7) Adding these equations gives: 2*U = {digit_sum + (u - t)} => U = {u}.\n"
+                f"8) Subtracting them gives: 2*T = {digit_sum - (u - t)} => T = {t}.\n"
+                f"So the original number is {correct}."
+            )
         elif kind == "work_backwards_money":
             remaining = random.choice([2, 3, 4, 5, 6, 8, 10])
             spent = random.choice([3, 4, 5, 6, 7, 8])
             correct = 2 * (remaining + spent)
-            text = (f"Tom spent half of his money on a book, then spent £{spent} on a pen, "
-                    f"and had £{remaining} left. How much money did he start with?")
+            text = (f"Ethan spent half of his savings on a new science book. He then spent £{spent} on "
+                    f"some lunch, which left him with exactly £{remaining} in his wallet. How much money did Ethan have initially?")
             distractors = _make_distractors(correct, spread=max(2, correct * 0.15))
-            explanation = (f"Before buying the pen he had £{remaining}+£{spent}=£{remaining+spent}; "
-                            f"this was half his money, so he started with 2 × £{remaining+spent} = £{correct}.")
+            explanation = (
+                f"Let's work backwards from the end of the story:\n"
+                f"1) Ethan had £{remaining} left at the very end.\n"
+                f"2) Before buying lunch which cost £{spent}, he must have had: £{remaining} + £{spent} = £{remaining + spent}.\n"
+                f"3) This £{remaining + spent} was what remained after he spent half of his savings on a book. This means £{remaining + spent} represents exactly the other half of his starting savings.\n"
+                f"4) To find the total starting amount, we multiply this half by 2: 2 × £{remaining + spent} = £{correct}.\n"
+                f"Therefore, Ethan started with £{correct}."
+            )
         elif kind == "calendar_reasoning":
             days_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             d = random.randint(9, 30)
             idx = (d - 1) % 7
             correct = days_names[idx]
-            text = f"If the 1st of a month falls on a Monday, what day of the week is the {d}th?"
+            text = f"If the 1st day of a certain month falls on a Monday, what day of the week will the {d}th day of the same month be?"
             distractors = [day for day in days_names if day != correct]
             random.shuffle(distractors)
             distractors = distractors[:4]
-            explanation = (f"There are {d-1} days between the 1st and the {d}th. "
-                            f"{d-1} ÷ 7 leaves a remainder of {idx} (counting Monday as 0), which is {correct}.")
+            explanation = (
+                f"Let's count the calendar days systematically:\n"
+                f"1) The 1st day of the month is a Monday.\n"
+                f"2) Days of the week repeat every 7 days, so the 1st, 8th, 15th, 22nd, and 29th are all Mondays.\n"
+                f"3) The number of days between the 1st and the {d}th is: {d} - 1 = {d - 1} days.\n"
+                f"4) We divide the difference by 7 to find how many full weeks pass: {d - 1} ÷ 7 = {(d - 1) // 7} weeks with a remainder of {idx}.\n"
+                f"5) Starting on Monday and counting forward {idx} days gives us: {correct}.\n"
+                f"Therefore, the {d}th of the month is a {correct}."
+            )
         elif kind == "two_step_percentage":
-            price = random.choice([40, 50, 60, 80, 100, 120])
-            pct1 = random.choice([10, 20, 25])
-            pct2 = random.choice([10, 20, 25])
-            step1 = price * (100 + pct1) // 100
-            correct = step1 * (100 - pct2) // 100
-            text = (f"A shop increases the price of a £{price} jacket by {pct1}%, then later "
-                    f"decreases the new price by {pct2}%. What is the final price, in pounds?")
+            # Curated combinations to guarantee integer steps and answers
+            combos = [
+                (200, 10, 10, "increase", "decrease"),  # 200 -> 220 -> 198
+                (100, 20, 25, "increase", "decrease"),  # 100 -> 120 -> 90
+                (120, 25, 20, "increase", "decrease"),  # 120 -> 150 -> 120
+                (80, 25, 10, "increase", "decrease"),  # 80 -> 100 -> 90
+                (150, 20, 15, "increase", "decrease"),  # 150 -> 180 -> 153
+                (160, 25, 20, "increase", "decrease"),  # 160 -> 200 -> 160
+                (50, 20, 25, "increase", "decrease"),  # 50 -> 60 -> 45
+                (120, 10, 25, "decrease", "increase"),  # 120 -> 108 -> 135
+                (200, 15, 20, "decrease", "increase"),  # 200 -> 170 -> 204
+                (80, 20, 25, "decrease", "increase"),  # 80 -> 64 -> 80
+            ]
+            price, pct1, pct2, dir1, dir2 = random.choice(combos)
+            if dir1 == "increase":
+                step1 = price + (price * pct1) // 100
+                verb1 = f"raises the price of a £{price} coat by {pct1}%"
+                expl1 = f"1) First change (increase): {pct1}% of £{price} is £{(price * pct1) // 100}. The new increased price is £{price} + £{(price * pct1) // 100} = £{step1}."
+            else:
+                step1 = price - (price * pct1) // 100
+                verb1 = f"reduces the price of a £{price} coat by {pct1}%"
+                expl1 = f"1) First change (reduction): {pct1}% of £{price} is £{(price * pct1) // 100}. The new reduced price is £{price} - £{(price * pct1) // 100} = £{step1}."
+
+            if dir2 == "increase":
+                correct = step1 + (step1 * pct2) // 100
+                verb2 = f"raises this new increased price by {pct2}%"
+                expl2 = f"2) Second change (increase): {pct2}% of the new £{step1} price is £{(step1 * pct2) // 100}. The final price is £{step1} + £{(step1 * pct2) // 100} = £{correct}."
+            else:
+                correct = step1 - (step1 * pct2) // 100
+                verb2 = f"reduces this new price by {pct2}% in a clearance sale"
+                expl2 = f"2) Second change (reduction): {pct2}% of the new £{step1} price is £{(step1 * pct2) // 100}. The final clearance price is £{step1} - £{(step1 * pct2) // 100} = £{correct}."
+
+            text = f"A shop {verb1}, then later {verb2}. What is the final clearance price of the coat in pounds?"
+            explanation = (
+                f"Let's break down the two sequential percentage changes step-by-step:\n"
+                f"{expl1}\n"
+                f"{expl2}\n"
+                f"Therefore, the final clearance price of the coat is £{correct}."
+            )
             distractors = _make_distractors(correct, spread=max(1, correct * 0.1))
-            explanation = (f"Increase: £{price} × {100+pct1}/100 = £{step1}. "
-                            f"Decrease: £{step1} × {100-pct2}/100 = £{correct}. "
-                            f"Note the two percentages don't cancel out, because the second is applied to a different amount.")
         else:  # lcm_deduction
             m1, m2 = random.choice([(4, 6), (3, 8), (6, 9), (4, 10), (5, 6)])
             lcm_val = m1 * m2 // math.gcd(m1, m2)
@@ -705,13 +1039,24 @@ def _gen_top_school_reasoning(index: int) -> tuple:
             correct = lcm_val * k
             lo = correct - random.randint(1, lcm_val - 1)
             hi = correct + random.randint(1, lcm_val - 1)
-            text = (f"A number is greater than {lo} and less than {hi}. It is a multiple of "
-                    f"both {m1} and {m2}. What is the number?")
-            distractors = list({lo, hi, lcm_val, correct + lcm_val} - {correct})
+            text = (f"I am a whole number greater than {lo} and less than {hi}. It is exactly divisible "
+                    f"by both {m1} and {m2}. What number am I?")
+            distractors = list({lo + 1, hi - 1, lcm_val, correct + lcm_val} - {correct})
             while len(distractors) < 4:
                 distractors.append(correct + lcm_val * (len(distractors) + 2))
-            explanation = (f"The number must be a multiple of both {m1} and {m2}, so it's a multiple "
-                            f"of {lcm_val}. The only multiple of {lcm_val} strictly between {lo} and {hi} is {correct}.")
+            explanation = (
+                f"Let's solve this logical puzzle step-by-step:\n"
+                f"1) The mystery number is a multiple of both {m1} and {m2}. This means it must be a multiple of their Least Common Multiple (LCM).\n"
+                f"2) To find the LCM of {m1} and {m2}:\n"
+                f"   - Multiples of {m1}: {', '.join(str(m1 * x) for x in range(1, 6))}...\n"
+                f"   - Multiples of {m2}: {', '.join(str(m2 * x) for x in range(1, 6))}...\n"
+                f"   The smallest common multiple is {lcm_val}.\n"
+                f"3) Since the number is a multiple of {lcm_val}, we list the multiples of {lcm_val}:\n"
+                f"   {', '.join(str(lcm_val * x) for x in range(1, 10))}...\n"
+                f"4) We are told the number is strictly between {lo} and {hi}.\n"
+                f"5) Looking at our list of multiples, {correct} is the only multiple of {lcm_val} that is greater than {lo} and less than {hi}.\n"
+                f"Therefore, the mystery number is {correct}."
+            )
         block, record = _build_question(i, text, correct, distractors[:4], explanation, difficulty="selective")
         blocks.append(block)
         records.append(record)
@@ -771,9 +1116,12 @@ def _weighted_topic_sequence(count: int) -> list:
 
 def check_11plus_math_exists() -> bool:
     """检查是否已有 11+ 数学练习"""
-    store = get_elevenplus_rag_store()
-    results = store.search(query="maths", k=1, filters={"subject": "Maths"})
-    return len(results) > 0
+    try:
+        store = get_elevenplus_rag_store()
+        results = store.search(query="maths", k=1, filters={"subject": "Maths"})
+        return len(results) > 0
+    except Exception:
+        return False
 
 
 def clean_11plus_math() -> int:
@@ -782,7 +1130,7 @@ def clean_11plus_math() -> int:
     results = store.search_by_metadata({"subject": "Maths"})
 
     if not results:
-        print("  没有找到需要清理的 11+ 作业")
+        print("  没有找到需要清理 of 11+ 作业")
         return 0
 
     deleted = 0

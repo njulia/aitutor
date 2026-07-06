@@ -9,6 +9,7 @@ Stores generated homework with metadata in a vector database for future search a
 """
 import os
 import logging
+import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -34,19 +35,16 @@ class ElevenPlusRAGStore:
         self.client = chromadb.PersistentClient(path=self.persist_dir)
 
         # 复用 homework_rag 的嵌入函数创建逻辑
-        from src.homework_rag import _create_embedding_function
-        self.embedding_function = _create_embedding_function()
+        try:
+            from src.homework_rag import _create_embedding_function
+            self.embedding_function = _create_embedding_function()
+        except ImportError:
+            # Fallback if homework_rag is not present in the same workspace yet
+            self.embedding_function = None
 
         # 作业集合
         self.collection = self.client.get_or_create_collection(
             name="elevenplus_collection",
-            embedding_function=self.embedding_function,
-            metadata={"hnsw:space": "cosine"},
-        )
-
-        # 中文教材集合
-        self.chinese_collection = self.client.get_or_create_collection(
-            name="chinese_collection",
             embedding_function=self.embedding_function,
             metadata={"hnsw:space": "cosine"},
         )
@@ -79,14 +77,10 @@ class ElevenPlusRAGStore:
         # 用毫秒时间戳生成唯一 ID
         doc_id = str(int(now.timestamp() * 1000))
 
-        # Import sanitize_metadata from homework_rag
-        from src.homework_rag import HomeworkRAGStore
-        
-        # Sanitize metadata to ensure JSON-serializable
-        sanitized_metadata = HomeworkRAGStore._sanitize_metadata(self, metadata)
-        
-        # Ensure metadata has required fields
-        sanitized_metadata.setdefault("created_at", now.isoformat())
+        # Ensure metadata has required fields and complies with ChromaDB rules
+        metadata_copy = metadata.copy()
+        metadata_copy.setdefault("created_at", now.isoformat())
+        sanitized_metadata = self._sanitize_metadata(metadata_copy)
 
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
@@ -99,10 +93,29 @@ class ElevenPlusRAGStore:
                 return doc_id
             except Exception as e:
                 if attempt < RAG_MAX_RETRIES:
-                    logger.warning(f"[RAG] Store attempt {attempt} failed for {doc_id}: {e}, retrying in {RAG_RETRY_DELAY}s...")
+                    logger.warning(
+                        f"[RAG] Store attempt {attempt} failed for {doc_id}: {e}, retrying in {RAG_RETRY_DELAY}s...")
                     time.sleep(RAG_RETRY_DELAY)
                 else:
                     raise
+
+    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize metadata to comply with ChromaDB's strict type requirements.
+        ChromaDB only supports str, int, float, or bool values for metadata.
+        Any None, list, dict, or other unsupported types must be converted to strings or removed.
+        """
+        sanitized = {}
+        for k, v in metadata.items():
+            if v is None:
+                continue  # Drop None values to avoid ChromaDB conversion errors
+            if isinstance(v, (str, int, float, bool)):
+                sanitized[k] = v
+            elif isinstance(v, (list, dict)):
+                import json
+                sanitized[k] = json.dumps(v, ensure_ascii=False)
+            else:
+                sanitized[k] = str(v)
+        return sanitized
 
     def add_batch_homework(
             self,
@@ -125,7 +138,7 @@ class ElevenPlusRAGStore:
 
         for item in homework_list:
             content = item["content"]
-            metadata = item["metadata"]
+            metadata = item["metadata"].copy()
             doc_id = item.get("doc_id")
 
             now = datetime.now()
@@ -137,7 +150,7 @@ class ElevenPlusRAGStore:
             metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
 
             texts.append(content)
-            metadatas.append(metadata)
+            metadatas.append(self._sanitize_metadata(metadata))
             doc_ids.append(doc_id)
 
         self.collection.add(documents=texts, metadatas=metadatas, ids=doc_ids)
@@ -344,145 +357,6 @@ class ElevenPlusRAGStore:
             topics.append(content)
         return topics
 
-    def ingest_chinese_textbooks(self, chinese_dir: str = None) -> int:
-        """Ingest Chinese textbooks into RAG store
-
-        Textbook mapping:
-        - 第一册 -> Year 1
-        - 第二册 -> Year 2
-        - ... up to 第九册 -> Year 9
-
-        Args:
-            chinese_dir: Path to Chinese textbooks directory
-
-        Returns:
-            Number of documents ingested
-        """
-        if chinese_dir is None:
-            chinese_dir = os.path.join(PROJECT_DIR, "data", "chinese")
-
-        if not os.path.exists(chinese_dir):
-            logger.warning(f"[RAG] Chinese textbooks directory not found: {chinese_dir}")
-            return 0
-
-        # Map Chinese numeral to year group
-        chinese_num_to_year = {
-            "第一册": 1,
-            "第二册": 2,
-            "第三册": 3,
-            "第四册": 4,
-            "第五册": 5,
-            "第六册": 6,
-            "第七册": 7,
-            "第八册": 8,
-            "第九册": 9,
-        }
-
-        texts = []
-        metadatas_list = []
-        doc_ids = []
-
-        # Iterate through each volume folder
-        for volume_folder in os.listdir(chinese_dir):
-            volume_path = os.path.join(chinese_dir, volume_folder)
-            if not os.path.isdir(volume_path):
-                continue
-
-            # Match volume name to year group
-            year_group = None
-            for chinese_num, year in chinese_num_to_year.items():
-                if chinese_num in volume_folder:
-                    year_group = year
-                    break
-
-            if year_group is None:
-                logger.warning(f"[RAG] Could not determine year group for: {volume_folder}")
-                continue
-
-            # Find PDF files in subfolders
-            for root, _dirs, files in os.walk(volume_path):
-                for filename in files:
-                    if not filename.endswith(".pdf"):
-                        continue
-
-                    filepath = os.path.join(root, filename)
-                    doc_id = f"chinese_y{year_group}_{filename.replace('.pdf', '')}"
-
-                    # Skip if already ingested
-                    try:
-                        existing = self.chinese_collection.get(ids=[doc_id])
-                        if existing and existing.get("ids"):
-                            logger.debug(f"[RAG] Already ingested: {doc_id}")
-                            continue
-                    except Exception:
-                        pass
-
-                    metadata = {
-                        "subject": "Chinese",
-                        "year_group": year_group,
-                        "volume": volume_folder,
-                        "filename": filename,
-                        "filepath": filepath,
-                        "source": "chinese_textbook",
-                        "ingested_at": datetime.now().isoformat(),
-                    }
-
-                    # Use filename and path as content (PDF parsing would need additional library)
-                    content = f"Chinese Textbook - Year {year_group}\nVolume: {volume_folder}\nFile: {filename}\nPath: {filepath}"
-
-                    texts.append(content)
-                    metadatas_list.append(metadata)
-                    doc_ids.append(doc_id)
-
-        if texts:
-            self.chinese_collection.add(documents=texts, metadatas=metadatas_list, ids=doc_ids)
-            logger.info(f"[RAG] Ingested {len(doc_ids)} Chinese textbook documents")
-
-        return len(doc_ids)
-
-    def search_chinese_textbooks(
-            self,
-            query: str,
-            year_group: int = None,
-            k: int = 5,
-    ) -> List[Dict[str, Any]]:
-        """Search Chinese textbooks
-
-        Args:
-            query: Search query
-            year_group: Optional year group filter
-            k: Number of results
-
-        Returns:
-            List of search results
-        """
-        filters = {}
-        if year_group is not None:
-            filters["year_group"] = year_group
-
-        where_clause = self._build_where_clause(filters) if filters else None
-
-        query_kwargs = {
-            "query_texts": [query],
-            "n_results": k,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where_clause:
-            query_kwargs["where"] = where_clause
-
-        raw = self.chinese_collection.query(**query_kwargs)
-
-        results = []
-        if raw and raw.get("ids") and raw["ids"][0]:
-            for i in range(len(raw["ids"][0])):
-                results.append({
-                    "content": raw["documents"][0][i],
-                    "metadata": raw["metadatas"][0][i],
-                    "score": raw["distances"][0][i],
-                })
-
-        return results
-
     def search_homework_answers(
             self,
             doc_id: str,
@@ -625,19 +499,6 @@ def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
     """Get previous topics covered for a student in a subject"""
     store = get_elevenplus_rag_store()
     return store.get_student_previous_topics(student_id, subject)
-
-
-def ingest_chinese_textbooks(chinese_dir: str = None) -> int:
-    """Ingest Chinese textbooks into RAG"""
-    store = get_elevenplus_rag_store()
-    return store.ingest_chinese_textbooks(chinese_dir)
-
-
-def search_chinese_textbooks(query: str, year_group: int = None, k: int = 5) -> List[Dict[str, Any]]:
-    """Search Chinese textbooks"""
-    store = get_elevenplus_rag_store()
-    return store.search_chinese_textbooks(query, year_group, k)
-
 
 def search_homework_answers(doc_id: str) -> Optional[str]:
     """通过 doc_id 获取正确答案

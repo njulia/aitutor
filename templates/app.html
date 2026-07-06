@@ -529,10 +529,10 @@
                 🎯 11+ Practice
             </button>
             <button class="tab active" onclick="switchTab('quick')">
-                ⚡ Quick Select
+                ⚡ Quick Homework
             </button>
             <button class="tab" onclick="switchTab('custom')">
-                📝 Custom Profile
+                📝 Custom Homework 
             </button>
             <button class="tab" onclick="switchTab('review')">
                 ✅ Check Homework
@@ -790,6 +790,35 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         let isPracticeMode = false;
         let currentPracticeContent = '';
         let currentPracticeSubject = 'Maths';
+
+        // 订阅状态
+        let hasSubscription = null; // null = 未检查, true/false = 已检查
+
+        // 检查订阅状态
+        async function checkSubscription() {
+            if (hasSubscription !== null) return hasSubscription;
+            try {
+                const resp = await fetch('/api/check-subscription');
+                const data = await resp.json();
+                hasSubscription = data.has_subscription === true;
+                return hasSubscription;
+            } catch(e) {
+                console.error('Failed to check subscription:', e);
+                hasSubscription = false;
+                return false;
+            }
+        }
+
+        // 检查是否需要订阅才能使用高级功能
+        async function requireSubscription(featureName) {
+            const subscribed = await checkSubscription();
+            if (!subscribed) {
+                alert(`${featureName} requires a subscription. Please subscribe to continue.`);
+                window.location.href = '/pricing';
+                return false;
+            }
+            return true;
+        }
 
         // 状态保存（用于在功能切换时保留答案和批改结果）
         let savedHomeworkState = null;
@@ -1178,18 +1207,16 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             .finally(() => hideLoading());
         }
 
-        function generateCustomHomeworkEleven() {
+        async function generateCustomHomeworkEleven() {
+            // 检查订阅
+            if (!await requireSubscription('Customize 11+ Practice')) return;
+
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
-            
-<!--            if (subjects.length === 0) {-->
-<!--                alert('Please select at least one subject!');-->
-<!--                return;-->
-<!--            }-->
-<!--            -->
+
             clearSavedState();
             showLoading();
-            
+
             fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1327,7 +1354,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             document.getElementById('results').style.display = 'block';
         }
 
-        function ExplainDeep() {
+        async function ExplainDeep() {
+            // 检查订阅
+            if (!await requireSubscription('Explain in Detail')) return;
+
             // 保存当前状态（答案 + 批改结果），以便返回时恢复
             saveCurrentState();
 
@@ -1403,7 +1433,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             }
         }
 
-        function ImprovePractice() {
+        async function ImprovePractice() {
+            // 检查订阅
+            if (!await requireSubscription('Help me improve')) return;
+
             // 保存当前状态（答案 + 批改结果），以便返回时恢复
             saveCurrentState();
 
@@ -1567,7 +1600,10 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 
         // ---- 学习进度追踪 ----
 
-        function TrackProgress() {
+        async function TrackProgress() {
+            // 检查订阅
+            if (!await requireSubscription('Track Progress')) return;
+
             // 保存当前状态到 sessionStorage，以便从定价页返回时恢复
             const state = {
                 homework: currentHomework,

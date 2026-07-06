@@ -123,17 +123,58 @@
             margin-top: 30px;
         }
         
+        /* 鼓励反馈横幅 */
+        .feedback-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 30px 35px;
+            margin-bottom: 30px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .feedback-banner::after {
+            content: '';
+            position: absolute;
+            top: -30px;
+            right: -30px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        
+        .feedback-headline {
+            font-size: 1.6em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .feedback-message {
+            font-size: 1.05em;
+            line-height: 1.6;
+            opacity: 0.95;
+            margin-bottom: 12px;
+        }
+        
+        .feedback-tip {
+            font-size: 0.95em;
+            opacity: 0.85;
+            font-style: italic;
+        }
+        
         .progress-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
             margin-bottom: 30px;
         }
         
         .stat-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 25px;
+            padding: 22px 18px;
             border-radius: 15px;
             text-align: center;
         }
@@ -150,14 +191,22 @@
             background: linear-gradient(135deg, #4facfe, #00f2fe);
         }
         
+        .stat-card.teal {
+            background: linear-gradient(135deg, #0cebeb, #20e3b2);
+        }
+        
+        .stat-card.pink {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+        
         .stat-value {
-            font-size: 2.5em;
+            font-size: 2.2em;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .stat-label {
-            font-size: 0.95em;
+            font-size: 0.88em;
             opacity: 0.9;
         }
         
@@ -283,6 +332,128 @@
             display: none;
         }
         
+        /* 每日目标日历热力图 */
+        .daily-goal-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 15px;
+        }
+        
+        .day-cell {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7em;
+            font-weight: 600;
+            color: white;
+            position: relative;
+        }
+        
+        .day-cell.goal-met {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+        }
+        
+        .day-cell.goal-not-met {
+            background: #e0e0e0;
+            color: #999;
+        }
+        
+        .day-cell .day-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        
+        .day-cell:hover .day-tooltip {
+            display: block;
+        }
+        
+        /* 正确率环形图容器 */
+        .accuracy-ring-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .accuracy-ring {
+            position: relative;
+            width: 140px;
+            height: 140px;
+        }
+        
+        .accuracy-ring canvas {
+            width: 140px !important;
+            height: 140px !important;
+        }
+        
+        .accuracy-ring-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        .accuracy-ring-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .accuracy-ring-text {
+            font-size: 0.8em;
+            color: #888;
+        }
+        
+        .accuracy-details {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .accuracy-detail-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .accuracy-detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .accuracy-subject-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .accuracy-detail-label {
+            flex: 1;
+            font-weight: 500;
+            color: #444;
+        }
+        
+        .accuracy-detail-value {
+            font-weight: 700;
+            color: #667eea;
+        }
+        
         @media (max-width: 768px) {
             .student-selector {
                 flex-direction: column;
@@ -293,7 +464,11 @@
             }
             
             .progress-stats {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .accuracy-ring-container {
+                justify-content: center;
             }
         }
     </style>
@@ -330,23 +505,53 @@
 
         <div id="progress-content" class="hidden">
             <div class="progress-dashboard">
+                <!-- 鼓励性反馈横幅 -->
+                <div class="feedback-banner" id="feedback-banner"></div>
+
+                <!-- 统计卡片 -->
                 <div class="progress-stats" id="stats-container"></div>
 
+                <!-- 正确率详情 -->
+                <div class="card" id="accuracy-card">
+                    <h3 class="section-title">Accuracy Rate</h3>
+                    <div class="accuracy-ring-container">
+                        <div class="accuracy-ring">
+                            <canvas id="accuracyRingChart"></canvas>
+                            <div class="accuracy-ring-label">
+                                <div class="accuracy-ring-value" id="accuracy-ring-value">--</div>
+                                <div class="accuracy-ring-text">Overall</div>
+                            </div>
+                        </div>
+                        <div class="accuracy-details" id="accuracy-details"></div>
+                    </div>
+                </div>
+
+                <!-- 每日目标完成热力图 -->
+                <div class="card" id="daily-goal-card">
+                    <h3 class="section-title">Daily Goal Completion</h3>
+                    <p id="daily-goal-summary" style="color: #666; margin-bottom: 15px;"></p>
+                    <div class="daily-goal-grid" id="daily-goal-grid"></div>
+                </div>
+
+                <!-- 分数趋势图 -->
                 <div class="chart-container">
                     <div class="chart-title">Score Trend Over Time</div>
                     <canvas id="scoreTrendChart"></canvas>
                 </div>
 
+                <!-- 科目正确率柱状图 -->
                 <div class="chart-container">
                     <div class="chart-title">Accuracy by Subject</div>
                     <canvas id="subjectChart"></canvas>
                 </div>
 
+                <!-- 主题进度表 -->
                 <div class="card">
                     <h3 class="section-title">Topic Progress</h3>
                     <div id="topics-container"></div>
                 </div>
 
+                <!-- 最近会话列表 -->
                 <div class="card">
                     <h3 class="section-title">Recent Sessions</h3>
                     <div class="sessions-list" id="sessions-container"></div>
@@ -406,6 +611,10 @@
             const scoreHistory = data.score_history;
             const topics = data.topics;
             const overall = summary.overall;
+            const dailyGoal = data.daily_goal || {};
+            const streak = data.streak || {};
+            const accuracyRate = data.accuracy_rate || {};
+            const feedback = data.feedback || {};
 
             // 销毁旧图表
             charts.forEach(c => c.destroy());
@@ -420,26 +629,17 @@
             document.getElementById('no-data').classList.add('hidden');
             document.getElementById('progress-content').classList.remove('hidden');
 
+            // 渲染鼓励反馈横幅
+            renderFeedback(feedback);
+
             // 渲染统计卡片
-            const statsContainer = document.getElementById('stats-container');
-            statsContainer.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-value">${overall.total_sessions}</div>
-                    <div class="stat-label">Homework Completed</div>
-                </div>
-                <div class="stat-card green">
-                    <div class="stat-value">${overall.avg_accuracy}%</div>
-                    <div class="stat-label">Average Score</div>
-                </div>
-                <div class="stat-card orange">
-                    <div class="stat-value">${summary.by_subject.length}</div>
-                    <div class="stat-label">Subjects Practised</div>
-                </div>
-                <div class="stat-card blue">
-                    <div class="stat-value">${topics.length}</div>
-                    <div class="stat-label">Topics Covered</div>
-                </div>
-            `;
+            renderStats(overall, streak, dailyGoal, accuracyRate, summary.by_subject.length, topics.length);
+
+            // 渲染正确率详情
+            renderAccuracyRate(accuracyRate);
+
+            // 渲染每日目标热力图
+            renderDailyGoalGrid(dailyGoal);
 
             // 渲染分数趋势图
             renderScoreTrendChart(scoreHistory);
@@ -452,6 +652,148 @@
 
             // 渲染最近会话列表
             renderSessionsList(scoreHistory);
+        }
+
+        function renderFeedback(feedback) {
+            const banner = document.getElementById('feedback-banner');
+            if (!feedback.headline) {
+                banner.classList.add('hidden');
+                return;
+            }
+            banner.classList.remove('hidden');
+            banner.innerHTML = `
+                <div class="feedback-headline">${feedback.headline}</div>
+                <div class="feedback-message">${feedback.message || ''}</div>
+                <div class="feedback-tip">${feedback.tip || ''}</div>
+            `;
+        }
+
+        function renderStats(overall, streak, dailyGoal, accuracyRate, subjectCount, topicCount) {
+            const statsContainer = document.getElementById('stats-container');
+            const overallAccuracy = accuracyRate.overall_accuracy !== null && accuracyRate.overall_accuracy !== undefined
+                ? accuracyRate.overall_accuracy
+                : overall.avg_accuracy;
+
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${overall.total_sessions}</div>
+                    <div class="stat-label">Homework Completed</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-value">${overallAccuracy}%</div>
+                    <div class="stat-label">Overall Accuracy</div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="stat-value">${streak.current_streak || 0}</div>
+                    <div class="stat-label">Day Streak</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-value">${streak.best_streak || 0}</div>
+                    <div class="stat-label">Best Streak</div>
+                </div>
+                <div class="stat-card teal">
+                    <div class="stat-value">${dailyGoal.daily_goal_rate || 0}%</div>
+                    <div class="stat-label">Daily Goal Rate</div>
+                </div>
+                <div class="stat-card pink">
+                    <div class="stat-value">${topicCount}</div>
+                    <div class="stat-label">Topics Covered</div>
+                </div>
+            `;
+        }
+
+        function renderAccuracyRate(accuracyRate) {
+            const ringValue = document.getElementById('accuracy-ring-value');
+            const detailsContainer = document.getElementById('accuracy-details');
+
+            const overall = accuracyRate.overall_accuracy;
+            if (overall === null || overall === undefined) {
+                ringValue.textContent = '--';
+                detailsContainer.innerHTML = '<p style="color: #888;">No question-level accuracy data yet. Complete more practice to unlock detailed accuracy tracking.</p>';
+                return;
+            }
+
+            ringValue.textContent = overall + '%';
+
+            // 绘制环形图
+            const ctx = document.getElementById('accuracyRingChart');
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Correct', 'Incorrect'],
+                    datasets: [{
+                        data: [overall, 100 - overall],
+                        backgroundColor: ['#667eea', '#e0e0e0'],
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    cutout: '72%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false },
+                    },
+                }
+            });
+            charts.push(chart);
+
+            // 各科正确率明细
+            const bySubject = accuracyRate.by_subject || [];
+            const subjectColors = {
+                'Maths': '#667eea',
+                'English': '#ee0979',
+                'Science': '#11998e',
+                'Spanish': '#ff6a00',
+            };
+            const defaultColors = ['#764ba2', '#00b4d8', '#f5576c', '#38ef7d'];
+
+            if (bySubject.length === 0) {
+                detailsContainer.innerHTML = '<p style="color: #888;">No subject-level data yet.</p>';
+                return;
+            }
+
+            detailsContainer.innerHTML = bySubject.map((s, i) => {
+                const color = subjectColors[s.subject] || defaultColors[i % defaultColors.length];
+                return `
+                    <div class="accuracy-detail-row">
+                        <span class="accuracy-subject-dot" style="background: ${color}"></span>
+                        <span class="accuracy-detail-label">${s.subject}</span>
+                        <span class="accuracy-detail-value">${s.accuracy}%</span>
+                        <span style="color: #aaa; font-size: 0.85em;">(${s.questions_correct}/${s.questions_attempted})</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderDailyGoalGrid(dailyGoal) {
+            const grid = document.getElementById('daily-goal-grid');
+            const summary = document.getElementById('daily-goal-summary');
+            const breakdown = dailyGoal.daily_breakdown || [];
+
+            if (breakdown.length === 0) {
+                summary.textContent = 'No daily activity recorded yet.';
+                grid.innerHTML = '';
+                return;
+            }
+
+            summary.textContent = `You met your daily goal on ${dailyGoal.goal_met_days} out of ${dailyGoal.total_active_days} active days (${dailyGoal.daily_goal_rate}%).`;
+
+            grid.innerHTML = breakdown.map(d => {
+                const dateObj = new Date(d.date);
+                const dayNum = dateObj.getDate();
+                const monthStr = dateObj.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+                const cls = d.goal_met ? 'goal-met' : 'goal-not-met';
+                const tooltipText = d.goal_met
+                    ? `${monthStr}: ${d.count} session(s) - Goal met!`
+                    : `${monthStr}: ${d.count} session(s)`;
+                return `
+                    <div class="day-cell ${cls}">
+                        ${dayNum}
+                        <span class="day-tooltip">${tooltipText}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderScoreTrendChart(scoreHistory) {
