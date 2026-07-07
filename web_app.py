@@ -23,7 +23,7 @@ import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -212,26 +212,109 @@ def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus
     return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
 
 
-def review_homework(homework_content: str, student_answers: str, subject: str, profile=None):
+def _split_homework_into_questions(homework_content: str, subject: str) -> List[Dict[str, str]]:
+    """
+    Splits a block of homework content into individual questions.
+    Assumes questions are numbered (e.g., 1., 2., (1), (2), or bullet points).
+    """
+    questions = []
+    # Split by common numbering patterns or bullet points
+    # This regex tries to capture:
+    # 1. Number followed by a dot (e.g., "1. Question text")
+    # 2. Number in parentheses (e.g., "(1) Question text")
+    # 3. Bullet points (e.g., "- Question text" or "* Question text")
+    # It also handles multi-line questions by looking for the next pattern.
+
+    # First, try to split by numbered questions (1., 2., etc.)
+    # This pattern looks for a number followed by a dot and a space, at the beginning of a line.
+    # It captures the number and the rest of the question text until the next number or end of string.
+    numbered_questions = re.split(r'\n\s*(\d+\.\s)', homework_content)
+    
+    # The first element might be empty or a header before the first question
+    if numbered_questions and not numbered_questions[0].strip():
+        numbered_questions = numbered_questions[1:] # Remove empty string at the beginning
+
+    i = 0
+    while i < len(numbered_questions):
+        if re.match(r'\d+\.\s', numbered_questions[i]): # If it's a number and a dot
+            question_number = numbered_questions[i].strip()
+            question_text = numbered_questions[i+1].strip() if i+1 < len(numbered_questions) else ""
+            questions.append({
+                "subject": subject,
+                "content": f"{question_number}{question_text}",
+                "original_full_content": homework_content # Keep full content for context if needed
+            })
+            i += 2
+        else: # If it's not a numbered question, treat it as part of the previous or a standalone block
+            # This handles cases where the first part is a header or unnumbered intro
+            if numbered_questions[i].strip():
+                questions.append({
+                    "subject": subject,
+                    "content": numbered_questions[i].strip(),
+                    "original_full_content": homework_content
+                })
+            i += 1
+
+    # If no numbered questions were found, try splitting by bullet points or just treat as one block
+    if not questions:
+        bullet_questions = re.split(r'\n\s*([-*]\s)', homework_content)
+        if len(bullet_questions) > 1:
+            # The first element might be a header or empty
+            if bullet_questions[0].strip():
+                questions.append({
+                    "subject": subject,
+                    "content": bullet_questions[0].strip(),
+                    "original_full_content": homework_content
+                })
+            for i in range(1, len(bullet_questions), 2):
+                if i + 1 < len(bullet_questions):
+                    questions.append({
+                        "subject": subject,
+                        "content": f"{bullet_questions[i]}{bullet_questions[i+1].strip()}",
+                        "original_full_content": homework_content
+                    })
+        else:
+            # If still no clear split, treat the whole content as one question
+            questions.append({
+                "subject": subject,
+                "content": homework_content.strip(),
+                "original_full_content": homework_content
+            })
+
+    # Filter out any empty content questions that might arise from splitting
+    questions = [q for q in questions if q["content"].strip()]
+    
+    # Assign unique IDs to each question
+    for i, q in enumerate(questions):
+        q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i+1}"
+
+    return questions
+
+
+def review_homework(homework_content: str, student_answers: str, subject: str, profile=None, is_tutor_mode: bool = False):
     """批改作业 - 使用 REVIEW_HOMEWORK_PROMPT 生成简洁答案和基本解释"""
     from src.llm_client import format_prompt, build_messages
-    from src.prompts import REVIEW_HOMEWORK_PROMPT
+    from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT
     from src.cache import review_cache, make_cache_key
 
     if profile is None:
         profile = {"year_group": 3, "age": 7}
 
-    # 检查缓存
-    cache_key = make_cache_key("review", subject, str(profile.get("year_group", 3)),
+    # Determine which prompt to use
+    prompt_template = REVIEW_TUTOR_QUESTION_PROMPT if is_tutor_mode else REVIEW_HOMEWORK_PROMPT
+
+    # Cache key needs to differentiate between tutor mode and homework mode
+    cache_key_prefix = "review_tutor" if is_tutor_mode else "review_homework"
+    cache_key = make_cache_key(cache_key_prefix, subject, str(profile.get("year_group", 3)),
                                homework_content[:200], student_answers[:200])
     cached = review_cache.get(cache_key)
     if cached:
-        logger.info("[Cache] 命中批改缓存")
+        logger.info("[Cache] 命中批改缓存 (%s)", cache_key_prefix)
         return {"success": True, "review": cached, "from_cache": True}
 
     try:
         prompt_text = format_prompt(
-            REVIEW_HOMEWORK_PROMPT,
+            prompt_template,
             student_profile=str(profile),
             subject=subject,
             day=datetime.now().strftime("%A, %B %d, %Y"),
@@ -244,25 +327,26 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
         # 写入缓存
         review_cache.set(cache_key, result)
 
-        # 保存进度到数据库
-        try:
-            from src.progress_db import save_homework_session
-            # 从 review 文本中提取分数（如 "Score: 7/10" 或 "7/10"）
-            score_match = re.search(r"(\d+(?:\.\d+)?)\s*/\s*(\d+)", result)
-            score = float(score_match.group(1)) if score_match else None
+        # 保存进度到数据库 (Only save for full homework sessions, not individual tutor questions)
+        if not is_tutor_mode:
+            try:
+                from src.progress_db import save_homework_session
+                # 从 review 文本中提取分数（如 "Score: 7/10" 或 "7/10"）
+                score_match = re.search(r"(\d+(?:\.\d+)?)\s*/\s*(\d+)", result)
+                score = float(score_match.group(1)) if score_match else None
 
-            student_id = profile.get("student_id", "anonymous")
-            save_homework_session(
-                student_id=student_id,
-                subject=subject,
-                year_group=profile.get("year_group", 3),
-                homework_content=homework_content,
-                student_answers=student_answers,
-                score=score,
-                review_text=result,
-            )
-        except Exception as db_exc:
-            logger.warning("Failed to save progress: %s", db_exc)
+                student_id = profile.get("student_id", "anonymous")
+                save_homework_session(
+                    student_id=student_id,
+                    subject=subject,
+                    year_group=profile.get("year_group", 3),
+                    homework_content=homework_content,
+                    student_answers=student_answers,
+                    score=score,
+                    review_text=result,
+                )
+            except Exception as db_exc:
+                logger.warning("Failed to save progress: %s", db_exc)
 
         return {"success": True, "review": result}
     except Exception as exc:
@@ -366,6 +450,7 @@ class ProfileRequest(BaseModel):
     year: Optional[int] = None
     student_id: Optional[str] = None
     is_eleven_plus: bool = False
+    mode: Optional[str] = "homework" # Added mode field
 
 
 class ReviewRequest(BaseModel):
@@ -374,6 +459,7 @@ class ReviewRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     session_id: Optional[str] = None
+    is_tutor_mode: Optional[bool] = False # Added for tutor mode review
 
 
 class ExplainDeepRequest(BaseModel):
@@ -566,9 +652,18 @@ async def api_generate(request: ProfileRequest):
                 content={"success": False, "error": "No subjects selected"},
             )
 
-        results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
+        # Generate homework for all subjects
+        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
 
-        return {"success": True, "homework": results, "profile": profile}
+        if request.mode == "tutor":
+            individual_questions = []
+            for hw_block in all_homework_results:
+                # Split each subject's homework content into individual questions
+                split_questions = _split_homework_into_questions(hw_block["content"], hw_block["subject"])
+                individual_questions.extend(split_questions)
+            return {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
+        else: # Default to homework mode
+            return {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
     except Exception as exc:
         logger.error("Error generating homework: %s", exc)
         return JSONResponse(
@@ -587,7 +682,7 @@ async def api_review(request: ReviewRequest):
             profile = profile or session.get("profile")
 
         result = review_homework(
-            request.homework, request.answers, request.subject, profile
+            request.homework, request.answers, request.subject, profile, is_tutor_mode=request.is_tutor_mode
         )
         return result
     except Exception as exc:

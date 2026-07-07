@@ -505,6 +505,29 @@
             margin-bottom: 10px;
             color: #667eea;
         }
+
+        /* Mode selection styles */
+        .mode-selection {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mode-selection label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: normal;
+            margin-bottom: 0; /* Override default form-group margin */
+        }
+
+        .mode-selection input[type="radio"] {
+            width: auto;
+            margin-right: 8px;
+            transform: scale(1.2); /* Make radio buttons slightly larger */
+        }
     </style>
 </head>
 <body>
@@ -565,6 +588,20 @@
                             style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label>Mode Selection</label>
+                    <div class="mode-selection">
+                        <label>
+                            <input type="radio" name="quick-mode" value="homework" checked>
+                            Homework Mode (All questions at once)
+                        </label>
+                        <label>
+                            <input type="radio" name="quick-mode" value="tutor">
+                            Tutor Mode (One question at a time)
+                        </label>
+                    </div>
+                </div>
                 
                 <div class="form-group">
                     <label>Subjects</label>
@@ -613,14 +650,6 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                 <p style="color: #666; margin-bottom: 30px;">
                     Prepare for grammar school entrance exams
                 </p>
-                <div class="form-group">
-                    <label>Subjects</label>
-                    <div class="subject-grid" id="eleven-subjects"></div>
-                </div>
-                <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
-                    Generate 11+ Practice!
-                </button>
-
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Describe the Student</label>
@@ -629,6 +658,28 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 </textarea>
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label>Mode Selection</label>
+                    <div class="mode-selection">
+                        <label>
+                            <input type="radio" name="eleven-mode" value="homework" checked>
+                            Homework Mode (All questions at once)
+                        </label>
+                        <label>
+                            <input type="radio" name="eleven-mode" value="tutor">
+                            Tutor Mode (One question at a time)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Subjects</label>
+                    <div class="subject-grid" id="eleven-subjects"></div>
+                </div>
+                <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
+                    Generate 11+ Practice!
+                </button>
                 <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
                     Customize 11+ Practice!
                 </button>
@@ -768,6 +819,19 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                         Track Progress
                     </button>
                 </div>
+
+                <!-- Tutor Mode specific buttons -->
+                <div id="tutor-mode-buttons" style="margin-top: 30px; text-align: center; display: none;">
+                    <button class="btn btn-primary" onclick="reviewCurrentQuestion()">
+                        Review Question
+                    </button>
+                    <button class="btn btn-secondary" onclick="nextQuestion()">
+                        Next Question
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearResults()">
+                        Exit Tutor Mode
+                    </button>
+                </div>
                 
                 <div id="review-result"></div>
             </div>
@@ -790,6 +854,11 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
         let isPracticeMode = false;
         let currentPracticeContent = '';
         let currentPracticeSubject = 'Maths';
+
+        // 新增：作业模式和当前问题索引
+        let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
+        let currentQuestionIndex = 0;
+        let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
 
         // 订阅状态
         let hasSubscription = null; // null = 未检查, true/false = 已检查
@@ -895,7 +964,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                             currentHomework = state.homework;
                             currentProfile = state.profile;
                             currentSubject = state.subject || 'Maths';
-                            displayHomework(state.homework);
+                            currentHomeworkMode = state.mode || 'homework'; // Restore mode
+                            if (currentHomeworkMode === 'tutor') {
+                                currentQuestionIndex = state.questionIndex || 0;
+                                currentQuestionAnswers = state.questionAnswers || {};
+                                displayTutorQuestion(currentQuestionIndex);
+                            } else {
+                                displayHomework(state.homework);
+                            }
+
                             // 恢复答案
                             document.querySelectorAll('.answer-input-inline').forEach(input => {
                                 if (state.answers && state.answers[input.dataset.subject] !== undefined) {
@@ -1122,13 +1199,29 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
             currentHomework = [];
             isPracticeMode = false;
             currentPracticeContent = '';
+            currentHomeworkMode = 'homework'; // Reset mode
+            currentQuestionIndex = 0;
+            currentQuestionAnswers = {};
+            document.getElementById('homework-buttons').style.display = 'block'; // Show homework buttons
+            document.getElementById('tutor-mode-buttons').style.display = 'none'; // Hide tutor buttons
             clearSavedState();
+        }
+
+        function getSelectedMode(name) {
+            const radios = document.getElementsByName(name);
+            for (const radio of radios) {
+                if (radio.checked) {
+                    return radio.value;
+                }
+            }
+            return 'homework'; // Default to homework mode
         }
 
         function generateQuickHomework() {
             const year = parseInt(document.getElementById('quick-year').value);
             const subjects = getSelectedSubjects('quick-subjects');
-            
+            const mode = getSelectedMode('quick-mode');
+
             if (subjects.length === 0) {
                 alert('Please select at least one subject!');
                 return;
@@ -1146,7 +1239,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                     quick_select: true,
                     year: year,
                     subjects: subjects,
-                    student_id: studentId || undefined
+                    student_id: studentId || undefined,
+                    mode: mode // Pass the selected mode
                 })
             })
             .then(response => response.json())
@@ -1154,7 +1248,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    displayHomework(data.homework);
+                    currentHomeworkMode = mode; // Set the global mode
+                    currentQuestionIndex = 0; // Reset question index for new homework
+                    currentQuestionAnswers = {}; // Reset answers for new homework
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1172,6 +1274,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 
         function generateQuickHomeworkEleven() {
             const subjects = getSelectedSubjects('eleven-subjects');
+            const mode = getSelectedMode('eleven-mode');
 
             if (subjects.length === 0) {
                 alert('Please select at least one subject!');
@@ -1187,7 +1290,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 body: JSON.stringify({
                     quick_select: true,
                     subjects: subjects,
-                    is_eleven_plus: true
+                    is_eleven_plus: true,
+                    mode: mode // Pass the selected mode
                 })
             })
             .then(response => response.json())
@@ -1195,7 +1299,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    displayHomework(data.homework);
+                    currentHomeworkMode = mode; // Set the global mode
+                    currentQuestionIndex = 0; // Reset question index for new homework
+                    currentQuestionAnswers = {}; // Reset answers for new homework
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1213,6 +1325,7 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
 
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
+            const mode = getSelectedMode('eleven-mode');
 
             clearSavedState();
             showLoading();
@@ -1223,7 +1336,8 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 body: JSON.stringify({
                     profile: { description: profileText },
                     subjects: subjects,
-                    is_eleven_plus: true
+                    is_eleven_plus: true,
+                    mode: mode // Pass the selected mode
                 })
             })
             .then(response => response.json())
@@ -1231,7 +1345,15 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    displayHomework(data.homework);
+                    currentHomeworkMode = mode; // Set the global mode
+                    currentQuestionIndex = 0; // Reset question index for new homework
+                    currentQuestionAnswers = {}; // Reset answers for new homework
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1273,9 +1395,104 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                     </div>
                 </div>
             `).join('');
-            
+
             showResults();
+            document.getElementById('homework-buttons').style.display = 'block';
+            document.getElementById('tutor-mode-buttons').style.display = 'none';
         }
+
+        function displayTutorQuestion(index) {
+            if (index >= currentHomework.length) {
+                alert('You have completed all questions!');
+                clearResults(); // Or show a completion message
+                return;
+            }
+
+            const hw = currentHomework[index];
+            const container = document.getElementById('homework-results');
+            container.innerHTML = `
+                <div class="homework-block">
+                    <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length})</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(marked.parse(hw.content))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answer:</h4>
+                            <textarea class="answer-input-inline"
+                                      id="tutor-answer-input"
+                                      placeholder="Write your answer here..."
+                                      data-subject="${hw.subject}"></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Restore saved answer for this question if exists
+            const savedAnswer = currentQuestionAnswers[index] || '';
+            document.getElementById('tutor-answer-input').value = savedAnswer;
+
+            showResults();
+            document.getElementById('homework-buttons').style.display = 'none';
+            document.getElementById('tutor-mode-buttons').style.display = 'block';
+            document.getElementById('review-result').innerHTML = ''; // Clear previous review
+        }
+
+        function reviewCurrentQuestion() {
+            const answerInput = document.getElementById('tutor-answer-input');
+            const studentAnswer = answerInput ? answerInput.value.trim() : '';
+
+            if (!studentAnswer) {
+                alert('Please enter your answer for this question!');
+                return;
+            }
+
+            // Save the current answer
+            currentQuestionAnswers[currentQuestionIndex] = studentAnswer;
+
+            const hw = currentHomework[currentQuestionIndex];
+            const homeworkContent = hw.content;
+            const subject = hw.subject;
+
+            showLoading();
+
+            fetch('/api/review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: homeworkContent,
+                    answers: studentAnswer,
+                    subject: subject,
+                    profile: currentProfile,
+                    is_tutor_mode: true // Indicate tutor mode review
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayReview(data.review);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function nextQuestion() {
+            // Save the current answer before moving to the next question
+            const answerInput = document.getElementById('tutor-answer-input');
+            if (answerInput) {
+                currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
+            }
+
+            currentQuestionIndex++;
+            displayTutorQuestion(currentQuestionIndex);
+        }
+
 
         function reviewGeneratedHomework() {
             // 收集所有答案
@@ -1611,6 +1828,9 @@ Ana is a 9 years old student in Year 5 in London. She is a strong student with a
                 subject: currentSubject,
                 answers: {},
                 reviewHTML: document.getElementById('review-result').innerHTML,
+                mode: currentHomeworkMode, // Save current mode
+                questionIndex: currentQuestionIndex, // Save current question index
+                questionAnswers: currentQuestionAnswers // Save tutor mode answers
             };
             document.querySelectorAll('.answer-input-inline').forEach(input => {
                 state.answers[input.dataset.subject] = input.value;

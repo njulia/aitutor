@@ -90,7 +90,7 @@ Example: ["Maths", "English"]
 
 
 # ============================================================
-# 作业批改 Prompt - 快速批改，简洁答案和基本解释
+# 作业批改 Prompt - 快速批改，简洁答案和基本解释 (用于多问题作业模式)
 # ============================================================
 
 REVIEW_HOMEWORK_PROMPT = """You are an AI tutor reviewing homework for a UK Primary School student (Year 1-6).
@@ -118,6 +118,34 @@ Please review the student's work and provide:
 Return the review in a clear, encouraging format appropriate for a primary school student.
 """
 
+# ============================================================
+# 导师模式批改 Prompt - 针对单个问题给出简洁答案和基本解释
+# ============================================================
+
+REVIEW_TUTOR_QUESTION_PROMPT = """You are an AI tutor reviewing a single homework question for a UK Primary School student (Year 1-6) in Tutor Mode.
+
+Student Information:
+{student_profile}
+
+Subject: {subject}
+Day: {day}
+
+Question:
+{homework_content}
+
+Student's Answer/Work:
+{student_answer}
+
+Please review the student's answer for this SINGLE question and provide:
+1. A clear indication of whether the answer is correct or incorrect.
+2. A brief explanation of the correct answer if the student's answer is wrong or incomplete.
+3. Specific feedback on what the student did well in their attempt.
+4. Specific feedback on areas that need correction or improvement for this question.
+5. Encouragement and motivation relevant to this single question.
+
+Return the review in a clear, encouraging format appropriate for a primary school student. Focus only on the single question provided.
+"""
+
 
 # ============================================================
 # 作业正确答案生成 Prompt
@@ -133,7 +161,7 @@ Year Group: {year_group}
 
 Please provide the correct answers for this homework. Only generate answers for questions/tasks that have clear, unique answers (e.g., maths calculations, grammar exercises, fill-in-the-blank, spelling).
 
-For open-ended questions (e.g., creative writing, opinions, descriptions), provide a brief answer guideline or example instead of marking as "no unique answer".
+For open-ended questions (e.g., creative writing, opinions, descriptions, dialogues), provide a brief answer guideline or example instead of marking as "no unique answer".
 
 Format the answers clearly:
 - Use numbered list matching the homework task numbers
