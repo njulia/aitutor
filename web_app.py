@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, UTC
 from typing import Any, Dict, Optional, List
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -91,6 +91,37 @@ async def lifespan(_app: FastAPI):
     """Warm up LLM on startup."""
     initialize()
     yield
+
+
+def is_logged_in(req: Request) -> bool:
+    """Simple login check: currently looks for a user_id cookie or Authorization/X-User-Id header."""
+    try:
+        if req.cookies.get("user_id"):
+            return True
+        if req.headers.get("X-User-Id") or req.headers.get("Authorization"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def user_has_subscription() -> bool:
+    """Check for any active subscription. In dev mode this checks local DB, in production it queries Stripe."""
+    try:
+        if _dev_mode:
+            from src.progress_db import list_local_subscriptions
+            subs = list_local_subscriptions()
+            for s in subs:
+                if s.get("status") == "active":
+                    return True
+            return False
+        else:
+            import stripe
+            subs = stripe.Subscription.list(limit=1, status="active")
+            return bool(subs.data)
+    except Exception as e:
+        logger.warning("Subscription check failed: %s", e)
+        return False
 
 
 app = FastAPI(
@@ -460,6 +491,8 @@ class ReviewRequest(BaseModel):
     profile: Optional[dict] = None
     session_id: Optional[str] = None
     is_tutor_mode: Optional[bool] = False # Added for tutor mode review
+    from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
+    homework_doc_id: Optional[str] = None  # RAG document id if available
 
 
 class ExplainDeepRequest(BaseModel):
@@ -634,7 +667,7 @@ async def get_year_groups():
 
 
 @app.post("/api/generate")
-async def api_generate(request: ProfileRequest):
+async def api_generate(req: Request, request: ProfileRequest):
     try:
         initialize()
 
@@ -660,7 +693,22 @@ async def api_generate(request: ProfileRequest):
             for hw_block in all_homework_results:
                 # Split each subject's homework content into individual questions
                 split_questions = _split_homework_into_questions(hw_block["content"], hw_block["subject"])
+                # Preserve RAG metadata on each split question
+                for q in split_questions:
+                    q["doc_id"] = hw_block.get("doc_id")
+                    q["from_rag"] = bool(hw_block.get("from_rag", False))
                 individual_questions.extend(split_questions)
+
+            # If user is not subscribed, only return RAG-sourced questions for free users
+            if not user_has_subscription():
+                rag_only = [q for q in individual_questions if q.get("from_rag")]
+                if rag_only:
+                    return {"success": True, "homework": rag_only, "profile": profile, "mode": "tutor", "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
+                # No RAG results - require login and subscription to access tutor mode
+                if not is_logged_in(req):
+                    return JSONResponse(status_code=401, content={"success": False, "error": "Login required to access tutor mode for freshly generated questions"})
+                return JSONResponse(status_code=402, content={"success": False, "error": "Tutor mode requires an active subscription"})
+
             return {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
         else: # Default to homework mode
             return {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
@@ -672,9 +720,16 @@ async def api_generate(request: ProfileRequest):
 
 
 @app.post("/api/review")
-async def api_review(request: ReviewRequest):
+async def api_review(req: Request, request: ReviewRequest):
     try:
         initialize()
+
+        # If this is a tutor-mode review and the question is not from RAG, require subscription
+        if request.is_tutor_mode and not request.from_rag:
+            if not is_logged_in(req):
+                return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use tutor mode review"})
+            if not user_has_subscription():
+                return JSONResponse(status_code=402, content={"success": False, "error": "Tutor mode review requires an active subscription"})
 
         profile = request.profile
         if request.session_id and request.session_id in tutor_sessions:
@@ -693,9 +748,15 @@ async def api_review(request: ReviewRequest):
 
 
 @app.post("/api/explain-deep")
-async def api_explain_deep(request: ExplainDeepRequest):
+async def api_explain_deep(req: Request, request: ExplainDeepRequest):
     try:
         initialize()
+
+        # ExplainDeep is a paid feature - require login and active subscription
+        if not is_logged_in(req):
+            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Explain in Detail"})
+        if not user_has_subscription():
+            return JSONResponse(status_code=402, content={"success": False, "error": "Explain in Detail requires an active subscription"})
 
         result = explain_deep(
             request.homework, request.answers, request.subject,
@@ -710,9 +771,15 @@ async def api_explain_deep(request: ExplainDeepRequest):
 
 
 @app.post("/api/improve-practice")
-async def api_improve_practice(request: ImprovePracticeRequest):
+async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
     try:
         initialize()
+
+        # ImprovePractice is a paid feature - require login and active subscription
+        if not is_logged_in(req):
+            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Help me improve"})
+        if not user_has_subscription():
+            return JSONResponse(status_code=402, content={"success": False, "error": "Help me improve requires an active subscription"})
 
         result = improve_practice(
             request.homework, request.answers, request.subject,
