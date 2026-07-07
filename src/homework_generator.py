@@ -55,7 +55,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         is_eleven_plus: 是否来自 11+ Practice 标签页（所有科目按 Year 6 难度）
 
     Returns:
-        (作业内容字符串, doc_id)
+        (作业内容字符串, doc_id, from_rag)
     """
     # 11+ Practice 标签页或 11+ 专属科目，始终按 Year 6 难度生成
     if is_eleven_plus or _is_eleven_plus_subject(subject):
@@ -81,7 +81,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     cached = homework_cache.get(cache_key)
     if cached:
         logger.info("[Cache] 命中作业缓存: %s Year %d (%s)", subject, year_group, "11+" if is_eleven_plus else "normal")
-        return cached["content"], cached["doc_id"]
+        return cached["content"], cached["doc_id"], cached.get("from_rag", False)
 
     # 2. 获取该学生该科目的历史作业，用于避免重复
     try:
@@ -112,8 +112,8 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             doc_id = rag_results[0]["doc_id"]
             logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s)", subject, year_group, "11+" if is_eleven_plus else "normal")
             # 写入内存缓存
-            homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id})
-            return homework_content, doc_id
+            homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id, "from_rag": True})
+            return homework_content, doc_id, True
     except Exception as e:
         logger.warning("[RAG] Failed to search homework: %s", e)
 
@@ -159,9 +159,9 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         logger.warning("[RAG] Failed to store homework for %s: %s", subject, e)
 
     # 写入内存缓存
-    homework_cache.set(cache_key, {"content": result, "doc_id": doc_id})
+    homework_cache.set(cache_key, {"content": result, "doc_id": doc_id, "from_rag": False})
 
-    return result, doc_id
+    return result, doc_id, False
 
 
 def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
@@ -250,7 +250,7 @@ def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[s
         day_homework = {}
         for subject in day_subjects:
             logger.info("[Homework] Day %d: Generating homework for %s...", day, subject)
-            homework, _ = generate_homework_for_subject(student_profile, subject, llm)
+            homework, _, _ = generate_homework_for_subject(student_profile, subject, llm)
             day_homework[subject] = homework
         homework_plan[day] = day_homework
 
@@ -277,18 +277,18 @@ def generate_homework_parallel(
         is_eleven_plus: 是否来自 11+ Practice 标签页
 
     Returns:
-        [{"subject": str, "content": str, "doc_id": str}]
+        [{"subject": str, "content": str, "doc_id": str, "from_rag": bool}]
     """
     if len(subjects) <= 1:
         # 单科目无需并行
         results = []
         for subject in subjects:
             try:
-                content, doc_id = generate_homework_for_subject(student_profile, subject, llm, is_eleven_plus=is_eleven_plus)
-                results.append({"subject": subject, "content": content, "doc_id": doc_id})
+                content, doc_id, from_rag = generate_homework_for_subject(student_profile, subject, llm, is_eleven_plus=is_eleven_plus)
+                results.append({"subject": subject, "content": content, "doc_id": doc_id, "from_rag": from_rag})
             except Exception as exc:
                 logger.error("[Homework] 生成 %s 失败: %s", subject, exc)
-                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None})
+                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None, "from_rag": False})
         return results
 
     results = []
@@ -307,11 +307,11 @@ def generate_homework_parallel(
         for future in as_completed(future_to_subject):
             subject = future_to_subject[future]
             try:
-                content, doc_id = future.result()
-                results.append({"subject": subject, "content": content, "doc_id": doc_id})
+                content, doc_id, from_rag = future.result()
+                results.append({"subject": subject, "content": content, "doc_id": doc_id, "from_rag": from_rag})
                 logger.info("[Homework] 并行生成完成: %s", subject)
             except Exception as exc:
                 logger.error("[Homework] 并行生成 %s 失败: %s", subject, exc)
-                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None})
+                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None, "from_rag": False})
 
     return results

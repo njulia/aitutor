@@ -1,0 +1,17 @@
+@web_app.py   @app.html 点击"generate homework！" 和"generate 11+ practice"按钮后会从rag中找出作业，同时输出多个问题。把按钮拆分为两个功能：1. “homework mode”，和当前功能一致，输出多个问题，批阅作业分为快速批阅和详细批阅。2. “tutor mode”, 输出一个问题，用户点击“review”，直接给出详细批阅结果，用户点击“next"后再输出新的一个问题。如果问题从rag中读取，免费输出。检查作业“homework mode"免费，ExplainDeep()和ImprovePractice()h和TrackProgress()收费。所有tutor moded的功能收费。用户需要登陆才能使用付费功能。
+
+- Build an interactive school comparison tool (students select 2–3 schools and see acceptance rates, GCSE outcomes side-by-side)?
+- Build a JSON database of UK grammar schools with acceptance rates & GCSE data for your app to query
+- Generate a sitemap XML for SEO
+
+
+- Create additional articles with data visualizations (e.g., "Top 30 Grammar Schools", "Regional 11+ Guide")?
+- "11+ Verbal Reasoning Strategies" (codes, analogies, hidden words)
+- "Non-Verbal Reasoning Patterns Explained" (series, matrices, rotations)
+- "English Comprehension Tips" (inference, vocabulary in context)
+- "11+ Time Management During the Exam"
+
+- Create landing pages for specific regions (London Schools, Home Counties, Northern England, etc.)
+
+
+
