@@ -101,6 +101,14 @@ def init_db() -> None:
             is_dev INTEGER NOT NULL DEFAULT 0
         );
 
+        -- Users table for persistent login
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS ai_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id TEXT NOT NULL,
@@ -619,6 +627,95 @@ def get_all_sessions_summary() -> Dict[str, Any]:
 
 # ---- 本地订阅管理（开发模式绕过 Stripe） ----
 
+
+# ---- 用户认证（持久化用户，密码哈希） ----
+import hashlib
+import binascii
+import os
+
+
+def _hash_password(password: str, salt_hex: str) -> str:
+    """Return hex-encoded PBKDF2-HMAC-SHA256 hash."""
+    salt = bytes.fromhex(salt_hex)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100_000)
+    return binascii.hexlify(dk).decode('ascii')
+
+
+def create_user(username: str, password: str) -> Dict[str, Any]:
+    """Create a new user with salted password hash. Raises if user exists."""
+    conn = _get_db()
+    # Check exists
+    existing = conn.execute("SELECT username FROM users WHERE username = ?", (username,)).fetchone()
+    if existing:
+        raise ValueError("User already exists")
+
+    salt = os.urandom(16).hex()
+    password_hash = _hash_password(password, salt)
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
+        (username, password_hash, salt, now),
+    )
+    conn.commit()
+    return {"username": username, "created_at": now}
+
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    conn = _get_db()
+    row = conn.execute("SELECT username, password_hash, salt, created_at FROM users WHERE username = ?", (username,)).fetchone()
+    return dict(row) if row else None
+
+
+def verify_user_credentials(username: str, password: str) -> bool:
+    user = get_user_by_username(username)
+    if not user:
+        return False
+    salt = user.get('salt')
+    expected_hash = user.get('password_hash')
+    if not salt or not expected_hash:
+        return False
+    calc = _hash_password(password, salt)
+    # Use constant-time compare
+    import hmac
+    return hmac.compare_digest(calc, expected_hash)
+
+
+def ensure_user_columns():
+    """Ensure optional columns exist on users table (migration-safe)."""
+    conn = _get_db()
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if 'is_test' not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+            logger.info("[DB] Added users.is_test column")
+    except Exception as e:
+        logger.warning("Could not ensure user columns: %s", e)
+
+
+def set_user_test_flag(username: str, is_test: bool) -> bool:
+    """Mark a persistent user as a test account (bypass payment checks).
+
+    Returns True if update affected a row.
+    """
+    ensure_user_columns()
+    conn = _get_db()
+    val = 1 if is_test else 0
+    conn.execute("UPDATE users SET is_test = ? WHERE username = ?", (val, username))
+    conn.commit()
+    return conn.total_changes > 0
+
+
+def is_user_test(username: str) -> bool:
+    """Return True if the user is marked as a test account."""
+    ensure_user_columns()
+    conn = _get_db()
+    row = conn.execute("SELECT is_test FROM users WHERE username = ?", (username,)).fetchone()
+    if not row:
+        return False
+    return bool(row["is_test"])
+
+
 def create_local_subscription(
     customer_email: str,
     customer_name: str,
@@ -681,3 +778,4 @@ def get_local_subscription_stats() -> Dict[str, Any]:
 
 # 初始化时创建表
 init_db()
+ensure_user_columns()

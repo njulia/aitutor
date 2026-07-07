@@ -541,6 +541,7 @@
                 <a href="/ks1-homework">KS1</a>
                 <a href="/ks2-homework">KS2</a>
                 <a href="/progress">Progress</a>
+                <a href="#" id="login-link" onclick="openLogin()">Login</a>
             </nav>
         </div>
     </div>
@@ -594,28 +595,21 @@
                             style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Mode Selection</label>
-                    <div class="mode-selection">
-                        <label>
-                            <input type="radio" name="quick-mode" value="homework" checked>
-                            Homework Mode (All questions at once)
-                        </label>
-                        <label>
-                            <input type="radio" name="quick-mode" value="tutor">
-                            Tutor Mode (One question at a time)
-                        </label>
-                    </div>
-                </div>
                 
                 <div class="form-group">
                     <label>Subjects</label>
                     <div class="subject-grid" id="quick-subjects"></div>
                 </div>
-                
-                <button class="btn btn-primary" onclick="generateQuickHomework()">
-                    Generate Homework!
+
+                <div class="form-group">
+                    <label>Mode</label>
+                    <p style="color:#666; margin-top:8px;">Choose either "Generate Homework" for multi-question homework, or "Start Tutor Mode" for one-question tutoring.</p>
+                </div>
+                <button class="btn btn-primary" onclick="generateQuickHomeworkMode('homework')">
+                    Generate Homework
+                </button>
+                <button class="btn btn-primary" onclick="generateQuickHomeworkMode('tutor')" style="margin-left:12px;">
+                    Start Tutor Mode
                 </button>
             </div>
         </div>
@@ -666,27 +660,20 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
                 </div>
 
                 <div class="form-group">
-                    <label>Mode Selection</label>
-                    <div class="mode-selection">
-                        <label>
-                            <input type="radio" name="eleven-mode" value="homework" checked>
-                            Homework Mode (All questions at once)
-                        </label>
-                        <label>
-                            <input type="radio" name="eleven-mode" value="tutor">
-                            Tutor Mode (One question at a time)
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group">
                     <label>Subjects</label>
                     <div class="subject-grid" id="eleven-subjects"></div>
                 </div>
-                <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
-                    Generate 11+ Practice!
+                <div class="form-group">
+                    <label>Mode</label>
+                    <p style="color:#666; margin-top:8px;">Use the buttons below: "Generate 11+ Practice" for multi-question homework, or "Start 11+ Tutor Mode" for one-question tutoring.</p>
+                </div>
+                <button class="btn btn-primary" onclick="generateQuickHomeworkElevenMode('homework')">
+                    Generate 11+ Practice
                 </button>
-                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
+                <button class="btn btn-primary" onclick="generateQuickHomeworkElevenMode('tutor')" style="margin-left:12px;">
+                    Start 11+ Tutor Mode
+                </button>
+                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()" style="margin-left:12px;">
                     Customize 11+ Practice!
                 </button>
             </div>
@@ -810,18 +797,18 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
                 
                 <div id="homework-buttons" style="margin-top: 30px; text-align: center;">
                     <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
-                        Check Answers
+                        Quick Review
                     </button>
-                    <button class="btn btn-secondary" onclick="clearResults()">
+                    <button class="btn btn-primary" onclick="ExplainDeep()" style="margin-left:12px;">
+                        Detailed Review
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearResults()" style="margin-left:12px;">
                         New Homework
                     </button>
-                    <button class="btn btn-secondary" onclick="ExplainDeep()">
-                        Explain in Detail
-                    </button>
-                    <button class="btn btn-secondary" onclick="ImprovePractice()">
+                    <button class="btn btn-secondary" onclick="ImprovePractice()" style="margin-left:12px;">
                         Help me improve
                     </button>
-                    <button class="btn btn-secondary" onclick="TrackProgress()">
+                    <button class="btn btn-secondary" onclick="TrackProgress()" style="margin-left:12px;">
                         Track Progress
                     </button>
                 </div>
@@ -841,6 +828,26 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
                 
                 <div id="review-result"></div>
             </div>
+        </div>
+    </div>
+
+    <div id="login-modal" style="display:none; position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:9999;">
+        <div style="background:white; max-width:420px; margin:50px auto; padding:20px; border-radius:10px;">
+            <h3>Login / Register</h3>
+            <div style="margin-top:10px;">
+                <label>Username</label>
+                <input id="login-username" style="width:100%; padding:8px; margin-top:6px;" />
+            </div>
+            <div style="margin-top:10px;">
+                <label>Password</label>
+                <input id="login-password" type="password" style="width:100%; padding:8px; margin-top:6px;" />
+            </div>
+            <div style="margin-top:15px; text-align:right;">
+                <button class="btn btn-secondary" onclick="closeLogin()">Close</button>
+                <button class="btn btn-primary" style="margin-left:8px;" onclick="submitLogin()">Login</button>
+                <button class="btn btn-secondary" style="margin-left:8px;" onclick="submitRegister()">Register</button>
+            </div>
+            <div id="login-msg" style="margin-top:10px; color:#d32; display:none;"></div>
         </div>
     </div>
 
@@ -886,6 +893,21 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
 
         // 检查是否需要订阅才能使用高级功能
         async function requireSubscription(featureName) {
+            // Check login first
+            try {
+                const loginResp = await fetch('/api/is-logged-in');
+                const loginData = await loginResp.json();
+                if (!loginData.is_logged_in) {
+                    // Open login modal instead of redirecting
+                    openLogin();
+                    return false;
+                }
+            } catch (e) {
+                console.error('Login check failed:', e);
+                openLogin();
+                return false;
+            }
+
             const subscribed = await checkSubscription();
             if (!subscribed) {
                 alert(`${featureName} requires a subscription. Please subscribe to continue.`);
@@ -912,6 +934,87 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
             // 保存按钮区域 HTML
             const btnArea = document.getElementById('homework-buttons');
             if (btnArea) savedButtonsHTML = btnArea.innerHTML;
+        }
+
+        // Login modal controls
+        function openLogin() {
+            document.getElementById('login-modal').style.display = 'flex';
+        }
+        function closeLogin() {
+            document.getElementById('login-modal').style.display = 'none';
+            document.getElementById('login-msg').style.display = 'none';
+        }
+
+        async function submitLogin() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            if (!username || !password) {
+                showLoginMessage('Please enter username and password');
+                return;
+            }
+            try {
+                const resp = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    closeLogin();
+                    // Update subscription state
+                    hasSubscription = null;
+                    await checkSubscription();
+                    document.getElementById('login-link').textContent = 'Logout';
+                    document.getElementById('login-link').onclick = logout;
+                } else {
+                    showLoginMessage(data.error || 'Login failed');
+                }
+            } catch (e) {
+                showLoginMessage('Login error');
+            }
+        }
+
+        async function submitRegister() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            if (!username || !password) {
+                showLoginMessage('Please enter username and password');
+                return;
+            }
+            try {
+                const resp = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    closeLogin();
+                    hasSubscription = null;
+                    await checkSubscription();
+                    document.getElementById('login-link').textContent = 'Logout';
+                    document.getElementById('login-link').onclick = logout;
+                } else {
+                    showLoginMessage(data.error || 'Register failed');
+                }
+            } catch (e) {
+                showLoginMessage('Register error');
+            }
+        }
+
+        function showLoginMessage(msg) {
+            const el = document.getElementById('login-msg');
+            el.style.display = 'block';
+            el.textContent = msg;
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', {method:'POST'});
+            } catch (e) {}
+            document.getElementById('login-link').textContent = 'Login';
+            document.getElementById('login-link').onclick = openLogin;
+            hasSubscription = false;
         }
 
         function restoreSavedState() {
@@ -1213,29 +1316,20 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
             clearSavedState();
         }
 
-        function getSelectedMode(name) {
-            const radios = document.getElementsByName(name);
-            for (const radio of radios) {
-                if (radio.checked) {
-                    return radio.value;
-                }
-            }
-            return 'homework'; // Default to homework mode
-        }
 
-        function generateQuickHomework() {
+        // New: generate with explicit mode (homework | tutor)
+        function generateQuickHomeworkMode(mode) {
             const year = parseInt(document.getElementById('quick-year').value);
             const subjects = getSelectedSubjects('quick-subjects');
-            const mode = getSelectedMode('quick-mode');
 
             if (subjects.length === 0) {
                 alert('Please select at least one subject!');
                 return;
             }
-            
+
             clearSavedState();
             showLoading();
-            
+
             const studentId = document.getElementById('quick-student-id').value.trim();
 
             fetch('/api/generate', {
@@ -1246,7 +1340,7 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
                     year: year,
                     subjects: subjects,
                     student_id: studentId || undefined,
-                    mode: mode // Pass the selected mode
+                    mode: mode // Pass the explicit mode
                 })
             })
             .then(response => response.json())
@@ -1274,13 +1368,14 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
             .finally(() => hideLoading());
         }
 
-        function generateCustomHomework() {
-            window.location.href = '/pricing';
+        // Backwards-compatible wrapper — default to homework (radios removed)
+        function generateQuickHomework() {
+            generateQuickHomeworkMode('homework');
         }
 
-        function generateQuickHomeworkEleven() {
+        // 11+ variant with explicit mode
+        function generateQuickHomeworkElevenMode(mode) {
             const subjects = getSelectedSubjects('eleven-subjects');
-            const mode = getSelectedMode('eleven-mode');
 
             if (subjects.length === 0) {
                 alert('Please select at least one subject!');
@@ -1297,7 +1392,7 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
                     quick_select: true,
                     subjects: subjects,
                     is_eleven_plus: true,
-                    mode: mode // Pass the selected mode
+                    mode: mode // Pass the explicit mode
                 })
             })
             .then(response => response.json())
@@ -1325,13 +1420,28 @@ Ana is a 10-year-old student in Year 5 in London. She is a strong student with a
             .finally(() => hideLoading());
         }
 
+        // Backwards-compatible wrapper
+        function generateQuickHomeworkEleven() {
+            const mode = getSelectedMode('eleven-mode');
+            generateQuickHomeworkElevenMode(mode);
+        }
+
+        function generateCustomHomework() {
+            window.location.href = '/pricing';
+        }
+
+        // Backwards-compatible wrapper — default to homework mode for 11+
+        function generateQuickHomeworkEleven() {
+            generateQuickHomeworkElevenMode('homework');
+        }
+
         async function generateCustomHomeworkEleven() {
             // 检查订阅
             if (!await requireSubscription('Customize 11+ Practice')) return;
 
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
-            const mode = getSelectedMode('eleven-mode');
+            const mode = 'homework';
 
             clearSavedState();
             showLoading();

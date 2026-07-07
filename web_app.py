@@ -94,12 +94,23 @@ async def lifespan(_app: FastAPI):
 
 
 def is_logged_in(req: Request) -> bool:
-    """Simple login check: currently looks for a user_id cookie or Authorization/X-User-Id header."""
+    """Check whether the request has a valid logged-in user cookie or header mapped to an existing user."""
     try:
-        if req.cookies.get("user_id"):
-            return True
-        if req.headers.get("X-User-Id") or req.headers.get("Authorization"):
-            return True
+        user_id = req.cookies.get("user_id")
+        if user_id:
+            try:
+                from src.progress_db import get_user_by_username
+                return get_user_by_username(user_id) is not None
+            except Exception:
+                return False
+        # Support header-based auth for API calls in tests
+        header_user = req.headers.get("X-User-Id") or req.headers.get("Authorization")
+        if header_user:
+            try:
+                from src.progress_db import get_user_by_username
+                return get_user_by_username(header_user) is not None
+            except Exception:
+                return False
     except Exception:
         pass
     return False
@@ -556,6 +567,11 @@ class SubscriptionRequest(BaseModel):
     email: str
     name: str
     duration: str  # "5_days" or "30_days"
+
+
+class AuthRequest(BaseModel):
+    username: str
+    password: str
 
 
 # --- Web routes ---
@@ -1043,6 +1059,54 @@ async def check_subscription():
         return {"has_subscription": False, "error": str(exc)}
 
 
+@app.post("/api/register")
+async def api_register(request: AuthRequest):
+    try:
+        from src.progress_db import create_user
+        # Basic validation
+        username = request.username.strip()
+        password = request.password
+        if not username or not password:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Username and password required"})
+        try:
+            create_user(username, password)
+        except ValueError as ve:
+            return JSONResponse(status_code=400, content={"success": False, "error": str(ve)})
+        # Set cookie
+        resp = JSONResponse({"success": True, "username": username})
+        resp.set_cookie("user_id", username, httponly=True, samesite="lax")
+        return resp
+    except Exception as exc:
+        logger.error("Error in register: %s", exc)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
+
+
+@app.post("/api/login")
+async def api_login(request: AuthRequest):
+    try:
+        from src.progress_db import verify_user_credentials
+        username = request.username.strip()
+        password = request.password
+        if not username or not password:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Username and password required"})
+        ok = verify_user_credentials(username, password)
+        if not ok:
+            return JSONResponse(status_code=401, content={"success": False, "error": "Invalid credentials"})
+        resp = JSONResponse({"success": True, "username": username})
+        resp.set_cookie("user_id", username, httponly=True, samesite="lax")
+        return resp
+    except Exception as exc:
+        logger.error("Error in login: %s", exc)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
+
+
+@app.post("/api/logout")
+async def api_logout():
+    resp = JSONResponse({"success": True})
+    resp.delete_cookie("user_id")
+    return resp
+
+
 @app.post("/api/upload-file")
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -1224,6 +1288,51 @@ async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
     except Exception as e:
         logger.error("[Admin] 创建订阅失败: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Test account management for admins ---
+
+@app.post("/api/admin/test-account")
+async def admin_create_test_account(req: Request):
+    """Create a persistent test user (admin-only). Request JSON: {username, password, create_subscription: bool}
+
+    The created user will be marked as a test account which bypasses subscription checks.
+    In dev mode an accompanying local subscription can also be created.
+    """
+    data = await req.json()
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    create_sub = bool(data.get("create_subscription", True))
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="username and password required")
+    from src.progress_db import create_user, set_user_test_flag, create_local_subscription
+    try:
+        create_user(username, password)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="User already exists")
+    # mark as test
+    set_user_test_flag(username, True)
+
+    # Optionally create a long-lived local subscription in dev mode
+    if _dev_mode and create_sub:
+        try:
+            create_local_subscription(customer_email=username, customer_name=username, product_name="Admin Test Account", duration_days=365)
+        except Exception:
+            logger.warning("Failed to create local subscription for test account %s", username)
+
+    return {"success": True, "username": username}
+
+
+@app.post("/api/admin/users/{username}/test-toggle")
+async def admin_toggle_test(username: str, enable: bool = True):
+    """Toggle a persistent user's test status (enable=true/false)."""
+    from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+    user = get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    ok = set_user_test_flag(username, bool(enable))
+    return {"success": ok, "is_test": bool(enable)}
+
 
 
 @app.get("/api/admin/ai-metrics")
