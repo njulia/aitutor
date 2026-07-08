@@ -33,3 +33,7 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+# data archives
+data_archive/
+data-3-small/
+data/
