@@ -468,16 +468,20 @@ class LLMClient:
 # ---- 模块级便捷函数 ----
 
 def format_prompt(template: str, **kwargs) -> str:
-    """格式化 prompt 模板
+    """格式化 prompt 模板并进行轻量压缩以节省 token
 
     Args:
         template: 包含 {variable} 占位符的模板字符串
         **kwargs: 模板变量
 
     Returns:
-        格式化后的字符串
+        格式化并优化后的字符串
     """
-    return template.format(**kwargs)
+    try:
+        from src.prompt_utils import compact_format
+        return compact_format(template, **kwargs)
+    except Exception:
+        return template.format(**kwargs)
 
 
 def build_messages(user_content: str, system_content: str = None) -> List[Dict[str, str]]:

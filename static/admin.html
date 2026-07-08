@@ -102,12 +102,14 @@
         </div>
         <div>
             <button class="btn btn-primary" onclick="refreshAll()">Refresh</button>
+            <button class="btn" onclick="openCreateTestModal()" style="margin-left:8px;">Create Test Account</button>
         </div>
     </div>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('overview')">Overview</div>
         <div class="tab" onclick="switchTab('users')">Users</div>
+        <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
         <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
@@ -405,6 +407,30 @@
         </div>
     </div>
 
+    <!-- Auth Users Panel -->
+    <div class="panel" id="panel-auth-users">
+        <div class="table-container">
+            <div class="table-header">
+                <h3>Auth Users</h3>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input class="search-box" type="text" placeholder="Search auth users..." id="authUserSearch" oninput="filterAuthUsers()">
+                    <button class="btn btn-primary" onclick="loadAuthUsers()">Refresh</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Created</th>
+                        <th>Test Account</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="authUsersTable"></tbody>
+            </table>
+        </div>
+    </div>
+
     <script>
         const API = '/api/admin';
         let allUsers = [];
@@ -432,6 +458,8 @@
         function refreshAll() {
             const active = document.querySelector('.tab.active');
             if (active) loadTabData(active.textContent.toLowerCase().replace(' ', '-').replace('ai ', 'ai-'));
+            // also refresh auth users list
+            loadAuthUsers();
         }
 
         // API helper
@@ -746,6 +774,44 @@
             } catch(e) {
                 document.getElementById('modelsTable').innerHTML = `<tr><td colspan="7" style="color:#c53030">Error: ${e.message}</td></tr>`;
             }
+        }
+
+        // ---- Auth Users management ----
+        let authUsers = [];
+        async function loadAuthUsers(){
+            try{
+                const data = await fetch('/api/admin/auth-users').then(r=>r.json());
+                authUsers = data.users || [];
+                renderAuthUsers(authUsers);
+            }catch(e){
+                document.getElementById('authUsersTable').innerHTML = '<tr><td colspan="4" style="color:#c53030">Error: '+e.message+'</td></tr>';
+            }
+        }
+
+        function renderAuthUsers(users){
+            document.getElementById('authUsersTable').innerHTML = users.map(u=>`
+                <tr>
+                    <td><code>${u.username}</code></td>
+                    <td>${new Date(u.created_at).toLocaleString()}</td>
+                    <td>${u.is_test ? '<span class="badge badge-blue">Test</span>' : '<span class="badge">Regular</span>'}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="toggleTest('${u.username}', ${u.is_test ? 'false' : 'true'})">${u.is_test ? 'Unmark Test' : 'Mark Test'}</button>
+                    </td>
+                </tr>
+            `).join('')
+        }
+
+        function filterAuthUsers(){
+            const q = document.getElementById('authUserSearch').value.toLowerCase();
+            renderAuthUsers(authUsers.filter(u => (u.username||'').toLowerCase().includes(q)));
+        }
+
+        async function toggleTest(username, enable){
+            try{
+                const resp = await fetch(`/api/admin/users/${encodeURIComponent(username)}/test-toggle?enable=${enable}`, {method:'POST'});
+                const j = await resp.json();
+                if(j.success){ loadAuthUsers(); } else { alert('Error: '+(j.error||JSON.stringify(j))); }
+            }catch(e){ alert('Error: '+e.message); }
         }
 
         async function loadConversations() {

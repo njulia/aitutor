@@ -34,7 +34,12 @@ QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 
 # RAG 存储目录
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH") or os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
+# If data was moved to data_archive, fall back to that path
+if not os.path.exists(CHROMA_DB_PATH):
+    alt = os.path.join(PROJECT_DIR, "data_archive", "chroma_homework_db")
+    if os.path.exists(alt):
+        CHROMA_DB_PATH = alt
 
 
 def _create_embedding_function():
@@ -97,6 +102,7 @@ class HomeworkRAGStore:
         # 作业集合
         self.collection = self.client.get_or_create_collection(
             name="homework_collection",
+            # keep embedding_function for compatibility but we will pass embeddings via cache when adding/searching
             embedding_function=self.embedding_function,
             metadata={"hnsw:space": "cosine"},
         )
@@ -169,11 +175,30 @@ class HomeworkRAGStore:
 
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
-                self.collection.add(
-                    documents=[homework_content],
-                    metadatas=[sanitized_metadata],
-                    ids=[doc_id],
-                )
+                # Compute embeddings with cache to avoid repeated embedding costs
+                try:
+                    from src.embedding_cache import get_embeddings
+                    def _embed_fn(texts):
+                        # use sentence-transformers or API depending on _create_embedding_function
+                        ef = self.embedding_function
+                        # ef may be an object from chromadb utils or a callable; try common interfaces
+                        try:
+                            # sentence-transformers like: ef.embed_documents
+                            if hasattr(ef, 'embed_documents'):
+                                return ef.embed_documents(texts)
+                        except Exception:
+                            pass
+                        # fallback: assume ef is callable
+                        return [ef(t) if callable(ef) else ef for t in texts]
+                    embeddings = get_embeddings([homework_content], _embed_fn)[0]
+                except Exception:
+                    embeddings = None
+
+                add_kwargs = dict(documents=[homework_content], metadatas=[sanitized_metadata], ids=[doc_id])
+                if embeddings is not None:
+                    add_kwargs['embeddings'] = [embeddings]
+
+                self.collection.add(**add_kwargs)
                 logger.info(f"[RAG] Added homework document: {doc_id}")
                 return doc_id
             except Exception as e:
@@ -254,6 +279,25 @@ class HomeworkRAGStore:
         if where_clause:
             query_kwargs["where"] = where_clause
 
+        # If query embeddings supported, compute them with cache
+        try:
+            from src.embedding_cache import get_embeddings
+            def _embed_fn(texts):
+                ef = self.embedding_function
+                try:
+                    if hasattr(ef, 'embed_documents'):
+                        return ef.embed_documents(texts)
+                except Exception:
+                    pass
+                return [ef(t) if callable(ef) else ef for t in texts]
+            query_embs = get_embeddings([query], _embed_fn)[0]
+            query_kwargs['query_embeddings'] = [query_embs]
+            # remove query_texts to avoid double embedding
+            query_kwargs.pop('query_texts', None)
+        except Exception:
+            # fallback to text query
+            pass
+
         raw = self.collection.query(**query_kwargs)
 
         results = []
@@ -261,13 +305,13 @@ class HomeworkRAGStore:
             ids = raw["ids"][0]
             docs = raw["documents"][0]
             metas = raw["metadatas"][0]
-            dists = raw["distances"][0]
+            dists = raw.get("distances") and raw["distances"][0]
             for i in range(len(ids)):
                 results.append({
                     "doc_id": ids[i],
                     "content": docs[i],
                     "metadata": metas[i],
-                    "score": dists[i],
+                    "score": dists[i] if dists else None,
                 })
 
         return results

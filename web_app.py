@@ -94,31 +94,42 @@ async def lifespan(_app: FastAPI):
 
 
 def is_logged_in(req: Request) -> bool:
-    """Check whether the request has a valid logged-in user cookie or header mapped to an existing user."""
+    """Check whether the request has a valid session token cookie or header mapped to an existing user."""
     try:
-        user_id = req.cookies.get("user_id")
-        if user_id:
-            try:
-                from src.progress_db import get_user_by_username
-                return get_user_by_username(user_id) is not None
-            except Exception:
-                return False
-        # Support header-based auth for API calls in tests
-        header_user = req.headers.get("X-User-Id") or req.headers.get("Authorization")
-        if header_user:
-            try:
-                from src.progress_db import get_user_by_username
-                return get_user_by_username(header_user) is not None
-            except Exception:
-                return False
+        from src.auth_tokens import verify_token
+        from src.progress_db import get_user_by_username
+        token = req.cookies.get("session")
+        username = None
+        if token:
+            username = verify_token(token)
+            if username and get_user_by_username(username):
+                return True
+        # Support header-based token for API calls
+        header_token = req.headers.get("Authorization") or req.headers.get("X-User-Id")
+        if header_token:
+            maybe = verify_token(header_token)
+            if maybe and get_user_by_username(maybe):
+                return True
     except Exception:
         pass
     return False
 
 
-def user_has_subscription() -> bool:
-    """Check for any active subscription. In dev mode this checks local DB, in production it queries Stripe."""
+def user_has_subscription(req: Optional[Request] = None) -> bool:
+    """Check for any active subscription. If req provided, allow test users to bypass subscription checks."""
     try:
+        # If request provided and user is marked as test, grant access
+        if req is not None:
+            try:
+                from src.auth_tokens import verify_token
+                token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
+                username = verify_token(token) if token else None
+                if username:
+                    from src.progress_db import is_user_test
+                    if is_user_test(username):
+                        return True
+            except Exception:
+                pass
         if _dev_mode:
             from src.progress_db import list_local_subscriptions
             subs = list_local_subscriptions()
@@ -651,6 +662,21 @@ async def elevenplus_grammar_guide():
 async def elevenplus_vocabulary_list():
     return _static_page("static", "elevenplus", "uk_11plus_vocabulary_list.html")
 
+@app.get("/elevenplus/11plus-acceptance-rates-gcse")
+async def elevenplus_acceptance_rates_gcse():
+    return _static_page("static", "elevenplus", "11plus_acceptance_rates_gcse.html")
+
+@app.get("/elevenplus/11plus-maths-common-mistake")
+async def elevenplus_math_common_mistake():
+    return _static_page("static", "elevenplus", "11plus_maths_common_mistakes.html")
+
+@app.get("/elevenplus/11plus-school-guide")
+async def elevenplus_school_guide():
+    return _static_page("static", "elevenplus", "11plus_school_guide.html")
+
+@app.get("/elevenplus/11plus-time-management")
+async def elevenplus_time_management():
+    return _static_page("static", "elevenplus", "11plus_time_management.html")
 
 # --- API endpoints ---
 
@@ -716,7 +742,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                 individual_questions.extend(split_questions)
 
             # If user is not subscribed, only return RAG-sourced questions for free users
-            if not user_has_subscription():
+            if not user_has_subscription(req):
                 rag_only = [q for q in individual_questions if q.get("from_rag")]
                 if rag_only:
                     return {"success": True, "homework": rag_only, "profile": profile, "mode": "tutor", "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
@@ -744,7 +770,7 @@ async def api_review(req: Request, request: ReviewRequest):
         if request.is_tutor_mode and not request.from_rag:
             if not is_logged_in(req):
                 return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use tutor mode review"})
-            if not user_has_subscription():
+            if not user_has_subscription(req):
                 return JSONResponse(status_code=402, content={"success": False, "error": "Tutor mode review requires an active subscription"})
 
         profile = request.profile
@@ -771,7 +797,7 @@ async def api_explain_deep(req: Request, request: ExplainDeepRequest):
         # ExplainDeep is a paid feature - require login and active subscription
         if not is_logged_in(req):
             return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Explain in Detail"})
-        if not user_has_subscription():
+        if not user_has_subscription(req):
             return JSONResponse(status_code=402, content={"success": False, "error": "Explain in Detail requires an active subscription"})
 
         result = explain_deep(
@@ -794,7 +820,7 @@ async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
         # ImprovePractice is a paid feature - require login and active subscription
         if not is_logged_in(req):
             return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Help me improve"})
-        if not user_has_subscription():
+        if not user_has_subscription(req):
             return JSONResponse(status_code=402, content={"success": False, "error": "Help me improve requires an active subscription"})
 
         result = improve_practice(
@@ -1063,6 +1089,7 @@ async def check_subscription():
 async def api_register(request: AuthRequest):
     try:
         from src.progress_db import create_user
+        from src.auth_tokens import generate_token
         # Basic validation
         username = request.username.strip()
         password = request.password
@@ -1072,9 +1099,11 @@ async def api_register(request: AuthRequest):
             create_user(username, password)
         except ValueError as ve:
             return JSONResponse(status_code=400, content={"success": False, "error": str(ve)})
-        # Set cookie
+        # Set session cookie
+        token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
-        resp.set_cookie("user_id", username, httponly=True, samesite="lax")
+        secure_flag = not _dev_mode
+        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag)
         return resp
     except Exception as exc:
         logger.error("Error in register: %s", exc)
@@ -1085,6 +1114,7 @@ async def api_register(request: AuthRequest):
 async def api_login(request: AuthRequest):
     try:
         from src.progress_db import verify_user_credentials
+        from src.auth_tokens import generate_token
         username = request.username.strip()
         password = request.password
         if not username or not password:
@@ -1092,8 +1122,10 @@ async def api_login(request: AuthRequest):
         ok = verify_user_credentials(username, password)
         if not ok:
             return JSONResponse(status_code=401, content={"success": False, "error": "Invalid credentials"})
+        token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
-        resp.set_cookie("user_id", username, httponly=True, samesite="lax")
+        secure_flag = not _dev_mode
+        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag)
         return resp
     except Exception as exc:
         logger.error("Error in login: %s", exc)
@@ -1103,7 +1135,7 @@ async def api_login(request: AuthRequest):
 @app.post("/api/logout")
 async def api_logout():
     resp = JSONResponse({"success": True})
-    resp.delete_cookie("user_id")
+    resp.delete_cookie("session")
     return resp
 
 
@@ -1412,6 +1444,52 @@ async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50
     """获取对话历史"""
     from src.ai_monitor import get_conversations
     return get_conversations(student_id=student_id, limit=limit)
+
+
+# --- Admin endpoints: embedding cache & auth-user management ---
+
+@app.get("/api/admin/auth-users")
+async def admin_auth_users(limit: int = 100, offset: int = 0):
+    """List registered auth users (username, created_at, is_test)"""
+    from src.progress_db import list_all_users
+    users = list_all_users(limit=limit, offset=offset)
+    return {"success": True, "users": users}
+
+
+@app.get("/api/admin/embedding-cache/stats")
+async def admin_embedding_cache_stats():
+    from src.embedding_cache import get_stats
+    try:
+        return {"success": True, "stats": get_stats()}
+    except Exception as e:
+        logger.error("[Admin] embedding cache stats error: %s", e)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@app.post("/api/admin/embedding-cache/cleanup")
+async def admin_embedding_cache_cleanup(req: Request):
+    """Cleanup the embedding cache.
+    JSON body: { days: optional int, max_rows: optional int }
+    """
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    days = data.get('days')
+    max_rows = data.get('max_rows')
+    from src.embedding_cache import cleanup_older_than, ensure_max_rows
+    result = {}
+    try:
+        if days:
+            removed = cleanup_older_than(int(days))
+            result['removed'] = removed
+        if max_rows:
+            trimmed = ensure_max_rows(int(max_rows))
+            result['trimmed'] = trimmed
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error("[Admin] embedding cache cleanup failed: %s", e)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 static_path = os.path.join(project_root, "static")

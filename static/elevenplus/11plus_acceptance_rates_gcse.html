@@ -31,6 +31,8 @@
 }
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
 <style>
   body {
     font-family: 'Google Sans', Arial, sans-serif;
@@ -322,6 +324,34 @@
   /* Utility */
   .text-center { text-align: center; }
   strong.highlight { color: #EA4335; }
+
+  /* Chart container */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    margin: 30px 0;
+    background: #F8F9FA;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #E0E0E0;
+  }
+  .chart-container canvas {
+    max-width: 100%;
+  }
+  .chart-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #4285F4;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .chart-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 12px;
+    text-align: center;
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -383,6 +413,12 @@
     </tr>
   </tbody>
 </table>
+
+<div class="chart-container">
+  <div class="chart-title">How Acceptance Rates Vary Across UK Grammar Schools</div>
+  <canvas id="acceptanceRateChart"></canvas>
+  <div class="chart-description">Schools with lower acceptance rates receive more applications per available place, creating more competition.</div>
+</div>
 
 <div class="misconception">
   <div class="label">❌ Common Misconception</div>
@@ -476,6 +512,12 @@
 </div>
 
 <p><strong>What This Shows:</strong> More accessible entry point for strong candidates (1 in 3 applicants). Still highly selective. School is effective at developing students' strengths — particularly in STEM. A viable option for bright students who might find super-selective schools less welcoming.</p>
+
+<div class="chart-container">
+  <div class="chart-title">Acceptance Rate vs. GCSE Grade 7+ Outcomes</div>
+  <canvas id="acceptanceVsGCSEChart"></canvas>
+  <div class="chart-description">Higher acceptance rates don't mean lower GCSE outcomes. School quality depends on both selectivity and teaching effectiveness.</div>
+</div>
 
 <h2>Part 3: What Do These Numbers Really Tell You?</h2>
 
@@ -578,6 +620,12 @@
 
 <div class="info-box">
   <strong>How to interpret this table:</strong> If your child typically scores in the top 15% of their cohort on practice papers, a 20% school is realistic, but a 5% school requires sustained improvement to top-10% level. A 50% school is very likely. Focus your preparation energy where it will make the most difference.
+</div>
+
+<div class="chart-container">
+  <div class="chart-title">Realistic Entry Chances by Child's Ability Level</div>
+  <canvas id="prospectChart"></canvas>
+  <div class="chart-description">Green = likely entry, Orange = possible, Red = unlikely. This helps you set realistic targets for practice.</div>
 </div>
 
 <h2>Part 5: Understanding GCSE Performance Metrics</h2>
@@ -714,6 +762,12 @@
   </tbody>
 </table>
 
+<div class="chart-container">
+  <div class="chart-title">Typical 11+ Entry Score Ranges by School Type</div>
+  <canvas id="entryScoresChart"></canvas>
+  <div class="chart-description">Each band shows the typical 11+ score range (out of 200) for different school categories. Know your target school's typical range.</div>
+</div>
+
 <h2>Part 7: How to Use This Information for Your 11+ Preparation</h2>
 
 <h3>Step 1: Identify Your Target School(s)</h3>
@@ -783,6 +837,12 @@
 </div>
 
 <h2>Part 8: GCSE Outcome Scenarios by School Type</h2>
+
+<div class="chart-container">
+  <div class="chart-title">Typical GCSE Grade Distribution by School Selectivity</div>
+  <canvas id="gcseDistributionChart"></canvas>
+  <div class="chart-description">Super-selective schools show more Grade 9s, while selective schools show more variation across grades 6–9. Both produce strong outcomes.</div>
+</div>
 
 <h3>Scenario A: Super-Selective (7% School)</h3>
 <div class="scenario super-selective">
@@ -924,6 +984,231 @@
   <a href="/elevenplus/acceptance-rates-gcse">Acceptance Rates & GCSE</a>
   <a href="/check-my-homework">Check My Homework</a>
 </div>
+
+<script>
+// Chart 1: Acceptance Rate Comparison
+const acceptanceRateCtx = document.getElementById('acceptanceRateChart').getContext('2d');
+new Chart(acceptanceRateCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Super-Selective\n(London)', 'Highly Selective\n(Home Counties)', 'Selective\n(Regional)', 'Less Competitive\n(Rural)'],
+    datasets: [
+      {
+        label: 'Acceptance Rate (%)',
+        data: [10, 20, 40, 65],
+        backgroundColor: ['#EA4335', '#F57C00', '#FBBC05', '#34A853'],
+        borderColor: ['#C5221F', '#D84315', '#F9A825', '#2D8E47'],
+        borderWidth: 2,
+      },
+      {
+        label: 'Applications per Place',
+        data: [10, 5, 2.5, 1.5],
+        backgroundColor: ['rgba(234, 67, 53, 0.2)', 'rgba(245, 124, 0, 0.2)', 'rgba(251, 188, 5, 0.2)', 'rgba(52, 168, 83, 0.2)'],
+        borderColor: ['#EA4335', '#F57C00', '#FBBC05', '#34A853'],
+        borderWidth: 2,
+        yAxisID: 'y1',
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top' }
+    },
+    scales: {
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        title: { display: true, text: 'Acceptance Rate (%)' }
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        title: { display: true, text: 'Applications per Place' },
+        grid: { drawOnChartArea: false }
+      }
+    }
+  }
+});
+
+// Chart 2: Acceptance vs GCSE Outcomes
+const acceptanceVsGCSECtx = document.getElementById('acceptanceVsGCSEChart').getContext('2d');
+new Chart(acceptanceVsGCSECtx, {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'School Examples',
+        data: [
+          { x: 7, y: 78, schoolName: 'Henrietta Barnett' },
+          { x: 18, y: 87, schoolName: 'Guildford High' },
+          { x: 35, y: 76, schoolName: 'Manchester Grammar' }
+        ],
+        backgroundColor: '#4285F4',
+        borderColor: '#1a73e8',
+        borderWidth: 2,
+        pointRadius: 8,
+        pointHoverRadius: 10,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const point = context.raw;
+            return `${point.schoolName}: ${point.x}% acceptance, ${point.y}% Grade 7+`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Acceptance Rate (%)' },
+        min: 0,
+        max: 40
+      },
+      y: {
+        title: { display: true, text: 'GCSE Grade 7+ Rate (%)' },
+        min: 70,
+        max: 95
+      }
+    }
+  }
+});
+
+// Chart 3: Prospects by Ability Level
+const prospectCtx = document.getElementById('prospectChart').getContext('2d');
+new Chart(prospectCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Top 5%', 'Top 10%', 'Top 20%', 'Top 30%'],
+    datasets: [
+      {
+        label: '5% School (Super-Selective)',
+        data: [75, 30, 5, 1],
+        backgroundColor: '#EA4335',
+      },
+      {
+        label: '20% School (Highly Selective)',
+        data: [95, 70, 40, 20],
+        backgroundColor: '#F57C00',
+      },
+      {
+        label: '50% School (Selective)',
+        data: [100, 95, 75, 50],
+        backgroundColor: '#34A853',
+      }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `Likelihood: ${context.parsed.x}%`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        max: 100,
+        title: { display: true, text: 'Likelihood of Entry (%)' }
+      }
+    }
+  }
+});
+
+// Chart 4: Typical Entry Score Ranges
+const entryScoresCtx = document.getElementById('entryScoresChart').getContext('2d');
+new Chart(entryScoresCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Super-Selective', 'Highly Selective', 'Selective', 'Less Competitive'],
+    datasets: [
+      {
+        label: 'Lower Range',
+        data: [175, 155, 140, 100],
+        backgroundColor: ['#1a73e8', '#1976D2', '#1565C0', '#0D47A1'],
+        borderRadius: [0, 0, 0, 0],
+      },
+      {
+        label: 'Upper Range',
+        data: [5, 20, 15, 45],
+        backgroundColor: ['#4285F4', '#42A5F5', '#64B5F6', '#90CAF9'],
+        stacked: true,
+        borderRadius: [8, 8, 8, 8],
+      }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      x: {
+        stacked: true,
+        max: 200,
+        title: { display: true, text: '11+ Entry Score (out of 200)' }
+      }
+    }
+  }
+});
+
+// Chart 5: GCSE Grade Distribution by School Type
+const gcseDistributionCtx = document.getElementById('gcseDistributionChart').getContext('2d');
+new Chart(gcseDistributionCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Grade 9', 'Grade 8', 'Grade 7', 'Grade 6', 'Grade 5 & Below'],
+    datasets: [
+      {
+        label: 'Super-Selective (7%)',
+        data: [62, 28, 8, 2, 0],
+        backgroundColor: '#EA4335',
+      },
+      {
+        label: 'Highly Selective (25%)',
+        data: [35, 45, 18, 2, 0],
+        backgroundColor: '#F57C00',
+      },
+      {
+        label: 'Selective (40%)',
+        data: [20, 35, 30, 12, 3],
+        backgroundColor: '#34A853',
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' }
+    },
+    scales: {
+      y: {
+        stacked: false,
+        title: { display: true, text: 'Percentage of Students (%)' },
+        max: 100
+      },
+      x: {
+        title: { display: true, text: 'GCSE Grade' }
+      }
+    }
+  }
+});
+</script>
 
 </body>
 </html>

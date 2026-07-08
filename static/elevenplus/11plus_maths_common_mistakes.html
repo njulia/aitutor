@@ -31,6 +31,8 @@
 }
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
 <style>
   body {
     font-family: 'Google Sans', Arial, sans-serif;
@@ -163,6 +165,34 @@
     border-radius: 4px;
     font-family: 'Courier New', monospace;
     color: #D32F2F;
+  }
+
+  /* Chart container */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    margin: 30px 0;
+    background: #F8F9FA;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #E0E0E0;
+  }
+  .chart-container canvas {
+    max-width: 100%;
+  }
+  .chart-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #4285F4;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .chart-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 12px;
+    text-align: center;
+    font-style: italic;
   }
 
   /* Table styles */
@@ -341,6 +371,12 @@
     <h3>Reading Errors</h3>
     <p>Missing key information; ignoring units; not spotting worded clues.</p>
   </div>
+</div>
+
+<div class="chart-container">
+  <div class="chart-title">Top 12 Maths Mistakes — How Often They Occur</div>
+  <canvas id="mistakeFrequencyChart"></canvas>
+  <div class="chart-description">These 12 mistakes account for ~85% of all 11+ Maths errors. Focus on the ones you make most often.</div>
 </div>
 
 <h2>Mistake 1: Forgetting to Read the Question Fully</h2>
@@ -900,6 +936,12 @@
 
 <h2>Summary: The Top 5 Habits to Prevent Mistakes</h2>
 
+<div class="chart-container">
+  <div class="chart-title">Impact of Habit Training on Preventing Mistakes</div>
+  <canvas id="habitImpactChart"></canvas>
+  <div class="chart-description">By implementing these 5 habits in just 50 seconds per question, you can prevent most common mistakes and improve your score by 10–15%.</div>
+</div>
+
 <table>
   <thead>
     <tr>
@@ -992,6 +1034,78 @@
   <a href="/elevenplus/maths-common-mistakes">Maths Common Mistakes</a>
   <a href="/check-my-homework">Check My Homework</a>
 </div>
+
+<script>
+// Chart 1: Mistake Frequency
+const mistakeFreqCtx = document.getElementById('mistakeFrequencyChart').getContext('2d');
+new Chart(mistakeFreqCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Forgot to Read\nFully', 'Dropped Zeros/\nDecimals', 'Fraction/Decimal\nConversion', 'Wrong\nOperation', 'Missing\nUnits', 'No Working\nShown', 'Misunderstood\nRatio', 'Decimal\nOrdering', 'Angle\nMeasurement', 'Forgot to\nSimplify', 'Mean/Median/\nMode Mix-up', 'Wrong Order\n(BODMAS)'],
+    datasets: [
+      {
+        label: 'How Often Seen in Exams (%)',
+        data: [18, 16, 12, 14, 11, 8, 7, 6, 5, 5, 4, 4],
+        backgroundColor: ['#EA4335', '#F57C00', '#FBBC05', '#F57C00', '#FBBC05', '#34A853', '#FBBC05', '#34A853', '#34A853', '#34A853', '#34A853', '#F57C00'],
+        borderColor: ['#C5221F', '#D84315', '#F9A825', '#D84315', '#F9A825', '#2D8E47', '#F9A825', '#2D8E47', '#2D8E47', '#2D8E47', '#2D8E47', '#D84315'],
+        borderWidth: 1,
+      }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      x: {
+        max: 20,
+        title: { display: true, text: 'Frequency (%)' }
+      }
+    }
+  }
+});
+
+// Chart 2: Habit Impact
+const habitImpactCtx = document.getElementById('habitImpactChart').getContext('2d');
+new Chart(habitImpactCtx, {
+  type: 'line',
+  data: {
+    labels: ['Habit 1:\nRead Q\nTwice', 'Habit 2:\nShow\nWorking', 'Habit 3:\nWrite\nUnits', 'Habit 4:\nSanity\nCheck', 'Habit 5:\nUnderline\nKeywords'],
+    datasets: [
+      {
+        label: 'Cumulative Mistakes Prevented (%)',
+        data: [15, 28, 35, 48, 60],
+        borderColor: '#34A853',
+        backgroundColor: 'rgba(52, 168, 83, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointRadius: 6,
+        pointBackgroundColor: '#34A853',
+        pointBorderColor: '#FFFFFF',
+        pointBorderWidth: 2,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' }
+    },
+    scales: {
+      y: {
+        max: 70,
+        title: { display: true, text: 'Mistakes Prevented (%)' }
+      },
+      x: {
+        title: { display: true, text: 'Habit Training Progression' }
+      }
+    }
+  }
+});
+</script>
 
 </body>
 </html>

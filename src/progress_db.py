@@ -142,6 +142,11 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_ai_requests_provider ON ai_requests(provider);
         CREATE INDEX IF NOT EXISTS idx_ai_requests_status ON ai_requests(status);
         CREATE INDEX IF NOT EXISTS idx_ai_requests_student ON ai_requests(student_id);
+
+        -- Additional performance indexes
+        CREATE INDEX IF NOT EXISTS idx_students_created_at ON students(created_at);
+        CREATE INDEX IF NOT EXISTS idx_homework_created_at ON homework_sessions(created_at);
+        CREATE INDEX IF NOT EXISTS idx_students_year_group ON students(year_group);
     """)
     conn.commit()
     logger.info("[DB] 数据库初始化完成: %s", DB_PATH)
@@ -689,6 +694,12 @@ def ensure_user_columns():
             conn.execute("ALTER TABLE users ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
             conn.commit()
             logger.info("[DB] Added users.is_test column")
+        # Ensure index exists for fast lookups
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_is_test ON users(is_test)")
+            conn.commit()
+        except Exception as e:
+            logger.warning("Could not create idx_users_is_test: %s", e)
     except Exception as e:
         logger.warning("Could not ensure user columns: %s", e)
 
@@ -774,6 +785,17 @@ def get_local_subscription_stats() -> Dict[str, Any]:
         "estimated_revenue_gbp": 0,
         "subscriptions": list_local_subscriptions(),
     }
+
+
+# ---- 管理员：列出所有持久化用户（auth users） ----
+def list_all_users(limit: int = 100, offset: int = 0):
+    """列出所有注册用户（包含 is_test 标记）"""
+    conn = _get_db()
+    rows = conn.execute(
+        "SELECT username, created_at, COALESCE(is_test, 0) as is_test FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # 初始化时创建表
