@@ -9,7 +9,7 @@ Metadata includes: year_group, subject, homework_minutes, study_year_month, etc.
 
 嵌入模型配置：
   - EMBEDDING_PROVIDER=local（默认）：使用 sentence-transformers 本地模型，零 API 费用
-  - EMBEDDING_PROVIDER=api：使用 OpenAI 兼容 API（AGICTO）
+  - EMBEDDING_PROVIDER=api：使用 OpenAI 兼容 API（QWEN）
 """
 import os
 import time
@@ -31,6 +31,7 @@ LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # API 嵌入（生产环境备用）
 QWEN_API_KEY = os.getenv("QWEN_API_KEY")
+QWEN_ENDPOINT = os.getenv("QWEN_ENDPOINT_OPENAI")
 
 # RAG 存储目录
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,45 +46,40 @@ if not os.path.exists(CHROMA_DB_PATH):
 def _create_embedding_function():
     """根据配置创建嵌入函数
 
-    优先使用本地模型（零费用），回退到 API 嵌入。
+    优先使用 ChromaDB 默认的 ONNX 嵌入（本地、快速、无 PyTorch 依赖）。
+    为了百万级用户的高并发场景，性能优先。
 
     Returns:
         ChromaDB 嵌入函数实例
     """
     if EMBEDDING_PROVIDER == "local":
+        # 优先使用 ONNX 嵌入：最快、最稳定、无 PyTorch 版本问题
         try:
-            from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
-            ef = SentenceTransformerEmbeddingFunction(model_name=LOCAL_EMBEDDING_MODEL)
-            logger.info("[RAG] 使用本地嵌入模型: %s", LOCAL_EMBEDDING_MODEL)
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            ef = DefaultEmbeddingFunction()
+            logger.info("[RAG] 使用 ChromaDB 默认本地嵌入函数 (ONNX) - 最优性能")
             return ef
-        except ImportError:
-            logger.warning(
-                "[RAG] sentence-transformers 未安装，回退到 API 嵌入。"
-                "请运行: pip install sentence-transformers"
-            )
         except Exception as e:
-            logger.warning("[RAG] 本地嵌入模型加载失败: %s，回退到 API 嵌入", e)
+            logger.error("[RAG] DefaultEmbeddingFunction 加载失败: %s", e)
+            raise
 
-    # 回退到 API 嵌入
-    if QWEN_API_KEY:
-        from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
-        ef = OpenAIEmbeddingFunction(
-            model_name="text-embedding-3-small",
-            api_key=QWEN_API_KEY,
-            api_base="https://api.agicto.cn/v1/",
-        )
-        logger.info("[RAG] 使用 API 嵌入模型 (text-embedding-3-small)")
-        return ef
+    # 如果指定为 API 嵌入
+    if EMBEDDING_PROVIDER == "api":
+        if QWEN_API_KEY:
+            from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+            ef = OpenAIEmbeddingFunction(
+                model_name="text-embedding-3-small",
+                api_key=QWEN_API_KEY,
+                api_base=QWEN_ENDPOINT,
+            )
+            logger.info("[RAG] 使用 API 嵌入模型 (text-embedding-3-small)")
+            return ef
+        else:
+            logger.error("[RAG] EMBEDDING_PROVIDER=api 但 QWEN_API_KEY 未设置")
+            raise ValueError("API embedding requires QWEN_API_KEY")
 
-    # 最终回退：使用 ChromaDB 默认的 ONNX 嵌入
-    try:
-        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-        ef = DefaultEmbeddingFunction()
-        logger.info("[RAG] 使用 ChromaDB 默认嵌入函数")
-        return ef
-    except Exception as e:
-        logger.error("[RAG] 无法创建任何嵌入函数: %s", e)
-        raise
+    logger.error("[RAG] 未知的 EMBEDDING_PROVIDER: %s", EMBEDDING_PROVIDER)
+    raise ValueError(f"Unknown EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
 
 
 class HomeworkRAGStore:
@@ -175,29 +171,9 @@ class HomeworkRAGStore:
 
         for attempt in range(1, RAG_MAX_RETRIES + 1):
             try:
-                # Compute embeddings with cache to avoid repeated embedding costs
-                try:
-                    from src.embedding_cache import get_embeddings
-                    def _embed_fn(texts):
-                        # use sentence-transformers or API depending on _create_embedding_function
-                        ef = self.embedding_function
-                        # ef may be an object from chromadb utils or a callable; try common interfaces
-                        try:
-                            # sentence-transformers like: ef.embed_documents
-                            if hasattr(ef, 'embed_documents'):
-                                return ef.embed_documents(texts)
-                        except Exception:
-                            pass
-                        # fallback: assume ef is callable
-                        return [ef(t) if callable(ef) else ef for t in texts]
-                    embeddings = get_embeddings([homework_content], _embed_fn)[0]
-                except Exception:
-                    embeddings = None
-
+                # Let ChromaDB handle embeddings with its configured embedding function
                 add_kwargs = dict(documents=[homework_content], metadatas=[sanitized_metadata], ids=[doc_id])
-                if embeddings is not None:
-                    add_kwargs['embeddings'] = [embeddings]
-
+                
                 self.collection.add(**add_kwargs)
                 logger.info(f"[RAG] Added homework document: {doc_id}")
                 return doc_id
@@ -270,7 +246,7 @@ class HomeworkRAGStore:
         """
         where_clause = self._build_where_clause(filters) if filters else None
 
-        # 直接使用 collection 的 query 方法，嵌入由 embedding_function 自动处理
+        # Let ChromaDB handle embeddings with its configured embedding function
         query_kwargs = {
             "query_texts": [query],
             "n_results": k,
@@ -278,25 +254,6 @@ class HomeworkRAGStore:
         }
         if where_clause:
             query_kwargs["where"] = where_clause
-
-        # If query embeddings supported, compute them with cache
-        try:
-            from src.embedding_cache import get_embeddings
-            def _embed_fn(texts):
-                ef = self.embedding_function
-                try:
-                    if hasattr(ef, 'embed_documents'):
-                        return ef.embed_documents(texts)
-                except Exception:
-                    pass
-                return [ef(t) if callable(ef) else ef for t in texts]
-            query_embs = get_embeddings([query], _embed_fn)[0]
-            query_kwargs['query_embeddings'] = [query_embs]
-            # remove query_texts to avoid double embedding
-            query_kwargs.pop('query_texts', None)
-        except Exception:
-            # fallback to text query
-            pass
 
         raw = self.collection.query(**query_kwargs)
 

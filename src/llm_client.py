@@ -6,7 +6,7 @@
 
 支持两种后端：
 1. Ollama 本地模型（开发/测试，零 API 费用）
-2. OpenAI 兼容 API（AGICTO 等，生产环境使用）
+2. OpenAI 兼容 API（QWEN 等，生产环境使用）
 
 通过环境变量 LLM_PROVIDER 切换：
   - "ollama"：使用 Ollama 本地模型
@@ -55,9 +55,9 @@ def _get_obs():
 # ---- 后端配置 ----
 
 # OpenAI 兼容 API（生产环境）
-DEFAULT_API_BASE = "https://api.agicto.cn/v1/"
-DEFAULT_MODEL = "deepseek-v4-flash"
-VISION_MODEL = "qwen3.5-plus"
+DEFAULT_API_BASE = os.getenv("QWEN_ENDPOINT_OPENAI")
+DEFAULT_MODEL = "qwen-plus"
+VISION_MODEL = "qwen-plus"
 
 # Ollama 本地模型（开发/测试）
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -108,13 +108,13 @@ class LLMClient:
         else:
             # OpenAI 兼容 API
             self.model = model or DEFAULT_MODEL
-            self.api_key = api_key or os.getenv("AGICTO_API_KEY")
+            self.api_key = api_key or os.getenv("QWEN_API_KEY")
             self.api_base = (api_base or DEFAULT_API_BASE).rstrip("/") + "/"
 
             if not self.api_key:
                 raise ValueError(
-                    "AGICTO_API_KEY 环境变量未设置，请先设置: "
-                    "export AGICTO_API_KEY='your-key'\n"
+                    "QWEN_API_KEY 环境变量未设置，请先设置: "
+                    "export QWEN_API_KEY='your-key'\n"
                     "或者设置 LLM_PROVIDER=ollama 使用本地模型"
                 )
             logger.info(

@@ -6,17 +6,17 @@ Homework Magic is an AI-powered homework platform for UK primary school students
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Web Framework | FastAPI + Uvicorn | Async REST API server |
-| Frontend | Vanilla HTML/JS + Marked.js | SPA with markdown rendering |
-| LLM Backend | Ollama (dev) / AGICTO API (prod) | Homework generation, review, practice |
-| Vector DB | ChromaDB | RAG storage for homework content |
+| Layer | Technology                                      | Purpose |
+|-------|-------------------------------------------------|---------|
+| Web Framework | FastAPI + Uvicorn                               | Async REST API server |
+| Frontend | Vanilla HTML/JS + Marked.js                     | SPA with markdown rendering |
+| LLM Backend | Ollama (dev) / LLM API (prod)                   | Homework generation, review, practice |
+| Vector DB | ChromaDB                                        | RAG storage for homework content |
 | Embedding | sentence-transformers (dev) / OpenAI API (prod) | Semantic search embeddings |
-| Progress DB | SQLite (WAL mode) | Student progress tracking |
-| Caching | In-memory TTL LRU cache | Reduce redundant LLM calls |
-| Observability | Langfuse (self-hosted) | LLM call tracing and quality scoring |
-| Payments | Stripe | Subscription management |
+| Progress DB | SQLite (WAL mode)                               | Student progress tracking |
+| Caching | In-memory TTL LRU cache                         | Reduce redundant LLM calls |
+| Observability | Langfuse (self-hosted)                          | LLM call tracing and quality scoring |
+| Payments | Stripe                                          | Subscription management |
 
 ## Architecture Diagram
 

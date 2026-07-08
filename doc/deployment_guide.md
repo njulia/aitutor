@@ -85,7 +85,7 @@ curl http://localhost:5000/api/health
 ```env
 # LLM Backend
 LLM_PROVIDER=api
-AGICTO_API_KEY=your-api-key
+QWEN_API_KEY=your-api-key
 
 # Embedding
 EMBEDDING_PROVIDER=api
@@ -136,7 +136,7 @@ CMD ["gunicorn", "web_app:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker"
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LLM_PROVIDER` | `api` | LLM backend: `ollama` or `api` |
-| `AGICTO_API_KEY` | - | API key for cloud LLM (required if `api`) |
+| `QWEN_API_KEY` | - | API key for cloud LLM (required if `api`) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama model name |
 | `OLLAMA_VISION_MODEL` | `llava:7b` | Ollama vision model |
@@ -162,7 +162,7 @@ EMBEDDING_PROVIDER=local
 ### Production (Cloud API)
 ```env
 LLM_PROVIDER=api
-AGICTO_API_KEY=your-key
+QWEN_API_KEY=your-key
 EMBEDDING_PROVIDER=api
 QWEN_API_KEY=your-key
 ```
@@ -170,7 +170,7 @@ QWEN_API_KEY=your-key
 ### Hybrid (Local Embeddings + Cloud LLM)
 ```env
 LLM_PROVIDER=api
-AGICTO_API_KEY=your-key
+QWEN_API_KEY=your-key
 EMBEDDING_PROVIDER=local
 ```
 

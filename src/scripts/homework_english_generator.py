@@ -5,6 +5,7 @@
 检查各年级English作业是否存在，缺失则生成 500 份作业并添加到 RAG 存储
 支持 Year 1-6 所有年级
 """
+import json
 import sys
 import os
 import random
