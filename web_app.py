@@ -579,8 +579,13 @@ class SubscriptionRequest(BaseModel):
 
 
 class AuthRequest(BaseModel):
-    username: str
+    username: str = None
+    email: str = None
     password: str
+
+    def get_username(self) -> str:
+        """Get username from either username or email field"""
+        return (self.username or self.email or "").strip()
 
 
 # --- Web routes ---
@@ -613,12 +618,12 @@ async def check_homework():
 
 @app.get("/register")
 async def register_page():
-    return _static_page("templates", "register.html")
+    return _static_page("static", "register.html")
 
 
 @app.get("/login")
 async def login_page():
-    return _static_page("templates", "login.html")
+    return _static_page("static", "login.html")
 
 
 @app.get("/pricing")
@@ -628,12 +633,12 @@ async def login_page():
 
 @app.get("/progress")
 async def progress_page():
-    return _static_page("templates", "progress.html")
+    return _static_page("static", "progress.html")
 
 
 @app.get("/app")
 async def app_page():
-    return _static_page("templates", "app.html")
+    return _static_page("static", "app.html")
 
 
 @app.get("/year-{year}-homework")
@@ -1099,14 +1104,30 @@ async def api_register(request: AuthRequest):
         from src.progress_db import create_user
         from src.auth_tokens import generate_token
         # Basic validation
-        username = request.username.strip()
+        username = request.get_username()
         password = request.password
-        if not username or not password:
-            return JSONResponse(status_code=400, content={"success": False, "error": "Username and password required"})
+
+        if not username:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Email address is required"})
+        if not password:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Password is required"})
+        if len(password) < 8:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Password must be at least 8 characters long"})
+
+        # Validate email format
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, username):
+            return JSONResponse(status_code=400, content={"success": False, "error": "Please enter a valid email address"})
+
         try:
             create_user(username, password)
         except ValueError as ve:
-            return JSONResponse(status_code=400, content={"success": False, "error": str(ve)})
+            error_msg = str(ve)
+            if "already exists" in error_msg.lower():
+                return JSONResponse(status_code=400, content={"success": False, "error": "This email is already registered. Please login or use a different email."})
+            return JSONResponse(status_code=400, content={"success": False, "error": error_msg})
+
         # Set session cookie
         token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
@@ -1115,7 +1136,7 @@ async def api_register(request: AuthRequest):
         return resp
     except Exception as exc:
         logger.error("Error in register: %s", exc)
-        return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Registration error: {str(exc)}"})
 
 
 @app.post("/api/login")
@@ -1123,13 +1144,18 @@ async def api_login(request: AuthRequest):
     try:
         from src.progress_db import verify_user_credentials
         from src.auth_tokens import generate_token
-        username = request.username.strip()
+        username = request.get_username()
         password = request.password
-        if not username or not password:
-            return JSONResponse(status_code=400, content={"success": False, "error": "Username and password required"})
+
+        if not username:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Email address is required"})
+        if not password:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Password is required"})
+
         ok = verify_user_credentials(username, password)
         if not ok:
-            return JSONResponse(status_code=401, content={"success": False, "error": "Invalid credentials"})
+            return JSONResponse(status_code=401, content={"success": False, "error": "Invalid email or password. Please check your credentials and try again."})
+
         token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
         secure_flag = not _dev_mode
@@ -1137,7 +1163,7 @@ async def api_login(request: AuthRequest):
         return resp
     except Exception as exc:
         logger.error("Error in login: %s", exc)
-        return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Login error: {str(exc)}"})
 
 
 @app.post("/api/logout")

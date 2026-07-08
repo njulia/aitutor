@@ -34,10 +34,10 @@ def display_homeworks(sections) -> str:
     Returns:
         渲染后的 HTML 字符串（带Tab切换功能）
     """
-    # 读取 homework.html 模板（在 templates/ 目录）
+    # 读取 homework.html 模板（在 static/ 目录）
     # shared.py 位于 src/ui/ 下，需要向上三级到达项目根目录
     project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    template_path = os.path.join(project_dir, "templates", "homework.html")
+    template_path = os.path.join(project_dir, "static", "homework.html")
 
     with open(template_path, mode='r', encoding='utf-8') as temp_file:
         template_content = temp_file.read()

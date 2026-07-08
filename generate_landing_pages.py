@@ -205,7 +205,7 @@ def render_page(page_data, sections, faqs, cta_text, page_path, page_name, json_
   <a href="/elevenplus-practice">11+</a>
   <a href="/elevenplus/articles">11+ Articles</a>
   <a href="/progress">Progress</a>
-  <a href="/check-my-homework">Check My Homework</a>
+  <a href="/check-my-homework">Mark Homework</a>
     <a href="/login">Login</a> <!-- Added Login link -->
   <a href="/register">Register</a> <!-- Added Register link -->
                 <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
@@ -445,11 +445,11 @@ KS2_CTA = "Generate Free KS2 Homework"
 
 
 # ---------------------------------------------------------------------------
-# 6. CHECK MY HOMEWORK PAGE
+# 6. Mark Homework PAGE
 # ---------------------------------------------------------------------------
 
 CHECK_PAGE = {
-    "title": "Check My Homework — Instant AI Homework Marking | Homework Magic",
+    "title": "Mark Homework — Instant AI Homework Marking | Homework Magic",
     "meta_description": (
         "Get instant AI marking for your child's homework. Upload handwritten work or type in answers, "
         "and receive friendly, detailed feedback aligned to the UK National Curriculum."
@@ -458,7 +458,7 @@ CHECK_PAGE = {
         "homework checker, AI homework marking, mark my homework, homework feedback, "
         "homework help, primary school homework review, mark maths homework"
     ),
-    "h1": "Check My Homework — Instant AI Marking",
+    "h1": "Mark Homework — Instant AI Marking",
     "intro": (
         "Upload a photo of your child's handwritten homework or type in their answers, and Homework Magic "
         "will mark it instantly. You'll get detailed, encouraging feedback that explains what they did well, "
@@ -522,7 +522,7 @@ def main():
         ("index.html", HOME_PAGE, HOME_SECTIONS, HOME_FAQS, HOME_CTA, "/", "Home", render_json_ld_educational_app()),
         ("ks1-homework.html", KS1_PAGE, KS1_SECTIONS, KS1_FAQS, KS1_CTA, "/ks1-homework", "KS1", None),
         ("ks2-homework.html", KS2_PAGE, KS2_SECTIONS, KS2_FAQS, KS2_CTA, "/ks2-homework", "KS2", None),
-        ("check-my-homework.html", CHECK_PAGE, CHECK_SECTIONS, CHECK_FAQS, CHECK_CTA, "/check-my-homework", "Check My Homework", None),
+        ("check-my-homework.html", CHECK_PAGE, CHECK_SECTIONS, CHECK_FAQS, CHECK_CTA, "/check-my-homework", "Mark Homework", None),
     ]
 
     for filename, page_data, sections, faqs, cta_text, page_path, page_name, json_ld in pages:
