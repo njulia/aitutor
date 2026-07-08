@@ -10,6 +10,7 @@ TTL 缓存模块
 
 import hashlib
 import logging
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -92,6 +93,146 @@ class TTLCache:
 
     def __len__(self) -> int:
         return len(self._cache)
+
+
+# ---- Redis-backed cache (optional) ----
+class RedisCache:
+    """Simple Redis-backed cache wrapper with pickle serialization.
+
+    Keys in Redis are prefixed with project name to avoid collision.
+    """
+
+    def __init__(self, namespace: str = "aitutor", default_ttl: int = 1800, redis_url: str = None):
+        self.namespace = namespace
+        self.default_ttl = default_ttl
+        self._client = None
+        self._available = False
+        try:
+            import redis
+            url = redis_url or os.getenv("REDIS_URL")
+            if not url:
+                raise ValueError("REDIS_URL not set")
+            self._client = redis.from_url(url, decode_responses=False)
+            # test
+            self._client.ping()
+            self._available = True
+        except Exception as e:
+            logger.info("RedisCache unavailable: %s", e)
+            self._available = False
+
+    def _key(self, key: str) -> str:
+        return f"{self.namespace}:{key}"
+
+    def get(self, key: str) -> Optional[Any]:
+        if not self._available:
+            return None
+        try:
+            val = self._client.get(self._key(key))
+            if val is None:
+                return None
+            return pickle.loads(val)
+        except Exception:
+            return None
+
+    def set(self, key: str, value: Any, ttl: int = None) -> None:
+        if not self._available:
+            return None
+        try:
+            data = pickle.dumps(value)
+            self._client.set(self._key(key), data, ex=ttl or self.default_ttl)
+        except Exception:
+            pass
+
+    def invalidate(self, key: str) -> None:
+        if not self._available:
+            return None
+        try:
+            self._client.delete(self._key(key))
+        except Exception:
+            pass
+
+    def clear(self) -> None:
+        if not self._available:
+            return None
+        try:
+            # delete keys by namespace
+            pattern = f"{self.namespace}:*"
+            cursor = '0'
+            while True:
+                cursor, keys = self._client.scan(cursor=cursor, match=pattern, count=1000)
+                if keys:
+                    self._client.delete(*keys)
+                if cursor == 0 or cursor == '0':
+                    break
+        except Exception:
+            pass
+
+    @property
+    def stats(self) -> dict:
+        if not self._available:
+            return {"available": False}
+        try:
+            # approximate size by scanning
+            count = 0
+            cursor = '0'
+            pattern = f"{self.namespace}:*"
+            while True:
+                cursor, keys = self._client.scan(cursor=cursor, match=pattern, count=1000)
+                count += len(keys)
+                if cursor == 0 or cursor == '0':
+                    break
+            return {"available": True, "size": count}
+        except Exception:
+            return {"available": False}
+
+
+# ---- Helper to pick cache backend ----
+def _select_cache(name: str, max_size: int = 1000, ttl_seconds: int = 1800):
+    # If REDIS_URL defined, try RedisCache
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        rc = RedisCache(namespace=f"aitutor:{name}", default_ttl=ttl_seconds, redis_url=redis_url)
+        if rc._available:
+            return rc
+    # fallback
+    return TTLCache(max_size=max_size, ttl_seconds=ttl_seconds)
+
+
+# ---- 预定义的缓存实例 ----
+
+# 作业生成缓存：同学科同年级的作业直接复用（1 小时）
+homework_cache = _select_cache("homework", max_size=500, ttl_seconds=3600)
+
+# 作业批改缓存：相同作业+答案的批改结果（30 分钟）
+review_cache = _select_cache("review", max_size=2000, ttl_seconds=1800)
+
+# 深度解释缓存（30 分钟）
+explain_cache = _select_cache("explain", max_size=1000, ttl_seconds=1800)
+
+# 练习生成缓存（30 分钟）
+practice_cache = _select_cache("practice", max_size=1000, ttl_seconds=1800)
+
+# 科目提取缓存：相同输入的提取结果（24 小时，近似确定性）
+subject_extraction_cache = _select_cache("subject_extraction", max_size=200, ttl_seconds=86400)
+
+# 学生档案解析缓存（24 小时）
+profile_parse_cache = _select_cache("profile_parse", max_size=200, ttl_seconds=86400)
+
+
+def make_cache_key(*parts: str) -> str:
+    """生成缓存键，对长内容做哈希以保持键短小
+
+    Args:
+        *parts: 参与键生成的各部分字符串
+
+    Returns:
+        缓存键字符串
+    """
+    raw = "|".join(str(p) for p in parts)
+    # 短内容直接用作键，长内容做哈希
+    if len(raw) <= 200:
+        return raw
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class _CacheEntry:

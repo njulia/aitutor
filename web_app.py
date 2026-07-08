@@ -1,18 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Homework Magic - Complete Web Application
-
-FastAPI web application for SEO landing pages, the AI tutor UI, and REST APIs.
-已移除 LangChain 依赖，使用轻量级 LLMClient 和缓存。
-"""
-
 import os
 import sys
 
 # 加载 .env 环境变量（必须在其他 import 之前）
 try:
     from dotenv import load_dotenv
+
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 except ImportError:
     pass
@@ -25,11 +17,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime, UTC
 from typing import Any, Dict, Optional, List
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from passlib.context import CryptContext  # For password hashing
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 
@@ -42,6 +35,7 @@ _dev_mode = os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
 
 if not _dev_mode and STRIPE_SECRET_KEY:
     import stripe
+
     stripe.api_key = STRIPE_SECRET_KEY
 elif not _dev_mode:
     logger_init = logging.getLogger(__name__)
@@ -64,6 +58,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 llm = None
 initialized = False
 tutor_sessions: Dict[str, Dict[str, Any]] = {}
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def secure_filename(filename: str) -> str:
@@ -216,11 +213,11 @@ def process_base64_image(data_url: str) -> str:
 
 
 def resolve_profile(
-    raw_profile: dict,
-    *,
-    quick_select: bool = False,
-    year: Optional[int] = None,
-    student_id: Optional[str] = None,
+        raw_profile: dict,
+        *,
+        quick_select: bool = False,
+        year: Optional[int] = None,
+        student_id: Optional[str] = None,
 ) -> dict:
     """Build a student profile from quick-select or natural-language input."""
     if quick_select:
@@ -282,23 +279,23 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
     # This pattern looks for a number followed by a dot and a space, at the beginning of a line.
     # It captures the number and the rest of the question text until the next number or end of string.
     numbered_questions = re.split(r'\n\s*(\d+\.\s)', homework_content)
-    
+
     # The first element might be empty or a header before the first question
     if numbered_questions and not numbered_questions[0].strip():
-        numbered_questions = numbered_questions[1:] # Remove empty string at the beginning
+        numbered_questions = numbered_questions[1:]  # Remove empty string at the beginning
 
     i = 0
     while i < len(numbered_questions):
-        if re.match(r'\d+\.\s', numbered_questions[i]): # If it's a number and a dot
+        if re.match(r'\d+\.\s', numbered_questions[i]):  # If it's a number and a dot
             question_number = numbered_questions[i].strip()
-            question_text = numbered_questions[i+1].strip() if i+1 < len(numbered_questions) else ""
+            question_text = numbered_questions[i + 1].strip() if i + 1 < len(numbered_questions) else ""
             questions.append({
                 "subject": subject,
                 "content": f"{question_number}{question_text}",
-                "original_full_content": homework_content # Keep full content for context if needed
+                "original_full_content": homework_content  # Keep full content for context if needed
             })
             i += 2
-        else: # If it's not a numbered question, treat it as part of the previous or a standalone block
+        else:  # If it's not a numbered question, treat it as part of the previous or a standalone block
             # This handles cases where the first part is a header or unnumbered intro
             if numbered_questions[i].strip():
                 questions.append({
@@ -323,7 +320,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
                 if i + 1 < len(bullet_questions):
                     questions.append({
                         "subject": subject,
-                        "content": f"{bullet_questions[i]}{bullet_questions[i+1].strip()}",
+                        "content": f"{bullet_questions[i]}{bullet_questions[i + 1].strip()}",
                         "original_full_content": homework_content
                     })
         else:
@@ -336,15 +333,16 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
 
     # Filter out any empty content questions that might arise from splitting
     questions = [q for q in questions if q["content"].strip()]
-    
+
     # Assign unique IDs to each question
     for i, q in enumerate(questions):
-        q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i+1}"
+        q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i + 1}"
 
     return questions
 
 
-def review_homework(homework_content: str, student_answers: str, subject: str, profile=None, is_tutor_mode: bool = False):
+def review_homework(homework_content: str, student_answers: str, subject: str, profile=None,
+                    is_tutor_mode: bool = False):
     """批改作业 - 使用 REVIEW_HOMEWORK_PROMPT 生成简洁答案和基本解释"""
     from src.llm_client import format_prompt, build_messages
     from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT
@@ -503,7 +501,7 @@ class ProfileRequest(BaseModel):
     year: Optional[int] = None
     student_id: Optional[str] = None
     is_eleven_plus: bool = False
-    mode: Optional[str] = "homework" # Added mode field
+    mode: Optional[str] = "homework"  # Added mode field
 
 
 class ReviewRequest(BaseModel):
@@ -512,7 +510,7 @@ class ReviewRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     session_id: Optional[str] = None
-    is_tutor_mode: Optional[bool] = False # Added for tutor mode review
+    is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
 
@@ -662,21 +660,26 @@ async def elevenplus_grammar_guide():
 async def elevenplus_vocabulary_list():
     return _static_page("static", "elevenplus", "uk_11plus_vocabulary_list.html")
 
+
 @app.get("/elevenplus/11plus-acceptance-rates-gcse")
 async def elevenplus_acceptance_rates_gcse():
     return _static_page("static", "elevenplus", "11plus_acceptance_rates_gcse.html")
+
 
 @app.get("/elevenplus/11plus-maths-common-mistake")
 async def elevenplus_math_common_mistake():
     return _static_page("static", "elevenplus", "11plus_maths_common_mistakes.html")
 
+
 @app.get("/elevenplus/11plus-school-guide")
 async def elevenplus_school_guide():
     return _static_page("static", "elevenplus", "11plus_school_guide.html")
 
+
 @app.get("/elevenplus/11plus-time-management")
 async def elevenplus_time_management():
     return _static_page("static", "elevenplus", "11plus_time_management.html")
+
 
 # --- API endpoints ---
 
@@ -718,7 +721,7 @@ async def api_generate(req: Request, request: ProfileRequest):
             quick_select=request.quick_select,
             year=request.year,
             student_id=request.student_id
-            or request.profile.get("student_id"),
+                       or request.profile.get("student_id"),
         )
         subjects = request.subjects
         if not subjects:
@@ -745,14 +748,17 @@ async def api_generate(req: Request, request: ProfileRequest):
             if not user_has_subscription(req):
                 rag_only = [q for q in individual_questions if q.get("from_rag")]
                 if rag_only:
-                    return {"success": True, "homework": rag_only, "profile": profile, "mode": "tutor", "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
+                    return {"success": True, "homework": rag_only, "profile": profile, "mode": "tutor",
+                            "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
                 # No RAG results - require login and subscription to access tutor mode
                 if not is_logged_in(req):
-                    return JSONResponse(status_code=401, content={"success": False, "error": "Login required to access tutor mode for freshly generated questions"})
-                return JSONResponse(status_code=402, content={"success": False, "error": "Tutor mode requires an active subscription"})
+                    return JSONResponse(status_code=401, content={"success": False,
+                                                                  "error": "Login required to access tutor mode for freshly generated questions"})
+                return JSONResponse(status_code=402,
+                                    content={"success": False, "error": "Tutor mode requires an active subscription"})
 
             return {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
-        else: # Default to homework mode
+        else:  # Default to homework mode
             return {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
     except Exception as exc:
         logger.error("Error generating homework: %s", exc)
@@ -769,9 +775,11 @@ async def api_review(req: Request, request: ReviewRequest):
         # If this is a tutor-mode review and the question is not from RAG, require subscription
         if request.is_tutor_mode and not request.from_rag:
             if not is_logged_in(req):
-                return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use tutor mode review"})
+                return JSONResponse(status_code=401,
+                                    content={"success": False, "error": "Login required to use tutor mode review"})
             if not user_has_subscription(req):
-                return JSONResponse(status_code=402, content={"success": False, "error": "Tutor mode review requires an active subscription"})
+                return JSONResponse(status_code=402, content={"success": False,
+                                                              "error": "Tutor mode review requires an active subscription"})
 
         profile = request.profile
         if request.session_id and request.session_id in tutor_sessions:
@@ -796,9 +804,11 @@ async def api_explain_deep(req: Request, request: ExplainDeepRequest):
 
         # ExplainDeep is a paid feature - require login and active subscription
         if not is_logged_in(req):
-            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Explain in Detail"})
+            return JSONResponse(status_code=401,
+                                content={"success": False, "error": "Login required to use Explain in Detail"})
         if not user_has_subscription(req):
-            return JSONResponse(status_code=402, content={"success": False, "error": "Explain in Detail requires an active subscription"})
+            return JSONResponse(status_code=402, content={"success": False,
+                                                          "error": "Explain in Detail requires an active subscription"})
 
         result = explain_deep(
             request.homework, request.answers, request.subject,
@@ -819,9 +829,11 @@ async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
 
         # ImprovePractice is a paid feature - require login and active subscription
         if not is_logged_in(req):
-            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to use Help me improve"})
+            return JSONResponse(status_code=401,
+                                content={"success": False, "error": "Login required to use Help me improve"})
         if not user_has_subscription(req):
-            return JSONResponse(status_code=402, content={"success": False, "error": "Help me improve requires an active subscription"})
+            return JSONResponse(status_code=402,
+                                content={"success": False, "error": "Help me improve requires an active subscription"})
 
         result = improve_practice(
             request.homework, request.answers, request.subject,
@@ -836,9 +848,16 @@ async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
 
 
 @app.get("/api/progress/{student_id}")
-async def api_get_progress(student_id: str, subject: Optional[str] = None):
+async def api_get_progress(req: Request, student_id: str, subject: Optional[str] = None):
     """获取学生的学习进度汇总数据（含每日目标、正确率、连续天数、鼓励反馈）"""
     try:
+        # Progress tracking is a paid feature - require login and active subscription
+        if not is_logged_in(req):
+            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress"})
+        if not user_has_subscription(req):
+            return JSONResponse(status_code=402, content={"success": False,
+                                                          "error": "Progress tracking requires an active subscription"})
+
         from src.progress_db import (
             get_progress_summary,
             get_score_history,
@@ -1040,49 +1059,28 @@ async def create_subscription(request: SubscriptionRequest):
 
 
 @app.get("/api/check-subscription")
-async def check_subscription():
-    """检查是否有活跃的订阅
+async def check_subscription_api(req: Request):
+    """API endpoint to check subscription status for the logged-in user."""
+    if not is_logged_in(req):
+        return JSONResponse(status_code=401, content={"has_subscription": False, "error": "Not logged in"})
 
-    开发模式：检查本地数据库中的订阅。
-    生产模式：检查 Stripe 订阅。
-    """
-    try:
-        if _dev_mode:
-            from src.progress_db import list_local_subscriptions
-            from datetime import datetime
-            subscriptions = list_local_subscriptions()
-            now = datetime.utcnow()
-            for sub in subscriptions:
-                if sub.get("status") == "active":
-                    expires_at = sub.get("expires_at")
-                    if expires_at:
-                        try:
-                            exp_date = datetime.fromisoformat(expires_at.replace("Z", "+00:00").replace("+00:00", ""))
-                            if exp_date > now:
-                                return {
-                                    "has_subscription": True,
-                                    "subscription_id": sub.get("id"),
-                                    "product_name": sub.get("product_name"),
-                                    "expires_at": expires_at,
-                                }
-                        except Exception:
-                            pass
-            return {"has_subscription": False}
+    from src.auth_tokens import verify_token
+    username = verify_token(
+        req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id"))
+    if not username:
+        return JSONResponse(status_code=401, content={"has_subscription": False, "error": "Invalid token"})
 
-        # 生产模式：检查 Stripe
-        import stripe
-        subscriptions = stripe.Subscription.list(limit=100, status="active")
-        if subscriptions.data:
-            sub = subscriptions.data[0]
-            return {
-                "has_subscription": True,
-                "subscription_id": sub.id,
-                "status": sub.status,
-            }
-        return {"has_subscription": False}
-    except Exception as exc:
-        logger.error("Error checking subscription: %s", exc)
-        return {"has_subscription": False, "error": str(exc)}
+    from src.progress_db import get_student_by_email
+    student_info = get_student_by_email(username)  # Assuming username is email
+    if not student_info:
+        return JSONResponse(status_code=404, content={"has_subscription": False, "error": "User not found"})
+
+    student_id = student_info.get("student_id")
+
+    # Use the internal user_has_subscription function
+    has_sub = user_has_subscription(req)  # Pass req to allow test user bypass
+
+    return {"has_subscription": has_sub}
 
 
 @app.post("/api/register")
@@ -1140,7 +1138,7 @@ async def api_logout():
 
 
 @app.post("/api/upload-file")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(request: Request, file: UploadFile = File(...)):
     try:
         initialize()
 
@@ -1148,7 +1146,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="No file selected")
 
         allowed_all = (
-            ALLOWED_IMAGE_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS | ALLOWED_PDF_EXTENSION
+                ALLOWED_IMAGE_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS | ALLOWED_PDF_EXTENSION
         )
         if not allowed_file(file.filename, allowed_all):
             raise HTTPException(
@@ -1178,14 +1176,14 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload-photo")
-async def upload_photo(request: PhotoRequest):
+async def upload_photo(request: Request, request_body: PhotoRequest):
     try:
         initialize()
 
-        if not request.photo:
+        if not request_body.photo:
             raise HTTPException(status_code=400, detail="No photo data")
 
-        content = process_base64_image(request.photo)
+        content = process_base64_image(request_body.photo)
         return {"success": True, "content": content}
     except HTTPException:
         raise
@@ -1348,7 +1346,8 @@ async def admin_create_test_account(req: Request):
     # Optionally create a long-lived local subscription in dev mode
     if _dev_mode and create_sub:
         try:
-            create_local_subscription(customer_email=username, customer_name=username, product_name="Admin Test Account", duration_days=365)
+            create_local_subscription(customer_email=username, customer_name=username,
+                                      product_name="Admin Test Account", duration_days=365)
         except Exception:
             logger.warning("Failed to create local subscription for test account %s", username)
 
@@ -1364,7 +1363,6 @@ async def admin_toggle_test(username: str, enable: bool = True):
         raise HTTPException(status_code=404, detail="User not found")
     ok = set_user_test_flag(username, bool(enable))
     return {"success": ok, "is_test": bool(enable)}
-
 
 
 @app.get("/api/admin/ai-metrics")
@@ -1400,14 +1398,14 @@ async def admin_ai_monitor_stats(hours: int = 24):
 
 @app.get("/api/admin/ai-monitor/requests")
 async def admin_ai_monitor_requests(
-    limit: int = 100,
-    offset: int = 0,
-    provider: str = None,
-    model: str = None,
-    status: str = None,
-    student_id: str = None,
-    subject: str = None,
-    operation: str = None,
+        limit: int = 100,
+        offset: int = 0,
+        provider: str = None,
+        model: str = None,
+        status: str = None,
+        student_id: str = None,
+        subject: str = None,
+        operation: str = None,
 ):
     """获取 LLM 请求记录（支持筛选）"""
     from src.ai_monitor import get_requests_by_filter

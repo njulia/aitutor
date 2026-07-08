@@ -1,13 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-11+ RAG (Retrieval-Augmented Generation) System
-
-Stores generated homework with metadata in a vector database for future search and retrieval.
-使用与 homework_rag 相同的本地嵌入策略，零 API 费用。
-"""
-import os
+import os # Added this line
 import logging
 import time
 from datetime import datetime
@@ -26,8 +17,12 @@ RAG_RETRY_DELAY = 2  # 秒
 
 # RAG storage directory
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CHROMA_DB_PATH = os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
-
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH") or os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
+# If data was moved to data_archive, fall back to that path
+if not os.path.exists(CHROMA_DB_PATH):
+    alt = os.path.join(PROJECT_DIR, "data_archive", "chroma_11plus_db")
+    if os.path.exists(alt):
+        CHROMA_DB_PATH = alt
 
 class ElevenPlusRAGStore:
     def __init__(self, persist_directory: str = None):
