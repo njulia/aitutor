@@ -8,7 +8,7 @@ FastAPI web application with:
 - **Backend**: FastAPI + Uvicorn
 - **AI**: LangChain + LangGraph hybrid agent (reactive + deliberative modes)
 - **Vector Store**: ChromaDB for homework RAG (Retrieval-Augmented Generation)
-- **LLM**: DeepSeek via AGICTO API
+- **LLM**: QWEN API
 - **Frontend**: Custom HTML/JS single-page application
 
 ## Features
@@ -26,7 +26,7 @@ FastAPI web application with:
 ## Requirements
 
 - Python 3.10+
-- AGICTO API Key (for LLM access)
+- QWEN API Key (for LLM access)
 
 ## Quick Start
 
@@ -34,18 +34,24 @@ FastAPI web application with:
 # Set API Key
 export QWEN_API_KEY="your-api-key"
 
-# (Optional) Enable LangSmith tracing for debugging
-export LANGCHAIN_TRACING_V2="true"
-export LANGCHAIN_API_KEY="your-langsmith-key"
+# Important environment variables
+export DEV_MODE=1                # development mode (skip Stripe, non-secure cookies)
+export SESSION_SECRET="changeme"  # REQUIRED in production: HMAC secret for session tokens
+export REDIS_URL="redis://:password@redis-host:6379/0"  # optional: enable Redis caches
+export CHROMA_DB_PATH="/path/to/chroma_db"            # optional
+export SSL_CERT_FILE="/path/to/fullchain.pem"        # optional
+export SSL_KEY_FILE="/path/to/privkey.pem"
 
 # Install dependencies
 pip install -r requirements.txt
+# If using Redis caching
+pip install redis
 
 # Run the application
 python web_app.py
 ```
 
-The application will start at `http://localhost:5000` (or the port specified in the `PORT` environment variable).
+The application will start at `http://localhost:5000` (or the port specified in the `PORT` environment variable). If SSL_CERT_FILE and SSL_KEY_FILE are set and valid files exist, the server will start on HTTPS instead.
 
 ## Project Structure
 
@@ -112,7 +118,7 @@ ai_tutor/
 - `GET /elevenplus-practice` - 11+ practice landing page
 - `GET /elevenplus/articles` - 11+ articles hub
 - `GET /elevenplus/uk-grammar-guide` - UK Grammar Guide
-- `GET /elevenplus/uk-11plus-vocabulary-list` - 11+ Vocabulary List
+- `GET /elevenplus/11plus-vocabulary-list` - 11+ Vocabulary List
 - `GET /check-my-homework` - Homework checker landing page
 - `GET /app` - Main AI tutor application
 

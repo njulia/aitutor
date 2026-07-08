@@ -199,12 +199,16 @@ def render_page(page_data, sections, faqs, cta_text, page_path, page_name, json_
 <p><a class="cta" href="{TOOL_URL}">{cta_text}</a></p>
 
 <div class="nav-links">
-  <a href="/">Home</a>
-  <a href="/ks1-homework">KS1 Homework</a>
-  <a href="/ks2-homework">KS2 Homework</a>
-  <a href="/elevenplus-practice">11 Plus Practice</a>
+   <a href="/">Home</a>
+  <a href="/ks1-homework">KS1</a>
+  <a href="/ks2-homework">KS2</a>
+  <a href="/elevenplus-practice">11+</a>
   <a href="/elevenplus/articles">11+ Articles</a>
+  <a href="/progress">Progress</a>
   <a href="/check-my-homework">Check My Homework</a>
+    <a href="/login">Login</a> <!-- Added Login link -->
+  <a href="/register">Register</a> <!-- Added Register link -->
+                <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
 </div>
 
 </body>
@@ -516,8 +520,8 @@ CHECK_CTA = "Try the Homework Checker"
 def main():
     pages = [
         ("index.html", HOME_PAGE, HOME_SECTIONS, HOME_FAQS, HOME_CTA, "/", "Home", render_json_ld_educational_app()),
-        ("ks1-homework.html", KS1_PAGE, KS1_SECTIONS, KS1_FAQS, KS1_CTA, "/ks1-homework", "KS1 Homework", None),
-        ("ks2-homework.html", KS2_PAGE, KS2_SECTIONS, KS2_FAQS, KS2_CTA, "/ks2-homework", "KS2 Homework", None),
+        ("ks1-homework.html", KS1_PAGE, KS1_SECTIONS, KS1_FAQS, KS1_CTA, "/ks1-homework", "KS1", None),
+        ("ks2-homework.html", KS2_PAGE, KS2_SECTIONS, KS2_FAQS, KS2_CTA, "/ks2-homework", "KS2", None),
         ("check-my-homework.html", CHECK_PAGE, CHECK_SECTIONS, CHECK_FAQS, CHECK_CTA, "/check-my-homework", "Check My Homework", None),
     ]
 

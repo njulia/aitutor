@@ -611,8 +611,18 @@ async def check_homework():
     return _static_page("static", "check-my-homework.html")
 
 
+@app.get("/register")
+async def register_page():
+    return _static_page("templates", "register.html")
+
+
+@app.get("/login")
+async def login_page():
+    return _static_page("templates", "login.html")
+
+
 @app.get("/pricing")
-async def pricing():
+async def login_page():
     return _static_page("static", "pricing.html")
 
 

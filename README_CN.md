@@ -8,7 +8,7 @@ FastAPI Web 应用，包含：
 - **后端**: FastAPI + Uvicorn
 - **AI**: LangChain + LangGraph 混合智能体（反应式 + 深思式模式）
 - **向量存储**: ChromaDB 用于作业 RAG（检索增强生成）
-- **LLM**: 通过 AGICTO API 使用 DeepSeek
+- **LLM**: 使用 QWEN
 - **前端**: 自定义 HTML/JS 单页应用
 
 ## 功能
@@ -26,7 +26,7 @@ FastAPI Web 应用，包含：
 ## 环境要求
 
 - Python 3.10+
-- AGICTO API Key（用于 LLM 访问）
+- QWEN API Key（用于 LLM 访问）
 
 ## 快速开始
 
@@ -112,7 +112,7 @@ ai_tutor/
 - `GET /elevenplus-practice` - 11+ 练习着陆页
 - `GET /elevenplus/articles` - 11+ 文章中心
 - `GET /elevenplus/uk-grammar-guide` - 英国语法指南
-- `GET /elevenplus/uk-11plus-vocabulary-list` - 11+ 词汇表
+- `GET /elevenplus/11plus-vocabulary-list` - 11+ 词汇表
 - `GET /check-my-homework` - 作业检查着陆页
 - `GET /app` - 主 AI 辅导应用
 

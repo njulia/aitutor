@@ -9,6 +9,7 @@ build/
 *.log
 *.pdf
 *.HEIC
+*.sqlit3
 
 # 虚拟环境
 venv/
