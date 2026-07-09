@@ -107,13 +107,28 @@ Homework Content:
 Student's Answer/Work:
 {student_answer}
 
-Please review the student's work and provide:
-1. Overall assessment (Good/Needs Improvement/Excellent)
-2. What the student did well
-3. Areas that need correction or improvement
-4. Specific feedback for each task
-5. Encouragement and motivation
-6. A score out of 10
+{correct_answers_section}
+ 
+ Please review the student's work and provide:
+ 1. Overall assessment (Good/Needs Improvement/Excellent)
+ 2. What the student did well
+ 3. Areas that need correction or improvement
+ 4. Specific feedback for each task
+ 5. Encouragement and motivation
+ 6. A score out of 10
+ 
+ ## Detailed Feedback
+ 
+ {feedback_instruction}
+ 
+ ## Learning Suggestions
+ - 2-3 specific tips for improvement
+ - Recommended practice activities
+ 
+ ## Encouragement
+ - A motivating message to keep the student engaged
+ 
+ ## Score: X/10
 
 Return the review in a clear, encouraging format appropriate for a primary school student.
 """

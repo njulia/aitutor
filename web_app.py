@@ -413,6 +413,8 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
     try:
         # 1. 优先从 RAG 中读取正确答案（零 LLM 调用）
         rag_answers = None
+        correct_answers_section = ""
+        feedback_instruction = ""
         if homework_doc_id:
             try:
                 if is_eleven_plus:
@@ -421,39 +423,46 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
                     from src.homework_rag import search_homework_answers as _search_answers
                 rag_answers = _search_answers(homework_doc_id)
                 if rag_answers:
-                    logger.info("[RAG] 找到 doc_id=%s 的正确答案，跳过 LLM 调用", homework_doc_id)
-            except Exception as e:
-                logger.warning("[RAG] 获取正确答案失败: %s", e)
+                    logger.info("[RAG] Found correct answers for doc_id=%s", homework_doc_id)
+                    # 将正确答案和学生答案一起发给 LLM 做简洁对比
+                    correct_answers_text = json.dumps(rag_answers, ensure_ascii=False) if isinstance(rag_answers, (list,
+                                                                                                                   dict)) else str(
+                        rag_answers)
+                    correct_answers_section = f"\n\n## Correct Answers (for your reference):\n```json\n{correct_answers_text}\n```\n"
+                    feedback_instruction = """For each question/task in the homework, provide feedback in a table format:
+                     | Question | Your Answer | Correct Answer | Teacher's Explanation |
+                     |---|---|---|---|
+                     - **Question**: The original question/task from the 'Homework Content'.
+                     - **Your Answer**: The student's answer for that specific question/task from 'Student\'s Answer/Work'.
+                     - **Correct Answer**: The correct answer for that specific question/task (refer to the 'Correct Answers' section provided).
+                     - **Teacher's Explanation**: A simple explanation of why the correct answer is correct. If the student's answer was wrong or incomplete, briefly explain the mistake or what was missed.
+                     Ensure the table covers ALL questions/tasks.
+                     """
+                else:
+                    logger.info("[Review] No correct answers found in RAG for doc_id=%s. Using LLM for full review.", homework_doc_id)
 
-        # 2. 如果有 RAG 答案，直接对比学生答案生成简洁批改
-        if rag_answers:
-            # 将正确答案和学生答案一起发给 LLM 做简洁对比
-            correct_answers_text = json.dumps(rag_answers, ensure_ascii=False) if isinstance(rag_answers, (list, dict)) else str(rag_answers)
-            prompt_text = format_prompt(
-                prompt_template,
-                student_profile=str(profile),
-                subject=subject,
-                day=datetime.now().strftime("%A, %B %d, %Y"),
-                homework_content=homework_content,
-                student_answer=student_answers,
-            )
-            # 在 prompt 中注入正确答案供 LLM 对比
-            prompt_text += f"\n\n## 正确答案（供参考，请直接对比批改）\n{correct_answers_text}"
-            messages = build_messages(prompt_text)
-            result = llm.complete(messages)
-        else:
-            # 3. RAG 中没有答案，完全由 LLM 生成
-            logger.info("[Review] RAG 中无正确答案，使用 LLM 生成批改 (doc_id=%s)", homework_doc_id)
-            prompt_text = format_prompt(
-                prompt_template,
-                student_profile=str(profile),
-                subject=subject,
-                day=datetime.now().strftime("%A, %B %d, %Y"),
-                homework_content=homework_content,
-                student_answer=student_answers,
-            )
-            messages = build_messages(prompt_text)
-            result = llm.complete(messages)
+            except Exception as e:
+                logger.warning("[RAG] Failed to retrieve correct answers: %s", e)
+                logger.info("[Review] Falling back to LLM for full review due to RAG error.")
+
+        # If RAG answers were not found or there was an error, use the default feedback instruction
+        if not feedback_instruction:
+            feedback_instruction = """- What the student did well
+                 - Areas that need correction or improvement
+                 - Specific feedback for each task"""
+
+        prompt_text = format_prompt(
+            prompt_template,
+            student_profile=str(profile),
+            subject=subject,
+            day=datetime.now().strftime("%A, %B %d, %Y"),
+            homework_content=homework_content,
+            student_answer=student_answers,
+            correct_answers_section=correct_answers_section,
+            feedback_instruction=feedback_instruction
+        )
+        messages = build_messages(prompt_text)
+        result = llm.complete(messages)
 
         # 写入缓存
         review_cache.set(cache_key, result)
