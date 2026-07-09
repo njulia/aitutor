@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Homework Tabs</title>
+    <!-- Marked.js library to parse Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Google Sans', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f7f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .homework-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+        }
+
+        .homework-tabs {
+            display: flex;
+            flex-wrap: wrap; /* Allows tabs to wrap if there are many rows */
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .homework-tab {
+            background: none;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .homework-tab:hover {
+            color: #007bff;
+        }
+
+        .homework-tab.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+        }
+
+        .homework-tab-content {
+            display: none;
+        }
+
+        .homework-tab-content.active {
+            display: block;
+        }
+
+        /* Basic Markdown rendering styles */
+        .container {
+            padding: 10px 0;
+        }
+
+        .container h1 {
+            color: #4285F4;
+            margin-top: 0;
+        }
+
+        .container h3 {
+            color: #34495e;
+            border-bottom: 1px solid #ecf0f1;
+            padding-bottom: 5px;
+        }
+
+        /* Table styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f8f9fa;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #eee;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="homework-container">
+    <!-- Tab navigation -->
+    <div class="homework-tabs">
+        {% for item in homework_items %}
+        <button class="homework-tab{% if loop.first %} active{% endif %}" onclick="switchHomeworkTab({{ loop.index0 }})" id="tab-btn-{{ loop.index0 }}">{{ item.subject }}</button>
+        {% endfor %}
+    </div>
+
+    {% for item in homework_items %}
+    <!-- {{ item.subject }} Content Tab -->
+    <div class="homework-tab-content{% if loop.first %} active{% endif %}" id="tab-content-{{ loop.index0 }}">
+        <div class="container" id="content-{{ loop.index0 }}">
+            <!-- Rendered HTML will appear here -->
+        </div>
+
+        <script type="text/markdown" id="markdown-source-{{ loop.index0 }}">
+{{ item.homework }}
+        </script>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    // Tab switching functionality
+    function switchHomeworkTab(index) {
+        document.querySelectorAll(".homework-tab-content").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".homework-tab").forEach(el => el.classList.remove("active"));
+
+        document.getElementById("tab-content-" + index).classList.add("active");
+        document.getElementById("tab-btn-" + index).classList.add("active");
+    }
+
+    // Process and render Markdown contents immediately and on DOM load
+    function renderMarkdown() {
+        const tabContents = document.querySelectorAll(".homework-tab-content");
+
+        tabContents.forEach((el, index) => {
+            try {
+                const sourceEl = document.getElementById(`markdown-source-${index}`);
+                const targetEl = document.getElementById(`content-${index}`);
+
+                if (sourceEl && targetEl) {
+                    const rawText = sourceEl.textContent || sourceEl.text;
+                    // Replaces literal '\n' text characters inside script tags with actual line breaks
+                    const formattedText = rawText.replace(/\\n/g, '\n');
+                    targetEl.innerHTML = marked.parse(formattedText);
+                }
+            } catch (error) {
+                console.error(`Error parsing markdown for tab index ${index}:`, error);
+            }
+        });
+    }
+
+    // Run immediately for dynamically inserted HTML elements
+    renderMarkdown();
+
+    // Secondary listener for traditional static rendering
+    document.addEventListener("DOMContentLoaded", renderMarkdown);
+</script>
+
+</body>
+</html>
