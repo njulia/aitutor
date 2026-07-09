@@ -107,20 +107,13 @@ Homework Content:
 Student's Answer/Work:
 {student_answer}
 
-{correct_answers_section}
+{correct_answers_section} # This section is for LLM context, not for table generation
  
  Please review the student's work and provide:
  1. Overall assessment (Good/Needs Improvement/Excellent)
  2. What the student did well
  3. Areas that need correction or improvement
- 4. Specific feedback for each task
- 5. Encouragement and motivation
- 6. A score out of 10
- 
- ## Detailed Feedback
- 
- {feedback_instruction}
- 
+
  ## Learning Suggestions
  - 2-3 specific tips for improvement
  - Recommended practice activities

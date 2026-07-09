@@ -73,7 +73,7 @@ Homework Magic is an AI-powered homework platform for UK primary school students
 - **`src/observability.py`** - Langfuse integration for LLM tracing
 
 ### Frontend
-- **`templates/app.html`** - Main SPA (Quick Select, Custom Profile, Check Homework, 11+ Practice)
+- **`templates/app.html`** - Main SPA (Quick Select, Custom Profile, Mark Homework, 11+ Practice)
 - **`static/index.html`** - Landing page
 - **`static/ks1-homework.html`** - KS1 SEO page
 - **`static/ks2-homework.html`** - KS2 SEO page
@@ -127,7 +127,7 @@ User clicks "Help me improve" after answering homework
 |---------|-------------|
 | Quick Select (generate homework) | Free - no registration required |
 | Custom Profile (personalised homework) | Registration + Subscription required |
-| Check Homework (AI marking) | Registration + Subscription required |
+| Mark Homework (AI marking) | Registration + Subscription required |
 | Track Progress (dashboard) | Registration + Subscription required |
 | 11+ Practice (quick generate) | Free - no registration required |
 | Help Me Improve (practice) | Available after generating homework |

@@ -194,6 +194,12 @@ This is recommended for production to save on embedding API costs while using a 
 - Ensure Ollama is running: `ollama serve`
 - Check model is pulled: `ollama list`
 - Verify URL: `curl http://localhost:11434/api/tags`
+- Stope Ollama: 
+```bash
+ollama unload qwen2.5:7b 
+or
+curl http://localhost:11434/api/chat -d '{"model": "qwen2.5:1.5b", "keep_alive": 0}'
+```
 
 ### Embedding Model Download
 First run downloads the model (~80MB for `all-MiniLM-L6-v2`). If behind a proxy:

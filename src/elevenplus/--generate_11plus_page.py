@@ -11,7 +11,7 @@ AI tutor tool (mounted at /app).
 
 Content is kept as structured Python data (PAGE, SECTIONS, FAQS) rather than
 hardcoded HTML strings, so the same render_page() function can be reused to
-generate the other landing pages (KS1, KS2, "check my homework", etc.) just
+generate the other landing pages (KS1, KS2, "Mark Homework", etc.) just
 by swapping in different data.
 
 Usage:

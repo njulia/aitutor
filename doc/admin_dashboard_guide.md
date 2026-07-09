@@ -59,7 +59,7 @@ When a student is deleted:
 
 ### Features Behind Paywall
 - Custom Profile (personalised homework)
-- Check Homework (AI marking)
+- Mark Homework (AI marking)
 - Track Progress (dashboard)
 
 ### Features Available for Free
