@@ -645,9 +645,14 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                     <div class="subject-grid" id="homework-subjects"></div>
                 </div>
 
-                <button class="btn btn-primary" onclick="generateHomework()">
-                    Generate Homework!
-                </button>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="generateHomework()">
+                        Generate Homework!
+                    </button>
+                    <button class="btn btn-secondary" onclick="generateCustomHomework()">
+                        Smart Homework (AI Analyze)
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -689,7 +694,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                     Generate 11+ Practice!
                 </button>
                 <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
-                    Customize 11+ Practice!
+                    Smart 11+ Practice!
                 </button>
             </div>
         </div>
@@ -923,28 +928,29 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         let currentPracticeContent = '';
         let currentPracticeSubject = 'Maths';
 
-        // 新增：作业模式和当前问题索引
+        // Homework mode and current question index
         let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
         let currentQuestionIndex = 0;
         let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
-        let currentStudentId = localStorage.getItem('student_id'); // Store student_id in local storage
-        let currentStudentEmail = localStorage.getItem('student_email'); // Store student_email in local storage
+        let currentStudentId = localStorage.getItem('student_id'); // Only for logged-in users
+        let currentStudentEmail = localStorage.getItem('student_email'); // Only for logged-in users
 
 
-        // 订阅状态
+        // Subscription status
         let hasSubscription = null; // null = 未检查, true/false = 已检查
 
         // 检查订阅状态
         async function checkSubscription() {
-            if (hasSubscription !== null) return hasSubscription;
-            if (!currentStudentId) {
-                hasSubscription = false;
-                return false;
-            }
+            if (hasSubscription !== null) return hasSubscription; // Already checked
+            
+            // If not logged in, the backend will handle anonymous session ID and return has_subscription: false
+            const url = `/api/check-subscription`;
             try {
-                const resp = await fetch(`/api/check-subscription?student_id=${currentStudentId}`);
+                const resp = await fetch(url);
                 const data = await resp.json();
                 hasSubscription = data.has_subscription === true;
+                // The backend sets the anon_session_id cookie. Frontend doesn't need to store it in localStorage.
+                // currentStudentId is only for logged-in users.
                 return hasSubscription;
             } catch(e) {
                 console.error('Failed to check subscription:', e);
@@ -955,12 +961,13 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
         // 检查是否需要订阅才能使用高级功能
         async function requireSubscription(featureName) {
-            if (!currentStudentId) {
+            // Paid features always require a logged-in user with a real student_id
+            if (!currentStudentId) { // currentStudentId is only set for logged-in users
                 alert(`Please login or register to use ${featureName}.`);
                 window.location.href = '/login'; // Redirect to login/register
                 return false;
             }
-            const subscribed = await checkSubscription();
+            const subscribed = await checkSubscription(); // Check subscription for the logged-in user
             if (!subscribed) {
                 alert(`${featureName} requires a subscription. Please subscribe to continue.`);
                 window.location.href = '/pricing';
@@ -1222,13 +1229,14 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             fetch('/api/subjects')
                 .then(response => response.json())
                 .then(data => {
-                    console.log("Subjects received:", data); // Add this line to debug
-                    renderSubjects('quick-subjects', data.primary);
-                    renderSubjects('custom-subjects', data.primary);
+                    console.log("Subjects received:", data);
+                    renderSubjects('homework-subjects', data.primary);
                     renderSubjects('eleven-subjects', data.eleven_plus);
 
                     const reviewSelect = document.getElementById('review-subject');
-                    data.primary.forEach(subject => {
+                    reviewSelect.innerHTML = ''; // Clear existing options
+                    const allSubjects = [...new Set([...data.primary, ...data.eleven_plus])].sort();
+                    allSubjects.forEach(subject => {
                         const option = document.createElement('option');
                         option.value = subject;
                         option.textContent = subject;
@@ -1240,9 +1248,19 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
         function renderSubjects(containerId, subjects) {
             const container = document.getElementById(containerId);
-            container.innerHTML = subjects.map(subject => {
-                // 在 quick-subjects 和 eleven-subjects 中默认选中 Maths
-                const isSelected = (containerId === 'quick-subjects' || containerId === 'eleven-subjects')
+            if (!container) {
+                console.error(`Subject container with id '${containerId}' not found.`);
+                return;
+            }
+            const subjectList = Array.isArray(subjects) ? subjects : [];
+            if (subjectList.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; grid-column: 1 / -1;">No subjects available to display.</p>';
+                return;
+            }
+
+            container.innerHTML = subjectList.map(subject => {
+                // Default select 'Maths' in both homework and 11+ tabs.
+                const isSelected = (containerId === 'homework-subjects' || containerId === 'eleven-subjects')
                                     && subject === 'Maths';
                 return `
                     <div class="subject-item ${isSelected ? 'selected' : ''}"
@@ -1317,23 +1335,31 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             return 'homework'; // Default to homework mode
         }
 
-        async function generateQuickHomework() {
-            const year = parseInt(document.getElementById('quick-year').value);
-            const subjects = getSelectedSubjects('quick-subjects');
-            const mode = getSelectedMode('quick-mode');
+        // Generate Homework - uses selected subjects directly
+        async function generateHomework() {
+            const year = parseInt(document.getElementById('homework-year').value);
+            const subjects = getSelectedSubjects('homework-subjects');
+            const mode = getSelectedMode('homework-mode');
+            const profileText = document.getElementById('homework-profile').value.trim();
+            const studentIdInput = document.getElementById('homework-student-id').value.trim();
 
             if (subjects.length === 0) {
                 alert('Please select at least one subject!');
                 return;
             }
 
-            // Set student_id in profile for subscription checks
-            const profile = { student_id: currentStudentId };
+            // Build profile
+            const profile = {
+                year_group: year,
+                age: 5 + (year - 1),
+                student_id: studentIdInput || currentStudentId || `student_${year}`
+            };
+            if (profileText) {
+                profile.description = profileText;
+            }
 
             clearSavedState();
             showLoading();
-
-            const studentIdInput = document.getElementById('quick-student-id').value.trim();
 
             try {
                 const response = await fetch('/api/generate', {
@@ -1343,18 +1369,18 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                         quick_select: true,
                         year: year,
                         subjects: subjects,
-                        student_id: studentIdInput || currentStudentId || undefined, // Prefer logged in student_id
-                        mode: mode, // Pass the selected mode
-                        profile: profile // Pass profile with student_id
+                        student_id: profile.student_id,
+                        mode: mode,
+                        profile: profile
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
+                if (response.status === 402) {
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
+                if (response.status === 401) {
                     alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
@@ -1365,9 +1391,9 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    currentHomeworkMode = mode; // Set the global mode
-                    currentQuestionIndex = 0; // Reset question index for new homework
-                    currentQuestionAnswers = {}; // Reset answers for new homework
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
 
                     if (currentHomeworkMode === 'tutor') {
                         displayTutorQuestion(currentQuestionIndex);
@@ -1385,8 +1411,76 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             }
         }
 
-        function generateCustomHomework() {
-            window.location.href = '/pricing';
+        // Smart Homework - uses LLM to analyze description and determine subjects/profile
+        async function generateSmartHomework() {
+            const profileText = document.getElementById('homework-profile').value.trim();
+            const year = parseInt(document.getElementById('homework-year').value);
+            const mode = getSelectedMode('homework-mode');
+            const studentIdInput = document.getElementById('homework-student-id').value.trim();
+
+            if (!profileText) {
+                alert('Please describe the student first! The AI will analyze the description to generate personalized homework.');
+                return;
+            }
+
+            // Build profile with description for LLM analysis
+            const profile = {
+                description: profileText,
+                year_group: year,
+                age: 5 + (year - 1),
+                student_id: studentIdInput || currentStudentId || `student_${year}`
+            };
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                // Send to API - the backend will use LLM to parse the profile and determine subjects
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: profile,
+                        subjects: [], // Empty - let LLM determine from description
+                        mode: mode,
+                        student_id: profile.student_id
+                    })
+                });
+
+                if (response.status === 402) {
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) {
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
+            } finally {
+                hideLoading();
+            }
         }
 
         async function generateQuickHomeworkEleven() {
@@ -1455,7 +1549,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
         async function generateCustomHomeworkEleven() {
             // Check subscription first
-            if (!await requireSubscription('Customize 11+ Practice')) return;
+            if (!await requireSubscription('Smart 11+ Practice')) return;
 
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
@@ -2034,7 +2128,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             } catch(e) {
                 console.error('Failed to save state to sessionStorage:', e);
             }
-            window.location.href = '/pricing';
+            window.location.href = '/progress'; // Redirect to progress page
         }
 
         // ---- Admin Tools Functions ----
