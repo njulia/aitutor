@@ -25,6 +25,8 @@ from pydantic import BaseModel, Field
 from passlib.context import CryptContext  # For password hashing
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
+from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
@@ -93,51 +95,69 @@ async def lifespan(_app: FastAPI):
 def is_logged_in(req: Request) -> bool:
     """Check whether the request has a valid session token cookie or header mapped to an existing user."""
     try:
-        from src.auth_tokens import verify_token
-        from src.progress_db import get_user_by_username
+        from src.auth_tokens import verify_token # Moved to top-level import
         token = req.cookies.get("session")
         username = None
         if token:
-            username = verify_token(token)
-            if username and get_user_by_username(username):
+            username = verify_token(token) # Verify token returns username (email)
+            if username and get_user_by_username(username): # Check if user exists in DB
                 return True
         # Support header-based token for API calls
         header_token = req.headers.get("Authorization") or req.headers.get("X-User-Id")
         if header_token:
             maybe = verify_token(header_token)
-            if maybe and get_user_by_username(maybe):
+            if maybe and get_user_by_username(maybe): # Check if user exists in DB
                 return True
     except Exception:
         pass
     return False
 
 
-def user_has_subscription(req: Optional[Request] = None) -> bool:
-    """Check for any active subscription. If req provided, allow test users to bypass subscription checks."""
+def user_has_subscription(req: Optional[Request] = None, student_id: Optional[str] = None, username: Optional[str] = None) -> bool:
+    """Check for any active subscription for a given student_id/username.
+    If req provided, it will attempt to resolve student_id/username from the request.
+    """
+    # If student_id/username not provided, try to resolve from request
+    if req and (student_id is None or username is None):
+        resolved_student_id, resolved_username, _ = _get_user_or_anonymous_id(req)
+        student_id = student_id or resolved_student_id
+        username = username or resolved_username
+
+    if student_id is None and username is None:
+        return False
+
     try:
-        # If request provided and user is marked as test, grant access
-        if req is not None:
-            try:
-                from src.auth_tokens import verify_token
-                token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
-                username = verify_token(token) if token else None
-                if username:
-                    from src.progress_db import is_user_test
-                    if is_user_test(username):
-                        return True
-            except Exception:
-                pass
+        # Check if user is a test user (requires username)
+        if username:
+            from src.progress_db import is_user_test
+            if is_user_test(username):
+                return True
+        
+        # Anonymous IDs cannot have subscriptions
+        if student_id and student_id.startswith("anon_"):
+            return False
+
         if _dev_mode:
             from src.progress_db import list_local_subscriptions
-            subs = list_local_subscriptions()
-            for s in subs:
-                if s.get("status") == "active":
-                    return True
+            if student_id:
+                subs = list_local_subscriptions(student_id=student_id)
+                for s in subs:
+                    if s.get("status") == "active":
+                        return True
             return False
         else:
+            # In production, fetch Stripe subscriptions for the specific customer
+            if student_id:
+                from src.progress_db import get_student_detail
+                student_detail = get_student_detail(student_id)
+                if student_detail and student_detail.get("stripe_customer_id"):
+                    import stripe
+                    subs = stripe.Subscription.list(customer=student_detail["stripe_customer_id"], status="active", limit=1)
+                    return bool(subs.data)
             import stripe
-            subs = stripe.Subscription.list(limit=1, status="active")
-            return bool(subs.data)
+            # Fallback for cases where student_id is not linked to Stripe customer
+            # For now, if no student_id or no stripe_customer_id, assume no subscription.
+            return False
     except Exception as e:
         logger.warning("Subscription check failed: %s", e)
         return False
@@ -250,6 +270,32 @@ def resolve_profile(
         profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
 
     return profile
+
+
+def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
+    """
+    Determines the student_id and username for the current request.
+    Returns (student_id, username_if_logged_in, new_anonymous_session_id_to_set_in_cookie).
+    new_anonymous_session_id_to_set_in_cookie will be None if no new cookie is needed.
+    """
+    from src.auth_tokens import verify_token  # Moved to top-level import
+    # 1. Check for logged-in user
+    token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
+    if token:
+        username = verify_token(token)
+        if username:
+            user_info = get_user_by_username(username) # Assuming username is email
+            if user_info and user_info.get("student_id"):
+                return user_info["student_id"], username, None
+
+    # 2. Check for anonymous session ID cookie
+    anonymous_session_id = req.cookies.get("anon_session_id")
+    if anonymous_session_id:
+        return anonymous_session_id, None, None # No username for anonymous
+
+    # 3. Generate a new anonymous session ID
+    new_anon_session_id = f"anon_{uuid.uuid4().hex}" # Prefix to distinguish from real student_ids
+    return new_anon_session_id, None, new_anon_session_id
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
@@ -491,7 +537,12 @@ def _static_page(*parts: str) -> FileResponse:
     path = os.path.join(project_root, *parts)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Page not found")
-    return FileResponse(path)
+    # 禁用缓存，确保开发时总是获取最新文件
+    return FileResponse(path, headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    })
 
 
 class ProfileRequest(BaseModel):
@@ -731,22 +782,47 @@ async def api_generate(req: Request, request: ProfileRequest):
     try:
         initialize()
 
+        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+
+        # Override the student_id in the request_body with the resolved one
+        request_body.student_id = resolved_student_id
+        if request_body.profile:
+            request_body.profile["student_id"] = resolved_student_id
+        else:
+            request_body.profile = {"student_id": resolved_student_id}
+
         profile = resolve_profile(
-            request.profile,
-            quick_select=request.quick_select,
-            year=request.year,
-            student_id=request.student_id
-                       or request.profile.get("student_id"),
+            request_body.profile,
+            quick_select=request_body.quick_select,
+            year=request_body.year,
+            student_id=request_body.student_id,
         )
-        subjects = request.subjects
+        subjects = request_body.subjects
+
+        # If no subjects selected, use LLM to extract from description
         if not subjects:
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": "No subjects selected"},
-            )
+            description = ""
+            if request_body.profile:
+                description = request_body.profile.get("description", "")
+            # Fallback to profile description if request_body.profile is None
+            description = description or profile.get("description", "")
+            if description:
+                from src.ui.shared import parse_profile_from_natural_language
+                parsed = parse_profile_from_natural_language(description, llm)
+                if parsed:
+                    # Update profile with parsed data
+                    profile.update(parsed)
+                    subjects = parsed.get("extracted_subjects", [])
+                    logger.info("[Generate] LLM extracted subjects from description: %s", subjects)
+
+            if not subjects:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "No subjects selected. Please select subjects or provide a description for AI analysis."},
+                )
 
         # Generate homework for all subjects
-        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
+        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request_body.is_eleven_plus)
 
         if request.mode == "tutor":
             individual_questions = []
@@ -759,22 +835,39 @@ async def api_generate(req: Request, request: ProfileRequest):
                     q["from_rag"] = bool(hw_block.get("from_rag", False))
                 individual_questions.extend(split_questions)
 
-            # If user is not subscribed, only return RAG-sourced questions for free users
-            if not user_has_subscription(req):
-                rag_only = [q for q in individual_questions if q.get("from_rag")]
-                if rag_only:
-                    return {"success": True, "homework": rag_only, "profile": profile, "mode": "tutor",
-                            "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
-                # No RAG results - require login and subscription to access tutor mode
-                if not is_logged_in(req):
-                    return JSONResponse(status_code=401, content={"success": False,
-                                                                  "error": "Login required to access tutor mode for freshly generated questions"})
-                return JSONResponse(status_code=402,
-                                    content={"success": False, "error": "Tutor mode requires an active subscription"})
-
-            return {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
+            # Check subscription for tutor mode (only for non-RAG questions)
+            has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+            
+            if not has_sub:
+                # Filter out non-RAG questions if not subscribed
+                rag_only_questions = [q for q in individual_questions if q.get("from_rag")]
+                if rag_only_questions:
+                    response_content = {"success": True, "homework": rag_only_questions, "profile": profile, "mode": "tutor",
+                                        "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
+                    resp = JSONResponse(content=response_content)
+                    if new_anon_session_id:
+                        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+                    return resp
+                else:
+                    # No RAG questions and no subscription for tutor mode
+                    if logged_in_username is None:
+                        return JSONResponse(status_code=401, content={"success": False,
+                                                                      "error": "Login required to access tutor mode for AI-generated questions."})
+                    return JSONResponse(status_code=402,
+                                        content={"success": False, "error": "Tutor mode for AI-generated questions requires an active subscription."})
+            else:
+                # User has subscription, return all questions
+                response_content = {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
+                resp = JSONResponse(content=response_content)
+                if new_anon_session_id:
+                    resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+                return resp
         else:  # Default to homework mode
-            return {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
+            response_content = {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
+            resp = JSONResponse(content=response_content)
+            if new_anon_session_id:
+                resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+            return resp
     except Exception as exc:
         logger.error("Error generating homework: %s", exc)
         return JSONResponse(
@@ -783,28 +876,39 @@ async def api_generate(req: Request, request: ProfileRequest):
 
 
 @app.post("/api/review")
-async def api_review(req: Request, request: ReviewRequest):
+async def api_review(req: Request, request_body: ReviewRequest):
     try:
         initialize()
 
-        # If this is a tutor-mode review and the question is not from RAG, require subscription
-        if request.is_tutor_mode and not request.from_rag:
-            if not is_logged_in(req):
-                return JSONResponse(status_code=401,
-                                    content={"success": False, "error": "Login required to use tutor mode review"})
-            if not user_has_subscription(req):
-                return JSONResponse(status_code=402, content={"success": False,
-                                                              "error": "Tutor mode review requires an active subscription"})
+        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-        profile = request.profile
-        if request.session_id and request.session_id in tutor_sessions:
-            session = tutor_sessions[request.session_id]
-            profile = profile or session.get("profile")
+        # Ensure profile has the resolved student_id
+        profile = request_body.profile or {}
+        profile["student_id"] = resolved_student_id
+
+        # If this is a tutor-mode review and the question is not from RAG, require subscription
+        if request_body.is_tutor_mode and not request_body.from_rag:
+            has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+            if not has_sub:
+                if logged_in_username is None:
+                    return JSONResponse(status_code=401,
+                                        content={"success": False, "error": "Login required to use tutor mode review for AI-generated questions."})
+                return JSONResponse(status_code=402,
+                                    content={"success": False, "error": "Tutor mode review for AI-generated questions requires an active subscription."})
+
+        if request_body.session_id and request_body.session_id in tutor_sessions:
+            session = tutor_sessions[request_body.session_id]
+            session_profile = session.get("profile", {})
+            profile = {**session_profile, **profile} # Merge, request_body.profile takes precedence
 
         result = review_homework(
-            request.homework, request.answers, request.subject, profile, is_tutor_mode=request.is_tutor_mode
+            request_body.homework, request_body.answers, request_body.subject, profile, is_tutor_mode=request_body.is_tutor_mode
         )
-        return result
+        
+        resp = JSONResponse(content=result)
+        if new_anon_session_id:
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+        return resp
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
         return JSONResponse(
@@ -813,23 +917,33 @@ async def api_review(req: Request, request: ReviewRequest):
 
 
 @app.post("/api/explain-deep")
-async def api_explain_deep(req: Request, request: ExplainDeepRequest):
+async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
     try:
         initialize()
 
+        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+
         # ExplainDeep is a paid feature - require login and active subscription
-        if not is_logged_in(req):
-            return JSONResponse(status_code=401,
-                                content={"success": False, "error": "Login required to use Explain in Detail"})
-        if not user_has_subscription(req):
+        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+        if not has_sub:
+            if logged_in_username is None:
+                return JSONResponse(status_code=401,
+                                    content={"success": False, "error": "Login required to use Explain in Detail."})
             return JSONResponse(status_code=402, content={"success": False,
-                                                          "error": "Explain in Detail requires an active subscription"})
+                                                          "error": "Explain in Detail requires an active subscription."})
+
+        profile = request_body.profile or {}
+        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
 
         result = explain_deep(
-            request.homework, request.answers, request.subject,
-            request.profile, request.review_feedback
+            request_body.homework, request_body.answers, request_body.subject,
+            profile, request_body.review_feedback
         )
-        return result
+        
+        resp = JSONResponse(content=result)
+        if new_anon_session_id:
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+        return resp
     except Exception as exc:
         logger.error("Error in explain_deep endpoint: %s", exc)
         return JSONResponse(
@@ -838,23 +952,33 @@ async def api_explain_deep(req: Request, request: ExplainDeepRequest):
 
 
 @app.post("/api/improve-practice")
-async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
+async def api_improve_practice(req: Request, request_body: ImprovePracticeRequest):
     try:
         initialize()
 
+        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+
         # ImprovePractice is a paid feature - require login and active subscription
-        if not is_logged_in(req):
-            return JSONResponse(status_code=401,
-                                content={"success": False, "error": "Login required to use Help me improve"})
-        if not user_has_subscription(req):
+        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+        if not has_sub:
+            if logged_in_username is None:
+                return JSONResponse(status_code=401,
+                                    content={"success": False, "error": "Login required to use Help me improve."})
             return JSONResponse(status_code=402,
-                                content={"success": False, "error": "Help me improve requires an active subscription"})
+                                content={"success": False, "error": "Help me improve requires an active subscription."})
+
+        profile = request_body.profile or {}
+        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
 
         result = improve_practice(
-            request.homework, request.answers, request.subject,
-            request.profile, request.review_feedback
+            request_body.homework, request_body.answers, request_body.subject,
+            profile, request_body.review_feedback
         )
-        return result
+        
+        resp = JSONResponse(content=result)
+        if new_anon_session_id:
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+        return resp
     except Exception as exc:
         logger.error("Error in improve_practice endpoint: %s", exc)
         return JSONResponse(
@@ -864,14 +988,23 @@ async def api_improve_practice(req: Request, request: ImprovePracticeRequest):
 
 @app.get("/api/progress/{student_id}")
 async def api_get_progress(req: Request, student_id: str, subject: Optional[str] = None):
-    """获取学生的学习进度汇总数据（含每日目标、正确率、连续天数、鼓励反馈）"""
+    """Get summary progress data for a student (daily goals, accuracy, streaks, encouraging feedback)."""
+    # Progress tracking is a paid feature - require login and active subscription
     try:
-        # Progress tracking is a paid feature - require login and active subscription
-        if not is_logged_in(req):
-            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress"})
-        if not user_has_subscription(req):
+        resolved_student_id, logged_in_username, _ = _get_user_or_anonymous_id(req)
+
+        if logged_in_username is None: # Not logged in
+            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
+        
+        # Ensure the requested student_id matches the logged-in user's student_id
+        # This prevents one user from viewing another's progress.
+        user_info = get_user_by_username(logged_in_username)
+        if not user_info or user_info.get("student_id") != student_id:
+            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this student's progress."})
+
+        if not user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username):
             return JSONResponse(status_code=402, content={"success": False,
-                                                          "error": "Progress tracking requires an active subscription"})
+                                                          "error": "Progress tracking requires an active subscription."})
 
         from src.progress_db import (
             get_progress_summary,
@@ -1075,27 +1208,20 @@ async def create_subscription(request: SubscriptionRequest):
 
 @app.get("/api/check-subscription")
 async def check_subscription_api(req: Request):
-    """API endpoint to check subscription status for the logged-in user."""
-    if not is_logged_in(req):
-        return JSONResponse(status_code=401, content={"has_subscription": False, "error": "Not logged in"})
+    """API endpoint to check subscription status for the current user (logged in or anonymous)."""
+    resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-    from src.auth_tokens import verify_token
-    username = verify_token(
-        req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id"))
-    if not username:
-        return JSONResponse(status_code=401, content={"has_subscription": False, "error": "Invalid token"})
+    has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
 
-    from src.progress_db import get_student_by_email
-    student_info = get_student_by_email(username)  # Assuming username is email
-    if not student_info:
-        return JSONResponse(status_code=404, content={"has_subscription": False, "error": "User not found"})
-
-    student_id = student_info.get("student_id")
-
-    # Use the internal user_has_subscription function
-    has_sub = user_has_subscription(req)  # Pass req to allow test user bypass
-
-    return {"has_subscription": has_sub}
+    response_content = {
+        "has_subscription": has_sub,
+        "student_id": resolved_student_id,
+        "logged_in": logged_in_username is not None
+    }
+    resp = JSONResponse(content=response_content)
+    if new_anon_session_id:
+        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+    return resp
 
 
 @app.post("/api/register")
@@ -1393,7 +1519,6 @@ async def admin_create_test_account(req: Request):
 @app.post("/api/admin/users/{username}/test-toggle")
 async def admin_toggle_test(username: str, enable: bool = True):
     """Toggle a persistent user's test status (enable=true/false)."""
-    from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
     user = get_user_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1565,7 +1690,8 @@ Press Ctrl+C to stop
     """
     )
 
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("web_app:app", host="0.0.0.0", port=port, reload=True)
 
 
 if __name__ == "__main__":

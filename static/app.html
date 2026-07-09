@@ -122,7 +122,22 @@
         .form-group {
             margin-bottom: 20px;
         }
-        
+
+        .homework-grid {
+            display: grid;
+            grid-template-columns: 4fr 1fr;
+            gap: 20px;
+            align-items: start; /* Forces all grid items to align to the top */
+        }
+
+        .homework-grid .form-group:last-child {
+            min-width: 150px;
+        }
+
+        #homework-year {
+            width: 100%;
+        }
+
         label {
             display: block;
             margin-bottom: 8px;
@@ -594,10 +609,10 @@
             <div class="card">
                 <h2 style="margin-bottom: 20px;">Homework Generator</h2>
                 <p style="color: #666; margin-bottom: 30px;">
-                    Describe your child and select subjects to generate personalized homework
+                    Describe yourself to generate personalized homework
                 </p>
 
-                <div class="form-grid">
+                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
                         <label>Describe the Student</label>
                         <textarea id="homework-profile" rows="5"
@@ -605,12 +620,35 @@
 Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
 </textarea>
                     </div>
+                    <div class="form-group">
+                        <label>Mode Selection</label>
+                        <div class="mode-selection">
+                            <label>
+                                <input type="radio" name="homework-mode" value="homework" checked>
+                                Homework Mode (All questions at once)
+                            </label>
+                            <label>
+                                <input type="radio" name="homework-mode" value="tutor">
+                                Tutor Mode
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateCustomHomework()">
+                            Smart Homework
+                        </button>
+                    </div>
                 </div>
 
-                <div class="form-grid">
+                <p style="color: #666; margin-bottom: 30px;">
+                    Select at least one subject and year group to generate homework
+                </p>
+                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
+                        <label>Subjects</label>
+                        <div class="subject-grid" id="homework-subjects"></div>
+                    </div>
+                    <div class="form-group" style="min-width: 150px;">
                         <label>Year Group</label>
-                        <select id="homework-year">
+                        <select id="homework-year" style="width: 100%;">
                             <option value="1">Year 1</option>
                             <option value="2">Year 2</option>
                             <option value="3" selected>Year 3</option>
@@ -618,41 +656,12 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                             <option value="5">Year 5</option>
                             <option value="6">Year 6</option>
                         </select>
+<!--                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">-->
+                        <button class="btn btn-primary" onclick="generateHomework()">
+                            Generate Homework!
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <label>Student ID (optional, for unique homework)</label>
-                        <input type="text" id="homework-student-id" placeholder="e.g. emma_year3"
-                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Mode Selection</label>
-                    <div class="mode-selection">
-                        <label>
-                            <input type="radio" name="homework-mode" value="homework" checked>
-                            Homework Mode (All questions at once)
-                        </label>
-                        <label>
-                            <input type="radio" name="homework-mode" value="tutor">
-                            Tutor Mode (One question at a time)
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Subjects (select at least one, or leave empty to use description)</label>
-                    <div class="subject-grid" id="homework-subjects"></div>
-                </div>
-
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" onclick="generateHomework()">
-                        Generate Homework!
-                    </button>
-                    <button class="btn btn-secondary" onclick="generateCustomHomework()">
-                        Smart Homework (AI Analyze)
-                    </button>
-                </div>
+               </div>
             </div>
         </div>
 
@@ -661,41 +670,50 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
             <div class="card">
                 <h2 style="margin-bottom: 20px;">11+ Practice</h2>
                 <p style="color: #666; margin-bottom: 30px;">
-                    Prepare for grammar school entrance exams
+                     Describe yourself to generate personalized 11+ practice
                 </p>
-                <div class="form-grid">
+                <div class="homework-grid">
                     <div class="form-group">
                         <label>Describe the Student</label>
                         <textarea id="eleven-profile" rows="6">
 Ana is a 10 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
 </textarea>
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Mode Selection</label>
-                    <div class="mode-selection">
-                        <label>
-                            <input type="radio" name="eleven-mode" value="homework" checked>
-                            Homework Mode (All questions at once)
-                        </label>
-                        <label>
-                            <input type="radio" name="eleven-mode" value="tutor">
-                            Tutor Mode (One question at a time)
-                        </label>
+                    <div class="form-group">
+                        <label>Mode Selection</label>
+                        <div class="mode-selection">
+                            <label>
+                                <input type="radio" name="eleven-mode" value="homework" checked>
+                                Homework Mode (All questions at once)
+                            </label>
+                            <label>
+                                <input type="radio" name="eleven-mode" value="tutor">
+                                Tutor Mode (One question at a time)
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
+                        Smart 11+ Practice!
+                        </button>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Subjects</label>
-                    <div class="subject-grid" id="eleven-subjects"></div>
-                </div>
-                <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
-                    Generate 11+ Practice!
-                </button>
-                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
-                    Smart 11+ Practice!
-                </button>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Select at least one subject generate 11+ practice
+                </p>
+                <div class="homework-grid">
+                    <div class="form-group">
+                        <label>Subjects</label>
+                        <div class="subject-grid" id="eleven-subjects"></div>
+                    </div>
+                    <div class="form-group" style="min-width: 150px;">
+                        <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
+                        Generate 11+ Practice!
+                        </button>
+    <!--                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">-->
+    <!--                    Smart 11+ Practice!-->
+    <!--                </button>-->
+                    </div>
+               </div>
             </div>
         </div>
 
