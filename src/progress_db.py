@@ -778,6 +778,20 @@ def list_local_subscriptions(limit: int = 100) -> List[Dict]:
     return [dict(r) for r in rows]
 
 
+def get_local_subscriptions_by_email(customer_email: str) -> List[Dict]:
+    """根据 email 查询订阅"""
+    conn = _get_db()
+    rows = conn.execute(
+        """SELECT id, customer_email, customer_name, status, product_name,
+                  duration_days, created_at, expires_at, is_dev
+           FROM subscriptions
+           WHERE customer_email = ?
+           ORDER BY created_at DESC""",
+        (customer_email,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_local_subscription_stats() -> Dict[str, Any]:
     """获取本地订阅统计"""
     conn = _get_db()

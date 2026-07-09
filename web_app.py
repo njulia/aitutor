@@ -9,6 +9,7 @@ try:
 except ImportError:
     pass
 
+import asyncio
 import logging
 import base64
 import re  # Ensure re is imported for regex operations
@@ -139,9 +140,11 @@ def user_has_subscription(req: Optional[Request] = None, student_id: Optional[st
             return False
 
         if _dev_mode:
-            from src.progress_db import list_local_subscriptions
-            if student_id:
-                subs = list_local_subscriptions(student_id=student_id)
+            from src.progress_db import get_local_subscriptions_by_email
+            # 订阅表用 customer_email 关联，优先用 username（即 email）查找
+            lookup_email = username or student_id
+            if lookup_email and not lookup_email.startswith("anon_"):
+                subs = get_local_subscriptions_by_email(lookup_email)
                 for s in subs:
                     if s.get("status") == "active":
                         return True
@@ -286,8 +289,9 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
         username = verify_token(token)
         if username:
             user_info = get_user_by_username(username) # Assuming username is email
-            if user_info and user_info.get("student_id"):
-                return user_info["student_id"], username, None
+            if user_info:
+                # users 表没有 student_id 列，用 username 作为标识
+                return username, username, None
 
     # 2. Check for anonymous session ID cookie
     anonymous_session_id = req.cookies.get("anon_session_id")
@@ -1060,7 +1064,8 @@ async def api_generate(req: Request, request: ProfileRequest):
             description = description or profile.get("description", "")
             if description:
                 from src.ui.shared import parse_profile_from_natural_language
-                parsed = parse_profile_from_natural_language(description, llm)
+                # 放到线程池执行，避免阻塞事件循环
+                parsed = await asyncio.to_thread(parse_profile_from_natural_language, description, llm)
                 if parsed:
                     # Update profile with parsed data
                     profile.update(parsed)
@@ -1073,8 +1078,10 @@ async def api_generate(req: Request, request: ProfileRequest):
                     content={"success": False, "error": "No subjects selected. Please select subjects or provide a description for AI analysis."},
                 )
 
-        # Generate homework for all subjects
-        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
+        # Generate homework for all subjects（放到线程池执行，避免阻塞事件循环）
+        all_homework_results = await asyncio.to_thread(
+            generate_homework_with_profile, profile, subjects, request.is_eleven_plus
+        )
 
         if request.mode == "tutor":
             individual_questions = []
@@ -1153,7 +1160,9 @@ async def api_review(req: Request, request_body: ReviewRequest):
             session_profile = session.get("profile", {})
             profile = {**session_profile, **profile} # Merge, request_body.profile takes precedence
 
-        result = review_homework(
+        # 放到线程池执行，避免阻塞事件循环
+        result = await asyncio.to_thread(
+            review_homework,
             request_body.homework, request_body.answers, request_body.subject, profile,
             is_tutor_mode=request_body.is_tutor_mode,
             homework_doc_id=request_body.homework_doc_id,
@@ -1189,7 +1198,9 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         profile = request_body.profile or {}
         profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
 
-        result = explain_deep(
+        # 放到线程池执行，避免阻塞事件循环
+        result = await asyncio.to_thread(
+            explain_deep,
             request_body.homework, request_body.answers, request_body.subject,
             profile, request_body.review_feedback
         )
@@ -1224,7 +1235,9 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         profile = request_body.profile or {}
         profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
 
-        result = improve_practice(
+        # 放到线程池执行，避免阻塞事件循环
+        result = await asyncio.to_thread(
+            improve_practice,
             request_body.homework, request_body.answers, request_body.subject,
             profile, request_body.review_feedback
         )
@@ -1582,7 +1595,8 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         with open(filepath, "wb") as handle:
             handle.write(raw)
 
-        content, is_image = process_uploaded_file(filepath)
+        # 放到线程池执行，避免阻塞事件循环
+        content, is_image = await asyncio.to_thread(process_uploaded_file, filepath)
         return {"success": True, "content": content, "is_image": is_image}
     except HTTPException:
         raise
@@ -1599,7 +1613,8 @@ async def upload_photo(request: Request, request_body: PhotoRequest):
         if not request_body.photo:
             raise HTTPException(status_code=400, detail="No photo data")
 
-        content = process_base64_image(request_body.photo)
+        # 放到线程池执行，避免阻塞事件循环
+        content = await asyncio.to_thread(process_base64_image, request_body.photo)
         return {"success": True, "content": content}
     except HTTPException:
         raise
