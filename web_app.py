@@ -12,6 +12,7 @@ except ImportError:
 import logging
 import base64
 import re
+import json # Added: Import the json module
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
@@ -388,8 +389,8 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
 
 
 def review_homework(homework_content: str, student_answers: str, subject: str, profile=None,
-                    is_tutor_mode: bool = False):
-    """批改作业 - 使用 REVIEW_HOMEWORK_PROMPT 生成简洁答案和基本解释"""
+                    is_tutor_mode: bool = False, homework_doc_id: str = None, is_eleven_plus: bool = False):
+    """批改作业 - 优先从 RAG 读取正确答案，否则使用 LLM 生成"""
     from src.llm_client import format_prompt, build_messages
     from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT
     from src.cache import review_cache, make_cache_key
@@ -410,16 +411,49 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
         return {"success": True, "review": cached, "from_cache": True}
 
     try:
-        prompt_text = format_prompt(
-            prompt_template,
-            student_profile=str(profile),
-            subject=subject,
-            day=datetime.now().strftime("%A, %B %d, %Y"),
-            homework_content=homework_content,
-            student_answer=student_answers,
-        )
-        messages = build_messages(prompt_text)
-        result = llm.complete(messages)
+        # 1. 优先从 RAG 中读取正确答案（零 LLM 调用）
+        rag_answers = None
+        if homework_doc_id:
+            try:
+                if is_eleven_plus:
+                    from src.elevenplus.elevenplus_rag import search_homework_answers as _search_answers
+                else:
+                    from src.homework_rag import search_homework_answers as _search_answers
+                rag_answers = _search_answers(homework_doc_id)
+                if rag_answers:
+                    logger.info("[RAG] 找到 doc_id=%s 的正确答案，跳过 LLM 调用", homework_doc_id)
+            except Exception as e:
+                logger.warning("[RAG] 获取正确答案失败: %s", e)
+
+        # 2. 如果有 RAG 答案，直接对比学生答案生成简洁批改
+        if rag_answers:
+            # 将正确答案和学生答案一起发给 LLM 做简洁对比
+            correct_answers_text = json.dumps(rag_answers, ensure_ascii=False) if isinstance(rag_answers, (list, dict)) else str(rag_answers)
+            prompt_text = format_prompt(
+                prompt_template,
+                student_profile=str(profile),
+                subject=subject,
+                day=datetime.now().strftime("%A, %B %d, %Y"),
+                homework_content=homework_content,
+                student_answer=student_answers,
+            )
+            # 在 prompt 中注入正确答案供 LLM 对比
+            prompt_text += f"\n\n## 正确答案（供参考，请直接对比批改）\n{correct_answers_text}"
+            messages = build_messages(prompt_text)
+            result = llm.complete(messages)
+        else:
+            # 3. RAG 中没有答案，完全由 LLM 生成
+            logger.info("[Review] RAG 中无正确答案，使用 LLM 生成批改 (doc_id=%s)", homework_doc_id)
+            prompt_text = format_prompt(
+                prompt_template,
+                student_profile=str(profile),
+                subject=subject,
+                day=datetime.now().strftime("%A, %B %d, %Y"),
+                homework_content=homework_content,
+                student_answer=student_answers,
+            )
+            messages = build_messages(prompt_text)
+            result = llm.complete(messages)
 
         # 写入缓存
         review_cache.set(cache_key, result)
@@ -445,7 +479,7 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
             except Exception as db_exc:
                 logger.warning("Failed to save progress: %s", db_exc)
 
-        return {"success": True, "review": result}
+        return {"success": True, "review": result, "from_rag_answers": rag_answers is not None}
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -755,6 +789,24 @@ async def health():
     return {"status": "ok", "initialized": initialized}
 
 
+@app.get("/api/client-id")
+async def get_client_id(request: Request):
+    """Get a unique client ID based on IP address for anonymous users."""
+    # Get client IP - handle proxy headers
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+
+    # Generate a stable ID from IP
+    import hashlib
+    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:12]
+    anon_id = f"anon_{ip_hash}"
+
+    return {"client_id": anon_id, "ip": client_ip}
+
+
 @app.get("/api/subjects")
 async def get_subjects():
     from src.models import UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS
@@ -784,27 +836,27 @@ async def api_generate(req: Request, request: ProfileRequest):
 
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-        # Override the student_id in the request_body with the resolved one
-        request_body.student_id = resolved_student_id
-        if request_body.profile:
-            request_body.profile["student_id"] = resolved_student_id
+        # Override the student_id in the request with the resolved one
+        request.student_id = resolved_student_id
+        if request.profile:
+            request.profile["student_id"] = resolved_student_id
         else:
-            request_body.profile = {"student_id": resolved_student_id}
+            request.profile = {"student_id": resolved_student_id}
 
         profile = resolve_profile(
-            request_body.profile,
-            quick_select=request_body.quick_select,
-            year=request_body.year,
-            student_id=request_body.student_id,
+            request.profile,
+            quick_select=request.quick_select,
+            year=request.year,
+            student_id=request.student_id,
         )
-        subjects = request_body.subjects
+        subjects = request.subjects
 
         # If no subjects selected, use LLM to extract from description
         if not subjects:
             description = ""
-            if request_body.profile:
-                description = request_body.profile.get("description", "")
-            # Fallback to profile description if request_body.profile is None
+            if request.profile:
+                description = request.profile.get("description", "")
+            # Fallback to profile description if request.profile is None
             description = description or profile.get("description", "")
             if description:
                 from src.ui.shared import parse_profile_from_natural_language
@@ -822,7 +874,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                 )
 
         # Generate homework for all subjects
-        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request_body.is_eleven_plus)
+        all_homework_results = generate_homework_with_profile(profile, subjects, is_eleven_plus=request.is_eleven_plus)
 
         if request.mode == "tutor":
             individual_questions = []
@@ -902,7 +954,9 @@ async def api_review(req: Request, request_body: ReviewRequest):
             profile = {**session_profile, **profile} # Merge, request_body.profile takes precedence
 
         result = review_homework(
-            request_body.homework, request_body.answers, request_body.subject, profile, is_tutor_mode=request_body.is_tutor_mode
+            request_body.homework, request_body.answers, request_body.subject, profile,
+            is_tutor_mode=request_body.is_tutor_mode,
+            homework_doc_id=request_body.homework_doc_id,
         )
         
         resp = JSONResponse(content=result)
@@ -1546,6 +1600,12 @@ async def admin_clear_cache():
     from src.admin import clear_all_caches
     cleared = clear_all_caches()
     return {"success": True, "cleared": cleared}
+
+
+@app.get("/api/admin/dev-mode-status")
+async def admin_dev_mode_status():
+    """Returns whether the application is running in development mode."""
+    return {"is_dev_mode": _dev_mode}
 
 
 # ---- AI 监控 API ----

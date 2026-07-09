@@ -639,7 +639,7 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                 </div>
 
                 <p style="color: #666; margin-bottom: 30px;">
-                    Select at least one subject and year group to generate homework
+                    Select one subject and year group to generate homework
                 </p>
                 <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
@@ -698,7 +698,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                 </div>
 
                 <p style="color: #666; margin-bottom: 30px;">
-                    Select at least one subject generate 11+ practice
+                    Select one subject generate 11+ practice
                 </p>
                 <div class="homework-grid">
                     <div class="form-group">
@@ -952,6 +952,45 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
         let currentStudentId = localStorage.getItem('student_id'); // Only for logged-in users
         let currentStudentEmail = localStorage.getItem('student_email'); // Only for logged-in users
+        let anonymousClientId = null; // IP-based ID for anonymous users
+
+        // Get effective student ID: logged-in user's email, or anonymous IP-based ID
+        async function getEffectiveStudentId() {
+            // If logged in, return the user's email
+            if (currentStudentId) {
+                return currentStudentId;
+            }
+            // If we already have an anonymous ID, return it
+            if (anonymousClientId) {
+                return anonymousClientId;
+            }
+            // Check localStorage for cached anonymous ID
+            const cached = localStorage.getItem('anonymous_client_id');
+            if (cached) {
+                anonymousClientId = cached;
+                return cached;
+            }
+            // Fetch IP-based ID from server
+            try {
+                const resp = await fetch('/api/client-id');
+                const data = await resp.json();
+                anonymousClientId = data.client_id;
+                localStorage.setItem('anonymous_client_id', anonymousClientId);
+                return anonymousClientId;
+            } catch (e) {
+                console.error('Failed to get client ID:', e);
+                // Fallback to a random ID
+                anonymousClientId = 'anon_' + Math.random().toString(36).substring(2, 14);
+                localStorage.setItem('anonymous_client_id', anonymousClientId);
+                return anonymousClientId;
+            }
+        }
+
+        // Synchronous version for places that can't await
+        function getEffectiveStudentIdSync() {
+            if (currentStudentId) return currentStudentId;
+            return localStorage.getItem('anonymous_client_id') || null;
+        }
 
 
         // Subscription status
@@ -1291,7 +1330,12 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         }
 
         function toggleSubject(element, containerId) {
-            element.classList.toggle('selected');
+            const container = document.getElementById(containerId);
+            // Deselect all other subjects in the same container
+            container.querySelectorAll('.subject-item.selected').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected'); // Select the clicked subject
         }
 
         function getSelectedSubjects(containerId) {
@@ -1359,10 +1403,9 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             const subjects = getSelectedSubjects('homework-subjects');
             const mode = getSelectedMode('homework-mode');
             const profileText = document.getElementById('homework-profile').value.trim();
-            const studentIdInput = document.getElementById('homework-student-id').value.trim();
 
             if (subjects.length === 0) {
-                alert('Please select at least one subject!');
+                alert('Please select one subject!');
                 return;
             }
 
@@ -1370,7 +1413,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             const profile = {
                 year_group: year,
                 age: 5 + (year - 1),
-                student_id: studentIdInput || currentStudentId || `student_${year}`
+                student_id: await getEffectiveStudentId()
             };
             if (profileText) {
                 profile.description = profileText;
@@ -1434,7 +1477,6 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             const profileText = document.getElementById('homework-profile').value.trim();
             const year = parseInt(document.getElementById('homework-year').value);
             const mode = getSelectedMode('homework-mode');
-            const studentIdInput = document.getElementById('homework-student-id').value.trim();
 
             if (!profileText) {
                 alert('Please describe the student first! The AI will analyze the description to generate personalized homework.');
@@ -1446,7 +1488,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                 description: profileText,
                 year_group: year,
                 age: 5 + (year - 1),
-                student_id: studentIdInput || currentStudentId || `student_${year}`
+                student_id: await getEffectiveStudentId()
             };
 
             clearSavedState();
@@ -1506,7 +1548,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             const mode = getSelectedMode('eleven-mode');
 
             if (subjects.length === 0) {
-                alert('Please select at least one subject!');
+                alert('Please select one subject!');
                 return;
             }
 
@@ -1793,34 +1835,43 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
             const homework = currentHomework.map(h => h.content).join('\n\n');
             const subject = currentHomework[0]?.subject || 'Maths';
+            // Get doc_id from the first homework item (for RAG answer lookup)
+            const homeworkDocId = currentHomework[0]?.doc_id || null;
 
             currentSubject = subject;
             // Homework mode review is free, no subscription check needed here.
-            reviewHomeworkWithContent(homework, combinedAnswers, subject);
+            reviewHomeworkWithContent(homework, combinedAnswers, subject, homeworkDocId);
         }
 
         function reviewHomework() {
             window.location.href = '/pricing'; // This is for the "Mark Homework" tab, which is a paid feature
         }
 
-        async function reviewHomeworkWithContent(homework, answers, subject) {
+        async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
             console.log("=== Starting Review ===");
             console.log("Homework:", homework);
             console.log("Answers:", answers);
             console.log("Subject:", subject);
+            console.log("Doc ID:", homeworkDocId);
 
             showLoading();
 
             try {
+                const requestBody = {
+                    homework: homework,
+                    answers: answers,
+                    subject: subject,
+                    profile: { student_id: currentStudentId }
+                };
+                // Add doc_id if available (for RAG answer lookup)
+                if (homeworkDocId) {
+                    requestBody.homework_doc_id = homeworkDocId;
+                }
+
                 const response = await fetch('/api/review', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        homework: homework,
-                        answers: answers,
-                        subject: subject,
-                        profile: { student_id: currentStudentId } // Pass student_id for potential future use
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 // No 402/401 check here as this is the free review for homework mode

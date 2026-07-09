@@ -517,10 +517,12 @@ def list_all_students(limit: int = 100, offset: int = 0) -> List[Dict]:
     conn = _get_db()
     rows = conn.execute(
         """SELECT s.student_id, s.name, s.year_group, s.age, s.created_at, s.is_active,
+           u.username as email,
            COUNT(h.id) as total_sessions,
            AVG(h.score) as avg_score
            FROM students s
            LEFT JOIN homework_sessions h ON s.student_id = h.student_id
+           LEFT JOIN users u ON s.student_id = u.username
            GROUP BY s.student_id
            ORDER BY s.created_at DESC
            LIMIT ? OFFSET ?""",

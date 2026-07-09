@@ -141,6 +141,7 @@
                     <thead>
                         <tr>
                             <th>Student ID</th>
+                            <th>Email</th>
                             <th>Name</th>
                             <th>Year</th>
                             <th>Age</th>
@@ -493,7 +494,7 @@
                 allUsers = data.users || [];
                 renderUsers(allUsers);
             } catch(e) {
-                document.getElementById('usersTable').innerHTML = `<tr><td colspan="8" style="color:#c53030">Error: ${e.message}</td></tr>`;
+                document.getElementById('usersTable').innerHTML = `<tr><td colspan="9" style="color:#c53030">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -501,6 +502,7 @@
             document.getElementById('usersTable').innerHTML = users.map(u => `
                 <tr>
                     <td><code>${u.student_id}</code></td>
+                    <td>${u.email || '-'}</td>
                     <td>${u.name || 'Student'}</td>
                     <td>Year ${u.year_group}</td>
                     <td>${u.age}</td>
@@ -519,6 +521,7 @@
             const q = document.getElementById('userSearch').value.toLowerCase();
             renderUsers(allUsers.filter(u =>
                 (u.student_id || '').toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q) ||
                 (u.name || '').toLowerCase().includes(q)
             ));
         }

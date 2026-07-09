@@ -61,12 +61,13 @@ VISION_MODEL = "qwen-plus"
 
 # Ollama 本地模型（开发/测试）
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llava:7b")
 
 # 重试配置
 MAX_RETRIES = 2
 RETRY_DELAY = 1  # 秒
+MAX_TIMEOUT = 180
 
 
 def get_llm_provider() -> str:
@@ -277,7 +278,7 @@ class LLMClient:
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                resp = requests.post(url, json=payload, timeout=120)
+                resp = requests.post(url, json=payload, timeout=MAX_TIMEOUT)
                 resp.raise_for_status()
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
@@ -341,7 +342,7 @@ class LLMClient:
         }
 
         try:
-            resp = requests.post(url, json=payload, timeout=120)
+            resp = requests.post(url, json=payload, timeout=MAX_TIMEOUT)
             resp.raise_for_status()
             data = resp.json()
             return data["message"]["content"]
@@ -367,7 +368,7 @@ class LLMClient:
         }
 
         try:
-            resp = requests.post(url, json=payload, timeout=120)
+            resp = requests.post(url, json=payload, timeout=MAX_TIMEOUT)
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]
@@ -397,7 +398,7 @@ class LLMClient:
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                resp = requests.post(url, json=payload, headers=headers, timeout=120)
+                resp = requests.post(url, json=payload, headers=headers, timeout=MAX_TIMEOUT)
                 resp.raise_for_status()
                 data = resp.json()
                 message = data["choices"][0]["message"]
