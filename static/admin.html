@@ -450,6 +450,7 @@
             switch(name) {
                 case 'overview': loadOverview(); break;
                 case 'users': loadUsers(); break;
+                case 'auth-users': loadAuthUsers(); break;
                 case 'subscriptions': loadSubscriptions(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
                 case 'ai-eval': loadAIEval(); break;
@@ -606,13 +607,14 @@
                 `;
                 const subs = data.subscriptions || [];
                 document.getElementById('subsTable').innerHTML = subs.length ? subs.map(s => {
-                    const expires = s.trial_end || s.current_period_end;
+                    const expires = s.expires_at || s.trial_end || s.current_period_end;
+                    const customer = s.customer || s.customer_name || s.customer_email || '-';
                     return `
                     <tr>
-                        <td><code>${s.id}</code></td>
-                        <td>${s.customer}</td>
+                        <td><code>${s.id || s.subscription_id}</code></td>
+                        <td>${customer}</td>
                         <td><span class="badge badge-green">${s.status}</span></td>
-                        <td>${new Date(s.created).toLocaleDateString()}</td>
+                        <td>${s.created ? new Date(s.created).toLocaleDateString() : (s.created_at ? new Date(s.created_at).toLocaleDateString() : '-')}</td>
                         <td>${expires ? new Date(expires).toLocaleDateString() : '-'}</td>
                     </tr>
                 `;}).join('') : '<tr><td colspan="5" style="text-align:center;color:#888">No subscriptions found</td></tr>';
@@ -783,10 +785,14 @@
         let authUsers = [];
         async function loadAuthUsers(){
             try{
-                const data = await fetch('/api/admin/auth-users').then(r=>r.json());
+                const data = await fetch('/api/admin/auth-users').then(r=>{
+                    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.json();
+                });
                 authUsers = data.users || [];
                 renderAuthUsers(authUsers);
             }catch(e){
+                console.error("loadAuthUsers error:", e);
                 document.getElementById('authUsersTable').innerHTML = '<tr><td colspan="4" style="color:#c53030">Error: '+e.message+'</td></tr>';
             }
         }

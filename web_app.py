@@ -313,6 +313,23 @@ def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus
     return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
 
 
+def normalize_question(text: str) -> str:
+    text = text.strip().lower()
+
+    # 去掉各种编号
+    text = re.sub(
+        r'^\s*(?:question\s*)?\(?\d+\)?[.)、:]?\s*',
+        '',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 去掉多余空格
+    text = re.sub(r'\s+', ' ', text)
+
+    return text
+
+
 def _split_homework_into_questions(homework_content: str, subject: str) -> List[Dict[str, str]]:
     """
     Splits a block of homework content into individual questions.
@@ -424,8 +441,11 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
     # Filter out any empty content questions that might arise from splitting
     extracted_questions = [q for q in extracted_questions if q["content"].strip()]
 
-    # Assign unique IDs to each question
+    # Assign a stable zero-based index within the original RAG document.
+    # Tutor mode sends this index back during review, so answer lookup does not
+    # depend on the displayed question text or its numbering.
     for i, q in enumerate(extracted_questions):
+        q["question_index"] = i
         q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i + 1}"
 
     return extracted_questions
@@ -516,7 +536,8 @@ def _parse_student_answers_to_map(student_answers_text: str, target_subject: str
 
 
 def review_homework(homework_content: str, student_answers: str, subject: str, profile=None,
-                    is_tutor_mode: bool = False, homework_doc_id: str = None, is_eleven_plus: bool = False):
+                    is_tutor_mode: bool = False, homework_doc_id: str = None,
+                    is_eleven_plus: bool = False, question_index: Optional[int] = None):
     """批改作业 - 优先从 RAG 读取正确答案，否则使用 LLM 生成"""
     from src.llm_client import format_prompt, build_messages
     from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT
@@ -530,8 +551,13 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
 
     # Cache key needs to differentiate between tutor mode and homework mode
     cache_key_prefix = "review_tutor" if is_tutor_mode else "review_homework"
-    cache_key = make_cache_key(cache_key_prefix, subject, str(profile.get("year_group", 3)),
-                               homework_content[:200], student_answers[:200])
+    cache_key = make_cache_key(
+        cache_key_prefix,
+        subject,
+        str(profile.get("year_group", 3)),
+        f"qidx={question_index}|{homework_content[:200]}",
+        student_answers[:200],
+    )
     cached = review_cache.get(cache_key)
     if cached:
         logger.info("[Cache] 命中批改缓存 (%s)", cache_key_prefix)
@@ -562,72 +588,67 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
                 parsed_questions = _split_homework_into_questions(homework_content, subject)
 
                 processed_rag_answers = []
+                target_question = (
+                    parsed_questions[0].get("full_content")
+                    or parsed_questions[0].get("content")
+                    or homework_content
+                ).strip() if parsed_questions else homework_content.strip()
+
                 if isinstance(raw_rag_answers, list) and all(isinstance(item, str) for item in raw_rag_answers):
-                    # Case: raw_rag_answers is a list of strings (just answers)
-                    logger.info("[RAG] Received raw answers as list of strings. Attempting to pair with questions from homework_content.")
-                    
-                    # Pair questions with answers
-                    for i, q_dict in enumerate(parsed_questions):
-                        # Use full_content (with numbering) if available for RAG pairing
-                        question_to_check = q_dict.get("full_content", q_dict["content"]).strip()
-                        
-                        # Only include if it looks like a question (numbered or bulleted)
-                        if re.match(r'^\s*(\d+\.|\(|\*|-)', question_to_check):
-                            if i < len(raw_rag_answers):
-                                processed_rag_answers.append({
-                                    "question": question_to_check,
-                                    "answer": raw_rag_answers[i].strip()
-                                })
-                            else:
-                                # Handle cases where there are more questions than answers
-                                processed_rag_answers.append({
-                                    "question": question_to_check,
-                                    "answer": "No correct answer found" # Placeholder
-                                })
+                    if is_tutor_mode and question_index is not None:
+                        if 0 <= question_index < len(raw_rag_answers):
+                            processed_rag_answers.append({
+                                "question": target_question,
+                                "answer": raw_rag_answers[question_index].strip(),
+                            })
+                            logger.info("[RAG] Tutor answer selected by question_index=%s.", question_index)
                         else:
-                            logger.debug(f"[RAG] Skipping non-question item from homework_content: {question_to_check}")
-                    rag_answers = processed_rag_answers
-                elif isinstance(raw_rag_answers, list) and all(isinstance(item, dict) and "question" in item and "answer" in item for item in raw_rag_answers):
-                    # Case: raw_rag_answers is already a list of dictionaries (question-answer pairs)
-                    logger.info("[RAG] Received raw answers as list of question-answer dictionaries.")
-                    
-                    if is_tutor_mode and len(parsed_questions) == 1:
-                        # Special Case: Tutor mode often reviews a single question.
-                        # We need to find this specific question in the RAG answers.
-                        target_q = parsed_questions[0]["content"].strip().lower()
-                        target_q_full = parsed_questions[0].get("full_content", "").strip().lower()
-                        
-                        found_item = None
-                        for item in raw_rag_answers:
-                            rag_q = item["question"].strip().lower()
-                            # Try matching full content, stripped content, or substring
-                            if target_q_full == rag_q or target_q == rag_q:
-                                found_item = item
-                                break
-                            # Robust matching: strip numbering from RAG question for comparison
-                            rag_q_stripped = re.sub(r'^\s*(\d+\.|\(|\*|-)\s*', '', item["question"]).strip().lower()
-                            if target_q == rag_q_stripped:
-                                found_item = item
-                                break
-                        
-                        if found_item:
-                            logger.info("[RAG] Matched single question to RAG answer.")
-                            processed_rag_answers.append(found_item)
-                        else:
-                            logger.warning("[RAG] Could not match tutor question to any RAG question. target_q: %s", target_q)
+                            logger.warning(
+                                "[RAG] question_index=%s is outside answer range 0..%s",
+                                question_index, len(raw_rag_answers) - 1,
+                            )
                     else:
-                        # Regular filtering
+                        for i, q_dict in enumerate(parsed_questions):
+                            if i >= len(raw_rag_answers):
+                                break
+                            processed_rag_answers.append({
+                                "question": q_dict.get("full_content", q_dict["content"]).strip(),
+                                "answer": raw_rag_answers[i].strip(),
+                            })
+                    rag_answers = processed_rag_answers
+
+                elif isinstance(raw_rag_answers, list) and all(
+                    isinstance(item, dict) and "question" in item and "answer" in item
+                    for item in raw_rag_answers
+                ):
+                    if is_tutor_mode and question_index is not None:
+                        if 0 <= question_index < len(raw_rag_answers):
+                            processed_rag_answers.append(raw_rag_answers[question_index])
+                            logger.info("[RAG] Tutor Q&A selected by question_index=%s.", question_index)
+                        else:
+                            logger.warning(
+                                "[RAG] question_index=%s is outside Q&A range 0..%s",
+                                question_index, len(raw_rag_answers) - 1,
+                            )
+
+                    # Backward-compatible fallback for older clients that do not send an index,
+                    # or for stale indexes after RAG data has changed.
+                    if is_tutor_mode and not processed_rag_answers and len(parsed_questions) == 1:
+                        target_q = normalize_question(parsed_questions[0]["content"])
                         for item in raw_rag_answers:
-                            # RAG answers in dict format already have the question text (likely with number)
-                            question_text = item["question"].strip()
-                            if re.match(r'^\s*(\d+\.|\(|\*|-)', question_text): 
+                            if normalize_question(str(item["question"])) == target_q:
                                 processed_rag_answers.append(item)
-                            else:
-                                logger.debug(f"[RAG] Filtering out non-question item from RAG answers: {question_text}")
+                                logger.info("[RAG] Tutor question matched by normalized text fallback.")
+                                break
+                    elif not is_tutor_mode:
+                        processed_rag_answers.extend(raw_rag_answers)
+
                     rag_answers = processed_rag_answers
                 else:
-                    # Unexpected format, treat as no RAG answers found
-                    logger.warning("[RAG] _search_answers returned unexpected format: %s. Expected list of strings or list of dicts with 'question' and 'answer'.", type(raw_rag_answers))
+                    logger.warning(
+                        "[RAG] Unexpected answer format for doc_id=%s: %s",
+                        homework_doc_id, type(raw_rag_answers),
+                    )
                     rag_answers = None
 
                 if rag_answers:
@@ -671,7 +692,13 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
 
                         # Escape pipe characters in answers to avoid breaking markdown table
                         # Determine if correct
-                        is_correct = (student_ans.lower() == correct_ans.lower()) # Simple string comparison for now
+                        if subject == "Maths":
+                            from src.tools.math_tools import verify_math_answer
+                            verification = verify_math_answer(q_text, student_ans, correct_ans)
+                            is_correct = verification["is_correct"]
+                        else:
+                            is_correct = (student_ans.lower() == correct_ans.lower()) # Simple string comparison for now
+                        
                         status_icon = "✅" if is_correct else "❌"
 
                         student_ans_escaped = student_ans.replace('|', '\\|')
@@ -859,6 +886,7 @@ class ReviewRequest(BaseModel):
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
+    question_index: Optional[int] = Field(default=None, ge=0)  # Zero-based index inside the source homework document
 
 
 class ExplainDeepRequest(BaseModel):
@@ -1223,6 +1251,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
             request_body.homework, request_body.answers, request_body.subject, profile,
             is_tutor_mode=request_body.is_tutor_mode,
             homework_doc_id=request_body.homework_doc_id,
+            question_index=request_body.question_index,
         )
         
         resp = JSONResponse(content=result)
@@ -1845,6 +1874,7 @@ async def admin_create_test_account(req: Request):
 @app.post("/api/admin/users/{username}/test-toggle")
 async def admin_toggle_test(username: str, enable: bool = True):
     """Toggle a persistent user's test status (enable=true/false)."""
+    from src.progress_db import get_user_by_username, set_user_test_flag
     user = get_user_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

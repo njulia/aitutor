@@ -1773,7 +1773,10 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                         profile: { student_id: currentStudentId }, // Pass student_id for subscription check
                         is_tutor_mode: true, // Indicate tutor mode review
                         from_rag: hw.from_rag, // Pass from_rag status
-                        homework_doc_id: hw.doc_id // Pass doc_id for potential use in review
+                        homework_doc_id: hw.doc_id, // Source RAG document
+                        question_index: Number.isInteger(hw.question_index)
+                            ? hw.question_index
+                            : currentQuestionIndex // Backward-compatible fallback
                     })
                 });
 

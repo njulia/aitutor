@@ -105,6 +105,56 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     weak_areas = student_profile.get("weak_areas", [])
     search_query = " ".join(learning_goals + weak_areas + [subject])
 
+    # --- TOOL OFFLOADING ---
+    # Map subjects to tools
+    TOOL_MAP = {
+        "Maths": "generate_math_homework_tool",
+        "Science": "generate_science_homework_tool",
+        "English": "generate_english_homework_tool"
+    }
+    
+    if subject in TOOL_MAP:
+        try:
+            from src.tools.math_tools import (
+                generate_math_homework_tool,
+                generate_science_homework_tool,
+                generate_english_homework_tool
+            )
+            tool_func_name = TOOL_MAP[subject]
+            tool_func = locals().get(tool_func_name) or globals().get(tool_func_name)
+            
+            # Since we imported them directly, they might not be in locals/globals 
+            # as expected by the logic above if imported inside the try.
+            # Let's just use a simple if-else or direct call.
+            if subject == "Maths":
+                tool_func = generate_math_homework_tool
+            elif subject == "Science":
+                tool_func = generate_science_homework_tool
+            elif subject == "English":
+                tool_func = generate_english_homework_tool
+
+            if tool_func:
+                logger.info("[Tool] Using Python tool to generate %s homework for Year %d", subject, year_group)
+                tool_result = tool_func(year_group)
+                content = tool_result["content"]
+                answers = tool_result["answers"]
+                
+                # Store to RAG for consistency
+                doc_id = _store_homework(
+                    content=content,
+                    year_group=year_group,
+                    subject=subject,
+                    student_id=student_id,
+                    answers=answers
+                )
+                
+                # Update cache
+                homework_cache.set(cache_key, {"content": content, "doc_id": doc_id, "from_rag": False})
+                return content, doc_id, False
+        except Exception as tool_exc:
+            logger.warning("[Tool] %s tool failed, falling back to RAG/LLM: %s", subject, tool_exc)
+    # --- END TOOL OFFLOADING ---
+
     try:
         rag_results = _search_homework(
             query=search_query,
