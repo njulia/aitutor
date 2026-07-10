@@ -175,9 +175,9 @@ async def test_review_homework_failure(mock_review_homework, client: AsyncClient
 @patch('web_app._split_homework_into_questions')
 @patch('src.homework_rag.search_homework_answers')
 @patch('src.llm_client.build_messages')
-@patch('src.llm_client.llm_call')
+@patch('web_app.llm.complete')
 async def test_review_homework_tutor_mode_rag_matching(
-    mock_llm_call, mock_build_messages, mock_search_answers, mock_split, client: AsyncClient
+    mock_llm_complete, mock_build_messages, mock_search_answers, mock_split, client: AsyncClient
 ):
     # Setup mocks
     # 1. Split homework should return stripped content and full content
@@ -190,7 +190,7 @@ async def test_review_homework_tutor_mode_rag_matching(
     ]
     
     # 3. LLM call mock (for the feedback part)
-    mock_llm_call.return_value = "The answer is correct. 4 x 9 is indeed 36."
+    mock_llm_complete.return_value = "The answer is correct. 4 x 9 is indeed 36."
     mock_build_messages.return_value = []
 
     # Import here to avoid issues with patches
