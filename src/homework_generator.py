@@ -18,6 +18,7 @@ from src.llm_client import LLMClient, format_prompt, build_messages
 from src.cache import homework_cache, subject_extraction_cache, make_cache_key
 from src.models import (
     UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS, KEY_STAGES, get_homework_time_by_age,
+    YEAR_GROUP_AGE,
 )
 from src.homework_rag import (
     store_homework, search_homework, get_student_previous_topics,
@@ -28,6 +29,9 @@ from src.elevenplus.elevenplus_rag import (
     search_homework as elevenplus_search_homework,
     get_student_previous_topics as elevenplus_get_student_previous_topics,
     search_homework_answers as elevenplus_search_homework_answers,
+)
+from src.elevenplus.prompts import (
+    HOMEWORK_PROMPT_11PLUS, RAG_PROMPT_11PLUS,
 )
 from src.prompts import (
     HOMEWORK_PROMPT, HOMEWORK_ANSWER_PROMPT, SUBJECT_EXTRACTION_PROMPT,
@@ -60,8 +64,11 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     # 11+ Practice 标签页或 11+ 专属科目，始终按 Year 6 难度生成
     if is_eleven_plus or _is_eleven_plus_subject(subject):
         year_group = 6
+        age = 11  # 11+ 考试针对 Year 6 (10-11岁)
     else:
         year_group = student_profile.get("year_group", 6)
+        age = student_profile.get("age") or YEAR_GROUP_AGE.get(year_group, 7)
+    
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
     student_id = student_profile.get("student_id", "")
@@ -77,7 +84,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         _get_previous_topics = get_student_previous_topics
 
     # 1. 检查内存缓存（同学科同年级的作业可直接复用）
-    cache_key = make_cache_key("homework", str(year_group), subject, "11plus" if is_eleven_plus else "normal")
+    cache_key = make_cache_key("homework", str(year_group), str(age), subject, "11plus" if is_eleven_plus else "normal")
     cached = homework_cache.get(cache_key)
     if cached:
         logger.info("[Cache] 命中作业缓存: %s Year %d (%s)", subject, year_group, "11+" if is_eleven_plus else "normal")
@@ -129,14 +136,20 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         previous_context += "\nPlease create completely NEW homework that does not cover any of the topics above.\n"
 
     # 调用 LLM 生成作业
+    if is_eleven_plus:
+        prompt_template = HOMEWORK_PROMPT_11PLUS
+    else:
+        prompt_template = HOMEWORK_PROMPT
+
     prompt_text = format_prompt(
-        HOMEWORK_PROMPT,
+        prompt_template,
         student_profile=json.dumps(student_profile, ensure_ascii=False, indent=2),
         subject=subject,
         homework_time=homework_time,
         year_group=year_group,
-        age=student_profile.get("age", 7),
+        age=age,
         previous_topics=previous_context,
+        index=len(previous_topics) + 1,  # For RAG_PROMPT_11PLUS if needed, but we use HOMEWORK_PROMPT_11PLUS
     )
     messages = build_messages(prompt_text)
     result = llm.complete(messages)
@@ -152,6 +165,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             key_stage=KEY_STAGES.get(year_group, "KS2"),
             english_level=student_profile.get("english_level", "Beginner"),
             student_id=student_id,
+            age=age,
         )
         logger.info("[RAG] Stored NEW homework for %s in %s (Year %d, %s), doc_id: %s",
                      student_id, subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)

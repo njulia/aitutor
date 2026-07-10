@@ -325,28 +325,29 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
 
     # --- Attempt to split by numbered questions first ---
     # This pattern splits on the start of a new numbered question (e.g., "1. ", "2. ")
-    # The capturing group `(\d+\.\s)` means the delimiter itself will be included in the split list.
-    numbered_parts = re.split(r'(?m)^\s*(\d+\.\s)', homework_content)
+    # The capturing group `(\d+\.)` means the delimiter itself will be included in the split list.
+    numbered_parts = re.split(r'(?m)^\s*(\d+\.)[\s\xa0]+', homework_content)
 
     # If the first part is not a delimiter, it's either a header or unnumbered intro.
     # If there are subsequent numbered questions (i.e., len(numbered_parts) > 1),
     # we can assume the first part is a header/intro to be discarded.
-    if numbered_parts and numbered_parts[0].strip() and len(numbered_parts) > 1 and not re.match(r'^\s*\d+\.\s', numbered_parts[0]):
+    if numbered_parts and numbered_parts[0].strip() and len(numbered_parts) > 1 and not re.match(r'^\s*\d+\.', numbered_parts[0]):
         logger.debug(f"Discarding unnumbered intro/header before first numbered question: '{numbered_parts[0].strip()}'")
         numbered_parts = numbered_parts[1:] # Discard the intro part
 
     i = 0
     while i < len(numbered_parts):
-        if re.match(r'^\s*\d+\.\s', numbered_parts[i]):  # This is a delimiter (e.g., "1. ")
+        if re.match(r'^\s*\d+\.', numbered_parts[i]):  # This is a delimiter (e.g., "1.")
             question_number_prefix = numbered_parts[i].strip()
             question_text_segment = numbered_parts[i + 1].strip() if i + 1 < len(numbered_parts) else ""
             
-            # Combine prefix and text segment to form the full question content
-            full_question_content = f"{question_number_prefix}{question_text_segment}"
+            # Combine prefix and text segment to form the full question content (for RAG)
+            full_question_content = f"{question_number_prefix} {question_text_segment}".strip()
             
             extracted_questions.append({
                 "subject": subject,
-                "content": full_question_content,
+                "content": question_text_segment,
+                "full_content": full_question_content,
                 "original_full_content": homework_content # This is the content *after* potential initial header removal
             })
             i += 2
@@ -358,6 +359,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
                      extracted_questions.append({
                         "subject": subject,
                         "content": numbered_parts[i].strip(),
+                        "full_content": numbered_parts[i].strip(),
                         "original_full_content": homework_content
                     })
                 else: # This is an unexpected unnumbered block in between or after numbered questions
@@ -365,27 +367,29 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
                     extracted_questions.append({
                         "subject": subject,
                         "content": numbered_parts[i].strip(),
+                        "full_content": numbered_parts[i].strip(),
                         "original_full_content": homework_content
                     })
             i += 1
 
     # If no questions were found from numbered patterns, try bullet points
     if not extracted_questions:
-        bullet_parts = re.split(r'(?m)^\s*([-*]\s)', homework_content)
+        bullet_parts = re.split(r'(?m)^\s*([-*])[\s\xa0]+', homework_content)
         # Similar logic for discarding initial unbulleted intro/header
-        if bullet_parts and bullet_parts[0].strip() and len(bullet_parts) > 1 and not re.match(r'^\s*([-*]\s)', bullet_parts[0]):
+        if bullet_parts and bullet_parts[0].strip() and len(bullet_parts) > 1 and not re.match(r'^\s*[-*]', bullet_parts[0].strip()):
             logger.debug(f"Discarding unbulleted intro/header before first bullet question: '{bullet_parts[0].strip()}'")
             bullet_parts = bullet_parts[1:]
 
         i = 0
         while i < len(bullet_parts):
-            if re.match(r'^\s*([-*]\s)', bullet_parts[i]): # This is a delimiter (e.g., "- ")
+            if re.match(r'^\s*[-*]', bullet_parts[i].strip()): # This is a delimiter (e.g., "-")
                 bullet_prefix = bullet_parts[i].strip()
                 bullet_text_segment = bullet_parts[i + 1].strip() if i + 1 < len(bullet_parts) else ""
-                full_bullet_content = f"{bullet_prefix}{bullet_text_segment}"
+                full_bullet_content = f"{bullet_prefix} {bullet_text_segment}".strip()
                 extracted_questions.append({
                     "subject": subject,
-                    "content": full_bullet_content,
+                    "content": bullet_text_segment,
+                    "full_content": full_bullet_content,
                     "original_full_content": homework_content
                 })
                 i += 2
@@ -395,6 +399,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
                         extracted_questions.append({
                             "subject": subject,
                             "content": bullet_parts[i].strip(),
+                            "full_content": bullet_parts[i].strip(),
                             "original_full_content": homework_content
                         })
                     else: # Unexpected unbulleted block
@@ -402,6 +407,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
                         extracted_questions.append({
                             "subject": subject,
                             "content": bullet_parts[i].strip(),
+                            "full_content": bullet_parts[i].strip(),
                             "original_full_content": homework_content
                         })
                 i += 1
@@ -411,6 +417,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
         extracted_questions.append({
             "subject": subject,
             "content": homework_content.strip(),
+            "full_content": homework_content.strip(),
             "original_full_content": homework_content
         })
 
@@ -551,42 +558,72 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
                 
                 raw_rag_answers = _search_answers(homework_doc_id)
                 
+                # Split homework_content into questions (needed for pairing and mapping)
+                parsed_questions = _split_homework_into_questions(homework_content, subject)
+
                 processed_rag_answers = []
                 if isinstance(raw_rag_answers, list) and all(isinstance(item, str) for item in raw_rag_answers):
                     # Case: raw_rag_answers is a list of strings (just answers)
                     logger.info("[RAG] Received raw answers as list of strings. Attempting to pair with questions from homework_content.")
                     
-                    # Split homework_content into questions
-                    parsed_questions = _split_homework_into_questions(homework_content, subject)
-                    
                     # Pair questions with answers
                     for i, q_dict in enumerate(parsed_questions):
+                        # Use full_content (with numbering) if available for RAG pairing
+                        question_to_check = q_dict.get("full_content", q_dict["content"]).strip()
+                        
                         # Only include if it looks like a question (numbered or bulleted)
-                        if re.match(r'^\s*(\d+\.|\(|\*|-)', q_dict["content"].strip()):
-                            question_text = q_dict["content"].strip()
+                        if re.match(r'^\s*(\d+\.|\(|\*|-)', question_to_check):
                             if i < len(raw_rag_answers):
                                 processed_rag_answers.append({
-                                    "question": question_text,
+                                    "question": question_to_check,
                                     "answer": raw_rag_answers[i].strip()
                                 })
                             else:
                                 # Handle cases where there are more questions than answers
                                 processed_rag_answers.append({
-                                    "question": question_text,
+                                    "question": question_to_check,
                                     "answer": "No correct answer found" # Placeholder
                                 })
                         else:
-                            logger.debug(f"[RAG] Skipping non-question item from homework_content: {q_dict['content']}")
+                            logger.debug(f"[RAG] Skipping non-question item from homework_content: {question_to_check}")
                     rag_answers = processed_rag_answers
                 elif isinstance(raw_rag_answers, list) and all(isinstance(item, dict) and "question" in item and "answer" in item for item in raw_rag_answers):
                     # Case: raw_rag_answers is already a list of dictionaries (question-answer pairs)
                     logger.info("[RAG] Received raw answers as list of question-answer dictionaries.")
-                    # Filter this list to ensure only actual questions are included
-                    for item in raw_rag_answers:
-                        if re.match(r'^\s*(\d+\.|\(|\*|-)', item["question"].strip()): # Check if it looks like a question
-                            processed_rag_answers.append(item)
+                    
+                    if is_tutor_mode and len(parsed_questions) == 1:
+                        # Special Case: Tutor mode often reviews a single question.
+                        # We need to find this specific question in the RAG answers.
+                        target_q = parsed_questions[0]["content"].strip().lower()
+                        target_q_full = parsed_questions[0].get("full_content", "").strip().lower()
+                        
+                        found_item = None
+                        for item in raw_rag_answers:
+                            rag_q = item["question"].strip().lower()
+                            # Try matching full content, stripped content, or substring
+                            if target_q_full == rag_q or target_q == rag_q:
+                                found_item = item
+                                break
+                            # Robust matching: strip numbering from RAG question for comparison
+                            rag_q_stripped = re.sub(r'^\s*(\d+\.|\(|\*|-)\s*', '', item["question"]).strip().lower()
+                            if target_q == rag_q_stripped:
+                                found_item = item
+                                break
+                        
+                        if found_item:
+                            logger.info("[RAG] Matched single question to RAG answer.")
+                            processed_rag_answers.append(found_item)
                         else:
-                            logger.debug(f"[RAG] Filtering out non-question item from RAG answers: {item['question']}")
+                            logger.warning("[RAG] Could not match tutor question to any RAG question. target_q: %s", target_q)
+                    else:
+                        # Regular filtering
+                        for item in raw_rag_answers:
+                            # RAG answers in dict format already have the question text (likely with number)
+                            question_text = item["question"].strip()
+                            if re.match(r'^\s*(\d+\.|\(|\*|-)', question_text): 
+                                processed_rag_answers.append(item)
+                            else:
+                                logger.debug(f"[RAG] Filtering out non-question item from RAG answers: {question_text}")
                     rag_answers = processed_rag_answers
                 else:
                     # Unexpected format, treat as no RAG answers found
@@ -606,11 +643,31 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
 
                     # Build the table rows
                     table_rows_data = []
+                    # Create a mapping from question content (without numbers) to full content (with numbers) if possible
+                    # This helps in case student_answers_map used the stripped content
+                    content_to_full = {q["content"].strip(): q["full_content"].strip() for q in parsed_questions if "full_content" in q}
+
                     for rag_item in rag_answers:
                         q_text = rag_item["question"].strip()
                         correct_ans = rag_item["answer"].strip()
 
-                        student_ans = student_answers_map.get(q_text, "No answer provided").strip()
+                        # Try to get student answer using the full question text (with number)
+                        student_ans = student_answers_map.get(q_text)
+                        
+                        # Fallback: if student_answers_map used stripped text, try that
+                        if student_ans is None:
+                            # Find the stripped version of q_text if it has a number
+                            # This is a bit tricky, but since q_text came from RAG, it likely HAS a number.
+                            # We can try to match it against our parsed questions.
+                            for p_q in parsed_questions:
+                                if p_q.get("full_content", "").strip() == q_text:
+                                    student_ans = student_answers_map.get(p_q["content"].strip())
+                                    break
+                        
+                        if student_ans is None:
+                            student_ans = "No answer provided"
+
+                        student_ans = student_ans.strip()
 
                         # Escape pipe characters in answers to avoid breaking markdown table
                         # Determine if correct

@@ -886,7 +886,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <!-- Loading -->
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <p>Generating homework with AI... Please wait</p>
+            <p>AI tutor is working on it... Please wait</p>
         </div>
 
         <!-- Results -->
@@ -1845,8 +1845,36 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
             reviewHomeworkWithContent(homework, combinedAnswers, subject, homeworkDocId);
         }
 
-        function reviewHomework() {
-            window.location.href = '/pricing'; // This is for the "Mark Homework" tab, which is a paid feature
+        async function reviewHomework() {
+            // 检查登录和订阅状态
+            if (!currentStudentId) {
+                alert('Please login to use Mark Homework.');
+                window.location.href = '/login';
+                return;
+            }
+            if (!await requireSubscription('Mark Homework')) return;
+
+            // 根据当前输入方式收集数据
+            let homeworkText = '';
+            let answersText = '';
+
+            if (currentInputMethod === 'text') {
+                homeworkText = document.getElementById('review-homework').value.trim();
+                answersText = document.getElementById('review-answers').value.trim();
+            } else if (currentInputMethod === 'file') {
+                homeworkText = document.getElementById('review-homework-file').value.trim();
+                // 文件内容作为答案（如果有提取的内容则使用提取的内容）
+                answersText = extractedContent || '';
+            }
+
+            const subject = document.getElementById('review-subject').value;
+
+            if (!answersText) {
+                alert('Please provide the student\'s answers.');
+                return;
+            }
+
+            reviewHomeworkWithContent(homeworkText, answersText, subject);
         }
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
@@ -1876,7 +1904,16 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                     body: JSON.stringify(requestBody)
                 });
 
-                // No 402/401 check here as this is the free review for homework mode
+                if (response.status === 402) {
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) {
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
                 const data = await response.json();
 
                 if (data.success) {
