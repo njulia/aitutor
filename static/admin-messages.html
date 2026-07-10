@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Messages - Homework Magic</title>
+  <link rel="stylesheet" href="/static/css/messages.css">
+</head>
+<body>
+<main class="page wide">
+  <h1>Admin Message Dashboard</h1>
+  <section class="card toolbar">
+    <label>Admin API key <input id="admin-key" type="password"></label>
+    <label>Status <select id="status-filter"><option value="">All</option><option>open</option><option>pending</option><option>replied</option><option>closed</option></select></label>
+    <button id="load" type="button">Load messages</button>
+  </section>
+  <div class="admin-grid">
+    <section class="card"><h2>Inbox</h2><div id="admin-list"></div></section>
+    <section class="card"><h2>Message and reply</h2><div id="admin-detail">Select a message.</div></section>
+  </div>
+</main>
+<script src="/static/js/admin-messages.js" defer></script>
+</body>
+</html>

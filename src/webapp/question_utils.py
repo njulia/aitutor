@@ -7,20 +7,20 @@ from typing import Dict, List
 logger = logging.getLogger(__name__)
 
 def normalize_question(text: str) -> str:
-    text = text.strip().lower()
+    """Normalize a question for backward-compatible text matching.
 
-    # 去掉各种编号
+    A numeric prefix is removed only when it is clearly a label such as
+    ``1.``, ``1)``, ``(1)`` or ``Question 1``. This deliberately preserves
+    arithmetic that starts with a number, for example ``10 - 4 = ?``.
+    """
+    text = text.strip().lower()
     text = re.sub(
-        r'^\s*(?:question\s*)?\(?\d+\)?[.)、:]?\s*',
+        r'^\s*(?:(?:question\s+)\d+\s*[.)、:]?\s*|\(\d+\)\s*|\d+[.)、:]\s*)',
         '',
         text,
         flags=re.IGNORECASE,
     )
-
-    # 去掉多余空格
-    text = re.sub(r'\s+', ' ', text)
-
-    return text
+    return re.sub(r'\s+', ' ', text)
 
 
 def _split_homework_into_questions(homework_content: str, subject: str) -> List[Dict[str, str]]:
@@ -46,7 +46,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
         numbered_parts = numbered_parts[1:] # Discard the intro part
 
     i = 0
-    while i < len(numbered_parts):
+    while len(numbered_parts) > 1 and i < len(numbered_parts):
         if re.match(r'^\s*\d+\.', numbered_parts[i]):  # This is a delimiter (e.g., "1.")
             question_number_prefix = numbered_parts[i].strip()
             question_text_segment = numbered_parts[i + 1].strip() if i + 1 < len(numbered_parts) else ""

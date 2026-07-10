@@ -17,7 +17,7 @@ import json # Added: Import the json module
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
@@ -98,98 +98,68 @@ def is_logged_in(req: Request) -> bool:
     """Check whether the request has a valid session token cookie or header mapped to an existing user."""
     try:
         from src.auth_tokens import verify_token # Moved to top-level import
-        token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
+        token = req.cookies.get("session")
+        username = None
         if token:
-            if token.startswith("Bearer "):
-                token = token[7:]
             username = verify_token(token) # Verify token returns username (email)
             if username and get_user_by_username(username): # Check if user exists in DB
+                return True
+        # Support header-based token for API calls
+        header_token = req.headers.get("Authorization") or req.headers.get("X-User-Id")
+        if header_token:
+            maybe = verify_token(header_token)
+            if maybe and get_user_by_username(maybe): # Check if user exists in DB
                 return True
     except Exception:
         pass
     return False
 
 
-def is_admin_request(req: Request) -> bool:
-    """Check if the current request is from an admin."""
-    from src.admin import verify_admin_token
-    # 1. Check for admin token in header or cookie
-    admin_token = req.headers.get("X-Admin-Token") or req.cookies.get("admin_token")
-    if admin_token and verify_admin_token(admin_token):
-        return True
-
-    # 2. Check if logged-in user is in ADMIN_EMAILS
-    from src.auth_tokens import verify_token
-    token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
-    if token:
-        if token.startswith("Bearer "):
-            token = token[7:]
+def _resolve_username(req: Request) -> Optional[str]:
+    """Return the authenticated account email, or None for anonymous users."""
+    try:
+        from src.auth_tokens import verify_token
+        token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
+        if not token:
+            return None
         username = verify_token(token)
-        if username:
-            admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
-            if username in admin_emails and admin_emails[0]:
-                return True
-            # Fallback for dev: if no admin emails set and no token set, and it's dev mode, maybe allow?
-            # But the requirement says "only show when admin logged in".
-            # For now, let's rely on ADMIN_EMAILS or X-Admin-Token.
-    
-    # 3. Special case for local dev if no ADMIN_TOKEN is set
-    from src.admin import ADMIN_TOKEN
-    if not ADMIN_TOKEN and _dev_mode:
-        return True
+        if username and get_user_by_username(username):
+            return username.strip().lower()
+    except Exception:
+        return None
+    return None
 
-    return False
+
+def _require_admin(req: Request) -> str:
+    username = _resolve_username(req)
+    if not username or username not in _admin_email_allowlist():
+        raise HTTPException(status_code=403, detail="Administrator access required")
+    return username
 
 
 def user_has_subscription(req: Optional[Request] = None, student_id: Optional[str] = None, username: Optional[str] = None) -> bool:
-    """Check for any active subscription for a given student_id/username.
-    If req provided, it will attempt to resolve student_id/username from the request.
+    """Check subscription at account level.
+
+    `student_id` is accepted for backward compatibility but billing is linked to
+    the authenticated parent/account email, not to an individual student.
     """
-    # If student_id/username not provided, try to resolve from request
-    if req and (student_id is None or username is None):
-        resolved_student_id, resolved_username, _ = _get_user_or_anonymous_id(req)
-        student_id = student_id or resolved_student_id
-        username = username or resolved_username
-
-    if student_id is None and username is None:
+    if req and not username:
+        username = _resolve_username(req)
+    if not username:
         return False
-
     try:
-        # Check if user is a test user (requires username)
-        if username:
-            from src.progress_db import is_user_test
-            if is_user_test(username):
-                return True
-        
-        # Anonymous IDs cannot have subscriptions
-        if student_id and student_id.startswith("anon_"):
-            return False
-
+        if is_user_test(username):
+            return True
+        from src.webapp.account_store import account_has_active_subscription
+        if account_has_active_subscription(username):
+            return True
+        # Backward-compatible lookup while old subscriptions are migrated.
         if _dev_mode:
             from src.progress_db import get_local_subscriptions_by_email
-            # 订阅表用 customer_email 关联，优先用 username（即 email）查找
-            lookup_email = username or student_id
-            if lookup_email and not lookup_email.startswith("anon_"):
-                subs = get_local_subscriptions_by_email(lookup_email)
-                for s in subs:
-                    if s.get("status") == "active":
-                        return True
-            return False
-        else:
-            # In production, fetch Stripe subscriptions for the specific customer
-            if student_id:
-                from src.progress_db import get_student_detail
-                student_detail = get_student_detail(student_id)
-                if student_detail and student_detail.get("stripe_customer_id"):
-                    import stripe
-                    subs = stripe.Subscription.list(customer=student_detail["stripe_customer_id"], status="active", limit=1)
-                    return bool(subs.data)
-            import stripe
-            # Fallback for cases where student_id is not linked to Stripe customer
-            # For now, if no student_id or no stripe_customer_id, assume no subscription.
-            return False
-    except Exception as e:
-        logger.warning("Subscription check failed: %s", e)
+            return any(s.get("status") == "active" for s in get_local_subscriptions_by_email(username))
+        return False
+    except Exception as exc:
+        logger.warning("Subscription check failed: %s", exc)
         return False
 
 
@@ -289,8 +259,8 @@ def resolve_profile(
         if parsed:
             profile = parsed
         else:
-            profile.setdefault("year_group", 6)
-            profile.setdefault("age", 11)
+            profile.setdefault("year_group", 3)
+            profile.setdefault("age", 7)
             profile.setdefault("student_id", "student_custom")
 
     if student_id:
@@ -302,30 +272,26 @@ def resolve_profile(
     return profile
 
 
-def _get_user_or_anonymous_id(req: Request) -> Tuple[str, Optional[str], Optional[str]]:
-    """
-    Determines the student_id and username for the current request.
-    Returns (student_id, username_if_logged_in, new_anonymous_session_id_to_set_in_cookie).
-    new_anonymous_session_id_to_set_in_cookie will be None if no new cookie is needed.
-    """
-    from src.auth_tokens import verify_token  # Moved to top-level import
-    # 1. Check for logged-in user
-    token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
-    if token:
-        username = verify_token(token)
-        if username:
-            user_info = get_user_by_username(username) # Assuming username is email
-            if user_info:
-                # users 表没有 student_id 列，用 username 作为标识
-                return username, username, None
+def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
+    """Return (active_student_id, account_email, new_anonymous_cookie).
 
-    # 2. Check for anonymous session ID cookie
+    Existing accounts are migrated lazily to an account with one default
+    student. A client may select another owned student with X-Student-Id.
+    """
+    username = _resolve_username(req)
+    if username:
+        from src.webapp.account_store import ensure_account, ensure_default_student, student_belongs_to_account
+        account = ensure_account(username)
+        default_student = ensure_default_student(account["id"])
+        requested_student_id = (req.headers.get("X-Student-Id") or "").strip()
+        if requested_student_id and student_belongs_to_account(requested_student_id, account["id"]):
+            return requested_student_id, username, None
+        return default_student["id"], username, None
+
     anonymous_session_id = req.cookies.get("anon_session_id")
     if anonymous_session_id:
-        return anonymous_session_id, None, None # No username for anonymous
-
-    # 3. Generate a new anonymous session ID
-    new_anon_session_id = f"anon_{uuid.uuid4().hex}" # Prefix to distinguish from real student_ids
+        return anonymous_session_id, None, None
+    new_anon_session_id = f"anon_{uuid.uuid4().hex}"
     return new_anon_session_id, None, new_anon_session_id
 
 
@@ -511,12 +477,12 @@ async def get_year_groups():
     return {
         "year_groups": [1, 2, 3, 4, 5, 6],
         "quick_select": [
-            {"year": 1, "age": 6, "stage": "KS1"},
-            {"year": 2, "age": 7, "stage": "KS1"},
-            {"year": 3, "age": 8, "stage": "KS2"},
-            {"year": 4, "age": 9, "stage": "KS2"},
-            {"year": 5, "age": 10, "stage": "KS2"},
-            {"year": 6, "age": 11, "stage": "KS2"},
+            {"year": 1, "age": 5, "stage": "KS1"},
+            {"year": 2, "age": 6, "stage": "KS1"},
+            {"year": 3, "age": 7, "stage": "KS2"},
+            {"year": 4, "age": 8, "stage": "KS2"},
+            {"year": 5, "age": 9, "stage": "KS2"},
+            {"year": 6, "age": 10, "stage": "KS2"},
         ],
     }
 
@@ -1135,17 +1101,13 @@ async def api_feedback(request: FeedbackRequest):
 
 
 @app.get("/admin")
-async def admin_page(req: Request):
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
+async def admin_page():
     return _static_page("static", "admin.html")
 
 
 @app.get("/api/admin/overview")
-async def admin_overview(req: Request):
+async def admin_overview():
     """管理后台概览数据"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import get_ai_metrics, get_subscription_overview, _check_langfuse
     from src.progress_db import list_all_students, get_all_sessions_summary
 
@@ -1160,20 +1122,16 @@ async def admin_overview(req: Request):
 
 
 @app.get("/api/admin/users")
-async def admin_list_users(req: Request, limit: int = 100, offset: int = 0):
+async def admin_list_users(limit: int = 100, offset: int = 0):
     """列出所有学生"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import list_all_students
     users = list_all_students(limit=limit, offset=offset)
     return {"success": True, "users": users}
 
 
 @app.post("/api/admin/users")
-async def admin_create_user(req: Request, request: AdminUserCreateRequest):
+async def admin_create_user(request: AdminUserCreateRequest):
     """管理员创建新学生"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import create_student
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
@@ -1190,10 +1148,8 @@ async def admin_create_user(req: Request, request: AdminUserCreateRequest):
 
 
 @app.get("/api/admin/users/{student_id}")
-async def admin_get_user(req: Request, student_id: str):
+async def admin_get_user(student_id: str):
     """获取学生详细信息"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import get_student_detail
     detail = get_student_detail(student_id)
     if not detail:
@@ -1202,10 +1158,8 @@ async def admin_get_user(req: Request, student_id: str):
 
 
 @app.put("/api/admin/users/{student_id}")
-async def admin_update_user(req: Request, student_id: str, request: AdminUserUpdateRequest):
+async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
     """更新学生信息"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import update_student
     updates = request.model_dump(exclude_unset=True)
     if request.is_active is not None:
@@ -1215,29 +1169,23 @@ async def admin_update_user(req: Request, student_id: str, request: AdminUserUpd
 
 
 @app.delete("/api/admin/users/{student_id}")
-async def admin_delete_user(req: Request, student_id: str):
+async def admin_delete_user(student_id: str):
     """删除学生及所有相关数据（UK GDPR 被遗忘权）"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import delete_student
     ok = delete_student(student_id)
     return {"success": ok, "message": "Student and all related data deleted (GDPR erasure)"}
 
 
 @app.get("/api/admin/subscriptions")
-async def admin_subscriptions(req: Request):
+async def admin_subscriptions():
     """获取订阅概览"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import get_subscription_overview
     return get_subscription_overview()
 
 
 @app.post("/api/admin/subscriptions")
-async def admin_create_subscription(req: Request, request: AdminSubscriptionCreateRequest):
+async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
     """管理员手动创建订阅"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import create_admin_subscription
     if not request.email or not request.email.strip():
         raise HTTPException(status_code=400, detail="Email is required")
@@ -1263,8 +1211,6 @@ async def admin_create_subscription(req: Request, request: AdminSubscriptionCrea
 
 @app.post("/api/admin/test-account")
 async def admin_create_test_account(req: Request):
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     """Create a persistent test user (admin-only). Request JSON: {username, password, create_subscription: bool}
 
     The created user will be marked as a test account which bypasses subscription checks.
@@ -1296,10 +1242,8 @@ async def admin_create_test_account(req: Request):
 
 
 @app.post("/api/admin/users/{username}/test-toggle")
-async def admin_toggle_test(req: Request, username: str, enable: bool = True):
+async def admin_toggle_test(username: str, enable: bool = True):
     """Toggle a persistent user's test status (enable=true/false)."""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import get_user_by_username, set_user_test_flag
     user = get_user_by_username(username)
     if not user:
@@ -1309,53 +1253,60 @@ async def admin_toggle_test(req: Request, username: str, enable: bool = True):
 
 
 @app.get("/api/admin/ai-metrics")
-async def admin_ai_metrics(req: Request):
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
+async def admin_ai_metrics():
     """获取 AI 系统运行指标"""
     from src.admin import get_ai_metrics
     return get_ai_metrics()
 
 
 @app.get("/api/admin/ai-evaluation")
-async def admin_ai_evaluation(req: Request):
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
+async def admin_ai_evaluation():
     """获取 AI 质量评估汇总"""
     from src.admin import get_evaluation_summary
     return get_evaluation_summary()
 
 
 @app.post("/api/admin/cache/clear")
-async def admin_clear_cache(req: Request):
+async def admin_clear_cache():
     """清空所有缓存"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import clear_all_caches
     cleared = clear_all_caches()
     return {"success": True, "cleared": cleared}
 
 
+def _admin_email_allowlist() -> set[str]:
+    """Return lowercase administrator emails configured through ADMIN_EMAILS."""
+    raw = os.environ.get("ADMIN_EMAILS", "")
+    return {email.strip().lower() for email in raw.split(",") if email.strip()}
+
+
+@app.get("/api/admin/access-status")
+async def admin_access_status(req: Request):
+    """Return whether the currently authenticated user is an administrator."""
+    _student_id, username, _new_anon_session_id = _get_user_or_anonymous_id(req)
+    is_admin = bool(username and username.strip().lower() in _admin_email_allowlist())
+    return {"is_admin": is_admin}
+
+
 @app.get("/api/admin/dev-mode-status")
 async def admin_dev_mode_status(req: Request):
-    """Returns whether the application is running in development mode and if user is admin."""
-    return {"is_dev_mode": _dev_mode, "is_admin": is_admin_request(req)}
+    """Backward-compatible status endpoint; never grants admin access by DEV_MODE alone."""
+    _student_id, username, _new_anon_session_id = _get_user_or_anonymous_id(req)
+    is_admin = bool(username and username.strip().lower() in _admin_email_allowlist())
+    return {"is_dev_mode": _dev_mode, "is_admin": is_admin}
 
 
 # ---- AI 监控 API ----
 
 @app.get("/api/admin/ai-monitor/stats")
-async def admin_ai_monitor_stats(req: Request, hours: int = 24):
+async def admin_ai_monitor_stats(hours: int = 24):
     """获取 AI 系统统计信息"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_ai_stats
     return get_ai_stats(hours=hours)
 
 
 @app.get("/api/admin/ai-monitor/requests")
 async def admin_ai_monitor_requests(
-        req: Request,
         limit: int = 100,
         offset: int = 0,
         provider: str = None,
@@ -1366,8 +1317,6 @@ async def admin_ai_monitor_requests(
         operation: str = None,
 ):
     """获取 LLM 请求记录（支持筛选）"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_requests_by_filter
     return get_requests_by_filter(
         provider=provider,
@@ -1381,10 +1330,8 @@ async def admin_ai_monitor_requests(
 
 
 @app.get("/api/admin/ai-monitor/request/{request_id}")
-async def admin_ai_monitor_request_detail(req: Request, request_id: str):
+async def admin_ai_monitor_request_detail(request_id: str):
     """获取单个请求的详细信息"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_request_detail
     detail = get_request_detail(request_id)
     if not detail:
@@ -1393,19 +1340,15 @@ async def admin_ai_monitor_request_detail(req: Request, request_id: str):
 
 
 @app.get("/api/admin/ai-monitor/models")
-async def admin_ai_monitor_models(req: Request):
+async def admin_ai_monitor_models():
     """获取模型对比数据"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_model_comparison
     return get_model_comparison()
 
 
 @app.get("/api/admin/ai-monitor/conversations")
-async def admin_ai_monitor_conversations(req: Request, student_id: str = None, limit: int = 50):
+async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50):
     """获取对话历史"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_conversations
     return get_conversations(student_id=student_id, limit=limit)
 
@@ -1413,19 +1356,15 @@ async def admin_ai_monitor_conversations(req: Request, student_id: str = None, l
 # --- Admin endpoints: embedding cache & auth-user management ---
 
 @app.get("/api/admin/auth-users")
-async def admin_auth_users(req: Request, limit: int = 100, offset: int = 0):
+async def admin_auth_users(limit: int = 100, offset: int = 0):
     """List registered auth users (username, created_at, is_test)"""
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import list_all_users
     users = list_all_users(limit=limit, offset=offset)
     return {"success": True, "users": users}
 
 
 @app.get("/api/admin/embedding-cache/stats")
-async def admin_embedding_cache_stats(req: Request):
-    if not is_admin_request(req):
-        raise HTTPException(status_code=403, detail="Not authorized")
+async def admin_embedding_cache_stats():
     from src.embedding_cache import get_stats
     try:
         return {"success": True, "stats": get_stats()}
@@ -1459,6 +1398,15 @@ async def admin_embedding_cache_cleanup(req: Request):
         logger.error("[Admin] embedding cache cleanup failed: %s", e)
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
+
+
+# Account, student and account-level subscription module
+from src.webapp.account_routes import build_account_router
+app.include_router(build_account_router(resolve_username=_resolve_username, require_admin=_require_admin))
+
+# User message and admin reply module
+from src.webapp.message_routes import create_message_router
+app.include_router(create_message_router(resolve_identity=_get_user_or_anonymous_id, project_root=project_root))
 
 static_path = os.path.join(project_root, "static")
 if os.path.exists(static_path):

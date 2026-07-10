@@ -153,15 +153,13 @@ let currentHomework = [];
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', function() {
             loadSubjects();
-            checkDevMode(); // Check dev mode and admin status on load
+            checkDevMode(); // Check dev mode on load
 
             // Update UI based on login status
             if (currentStudentId) {
                 document.getElementById('logout-link').style.display = 'block';
                 document.querySelector('nav.nav-links a[href="/login"]').style.display = 'none';
                 document.querySelector('nav.nav-links a[href="/register"]').style.display = 'none';
-                // If logged in, re-check admin status to ensure it's up to date
-                checkDevMode();
             }
 
             // Check for tab parameter in URL
@@ -218,7 +216,6 @@ let currentHomework = [];
             currentStudentId = null;
             currentStudentEmail = null;
             hasSubscription = null; // Reset subscription status
-            checkDevMode(); // Re-check admin status on logout
             window.location.href = '/'; // Redirect to home or login page
         });
 
@@ -1315,11 +1312,8 @@ let currentHomework = [];
                 const response = await fetch('/api/admin/dev-mode-status'); // New endpoint to check dev mode
                 const data = await response.json();
                 isDevMode = data.is_dev_mode;
-                const isAdmin = data.is_admin;
-                if (isAdmin) {
+                if (isDevMode) {
                     document.getElementById('admin-tools-tab').style.display = 'block';
-                } else {
-                    document.getElementById('admin-tools-tab').style.display = 'none';
                 }
             } catch (error) {
                 console.error('Failed to check dev mode status:', error);
