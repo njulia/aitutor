@@ -67,7 +67,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         age = 11  # 11+ 考试针对 Year 6 (10-11岁)
     else:
         year_group = student_profile.get("year_group", 6)
-        age = student_profile.get("age") or YEAR_GROUP_AGE.get(year_group, 7)
+        age = student_profile.get("age") or YEAR_GROUP_AGE.get(year_group, 11)
     
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]

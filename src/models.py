@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 # UK primary school year group to age mapping (Year 1-6, ages 5-11)
 YEAR_GROUP_AGE = {
-    1: 5,   # Year 1: age 5-6
-    2: 6,   # Year 2: age 6-7
-    3: 7,   # Year 3: age 7-8 (KS2 开始)
-    4: 8,   # Year 4: age 8-9
-    5: 9,   # Year 5: age 9-10
-    6: 10,  # Year 6: age 10-11 (KS2 结束)
+    1: 6,   # Year 1: age 5-6
+    2: 7,   # Year 2: age 6-7
+    3: 8,   # Year 3: age 7-8 (KS2 开始)
+    4: 9,   # Year 4: age 8-9
+    5: 10,   # Year 5: age 9-10
+    6: 11,  # Year 6: age 10-11 (KS2 结束)
 }
 
 # UK key stages
@@ -130,7 +130,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student1": {
         "student_id": "S2024001",
         "year_group": 1,
-        "age": 5,
+        "age": 6,
         "key_stage": "KS1",
         "english_level": "Beginner",
         "learning_goals": ["Learn phonics", "Recognise high-frequency words", "Read simple sentences"],
@@ -142,7 +142,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student2": {
         "student_id": "S2024002",
         "year_group": 2,
-        "age": 6,
+        "age": 7,
         "key_stage": "KS1",
         "english_level": "Beginner",
         "learning_goals": ["Read simple stories", "Write short sentences", "Learn basic spelling"],
@@ -154,7 +154,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student3": {
         "student_id": "S2024003",
         "year_group": 3,
-        "age": 7,
+        "age": 8,
         "key_stage": "KS2",
         "english_level": "Elementary",
         "learning_goals": ["Build vocabulary", "Improve reading comprehension", "Practice writing simple sentences"],
@@ -166,7 +166,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student4": {
         "student_id": "S2024004",
         "year_group": 4,
-        "age": 8,
+        "age": 9,
         "key_stage": "KS2",
         "english_level": "Elementary",
         "learning_goals": ["Improve reading fluency", "Write structured paragraphs", "Learn fronted adverbials"],
@@ -178,7 +178,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student5": {
         "student_id": "S2024005",
         "year_group": 5,
-        "age": 9,
+        "age":  10,
         "key_stage": "KS2",
         "english_level": "Intermediate",
         "learning_goals": ["Write descriptive essays", "Use complex sentences", "Expand vocabulary"],
@@ -190,7 +190,7 @@ SAMPLE_STUDENT_PROFILES = {
     "student6": {
         "student_id": "S2024006",
         "year_group": 6,
-        "age": 10,
+        "age": 11,
         "key_stage": "KS2",
         "english_level": "Intermediate",
         "learning_goals": ["Write short essays", "Improve speaking fluency", "Prepare for SATs"],

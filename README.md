@@ -1,147 +1,16 @@
-# Homework Magic - AI Tutor for UK Primary Schools
+# Homework Magic refactor
 
-An AI-powered homework generator and marker for UK primary school students (Year 1-6, ages 5-11), aligned to the UK National Curriculum. Generates personalised homework, marks student submissions (including handwritten photos via OCR), and provides encouraging feedback. Also covers 11+ exam preparation.
+This package reduces the size of the two largest files without changing API paths.
 
-## Architecture
+## Backend
+- `web_app.py`: FastAPI composition and routes only.
+- `src/webapp/question_utils.py`: question splitting, numbering and fallback matching.
+- `src/webapp/review_service.py`: review, detailed explanation and improvement practice.
+- `src/webapp/models.py`: Pydantic request models.
 
-FastAPI web application with:
-- **Backend**: FastAPI + Uvicorn
-- **AI**: LangChain + LangGraph hybrid agent (reactive + deliberative modes)
-- **Vector Store**: ChromaDB for homework RAG (Retrieval-Augmented Generation)
-- **LLM**: QWEN API
-- **Frontend**: Custom HTML/JS single-page application
+## Frontend
+- `static/app.html`: page markup only.
+- `static/css/app.css`: extracted styles.
+- `static/js/app.js`: extracted application logic.
 
-## Features
-
-- **Homework Generation**: Creates age-appropriate homework based on year group, strengths, and interests
-- **Multi-Subject Support**: Maths, English, Science, History, Geography, Spanish, French, Latin, Chinese, and more
-- **11+ Preparation**: Verbal Reasoning, Non-Verbal Reasoning, Maths, English for grammar school entrance
-- **Instant Marking**: AI reviews homework with encouraging feedback, scores, and improvement suggestions
-- **File Upload**: Supports images (JPG, PNG, HEIC), PDF, and text files for homework submission
-- **OCR**: Reads handwritten homework from photos using multimodal LLM
-- **RAG System**: Stores and retrieves homework using vector similarity search
-- **Student Profiles**: Personalised learning based on year group, level, and weak areas
-- **SEO Pages**: Static landing pages for KS1, KS2, 11+, and homework checking
-
-## Requirements
-
-- Python 3.10+
-- QWEN API Key (for LLM access)
-
-## Quick Start
-
-```bash
-# Set API Key
-export QWEN_API_KEY="your-api-key"
-
-# Important environment variables
-export DEV_MODE=1                # development mode (skip Stripe, non-secure cookies)
-export SESSION_SECRET="changeme"  # REQUIRED in production: HMAC secret for session tokens
-export REDIS_URL="redis://:password@redis-host:6379/0"  # optional: enable Redis caches
-export CHROMA_DB_PATH="/path/to/chroma_db"            # optional
-export SSL_CERT_FILE="/path/to/fullchain.pem"        # optional
-export SSL_KEY_FILE="/path/to/privkey.pem"
-
-# Install dependencies
-pip install -r requirements.txt
-# If using Redis caching
-pip install redis
-
-# Run the application
-python web_app.py
-```
-
-The application will start at `http://localhost:5000` (or the port specified in the `PORT` environment variable). If SSL_CERT_FILE and SSL_KEY_FILE are set and valid files exist, the server will start on HTTPS instead.
-
-## Project Structure
-
-```
-ai_tutor/
-├── web_app.py                    # FastAPI application (main server)
-├── launch.py                     # Unified launcher (generates SEO pages, starts web_app.py)
-── generate_landing_pages.py     # Generates SEO-optimised static landing pages
-├── requirements.txt              # Python dependencies
-├── run.sh / run.bat              # Launcher scripts
-│
-├── src/
-│   ├── models.py                 # Data models, student profiles, LangChain tools
-│   ├── prompts.py                # All LLM prompt templates
-│   ├── agent_workflow.py         # LangGraph hybrid agent workflow
-│   ├── homework_generator.py     # Homework generation logic
-│   ├── homework_manager.py       # Homework save/load/review/CSV management
-│   ├── homework_rag.py           # RAG system (ChromaDB) for homework storage & search
-│   ├── file_utils.py             # File reading utilities (image OCR, PDF, DOCX, text)
-│   │
-│   ├── ui/
-│   │   ├── shared.py             # Shared UI utilities (profile parsing, homework display)
-│   │   └── tui.py                # Terminal UI (CLI mode)
-│   │
-│   ├── elevenplus/               # 11+ exam preparation module
-│   │   ├── elevenplus_rag.py     # RAG system for 11+ knowledge base
-│   │   ├── prompts.py            # 11+ specific prompt templates
-│   │   └── generate_11plus_*.py  # 11+ homework generators
-│   │
-│   └── scripts/                  # Batch generation scripts
-│
-├── templates/
-│   ├── app.html                  # Main AI tutor web application (SPA)
-│   ├── homework.html             # Homework display template
-│   └── elevenplus-practice.html  # 11+ practice page template
-│
-├── static/
-│   ├── index.html                # SEO homepage
-│   ├── ks1-homework.html         # KS1 SEO landing page
-│   ├── ks2-homework.html         # KS2 SEO landing page
-│   ├── check-my-homework.html    # Homework checker SEO page
-│   ├── elevenplus-practice.html  # 11+ practice page
-│   ├── styles.css                # Shared CSS stylesheet
-│   └── elevenplus/               # 11+ specific static content
-│       ├── articles.html         # 11+ articles hub
-│       ├── uk_grammar_guide.html # UK Grammar Guide
-│       └── uk_11plus_vocabulary_list.html  # 11+ Vocabulary List
-│
-├── data/
-│   ├── homework.csv              # Sample homework data
-│   ├── chroma_homework_db/       # ChromaDB vector store
-│   ├── chinese/                  # Chinese textbook PDFs
-│   └── elevenplus/               # 11+ knowledge base data
-│
-└── homework_output/              # Generated homework output files
-```
-
-## API Endpoints
-
-### Web Pages
-- `GET /` - Homepage
-- `GET /ks1-homework` - KS1 homework landing page
-- `GET /ks2-homework` - KS2 homework landing page
-- `GET /elevenplus-practice` - 11+ practice landing page
-- `GET /elevenplus/articles` - 11+ articles hub
-- `GET /elevenplus/uk-grammar-guide` - UK Grammar Guide
-- `GET /elevenplus/11plus-vocabulary-list` - 11+ Vocabulary List
-- `GET /check-my-homework` - Homework checker landing page
-- `GET /app` - Main AI tutor application
-
-### REST API
-- `GET /api/health` - Health check
-- `GET /api/subjects` - List available subjects
-- `GET /api/year-groups` - List year groups
-- `POST /api/generate` - Generate homework
-- `POST /api/review` - Review/mark homework
-- `GET /api/quick-profile/{year}` - Get sample student profile
-- `POST /api/sessions` - Create tutoring session
-- `GET /api/sessions/{id}` - Get session
-- `PUT /api/sessions/{id}` - Update session
-- `DELETE /api/sessions/{id}` - Delete session
-- `POST /api/upload-file` - Upload homework file
-- `POST /api/upload-photo` - Upload photo for OCR
-
-## Subjects
-
-**Primary (KS1-KS2)**: Maths, English, Science, History, Geography, Design and Technology, Art and Design, Computing, Latin, Spanish, French, Chinese, RE, Music, PE
-
-**11+ Preparation**: Maths, English, Verbal Reasoning, Non-Verbal Reasoning
-
-## License
-
-Proprietary - All rights reserved
+Copy these files into the same relative paths in your project. Keep your existing `homework_rag.py`; it is not changed.

@@ -17,7 +17,7 @@ import json # Added: Import the json module
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
@@ -98,20 +98,46 @@ def is_logged_in(req: Request) -> bool:
     """Check whether the request has a valid session token cookie or header mapped to an existing user."""
     try:
         from src.auth_tokens import verify_token # Moved to top-level import
-        token = req.cookies.get("session")
-        username = None
+        token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
         if token:
+            if token.startswith("Bearer "):
+                token = token[7:]
             username = verify_token(token) # Verify token returns username (email)
             if username and get_user_by_username(username): # Check if user exists in DB
                 return True
-        # Support header-based token for API calls
-        header_token = req.headers.get("Authorization") or req.headers.get("X-User-Id")
-        if header_token:
-            maybe = verify_token(header_token)
-            if maybe and get_user_by_username(maybe): # Check if user exists in DB
-                return True
     except Exception:
         pass
+    return False
+
+
+def is_admin_request(req: Request) -> bool:
+    """Check if the current request is from an admin."""
+    from src.admin import verify_admin_token
+    # 1. Check for admin token in header or cookie
+    admin_token = req.headers.get("X-Admin-Token") or req.cookies.get("admin_token")
+    if admin_token and verify_admin_token(admin_token):
+        return True
+
+    # 2. Check if logged-in user is in ADMIN_EMAILS
+    from src.auth_tokens import verify_token
+    token = req.cookies.get("session") or req.headers.get("Authorization") or req.headers.get("X-User-Id")
+    if token:
+        if token.startswith("Bearer "):
+            token = token[7:]
+        username = verify_token(token)
+        if username:
+            admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
+            if username in admin_emails and admin_emails[0]:
+                return True
+            # Fallback for dev: if no admin emails set and no token set, and it's dev mode, maybe allow?
+            # But the requirement says "only show when admin logged in".
+            # For now, let's rely on ADMIN_EMAILS or X-Admin-Token.
+    
+    # 3. Special case for local dev if no ADMIN_TOKEN is set
+    from src.admin import ADMIN_TOKEN
+    if not ADMIN_TOKEN and _dev_mode:
+        return True
+
     return False
 
 
@@ -263,8 +289,8 @@ def resolve_profile(
         if parsed:
             profile = parsed
         else:
-            profile.setdefault("year_group", 3)
-            profile.setdefault("age", 7)
+            profile.setdefault("year_group", 6)
+            profile.setdefault("age", 11)
             profile.setdefault("student_id", "student_custom")
 
     if student_id:
@@ -276,7 +302,7 @@ def resolve_profile(
     return profile
 
 
-def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
+def _get_user_or_anonymous_id(req: Request) -> Tuple[str, Optional[str], Optional[str]]:
     """
     Determines the student_id and username for the current request.
     Returns (student_id, username_if_logged_in, new_anonymous_session_id_to_set_in_cookie).
@@ -313,546 +339,10 @@ def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus
     return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
 
 
-def normalize_question(text: str) -> str:
-    text = text.strip().lower()
 
-    # 去掉各种编号
-    text = re.sub(
-        r'^\s*(?:question\s*)?\(?\d+\)?[.)、:]?\s*',
-        '',
-        text,
-        flags=re.IGNORECASE,
-    )
+from src.webapp.question_utils import _split_homework_into_questions
+from src.webapp.review_service import review_homework, explain_deep, improve_practice
 
-    # 去掉多余空格
-    text = re.sub(r'\s+', ' ', text)
-
-    return text
-
-
-def _split_homework_into_questions(homework_content: str, subject: str) -> List[Dict[str, str]]:
-    """
-    Splits a block of homework content into individual questions.
-    Assumes questions are numbered (e.g., 1., 2., (1), (2), or bullet points).
-    """
-    extracted_questions = []
-    
-    # Normalize newlines and strip leading/trailing whitespace
-    homework_content = homework_content.strip().replace('\r\n', '\n')
-
-    # --- Attempt to split by numbered questions first ---
-    # This pattern splits on the start of a new numbered question (e.g., "1. ", "2. ")
-    # The capturing group `(\d+\.)` means the delimiter itself will be included in the split list.
-    numbered_parts = re.split(r'(?m)^\s*(\d+\.)[\s\xa0]+', homework_content)
-
-    # If the first part is not a delimiter, it's either a header or unnumbered intro.
-    # If there are subsequent numbered questions (i.e., len(numbered_parts) > 1),
-    # we can assume the first part is a header/intro to be discarded.
-    if numbered_parts and numbered_parts[0].strip() and len(numbered_parts) > 1 and not re.match(r'^\s*\d+\.', numbered_parts[0]):
-        logger.debug(f"Discarding unnumbered intro/header before first numbered question: '{numbered_parts[0].strip()}'")
-        numbered_parts = numbered_parts[1:] # Discard the intro part
-
-    i = 0
-    while i < len(numbered_parts):
-        if re.match(r'^\s*\d+\.', numbered_parts[i]):  # This is a delimiter (e.g., "1.")
-            question_number_prefix = numbered_parts[i].strip()
-            question_text_segment = numbered_parts[i + 1].strip() if i + 1 < len(numbered_parts) else ""
-            
-            # Combine prefix and text segment to form the full question content (for RAG)
-            full_question_content = f"{question_number_prefix} {question_text_segment}".strip()
-            
-            extracted_questions.append({
-                "subject": subject,
-                "content": question_text_segment,
-                "full_content": full_question_content,
-                "original_full_content": homework_content # This is the content *after* potential initial header removal
-            })
-            i += 2
-        else: # This branch should ideally only be hit if the content is malformed or not numbered.
-              # If it's the very first part and we didn't discard it, it's a standalone unnumbered block.
-            if numbered_parts[i].strip():
-                # If no questions have been added yet, treat this as the first question
-                if not extracted_questions: 
-                     extracted_questions.append({
-                        "subject": subject,
-                        "content": numbered_parts[i].strip(),
-                        "full_content": numbered_parts[i].strip(),
-                        "original_full_content": homework_content
-                    })
-                else: # This is an unexpected unnumbered block in between or after numbered questions
-                    logger.warning(f"Unexpected unnumbered part in homework content after split: '{numbered_parts[i].strip()}'")
-                    extracted_questions.append({
-                        "subject": subject,
-                        "content": numbered_parts[i].strip(),
-                        "full_content": numbered_parts[i].strip(),
-                        "original_full_content": homework_content
-                    })
-            i += 1
-
-    # If no questions were found from numbered patterns, try bullet points
-    if not extracted_questions:
-        bullet_parts = re.split(r'(?m)^\s*([-*])[\s\xa0]+', homework_content)
-        # Similar logic for discarding initial unbulleted intro/header
-        if bullet_parts and bullet_parts[0].strip() and len(bullet_parts) > 1 and not re.match(r'^\s*[-*]', bullet_parts[0].strip()):
-            logger.debug(f"Discarding unbulleted intro/header before first bullet question: '{bullet_parts[0].strip()}'")
-            bullet_parts = bullet_parts[1:]
-
-        i = 0
-        while i < len(bullet_parts):
-            if re.match(r'^\s*[-*]', bullet_parts[i].strip()): # This is a delimiter (e.g., "-")
-                bullet_prefix = bullet_parts[i].strip()
-                bullet_text_segment = bullet_parts[i + 1].strip() if i + 1 < len(bullet_parts) else ""
-                full_bullet_content = f"{bullet_prefix} {bullet_text_segment}".strip()
-                extracted_questions.append({
-                    "subject": subject,
-                    "content": bullet_text_segment,
-                    "full_content": full_bullet_content,
-                    "original_full_content": homework_content
-                })
-                i += 2
-            else:
-                if bullet_parts[i].strip():
-                    if not extracted_questions: # If no questions yet, treat as first
-                        extracted_questions.append({
-                            "subject": subject,
-                            "content": bullet_parts[i].strip(),
-                            "full_content": bullet_parts[i].strip(),
-                            "original_full_content": homework_content
-                        })
-                    else: # Unexpected unbulleted block
-                        logger.warning(f"Unexpected unbulleted part in homework content after split: '{bullet_parts[i].strip()}'")
-                        extracted_questions.append({
-                            "subject": subject,
-                            "content": bullet_parts[i].strip(),
-                            "full_content": bullet_parts[i].strip(),
-                            "original_full_content": homework_content
-                        })
-                i += 1
-
-    # If still no clear split, treat the whole content as one question
-    if not extracted_questions and homework_content.strip():
-        extracted_questions.append({
-            "subject": subject,
-            "content": homework_content.strip(),
-            "full_content": homework_content.strip(),
-            "original_full_content": homework_content
-        })
-
-    # Filter out any empty content questions that might arise from splitting
-    extracted_questions = [q for q in extracted_questions if q["content"].strip()]
-
-    # Assign a stable zero-based index within the original RAG document.
-    # Tutor mode sends this index back during review, so answer lookup does not
-    # depend on the displayed question text or its numbering.
-    for i, q in enumerate(extracted_questions):
-        q["question_index"] = i
-        q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i + 1}"
-
-    return extracted_questions
-
-
-def _parse_student_answers_to_map(student_answers_text: str, target_subject: str, rag_questions: List[str]) -> Dict[
-    str, str]:
-    """
-    Heuristically parses student answers to map them to known RAG questions for a specific subject.
-    Assumes student_answers_text might contain multiple subjects delimited by '--- Subject ---'.
-    This is a best-effort approach due to unstructured student input.
-    """
-    answer_map = {}
-
-    # 1. Extract the block of answers for the target_subject
-    subject_block = ""
-    start_marker = f"--- {target_subject} ---"
-    start_index = student_answers_text.find(start_marker)
-
-    if start_index == -1:
-        # If subject marker not found, assume the whole text is for the target subject
-        # This is a fallback and might be wrong if multiple subjects are present without markers.
-        subject_block = student_answers_text.strip()
-    else:
-        # Extract the content after the start marker
-        content_after_marker = student_answers_text[start_index + len(start_marker):].strip()
-
-        # Find the next subject marker
-        next_subject_marker_match = re.search(r'--- [^-\n]+ ---', content_after_marker)
-        if next_subject_marker_match:
-            end_index = next_subject_marker_match.start()
-            subject_block = content_after_marker[:end_index].strip()
-        else:
-            # No other subject markers, so the rest of the content is for the target subject
-            subject_block = content_after_marker.strip()
-
-    if not subject_block:
-        return {}  # No answers found for this subject
-
-    student_answer_lines = [line.strip() for line in subject_block.split('\n') if line.strip()]
-
-    # Create a map from question number (e.g., "1") to full question text (e.g., "1. 4 x 3 = ?")
-    # This is used for matching explicitly numbered student answers.
-    rag_q_num_to_full_q_text = {}
-    for q_text in rag_questions:
-        num_match = re.match(r'^\s*(\d+)\.\s*', q_text)
-        if num_match:
-            rag_q_num_to_full_q_text[num_match.group(1)] = q_text
-
-    # 2. Attempt to parse explicitly numbered student answers (e.g., "1. My answer")
-    temp_answer_map_numbered = {}
-    current_student_answer_parts = []
-    current_student_q_num = None
-
-    for line in student_answer_lines:
-        num_match = re.match(r'^\s*(\d+)\.\s*(.*)', line)
-        if num_match:
-            if current_student_q_num is not None and current_student_answer_parts:
-                if current_student_q_num in rag_q_num_to_full_q_text:
-                    temp_answer_map_numbered[rag_q_num_to_full_q_text[current_student_q_num]] = " ".join(current_student_answer_parts)
-            current_student_q_num = num_match.group(1)
-            current_student_answer_parts = [num_match.group(2)]
-        elif current_student_q_num is not None:
-            current_student_answer_parts.append(line)
-    
-    if current_student_q_num is not None and current_student_answer_parts:
-        if current_student_q_num in rag_q_num_to_full_q_text:
-            temp_answer_map_numbered[rag_q_num_to_full_q_text[current_student_q_num]] = " ".join(current_student_answer_parts)
-
-    if temp_answer_map_numbered:
-        return temp_answer_map_numbered
-
-    # 3. Fallback: If no numbered answers were found, try positional mapping
-    # This handles cases where student just lists answers without numbering.
-    # We map the first N student answer lines to the N RAG questions, where N is min(len(student_answer_lines), len(rag_questions))
-    num_to_map = min(len(student_answer_lines), len(rag_questions))
-    if num_to_map > 0:
-        logger.debug(f"Positional mapping {num_to_map} student answers to RAG questions for subject {target_subject}.")
-        for i in range(num_to_map):
-            answer_map[rag_questions[i]] = student_answer_lines[i]
-        return answer_map
-    
-    # 4. Fallback for single question (if only one RAG question and no other mapping)
-    if not answer_map and len(rag_questions) == 1:
-        answer_map[rag_questions[0]] = subject_block.strip()
-
-    return answer_map
-
-
-def review_homework(homework_content: str, student_answers: str, subject: str, profile=None,
-                    is_tutor_mode: bool = False, homework_doc_id: str = None,
-                    is_eleven_plus: bool = False, question_index: Optional[int] = None):
-    """批改作业 - 优先从 RAG 读取正确答案，否则使用 LLM 生成"""
-    from src.llm_client import format_prompt, build_messages
-    from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT
-    from src.cache import review_cache, make_cache_key
-
-    if profile is None:
-        profile = {"year_group": 3, "age": 7}
-
-    # Determine which prompt to use
-    prompt_template = REVIEW_TUTOR_QUESTION_PROMPT if is_tutor_mode else REVIEW_HOMEWORK_PROMPT
-
-    # Cache key needs to differentiate between tutor mode and homework mode
-    cache_key_prefix = "review_tutor" if is_tutor_mode else "review_homework"
-    cache_key = make_cache_key(
-        cache_key_prefix,
-        subject,
-        str(profile.get("year_group", 3)),
-        f"qidx={question_index}|{homework_content[:200]}",
-        student_answers[:200],
-    )
-    cached = review_cache.get(cache_key)
-    if cached:
-        logger.info("[Cache] 命中批改缓存 (%s)", cache_key_prefix)
-        return {"success": True, "review": cached, "from_cache": True}
-
-    try:
-        # 1. 优先从 RAG 中读取正确答案（零 LLM 调用）
-        rag_answers = None
-        correct_answers_section = ""
-        generated_table_markdown = ""  # New variable for the Python-generated table
-
-        # Default feedback instruction (LLM will generate this part)
-        # This will be used by the prompt template for the LLM's general feedback.
-        feedback_instruction_for_llm = """- What the student did well
-                    - Areas that need correction or improvement
-                    - Specific feedback for each task"""
-
-        if homework_doc_id:
-            try:
-                if is_eleven_plus:
-                    from src.elevenplus.elevenplus_rag import search_homework_answers as _search_answers
-                else:
-                    from src.homework_rag import search_homework_answers as _search_answers
-                
-                raw_rag_answers = _search_answers(homework_doc_id)
-                
-                # Split homework_content into questions (needed for pairing and mapping)
-                parsed_questions = _split_homework_into_questions(homework_content, subject)
-
-                processed_rag_answers = []
-                target_question = (
-                    parsed_questions[0].get("full_content")
-                    or parsed_questions[0].get("content")
-                    or homework_content
-                ).strip() if parsed_questions else homework_content.strip()
-
-                if isinstance(raw_rag_answers, list) and all(isinstance(item, str) for item in raw_rag_answers):
-                    if is_tutor_mode and question_index is not None:
-                        if 0 <= question_index < len(raw_rag_answers):
-                            processed_rag_answers.append({
-                                "question": target_question,
-                                "answer": raw_rag_answers[question_index].strip(),
-                            })
-                            logger.info("[RAG] Tutor answer selected by question_index=%s.", question_index)
-                        else:
-                            logger.warning(
-                                "[RAG] question_index=%s is outside answer range 0..%s",
-                                question_index, len(raw_rag_answers) - 1,
-                            )
-                    else:
-                        for i, q_dict in enumerate(parsed_questions):
-                            if i >= len(raw_rag_answers):
-                                break
-                            processed_rag_answers.append({
-                                "question": q_dict.get("full_content", q_dict["content"]).strip(),
-                                "answer": raw_rag_answers[i].strip(),
-                            })
-                    rag_answers = processed_rag_answers
-
-                elif isinstance(raw_rag_answers, list) and all(
-                    isinstance(item, dict) and "question" in item and "answer" in item
-                    for item in raw_rag_answers
-                ):
-                    if is_tutor_mode and question_index is not None:
-                        if 0 <= question_index < len(raw_rag_answers):
-                            processed_rag_answers.append(raw_rag_answers[question_index])
-                            logger.info("[RAG] Tutor Q&A selected by question_index=%s.", question_index)
-                        else:
-                            logger.warning(
-                                "[RAG] question_index=%s is outside Q&A range 0..%s",
-                                question_index, len(raw_rag_answers) - 1,
-                            )
-
-                    # Backward-compatible fallback for older clients that do not send an index,
-                    # or for stale indexes after RAG data has changed.
-                    if is_tutor_mode and not processed_rag_answers and len(parsed_questions) == 1:
-                        target_q = normalize_question(parsed_questions[0]["content"])
-                        for item in raw_rag_answers:
-                            if normalize_question(str(item["question"])) == target_q:
-                                processed_rag_answers.append(item)
-                                logger.info("[RAG] Tutor question matched by normalized text fallback.")
-                                break
-                    elif not is_tutor_mode:
-                        processed_rag_answers.extend(raw_rag_answers)
-
-                    rag_answers = processed_rag_answers
-                else:
-                    logger.warning(
-                        "[RAG] Unexpected answer format for doc_id=%s: %s",
-                        homework_doc_id, type(raw_rag_answers),
-                    )
-                    rag_answers = None
-
-                if rag_answers:
-                    # 将正确答案和学生答案一起发给 LLM 做简洁对比
-                    logger.info("[RAG] Found correct answers for doc_id=%s. Building comparison table.",
-                                homework_doc_id)
-
-                    # Extract questions from RAG answers for mapping
-                    rag_questions_list = [item["question"].strip() for item in rag_answers]
-
-                    # Heuristically parse student answers and map them to RAG questions for the current subject
-                    student_answers_map = _parse_student_answers_to_map(student_answers, subject, rag_questions_list)
-
-                    # Build the table rows
-                    table_rows_data = []
-                    # Create a mapping from question content (without numbers) to full content (with numbers) if possible
-                    # This helps in case student_answers_map used the stripped content
-                    content_to_full = {q["content"].strip(): q["full_content"].strip() for q in parsed_questions if "full_content" in q}
-
-                    for rag_item in rag_answers:
-                        q_text = rag_item["question"].strip()
-                        correct_ans = rag_item["answer"].strip()
-
-                        # Try to get student answer using the full question text (with number)
-                        student_ans = student_answers_map.get(q_text)
-                        
-                        # Fallback: if student_answers_map used stripped text, try that
-                        if student_ans is None:
-                            # Find the stripped version of q_text if it has a number
-                            # This is a bit tricky, but since q_text came from RAG, it likely HAS a number.
-                            # We can try to match it against our parsed questions.
-                            for p_q in parsed_questions:
-                                if p_q.get("full_content", "").strip() == q_text:
-                                    student_ans = student_answers_map.get(p_q["content"].strip())
-                                    break
-                        
-                        if student_ans is None:
-                            student_ans = "No answer provided"
-
-                        student_ans = student_ans.strip()
-
-                        # Escape pipe characters in answers to avoid breaking markdown table
-                        # Determine if correct
-                        if subject == "Maths":
-                            from src.tools.math_tools import verify_math_answer
-                            verification = verify_math_answer(q_text, student_ans, correct_ans)
-                            is_correct = verification["is_correct"]
-                        else:
-                            is_correct = (student_ans.lower() == correct_ans.lower()) # Simple string comparison for now
-                        
-                        status_icon = "✅" if is_correct else "❌"
-
-                        student_ans_escaped = student_ans.replace('|', '\\|')
-                        correct_ans_escaped = correct_ans.replace('|', '\\|')
-                        q_text_escaped = q_text.replace('|', '\\|')
-
-                        table_rows_data.append([status_icon, q_text_escaped, student_ans_escaped, correct_ans_escaped])
-
-                    if table_rows_data:
-                        table_header = "| Status | Question | Your Answer | Correct Answer |\n|---|---|---|---|\n"
-                        table_content = "\n".join(["| " + " | ".join(row) + " |" for row in table_rows_data])
-                        generated_table_markdown = f"\n\n## Homework Review Summary\n{table_header}{table_content}\n\n"
-
-                    # The `correct_answers_section` can still be passed to LLM for context
-
-                    correct_answers_text = json.dumps(rag_answers, ensure_ascii=False) if isinstance(rag_answers, (list,
-                                                                                                                   dict)) else str(
-                        rag_answers)
-                    correct_answers_section = f"\n\n## Correct Answers (for LLM context):\n```json\n{correct_answers_text}\n```\n"
-
-                else:
-                    logger.info("[Review] No correct answers found in RAG for doc_id=%s. Using LLM for full review.", homework_doc_id)
-
-            except Exception as e:
-                logger.warning("[RAG] Failed to retrieve correct answers or build table: %s", e)
-                logger.info(
-                    "[Review] Falling back to LLM for full review due to RAG error. No comparison table will be generated.")
-
-        prompt_text = format_prompt(
-            prompt_template,
-            student_profile=str(profile),
-            subject=subject,
-            day=datetime.now().strftime("%A, %B %d, %Y"),
-            homework_content=homework_content,
-            student_answer=student_answers,
-            correct_answers_section=correct_answers_section,
-            feedback_instruction = feedback_instruction_for_llm  # Use the general instruction for LLM
-        )
-        messages = build_messages(prompt_text)
-        llm_result = llm.complete(messages)  # Get LLM's general feedback
-        # Combine Python-generated table with LLM's response
-        final_review_result = generated_table_markdown + llm_result
-
-        # 写入缓存
-        review_cache.set(cache_key, final_review_result)
-
-        # 保存进度到数据库 (Only save for full homework sessions, not individual tutor questions)
-        if not is_tutor_mode:
-            try:
-                from src.progress_db import save_homework_session
-                # 从 review 文本中提取分数（如 "Score: 7/10" 或 "7/10"）
-                score_match = re.search(r"(\d+(?:\.\d+)?)\s*/\s*(\d+)", llm_result)  # Score is in LLM's part
-                score = float(score_match.group(1)) if score_match else None
-
-                student_id = profile.get("student_id", "anonymous")
-                save_homework_session(
-                    student_id=student_id,
-                    subject=subject,
-                    year_group=profile.get("year_group", 3),
-                    homework_content=homework_content,
-                    student_answers=student_answers,  # Original student answers
-                    score=score,
-                    review_text=final_review_result,  # Save the combined review
-                )
-
-            except Exception as db_exc:
-                logger.warning("Failed to save progress: %s", db_exc)
-
-        return {"success": True, "review": final_review_result, "from_rag_answers": rag_answers is not None}
-    except Exception as exc:
-        logger.error("Error reviewing homework: %s", exc)
-        return {"success": False, "error": str(exc)}
-
-
-def explain_deep(homework_content: str, student_answers: str, subject: str,
-                 profile=None, review_feedback: str = ""):
-    """深度解释作业答案 - 使用 EXPLAIN_DEEP_PROMPT 生成逐步解释、薄弱点分析等"""
-    from src.llm_client import format_prompt, build_messages
-    from src.prompts import EXPLAIN_DEEP_PROMPT
-    from src.cache import explain_cache, make_cache_key
-
-    if profile is None:
-        profile = {"year_group": 3, "age": 7}
-
-    # 检查缓存
-    cache_key = make_cache_key("explain", subject, str(profile.get("year_group", 3)),
-                               homework_content[:200], student_answers[:200])
-    cached = explain_cache.get(cache_key)
-    if cached:
-        logger.info("[Cache] 命中深度解释缓存")
-        return {"success": True, "explanation": cached, "from_cache": True}
-
-    try:
-        prompt_text = format_prompt(
-            EXPLAIN_DEEP_PROMPT,
-            homework_content=homework_content,
-            student_answer=student_answers,
-            subject=subject,
-            student_profile=str(profile),
-            review_feedback=review_feedback or "No review feedback available",
-            year_group=profile.get("year_group", 3),
-            age=profile.get("age", 7),
-        )
-        messages = build_messages(prompt_text)
-        result = llm.complete(messages)
-
-        # 写入缓存
-        explain_cache.set(cache_key, result)
-
-        return {"success": True, "explanation": result}
-    except Exception as exc:
-        logger.error("Error in explain_deep: %s", exc)
-        return {"success": False, "error": str(exc)}
-
-
-def improve_practice(homework_content: str, student_answers: str, subject: str,
-                     profile=None, review_feedback: str = ""):
-    """根据学生的弱项生成针对性练习 - 使用 IMPROVE_PRACTICE_PROMPT"""
-    from src.llm_client import format_prompt, build_messages
-    from src.prompts import IMPROVE_PRACTICE_PROMPT
-    from src.cache import practice_cache, make_cache_key
-
-    if profile is None:
-        profile = {"year_group": 3, "age": 7}
-
-    # 检查缓存
-    cache_key = make_cache_key("practice", subject, str(profile.get("year_group", 3)),
-                               homework_content[:200], student_answers[:200])
-    cached = practice_cache.get(cache_key)
-    if cached:
-        logger.info("[Cache] 命中练习生成缓存")
-        return {"success": True, "practice": cached, "from_cache": True}
-
-    try:
-        prompt_text = format_prompt(
-            IMPROVE_PRACTICE_PROMPT,
-            homework_content=homework_content,
-            student_answer=student_answers,
-            subject=subject,
-            student_profile=str(profile),
-            review_feedback=review_feedback or "No review feedback available",
-            year_group=profile.get("year_group", 3),
-            age=profile.get("age", 7),
-        )
-        messages = build_messages(prompt_text)
-        result = llm.complete(messages)
-
-        # 写入缓存
-        practice_cache.set(cache_key, result)
-
-        return {"success": True, "practice": result}
-    except Exception as exc:
-        logger.error("Error in improve_practice: %s", exc)
-        return {"success": False, "error": str(exc)}
 
 
 def _static_page(*parts: str) -> FileResponse:
@@ -867,99 +357,12 @@ def _static_page(*parts: str) -> FileResponse:
     })
 
 
-class ProfileRequest(BaseModel):
-    profile: dict = Field(default_factory=dict)
-    subjects: list = Field(default_factory=list)
-    quick_select: bool = False
-    year: Optional[int] = None
-    student_id: Optional[str] = None
-    is_eleven_plus: bool = False
-    mode: Optional[str] = "homework"  # Added mode field
+from src.webapp.models import (
+    ProfileRequest, ReviewRequest, ExplainDeepRequest, ImprovePracticeRequest,
+    PhotoRequest, SessionUpdateRequest, FeedbackRequest, AdminUserCreateRequest,
+    AdminSubscriptionCreateRequest, AdminUserUpdateRequest, SubscriptionRequest, AuthRequest,
+)
 
-
-class ReviewRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
-    profile: Optional[dict] = None
-    session_id: Optional[str] = None
-    is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
-    from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
-    homework_doc_id: Optional[str] = None  # RAG document id if available
-    question_index: Optional[int] = Field(default=None, ge=0)  # Zero-based index inside the source homework document
-
-
-class ExplainDeepRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
-    profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
-
-
-class ImprovePracticeRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
-    profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
-
-
-class PhotoRequest(BaseModel):
-    photo: str
-
-
-class SessionUpdateRequest(BaseModel):
-    homework: Optional[list] = None
-    profile: Optional[dict] = None
-    student_answers: Optional[str] = None
-    doc_id: Optional[str] = None
-    year_group: Optional[int] = None
-    subject: Optional[str] = None
-
-
-class FeedbackRequest(BaseModel):
-    trace_id: Optional[str] = None
-    score: float = Field(..., description="评分: 1.0 = thumbs up, 0.0 = thumbs down")
-    name: str = Field(default="user_feedback", description="评分类型")
-    comment: Optional[str] = Field(default=None, description="可选文字反馈")
-
-
-class AdminUserCreateRequest(BaseModel):
-    """管理员创建学生请求"""
-    name: str
-    year_group: int = 3
-    age: int = 7
-
-
-class AdminSubscriptionCreateRequest(BaseModel):
-    """管理员创建订阅请求"""
-    email: str
-    name: str
-    duration: str  # "5_days" 或 "30_days"
-
-
-class AdminUserUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    year_group: Optional[int] = None
-    age: Optional[int] = None
-    is_active: Optional[bool] = None
-
-
-class SubscriptionRequest(BaseModel):
-    email: str
-    name: str
-    duration: str  # "5_days" or "30_days"
-
-
-class AuthRequest(BaseModel):
-    username: str = None
-    email: str = None
-    password: str
-
-    def get_username(self) -> str:
-        """Get username from either username or email field"""
-        return (self.username or self.email or "").strip()
 
 
 # --- Web routes ---
@@ -1108,12 +511,12 @@ async def get_year_groups():
     return {
         "year_groups": [1, 2, 3, 4, 5, 6],
         "quick_select": [
-            {"year": 1, "age": 5, "stage": "KS1"},
-            {"year": 2, "age": 6, "stage": "KS1"},
-            {"year": 3, "age": 7, "stage": "KS2"},
-            {"year": 4, "age": 8, "stage": "KS2"},
-            {"year": 5, "age": 9, "stage": "KS2"},
-            {"year": 6, "age": 10, "stage": "KS2"},
+            {"year": 1, "age": 6, "stage": "KS1"},
+            {"year": 2, "age": 7, "stage": "KS1"},
+            {"year": 3, "age": 8, "stage": "KS2"},
+            {"year": 4, "age": 9, "stage": "KS2"},
+            {"year": 5, "age": 10, "stage": "KS2"},
+            {"year": 6, "age": 11, "stage": "KS2"},
         ],
     }
 
@@ -1252,6 +655,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
             is_tutor_mode=request_body.is_tutor_mode,
             homework_doc_id=request_body.homework_doc_id,
             question_index=request_body.question_index,
+            llm_client=llm,
         )
         
         resp = JSONResponse(content=result)
@@ -1288,7 +692,7 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         result = await asyncio.to_thread(
             explain_deep,
             request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback
+            profile, request_body.review_feedback, llm_client=llm
         )
         
         resp = JSONResponse(content=result)
@@ -1325,7 +729,7 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         result = await asyncio.to_thread(
             improve_practice,
             request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback
+            profile, request_body.review_feedback, llm_client=llm
         )
         
         resp = JSONResponse(content=result)
@@ -1731,13 +1135,17 @@ async def api_feedback(request: FeedbackRequest):
 
 
 @app.get("/admin")
-async def admin_page():
+async def admin_page(req: Request):
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     return _static_page("static", "admin.html")
 
 
 @app.get("/api/admin/overview")
-async def admin_overview():
+async def admin_overview(req: Request):
     """管理后台概览数据"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import get_ai_metrics, get_subscription_overview, _check_langfuse
     from src.progress_db import list_all_students, get_all_sessions_summary
 
@@ -1752,16 +1160,20 @@ async def admin_overview():
 
 
 @app.get("/api/admin/users")
-async def admin_list_users(limit: int = 100, offset: int = 0):
+async def admin_list_users(req: Request, limit: int = 100, offset: int = 0):
     """列出所有学生"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import list_all_students
     users = list_all_students(limit=limit, offset=offset)
     return {"success": True, "users": users}
 
 
 @app.post("/api/admin/users")
-async def admin_create_user(request: AdminUserCreateRequest):
+async def admin_create_user(req: Request, request: AdminUserCreateRequest):
     """管理员创建新学生"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import create_student
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
@@ -1778,8 +1190,10 @@ async def admin_create_user(request: AdminUserCreateRequest):
 
 
 @app.get("/api/admin/users/{student_id}")
-async def admin_get_user(student_id: str):
+async def admin_get_user(req: Request, student_id: str):
     """获取学生详细信息"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import get_student_detail
     detail = get_student_detail(student_id)
     if not detail:
@@ -1788,8 +1202,10 @@ async def admin_get_user(student_id: str):
 
 
 @app.put("/api/admin/users/{student_id}")
-async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
+async def admin_update_user(req: Request, student_id: str, request: AdminUserUpdateRequest):
     """更新学生信息"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import update_student
     updates = request.model_dump(exclude_unset=True)
     if request.is_active is not None:
@@ -1799,23 +1215,29 @@ async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
 
 
 @app.delete("/api/admin/users/{student_id}")
-async def admin_delete_user(student_id: str):
+async def admin_delete_user(req: Request, student_id: str):
     """删除学生及所有相关数据（UK GDPR 被遗忘权）"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import delete_student
     ok = delete_student(student_id)
     return {"success": ok, "message": "Student and all related data deleted (GDPR erasure)"}
 
 
 @app.get("/api/admin/subscriptions")
-async def admin_subscriptions():
+async def admin_subscriptions(req: Request):
     """获取订阅概览"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import get_subscription_overview
     return get_subscription_overview()
 
 
 @app.post("/api/admin/subscriptions")
-async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
+async def admin_create_subscription(req: Request, request: AdminSubscriptionCreateRequest):
     """管理员手动创建订阅"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import create_admin_subscription
     if not request.email or not request.email.strip():
         raise HTTPException(status_code=400, detail="Email is required")
@@ -1841,6 +1263,8 @@ async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
 
 @app.post("/api/admin/test-account")
 async def admin_create_test_account(req: Request):
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     """Create a persistent test user (admin-only). Request JSON: {username, password, create_subscription: bool}
 
     The created user will be marked as a test account which bypasses subscription checks.
@@ -1872,8 +1296,10 @@ async def admin_create_test_account(req: Request):
 
 
 @app.post("/api/admin/users/{username}/test-toggle")
-async def admin_toggle_test(username: str, enable: bool = True):
+async def admin_toggle_test(req: Request, username: str, enable: bool = True):
     """Toggle a persistent user's test status (enable=true/false)."""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import get_user_by_username, set_user_test_flag
     user = get_user_by_username(username)
     if not user:
@@ -1883,44 +1309,53 @@ async def admin_toggle_test(username: str, enable: bool = True):
 
 
 @app.get("/api/admin/ai-metrics")
-async def admin_ai_metrics():
+async def admin_ai_metrics(req: Request):
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     """获取 AI 系统运行指标"""
     from src.admin import get_ai_metrics
     return get_ai_metrics()
 
 
 @app.get("/api/admin/ai-evaluation")
-async def admin_ai_evaluation():
+async def admin_ai_evaluation(req: Request):
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     """获取 AI 质量评估汇总"""
     from src.admin import get_evaluation_summary
     return get_evaluation_summary()
 
 
 @app.post("/api/admin/cache/clear")
-async def admin_clear_cache():
+async def admin_clear_cache(req: Request):
     """清空所有缓存"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.admin import clear_all_caches
     cleared = clear_all_caches()
     return {"success": True, "cleared": cleared}
 
 
 @app.get("/api/admin/dev-mode-status")
-async def admin_dev_mode_status():
-    """Returns whether the application is running in development mode."""
-    return {"is_dev_mode": _dev_mode}
+async def admin_dev_mode_status(req: Request):
+    """Returns whether the application is running in development mode and if user is admin."""
+    return {"is_dev_mode": _dev_mode, "is_admin": is_admin_request(req)}
 
 
 # ---- AI 监控 API ----
 
 @app.get("/api/admin/ai-monitor/stats")
-async def admin_ai_monitor_stats(hours: int = 24):
+async def admin_ai_monitor_stats(req: Request, hours: int = 24):
     """获取 AI 系统统计信息"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_ai_stats
     return get_ai_stats(hours=hours)
 
 
 @app.get("/api/admin/ai-monitor/requests")
 async def admin_ai_monitor_requests(
+        req: Request,
         limit: int = 100,
         offset: int = 0,
         provider: str = None,
@@ -1931,6 +1366,8 @@ async def admin_ai_monitor_requests(
         operation: str = None,
 ):
     """获取 LLM 请求记录（支持筛选）"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_requests_by_filter
     return get_requests_by_filter(
         provider=provider,
@@ -1944,8 +1381,10 @@ async def admin_ai_monitor_requests(
 
 
 @app.get("/api/admin/ai-monitor/request/{request_id}")
-async def admin_ai_monitor_request_detail(request_id: str):
+async def admin_ai_monitor_request_detail(req: Request, request_id: str):
     """获取单个请求的详细信息"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_request_detail
     detail = get_request_detail(request_id)
     if not detail:
@@ -1954,15 +1393,19 @@ async def admin_ai_monitor_request_detail(request_id: str):
 
 
 @app.get("/api/admin/ai-monitor/models")
-async def admin_ai_monitor_models():
+async def admin_ai_monitor_models(req: Request):
     """获取模型对比数据"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_model_comparison
     return get_model_comparison()
 
 
 @app.get("/api/admin/ai-monitor/conversations")
-async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50):
+async def admin_ai_monitor_conversations(req: Request, student_id: str = None, limit: int = 50):
     """获取对话历史"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.ai_monitor import get_conversations
     return get_conversations(student_id=student_id, limit=limit)
 
@@ -1970,15 +1413,19 @@ async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50
 # --- Admin endpoints: embedding cache & auth-user management ---
 
 @app.get("/api/admin/auth-users")
-async def admin_auth_users(limit: int = 100, offset: int = 0):
+async def admin_auth_users(req: Request, limit: int = 100, offset: int = 0):
     """List registered auth users (username, created_at, is_test)"""
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.progress_db import list_all_users
     users = list_all_users(limit=limit, offset=offset)
     return {"success": True, "users": users}
 
 
 @app.get("/api/admin/embedding-cache/stats")
-async def admin_embedding_cache_stats():
+async def admin_embedding_cache_stats(req: Request):
+    if not is_admin_request(req):
+        raise HTTPException(status_code=403, detail="Not authorized")
     from src.embedding_cache import get_stats
     try:
         return {"success": True, "stats": get_stats()}

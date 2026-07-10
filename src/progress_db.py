@@ -578,7 +578,7 @@ def delete_student(student_id: str) -> bool:
     return conn.total_changes > 0
 
 
-def create_student(name: str, year_group: int = 3, age: int = 7) -> Dict[str, Any]:
+def create_student(name: str, year_group: int = 3, age: int = 8) -> Dict[str, Any]:
     """创建新学生记录（管理员用）
 
     自动生成 UUID 作为 student_id。
