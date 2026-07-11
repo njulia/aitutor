@@ -245,7 +245,7 @@ def review_homework(homework_content: str, student_answers: str, subject: str, p
             except Exception as db_exc:
                 logger.warning("Failed to save progress: %s", db_exc)
 
-        return {"success": True, "review": final_review_result, "from_rag_answers": rag_answers is not None}
+        return {"success": True, "review": final_review_result, "from_rag_answers": bool(rag_answers)}
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
         return {"success": False, "error": str(exc)}

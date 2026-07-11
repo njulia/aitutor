@@ -153,7 +153,7 @@ let currentHomework = [];
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', function() {
             loadSubjects();
-            checkDevMode(); // Check dev mode on load
+            checkAdminAccess(); // Show admin tools only to configured administrators
 
             // Update UI based on login status
             if (currentStudentId) {
@@ -1305,19 +1305,30 @@ let currentHomework = [];
         }
 
         // ---- Admin Tools Functions ----
-        let isDevMode = false; // Will be set by checkDevMode
+        let isAdminUser = false;
 
-        async function checkDevMode() {
+        async function checkAdminAccess() {
+            const adminTab = document.getElementById('admin-tools-tab');
+            if (!adminTab) return;
+
+            // Hidden by default. Only the server can make it visible after
+            // checking the authenticated user's email against ADMIN_EMAILS.
+            adminTab.style.display = 'none';
             try {
-                const response = await fetch('/api/admin/dev-mode-status'); // New endpoint to check dev mode
+                const response = await fetch('/api/admin/access-status', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!response.ok) return;
+
                 const data = await response.json();
-                isDevMode = data.is_dev_mode;
-                if (isDevMode) {
-                    document.getElementById('admin-tools-tab').style.display = 'block';
+                isAdminUser = data.is_admin === true;
+                if (isAdminUser) {
+                    adminTab.style.display = 'block';
                 }
             } catch (error) {
-                console.error('Failed to check dev mode status:', error);
-                isDevMode = false; // Assume not dev mode if check fails
+                console.error('Failed to check admin access:', error);
+                isAdminUser = false;
             }
         }
 

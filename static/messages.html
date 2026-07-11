@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Messages - Homework Magic</title>
+  <link rel="stylesheet" href="/static/css/messages.css">
+</head>
+<body>
+<main class="page">
+  <h1>Contact Homework Magic</h1>
+  <p>Send a question to our support team. Replies appear here and are also emailed to you.</p>
+
+  <section class="card">
+    <form id="message-form">
+      <label>Email <input id="email" type="email" autocomplete="email" placeholder="parent@example.com"></label>
+      <label>Category
+        <select id="category"><option value="general">General</option><option value="homework">Homework</option><option value="account">Account</option><option value="billing">Billing</option></select>
+      </label>
+      <label>Subject <input id="subject" maxlength="160" required></label>
+      <label>Message <textarea id="message" maxlength="10000" rows="7" required></textarea></label>
+      <button type="submit">Send message</button>
+      <div id="form-status" role="status"></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Your messages</h2>
+    <button id="refresh" type="button">Refresh</button>
+    <div id="messages"></div>
+  </section>
+</main>
+<script src="/static/js/messages.js" defer></script>
+</body>
+</html>
