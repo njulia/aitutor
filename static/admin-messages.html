@@ -1,23 +1,67 @@
 <!doctype html>
 <html lang="en-GB">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin Messages - Homework Magic</title>
-  <link rel="stylesheet" href="/static/css/messages.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>User Messages - Homework Magic Admin</title>
+    <link rel="stylesheet" href="/static/css/messages.css">
 </head>
 <body>
-<main class="page wide">
-  <h1>Admin Message Dashboard</h1>
-  <section class="card toolbar">
-    <label>Admin API key <input id="admin-key" type="password"></label>
-    <label>Status <select id="status-filter"><option value="">All</option><option>open</option><option>pending</option><option>replied</option><option>closed</option></select></label>
-    <button id="load" type="button">Load messages</button>
-  </section>
-  <div class="admin-grid">
-    <section class="card"><h2>Inbox</h2><div id="admin-list"></div></section>
-    <section class="card"><h2>Message and reply</h2><div id="admin-detail">Select a message.</div></section>
-  </div>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/admin">Homework Magic Admin</a>
+        <nav class="site-nav" aria-label="Admin navigation">
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/messages" aria-current="page">User messages</a>
+            <a href="/app">Main app</a>
+        </nav>
+    </div>
+</header>
+<main>
+    <section class="hero">
+        <h1>User messages</h1>
+        <p>Read parent or guardian messages, reply in their message box, and optionally send the same reply by email.</p>
+    </section>
+
+    <div id="summary" class="summary" aria-live="polite"></div>
+
+    <section class="card">
+        <div class="toolbar">
+            <div class="form-group">
+                <label for="filter-status">Status</label>
+                <select id="filter-status">
+                    <option value="">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="pending">Pending</option>
+                    <option value="replied">Replied</option>
+                    <option value="closed">Closed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="filter-category">Category</label>
+                <select id="filter-category">
+                    <option value="">All categories</option>
+                    <option value="general">General</option>
+                    <option value="homework">Homework</option>
+                    <option value="account">Account</option>
+                    <option value="billing">Billing</option>
+                    <option value="privacy">Privacy</option>
+                    <option value="technical">Technical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="message-search">Search subject or email</label>
+                <input id="message-search" type="search" maxlength="120">
+            </div>
+            <button id="refresh-admin-messages" class="btn btn-secondary" type="button">Refresh</button>
+        </div>
+
+        <div class="admin-grid">
+            <div id="admin-message-list" class="message-list admin-list" aria-live="polite"></div>
+            <div id="admin-message-detail" class="empty">Select a message to read it.</div>
+        </div>
+        <div id="admin-status" class="status-message hidden" role="status" aria-live="polite"></div>
+    </section>
 </main>
 <script src="/static/js/admin-messages.js" defer></script>
 </body>

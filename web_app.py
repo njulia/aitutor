@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -836,6 +836,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
             question_index=request_body.question_index,
             is_eleven_plus=request_body.is_eleven_plus,
             llm_client=llm,
+            timeout=120.0
         )
         
         result["memory_updated"] = await _record_learning_memory(
@@ -1282,8 +1283,22 @@ async def api_feedback(request: FeedbackRequest):
 
 
 @app.get("/admin")
-async def admin_page():
-    return _static_page("static", "admin.html")
+async def admin_page(req: Request):
+    """Serve the existing admin dashboard with a messages shortcut injected."""
+    _require_admin(req)
+    path = os.path.join(project_root, "static", "admin.html")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Page not found")
+    with open(path, "r", encoding="utf-8") as handle:
+        html = handle.read()
+    script = '<script src="/static/js/admin-message-link.js" defer></script>'
+    if script not in html:
+        html = html.replace("</body>", f"    {script}\n</body>")
+    return HTMLResponse(html, headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    })
 
 
 @app.get("/api/admin/overview")
@@ -1593,9 +1608,17 @@ app.include_router(build_billing_router(resolve_username=_resolve_username))
 from src.webapp.memory_routes import build_memory_router
 app.include_router(build_memory_router(resolve_username=_resolve_username))
 
-# User message and admin reply module
+# Parent/guardian contact messages and authenticated admin replies
 from src.webapp.message_routes import create_message_router
-app.include_router(create_message_router(resolve_identity=_get_user_or_anonymous_id, project_root=project_root))
+app.include_router(create_message_router(
+    resolve_identity=_get_user_or_anonymous_id,
+    require_admin=_require_admin,
+    project_root=project_root,
+))
+
+# Secure, single-use parent/guardian password reset flow
+from src.webapp.password_reset_routes import create_password_reset_router
+app.include_router(create_password_reset_router(project_root=project_root, dev_mode=_dev_mode))
 
 static_path = os.path.join(project_root, "static")
 if os.path.exists(static_path):

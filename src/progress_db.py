@@ -438,12 +438,17 @@ def get_local_subscriptions_by_email(customer_email: str) -> List[Dict]:
 def get_local_subscription_stats() -> Dict[str, Any]:
     items = list_local_subscriptions()
     now = _now()
-    active = [
-        item for item in items
-        if item.get("status") == "active"
-        and item.get("expires_at") is not None
-        and item["expires_at"] > now
-    ]
+    active = []
+    for item in items:
+        if item.get("status") == "active" and item.get("expires_at") is not None:
+            try:
+                expires_at = datetime.fromisoformat(item["expires_at"])
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=UTC)
+                if expires_at > now:
+                    active.append(item)
+            except (ValueError, TypeError):
+                continue
     return {
         "active_subscriptions": len(active),
         "estimated_revenue_gbp": 0,

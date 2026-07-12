@@ -55,9 +55,10 @@ def _get_obs():
 # ---- 后端配置 ----
 
 # OpenAI 兼容 API（生产环境）
-DEFAULT_API_BASE = os.getenv("QWEN_ENDPOINT_OPENAI")
-DEFAULT_MODEL = "qwen-plus"
-VISION_MODEL = "qwen-plus"
+DEFAULT_API_KEY = os.getenv("DEFAULT_API_KEY")
+DEFAULT_API_BASE = os.getenv("DEFAULT_ENDPOINT_OPENAI").rstrip("/") + "/"
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
+VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL", "qwen-plus")
 
 # Ollama 本地模型（开发/测试）
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -109,7 +110,8 @@ class LLMClient:
         else:
             # OpenAI 兼容 API
             self.model = model or DEFAULT_MODEL
-            self.api_key = api_key or os.getenv("QWEN_API_KEY")
+            self.api_key = api_key or DEFAULT_API_KEY
+            # Ensure api_base ends with a slash
             self.api_base = (api_base or DEFAULT_API_BASE).rstrip("/") + "/"
 
             if not self.api_key:

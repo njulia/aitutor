@@ -156,7 +156,13 @@ def get_subscription_overview() -> Dict[str, Any]:
         legacy = None
     from src.webapp.account_store import get_subscription_stats
     result = get_subscription_stats()
-    if legacy and legacy.get("active_subscriptions"):
+    if legacy:
+        result["active_subscriptions"] += legacy.get("active_subscriptions", 0)
+        # Merge legacy subscriptions into the main list if desired, or keep separate
+        # The UI seems to only use data.subscriptions
+        if "subscriptions" in result:
+            result["subscriptions"] = legacy.get("subscriptions", []) + result["subscriptions"]
+        
         result["legacy_dev_subscriptions"] = legacy
     return result
 

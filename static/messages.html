@@ -1,35 +1,78 @@
 <!doctype html>
 <html lang="en-GB">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Messages - Homework Magic</title>
-  <link rel="stylesheet" href="/static/css/messages.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contact Homework Magic</title>
+    <meta name="description" content="Send a message to Homework Magic support and read replies.">
+    <link rel="stylesheet" href="/static/css/messages.css">
 </head>
 <body>
-<main class="page">
-  <h1>Contact Homework Magic</h1>
-  <p>Send a question to our support team. Replies appear here and are also emailed to you.</p>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/">✨ Homework Magic</a>
+        <nav class="site-nav" aria-label="Main navigation">
+            <a href="/app">Homework</a>
+            <a href="/messages" aria-current="page">Your messages</a>
+            <a href="/privacy">Privacy</a>
+        </nav>
+    </div>
+</header>
+<main>
+    <section class="hero">
+        <h1>Contact us</h1>
+        <p>A parent or guardian can send a question to the Homework Magic team. Replies will appear in the message box and can also be sent by email.</p>
+    </section>
 
-  <section class="card">
-    <form id="message-form">
-      <label>Email <input id="email" type="email" autocomplete="email" placeholder="parent@example.com"></label>
-      <label>Category
-        <select id="category"><option value="general">General</option><option value="homework">Homework</option><option value="account">Account</option><option value="billing">Billing</option></select>
-      </label>
-      <label>Subject <input id="subject" maxlength="160" required></label>
-      <label>Message <textarea id="message" maxlength="10000" rows="7" required></textarea></label>
-      <button type="submit">Send message</button>
-      <div id="form-status" role="status"></div>
-    </form>
-  </section>
+    <div class="grid">
+        <section class="card" aria-labelledby="contact-heading">
+            <h2 id="contact-heading">Send a message</h2>
+            <div class="notice">
+                Please do not include a child's full name, school, address, phone number, date of birth or other private details.
+            </div>
+            <form id="contact-form">
+                <div class="form-group">
+                    <label for="contact-email">Parent or guardian email</label>
+                    <input id="contact-email" name="contact_email" type="email" autocomplete="email" maxlength="254" required>
+                </div>
+                <div class="form-group">
+                    <label for="message-category">What is this about?</label>
+                    <select id="message-category" name="category">
+                        <option value="general">General question</option>
+                        <option value="homework">Homework or marking</option>
+                        <option value="account">Account</option>
+                        <option value="billing">Payment or subscription</option>
+                        <option value="privacy">Privacy or data request</option>
+                        <option value="technical">Technical problem</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="message-subject">Subject</label>
+                    <input id="message-subject" name="subject" maxlength="160" required placeholder="A short title">
+                </div>
+                <div class="form-group">
+                    <label for="message-body">Message</label>
+                    <textarea id="message-body" name="message" maxlength="5000" required placeholder="Tell us how we can help."></textarea>
+                </div>
+                <button id="send-message" class="btn btn-primary" type="submit">Send message</button>
+                <div id="form-status" class="status-message hidden" role="status" aria-live="polite"></div>
+            </form>
+        </section>
 
-  <section class="card">
-    <h2>Your messages</h2>
-    <button id="refresh" type="button">Refresh</button>
-    <div id="messages"></div>
-  </section>
+        <section class="card" aria-labelledby="inbox-heading">
+            <div class="detail-header">
+                <div>
+                    <h2 id="inbox-heading">Your message box</h2>
+                    <p class="message-meta">Replies from the support team will appear here.</p>
+                </div>
+                <button id="refresh-messages" class="btn btn-secondary" type="button">Refresh</button>
+            </div>
+            <div id="message-list" class="message-list" aria-live="polite"></div>
+            <div id="message-detail" class="hidden"></div>
+        </section>
+    </div>
 </main>
+<footer>Homework Magic © 2026</footer>
 <script src="/static/js/messages.js" defer></script>
 </body>
 </html>

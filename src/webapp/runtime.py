@@ -142,7 +142,7 @@ async def run_blocking(
 
 def public_error(exc: BaseException, message: str = "Something went wrong. Please try again.") -> str:
     """Log the real exception while returning a child-friendly safe message."""
-    logger.exception("Unhandled application error", exc_info=exc)
+    logger.exception("Unhandled application error: %s", exc)
     return message
 
 
