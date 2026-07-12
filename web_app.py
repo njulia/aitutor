@@ -764,7 +764,8 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         result = await run_blocking(
             explain_deep,
             request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback, llm_client=llm
+            profile, request_body.review_feedback, llm_client=llm,
+            timeout=120.0
         )
         
         resp = JSONResponse(content=result)
@@ -804,7 +805,8 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         result = await run_blocking(
             improve_practice,
             request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback, llm_client=llm
+            profile, request_body.review_feedback, llm_client=llm,
+            timeout=120.0
         )
         
         resp = JSONResponse(content=result)

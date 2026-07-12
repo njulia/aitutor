@@ -132,7 +132,7 @@ def _mark_rows(
 def _table(rows: List[Dict[str, Any]]) -> str:
     if not rows:
         return ""
-    header = "Result | Question | Your answer | Correct answer\n|---|---|---|---|\n"
+    header = "| Result | Question | Your answer | Correct answer |\n|---|---|---|---|\n"
     body = []
     for row in rows:
         values = [
@@ -141,8 +141,8 @@ def _table(rows: List[Dict[str, Any]]) -> str:
             row["student_answer"],
             row["correct_answer"],
         ]
-        body.append(" | ".join(str(value).replace("|", "\\|") for value in values))
-    return "\n\n## Check your answers\n" + header + "\n".join(body) + "\n\n"
+        body.append("| " + " | ".join(str(value).replace("|", "\\|") for value in values) + " |")
+    return "\n\n## Check your answers\n\n" + header + "\n".join(body) + "\n\n"
 
 
 def _extract_score(text: str) -> tuple[Optional[float], Optional[int]]:
@@ -225,7 +225,10 @@ def review_homework(
         homework_content=budget["homework_content"],
         student_answer=budget["student_answers"],
         context=correct_context,  # For ELEVEN_PLUS_PROMPT
-        question=budget["student_answers"], # For ELEVEN_PLUS_PROMPT
+        question=(
+            f"Question: {budget['homework_content']}\n\nStudent Answer: {budget['student_answers']}"
+            if is_eleven_plus else budget["student_answers"]
+        ),
         correct_answers_section=correct_context,
         feedback_instruction=(
             "Use kind, simple UK English. Praise effort, explain one next step, "

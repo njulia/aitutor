@@ -195,14 +195,15 @@ let currentHomework = [];
                 setTimeout(() => switchTab(tabParam), 100);
             }
 
-            // 从 sessionStorage 恢复状态（Track Progress 返回时）
+            // 从 sessionStorage 恢复状态
             try {
                 const savedStr = sessionStorage.getItem('homeworkState');
                 if (savedStr) {
                     sessionStorage.removeItem('homeworkState');
                     const state = JSON.parse(savedStr);
                     if (state.homework && state.homework.length > 0) {
-                        setTimeout(() => {
+                        // Wait for subjects to load and UI to be ready
+                        const restore = () => {
                             currentHomework = state.homework;
                             currentProfile = state.profile;
                             currentSubject = state.subject || 'Maths';
@@ -216,16 +217,24 @@ let currentHomework = [];
                             }
 
                             // 恢复答案
-                            document.querySelectorAll('.answer-input-inline').forEach(input => {
-                                if (state.answers && state.answers[input.dataset.subject] !== undefined) {
-                                    input.value = state.answers[input.dataset.subject];
+                            setTimeout(() => {
+                                document.querySelectorAll('.answer-input-inline').forEach(input => {
+                                    if (state.answers && state.answers[input.dataset.subject] !== undefined) {
+                                        input.value = state.answers[input.dataset.subject];
+                                    }
+                                });
+                                // 恢复批改结果
+                                if (state.reviewHTML) {
+                                    document.getElementById('review-result').innerHTML = state.reviewHTML;
                                 }
-                            });
-                            // 恢复批改结果
-                            if (state.reviewHTML) {
-                                document.getElementById('review-result').innerHTML = state.reviewHTML;
-                            }
-                        }, 300);
+                            }, 50);
+                        };
+                        
+                        if (document.getElementById('homework-results')) {
+                            setTimeout(restore, 200);
+                        } else {
+                            setTimeout(restore, 500);
+                        }
                     }
                 }
             } catch(e) {
@@ -1067,6 +1076,10 @@ let currentHomework = [];
             }
 
             const homework = currentHomework.map(h => h.content).join('\n\n');
+            if (!homework.trim()) {
+                alert('No homework content found to explain.');
+                return;
+            }
             const subject = currentHomework[0]?.subject || 'Maths';
 
             // Get existing review feedback (if answers have been checked)
@@ -1103,11 +1116,17 @@ let currentHomework = [];
                 }
 
                 const data = await response.json();
+                
+                if (response.status === 504) {
+                    alert('That took too long. Please try again or use a shorter question.');
+                    return;
+                }
 
-                if (data.success) {
+                if (response.ok && data.success) {
                     displayExplainDeep(data.explanation);
                 } else {
-                    alert('Error: ' + data.error);
+                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'Unknown error';
+                    alert('Error: ' + errorMsg);
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -1164,6 +1183,10 @@ let currentHomework = [];
             }
 
             const homework = currentHomework.map(h => h.content).join('\n\n');
+            if (!homework.trim()) {
+                alert('No homework content found to practice.');
+                return;
+            }
             const subject = currentHomework[0]?.subject || 'Maths';
 
             // Get existing review feedback (if answers have been checked)
@@ -1200,11 +1223,17 @@ let currentHomework = [];
                 }
 
                 const data = await response.json();
+                
+                if (response.status === 504) {
+                    alert('That took too long. Please try again or use a shorter question.');
+                    return;
+                }
 
-                if (data.success) {
+                if (response.ok && data.success) {
                     displayPracticeQuestions(data.practice, subject);
                 } else {
-                    alert('Error: ' + data.error);
+                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'Unknown error';
+                    alert('Error: ' + errorMsg);
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -1326,7 +1355,13 @@ let currentHomework = [];
 
             // Save current state to sessionStorage, so it can be restored when returning from pricing page
             saveStateToSessionStorage();
-            window.location.href = '/progress'; // Redirect to progress page
+            
+            // Append student_id if logged in
+            let url = '/progress';
+            if (currentStudentId) {
+                url += `?student_id=${encodeURIComponent(currentStudentId)}`;
+            }
+            window.location.href = url; // Redirect to progress page
         }
 
         // ---- Admin Tools Functions ----

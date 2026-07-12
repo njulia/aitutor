@@ -30,6 +30,7 @@ from src.elevenplus_rag import (
 )
 from src.prompts import (
     HOMEWORK_PROMPT, SUBJECT_EXTRACTION_PROMPT, HOMEWORK_PROMPT_11PLUS,
+    RAG_PROMPT_11PLUS,
 )
 
 
@@ -133,10 +134,11 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         _get_previous_topics = get_student_previous_topics
 
     # 1. 检查内存缓存（同学科同年级的作业可直接复用）
-    cache_key = make_cache_key("homework", str(year_group), str(age), subject, "11plus" if is_eleven_plus else "normal")
+    # 对于 11+，增加 student_id 以确保不同学生获得不同内容（除非 RAG 命中）
+    cache_key = make_cache_key("homework", str(year_group), str(age), subject, student_id if is_eleven_plus else "normal")
     cached = homework_cache.get(cache_key)
     if cached:
-        logger.info("[Cache] 命中作业缓存: %s Year %d (%s)", subject, year_group, "11+" if is_eleven_plus else "normal")
+        logger.info("[Cache] 命中作业缓存: %s Year %d (%s) for %s", subject, year_group, "11+" if is_eleven_plus else "normal", student_id)
         return cached["content"], cached["doc_id"], cached.get("from_rag", False)
 
     # 2. 获取该学生该科目的历史作业，用于避免重复
@@ -160,18 +162,22 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     #     return content, doc_id, from_rag
 
     try:
+        # Increase k to get more variety and pick one randomly
         rag_results = _search_homework(
             query=search_query,
             year_group=year_group,
             subject=subject,
-            k=1,
+            k=10 if is_eleven_plus else 1,
         )
 
         # 如果 RAG 中有相关作业，直接返回（零 LLM 调用）
         if rag_results:
-            homework_content = rag_results[0]["content"]
-            doc_id = rag_results[0]["doc_id"]
-            logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s)", subject, year_group, "11+" if is_eleven_plus else "normal")
+            import random
+            selected_homework = random.choice(rag_results)
+            homework_content = selected_homework["content"]
+            doc_id = selected_homework["doc_id"]
+            logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s), selected doc_id: %s", 
+                        subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)
             # 写入内存缓存
             homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id, "from_rag": True})
             return homework_content, doc_id, True
@@ -191,7 +197,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
 
     # 调用 LLM 生成作业
     if is_eleven_plus:
-        prompt_template = HOMEWORK_PROMPT_11PLUS
+        prompt_template = RAG_PROMPT_11PLUS
     else:
         prompt_template = HOMEWORK_PROMPT
 

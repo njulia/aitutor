@@ -579,10 +579,16 @@
     <script>
         let charts = [];
 
-        // 从 URL 参数读取 student_id
+        // 从 URL 参数读取 student_id，或从 localStorage 读取
         (function() {
             const params = new URLSearchParams(window.location.search);
-            const studentId = params.get('student_id');
+            let studentId = params.get('student_id');
+            
+            if (!studentId) {
+                // Fallback to localStorage if not in URL
+                studentId = localStorage.getItem('student_id');
+            }
+
             if (studentId) {
                 document.getElementById('student-id').value = studentId;
                 loadProgress();
