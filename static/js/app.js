@@ -493,6 +493,22 @@ let currentHomework = [];
             return 'homework'; // Default to homework mode
         }
 
+        function extractChoices(content) {
+            // Regex to match choices like A) ..., B) ..., C) ..., etc. or A. ..., B. ..., C. ...
+            // We look for patterns starting with a letter and a closing parenthesis or dot, followed by space or newline
+            const choiceRegex = /([A-E])[\)\.]\s*([^\n]+)/g;
+            const choices = [];
+            let match;
+            while ((match = choiceRegex.exec(content)) !== null) {
+                choices.push({
+                    id: match[1],
+                    text: match[2].trim()
+                });
+            }
+            // Only return if we found at least 2 choices (minimum for multiple choice)
+            return choices.length >= 2 ? choices : null;
+        }
+
         // Generate Homework - uses selected subjects directly
         async function generateHomework() {
             const year = parseInt(document.getElementById('homework-year').value);
@@ -787,22 +803,39 @@ let currentHomework = [];
 
         function displayHomework(homeworkList) {
             const container = document.getElementById('homework-results');
-            container.innerHTML = homeworkList.map(hw => `
-                <div class="homework-block">
-                    <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
-                    <div class="homework-content">
-                        <div class="question-column">
-                            ${formatQuestions(renderSafeMarkdown(hw.content))}
-                        </div>
-                        <div class="answer-column">
-                            <h4>Your Answer:</h4>
-                            <textarea class="answer-input-inline"
-                                      placeholder="Write your answer here..."
-                                      data-subject="${hw.subject}"></textarea>
+            container.innerHTML = homeworkList.map((hw, idx) => {
+                const choices = extractChoices(hw.content);
+                const answerHtml = choices ? `
+                    <div class="choices-container" data-question-idx="${idx}">
+                        ${choices.map(choice => `
+                            <label class="choice-item">
+                                <input type="radio" name="answer-${idx}" value="${choice.id}" data-subject="${hw.subject}">
+                                <span class="choice-prefix">${choice.id})</span>
+                                <span class="choice-text">${choice.text}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <textarea class="answer-input-inline"
+                              placeholder="Write your answer here..."
+                              data-subject="${hw.subject}"></textarea>
+                `;
+
+                return `
+                    <div class="homework-block">
+                        <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                        <div class="homework-content">
+                            <div class="question-column">
+                                ${formatQuestions(renderSafeMarkdown(hw.content))}
+                            </div>
+                            <div class="answer-column">
+                                <h4>Your Answer:</h4>
+                                ${answerHtml}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             showResults();
             document.getElementById('homework-buttons').style.display = 'block';
@@ -817,6 +850,28 @@ let currentHomework = [];
             }
 
             const hw = currentHomework[index];
+            const choices = extractChoices(hw.content);
+            const savedAnswer = currentQuestionAnswers[index] || '';
+
+            const answerHtml = choices ? `
+                <div class="choices-container" id="tutor-choices-container">
+                    ${choices.map(choice => `
+                        <label class="choice-item">
+                            <input type="radio" name="tutor-answer" value="${choice.id}" 
+                                   data-subject="${hw.subject}" 
+                                   ${savedAnswer === choice.id ? 'checked' : ''}>
+                            <span class="choice-prefix">${choice.id})</span>
+                            <span class="choice-text">${choice.text}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            ` : `
+                <textarea class="answer-input-inline"
+                          id="tutor-answer-input"
+                          placeholder="Write your answer here..."
+                          data-subject="${hw.subject}">${savedAnswer}</textarea>
+            `;
+
             const container = document.getElementById('homework-results');
             container.innerHTML = `
                 <div class="homework-block">
@@ -827,18 +882,11 @@ let currentHomework = [];
                         </div>
                         <div class="answer-column">
                             <h4>Your Answer:</h4>
-                            <textarea class="answer-input-inline"
-                                      id="tutor-answer-input"
-                                      placeholder="Write your answer here..."
-                                      data-subject="${hw.subject}"></textarea>
+                            ${answerHtml}
                         </div>
                     </div>
                 </div>
             `;
-
-            // Restore saved answer for this question if exists
-            const savedAnswer = currentQuestionAnswers[index] || '';
-            document.getElementById('tutor-answer-input').value = savedAnswer;
 
             showResults();
             document.getElementById('homework-buttons').style.display = 'none';
@@ -847,11 +895,18 @@ let currentHomework = [];
         }
 
         async function reviewCurrentQuestion() {
-            const answerInput = document.getElementById('tutor-answer-input');
-            const studentAnswer = answerInput ? answerInput.value.trim() : '';
+            let studentAnswer = '';
+            const choiceContainer = document.getElementById('tutor-choices-container');
+            if (choiceContainer) {
+                const selected = choiceContainer.querySelector('input[name="tutor-answer"]:checked');
+                studentAnswer = selected ? selected.value : '';
+            } else {
+                const answerInput = document.getElementById('tutor-answer-input');
+                studentAnswer = answerInput ? answerInput.value.trim() : '';
+            }
 
             if (!studentAnswer) {
-                alert('Please enter your answer for this question!');
+                alert('Please select or enter your answer for this question!');
                 return;
             }
 
@@ -913,9 +968,15 @@ let currentHomework = [];
 
         function nextQuestion() {
             // Save the current answer before moving to the next question
-            const answerInput = document.getElementById('tutor-answer-input');
-            if (answerInput) {
-                currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
+            const choiceContainer = document.getElementById('tutor-choices-container');
+            if (choiceContainer) {
+                const selected = choiceContainer.querySelector('input[name="tutor-answer"]:checked');
+                currentQuestionAnswers[currentQuestionIndex] = selected ? selected.value : '';
+            } else {
+                const answerInput = document.getElementById('tutor-answer-input');
+                if (answerInput) {
+                    currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
+                }
             }
 
             currentQuestionIndex++;
@@ -925,14 +986,25 @@ let currentHomework = [];
 
         async function reviewGeneratedHomework() {
             // Collect all answers
-            const answerInputs = document.querySelectorAll('.answer-input-inline');
             let allAnswers = [];
 
+            // Textarea answers
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
             answerInputs.forEach(input => {
                 const subject = input.dataset.subject;
                 const answer = input.value.trim();
                 if (answer) {
                     allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            // Choice answers
+            const choiceContainers = document.querySelectorAll('.choices-container');
+            choiceContainers.forEach(container => {
+                const selected = container.querySelector('input:checked');
+                if (selected) {
+                    const subject = selected.dataset.subject;
+                    allAnswers.push(`--- ${subject} ---\n${selected.value}`);
                 }
             });
 

@@ -333,6 +333,59 @@
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
+
+        /* Choice styling */
+        .choices-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .choice-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .choice-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .choice-item input[type="radio"] {
+            margin-right: 12px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .choice-prefix {
+            font-weight: bold;
+            margin-right: 8px;
+            color: #667eea;
+        }
+
+        .choice-text {
+            flex-grow: 1;
+        }
+
+        .choice-item input[type="radio"]:checked + .choice-prefix + .choice-text,
+        .choice-item input[type="radio"]:checked ~ .choice-text,
+        .choice-item input[type="radio"]:checked ~ .choice-prefix {
+            color: #667eea;
+        }
+        
+        .choice-item:has(input[type="radio"]:checked) {
+            border-color: #667eea;
+            background: #f0f4ff;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+        }
         
         /* Question formatting */
         .question-number {

@@ -383,6 +383,121 @@ def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus
 
 
 
+_MULTIPLE_CHOICE_OPTION_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:\*\*)?\(?([A-Ha-h])\)?[\)\].:\-](?:\*\*)?\s+(.+?)\s*$"
+)
+_MULTIPLE_CHOICE_QUESTION_RE = re.compile(
+    r"^\s*(?:\*\*)?(?:question\s*)?(\d+)[\)\].:\-](?:\*\*)?\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _clean_multiple_choice_text(value: str) -> str:
+    """Remove light Markdown wrappers without changing the question wording."""
+    cleaned = str(value or "").strip()
+    cleaned = re.sub(r"^#{1,6}\s+", "", cleaned)
+    cleaned = re.sub(r"^\*\*(.*?)\*\*$", r"\1", cleaned)
+    return cleaned.strip()
+
+
+def _parse_multiple_choice_questions(content: str) -> List[Dict[str, Any]]:
+    """Return structured questions only when at least two A-H options exist.
+
+    The correct answer is deliberately not included in the API response. This
+    parser only turns answer choices already visible in the question text into
+    a safer, easier-to-use structure for the browser.
+    """
+    if not content:
+        return []
+
+    normalised = str(content).replace("\r\n", "\n").replace("\r", "\n")
+    # Some model outputs place all choices on one line. Put each choice on its
+    # own line before parsing, while leaving normal prose untouched.
+    normalised = re.sub(
+        r"(\S)\s+(?=(?:\*\*)?\(?[A-Ha-h]\)?[\)\].:]\s+)",
+        r"\1\n",
+        normalised,
+    )
+
+    questions: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
+    preface_lines: List[str] = []
+
+    def finish_current() -> None:
+        nonlocal current
+        if not current:
+            return
+        stem = _clean_multiple_choice_text("\n".join(current.get("stem_lines", [])))
+        options = current.get("options", [])
+        if stem and len(options) >= 2:
+            questions.append({
+                "number": current.get("number") or len(questions) + 1,
+                "question": stem,
+                "options": options,
+            })
+        current = None
+
+    for raw_line in normalised.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        question_match = _MULTIPLE_CHOICE_QUESTION_RE.match(line)
+        if question_match:
+            finish_current()
+            current = {
+                "number": int(question_match.group(1)),
+                "stem_lines": [_clean_multiple_choice_text(question_match.group(2))],
+                "options": [],
+            }
+            preface_lines = []
+            continue
+
+        option_match = _MULTIPLE_CHOICE_OPTION_RE.match(line)
+        if option_match:
+            if current is None:
+                stem_lines = preface_lines[-4:] if preface_lines else []
+                current = {
+                    "number": len(questions) + 1,
+                    "stem_lines": stem_lines,
+                    "options": [],
+                }
+                preface_lines = []
+            current["options"].append({
+                "label": option_match.group(1).upper(),
+                "text": _clean_multiple_choice_text(option_match.group(2)),
+            })
+            continue
+
+        if current is not None:
+            if current.get("options"):
+                # Wrapped option text belongs to the previous option.
+                current["options"][-1]["text"] = (
+                    current["options"][-1]["text"] + " " + _clean_multiple_choice_text(line)
+                ).strip()
+            else:
+                current["stem_lines"].append(_clean_multiple_choice_text(line))
+        else:
+            preface_lines.append(_clean_multiple_choice_text(line))
+
+    finish_current()
+    return questions
+
+
+def _add_multiple_choice_metadata(item: Dict[str, Any], *, is_eleven_plus: bool) -> None:
+    """Attach answer-choice metadata to 11+ items when choices are present."""
+    if not is_eleven_plus:
+        return
+    questions = _parse_multiple_choice_questions(str(item.get("content") or ""))
+    if not questions:
+        return
+    item["question_type"] = "multiple_choice"
+    item["questions"] = questions
+    if len(questions) == 1:
+        item["question_text"] = questions[0]["question"]
+        item["options"] = questions[0]["options"]
+
+
 from src.webapp.question_utils import _split_homework_into_questions
 from src.webapp.review_service import review_homework, explain_deep, improve_practice
 
@@ -623,6 +738,9 @@ async def api_generate(req: Request, request: ProfileRequest):
         )
         for homework_item in all_homework_results:
             homework_item["is_eleven_plus"] = bool(request.is_eleven_plus)
+            _add_multiple_choice_metadata(
+                homework_item, is_eleven_plus=bool(request.is_eleven_plus)
+            )
 
         if request.mode == "tutor":
             individual_questions = []
@@ -635,6 +753,9 @@ async def api_generate(req: Request, request: ProfileRequest):
                     q["from_rag"] = bool(hw_block.get("from_rag", False))
                     q["question_index"] = source_index
                     q["is_eleven_plus"] = bool(request.is_eleven_plus)
+                    _add_multiple_choice_metadata(
+                        q, is_eleven_plus=bool(request.is_eleven_plus)
+                    )
                 individual_questions.extend(split_questions)
 
             # Check subscription for tutor mode (only for non-RAG questions)
@@ -772,6 +893,8 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         if new_anon_session_id:
             resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
         return resp
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in explain_deep endpoint: %s", exc)
         return JSONResponse(
@@ -813,6 +936,8 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         if new_anon_session_id:
             resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
         return resp
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in improve_practice endpoint: %s", exc)
         return JSONResponse(
