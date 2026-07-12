@@ -134,14 +134,12 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
         _get_previous_topics = get_student_previous_topics
 
     # 1. 检查内存缓存（同学科同年级的作业可直接复用）
-    # 对于 11+，增加 student_id 以确保不同学生获得不同内容（除非 RAG 命中）
-    cache_key = make_cache_key("homework", str(year_group), str(age), subject, student_id if is_eleven_plus else "normal")
-    cached = homework_cache.get(cache_key)
-    if cached:
-        logger.info("[Cache] 命中作业缓存: %s Year %d (%s) for %s", subject, year_group, "11+" if is_eleven_plus else "normal", student_id)
-        return cached["content"], cached["doc_id"], cached.get("from_rag", False)
-
-    # 2. 获取该学生该科目的历史作业，用于避免重复
+    # 注意：为了让同一用户点击“生成”时能看到不同内容，我们跳过内存缓存，
+    # 直接进入 RAG 检索（带去重逻辑）或 LLM 生成。
+    # 这里我们选择禁用 generate_homework_for_subject 的入口查询以满足“不重复”需求。
+    cache_key = make_cache_key("homework", str(year_group), str(age), subject, student_id)
+    
+    # 获取该学生该科目的历史作业，用于避免重复
     try:
         previous_topics = _get_previous_topics(student_id, subject)
         if previous_topics:
@@ -167,20 +165,28 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
             query=search_query,
             year_group=year_group,
             subject=subject,
-            k=10 if is_eleven_plus else 1,
+            k=10,
         )
 
-        # 如果 RAG 中有相关作业，直接返回（零 LLM 调用）
+        # 如果 RAG 中有相关作业，过滤掉最近已做的作业，然后随机选择
         if rag_results:
             import random
-            selected_homework = random.choice(rag_results)
-            homework_content = selected_homework["content"]
-            doc_id = selected_homework["doc_id"]
-            logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s), selected doc_id: %s", 
-                        subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)
-            # 写入内存缓存
-            homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id, "from_rag": True})
-            return homework_content, doc_id, True
+            
+            # 过滤掉已做过的主题（简单通过内容前 100 字符匹配）
+            prev_prefixes = set(t[:100] for t in previous_topics)
+            fresh_results = [r for r in rag_results if r["content"][:100] not in prev_prefixes]
+            
+            if fresh_results:
+                selected_homework = random.choice(fresh_results)
+                homework_content = selected_homework["content"]
+                doc_id = selected_homework["doc_id"]
+                logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s), selected doc_id: %s", 
+                            subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)
+                # 写入内存缓存
+                homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id, "from_rag": True})
+                return homework_content, doc_id, True
+            else:
+                logger.info("[RAG] All matching homework in RAG for %s were previously done, will generate new.", subject)
     except Exception as e:
         logger.warning("[RAG] Failed to search homework: %s", e)
 
