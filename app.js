@@ -282,7 +282,6 @@ let currentHomework = [];
 
                 if (data.success) {
                     extractedContent = data.content;
-                    console.log('Extracted content:', extractedContent);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -334,7 +333,6 @@ let currentHomework = [];
 
                 if (data.success) {
                     extractedContent = data.content;
-                    console.log('Extracted content:', extractedContent);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -350,7 +348,6 @@ let currentHomework = [];
             fetch('/api/subjects')
                 .then(response => response.json())
                 .then(data => {
-                    console.log("Subjects received:", data);
                     renderSubjects('homework-subjects', data.primary);
                     renderSubjects('eleven-subjects', data.eleven_plus);
 
@@ -752,7 +749,7 @@ let currentHomework = [];
                     <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
                     <div class="homework-content">
                         <div class="question-column">
-                            ${formatQuestions(marked.parse(hw.content))}
+                            ${formatQuestions(renderSafeMarkdown(hw.content))}
                         </div>
                         <div class="answer-column">
                             <h4>Your Answer:</h4>
@@ -783,7 +780,7 @@ let currentHomework = [];
                     <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
                     <div class="homework-content">
                         <div class="question-column">
-                            ${formatQuestions(marked.parse(hw.content))}
+                            ${formatQuestions(renderSafeMarkdown(hw.content))}
                         </div>
                         <div class="answer-column">
                             <h4>Your Answer:</h4>
@@ -836,6 +833,7 @@ let currentHomework = [];
                         is_tutor_mode: true, // Indicate tutor mode review
                         from_rag: hw.from_rag, // Pass from_rag status
                         homework_doc_id: hw.doc_id, // Source RAG document
+                        is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
                             : currentQuestionIndex // Backward-compatible fallback
@@ -943,11 +941,6 @@ let currentHomework = [];
         }
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
-            console.log("=== Starting Review ===");
-            console.log("Homework:", homework);
-            console.log("Answers:", answers);
-            console.log("Subject:", subject);
-            console.log("Doc ID:", homeworkDocId);
 
             showLoading();
 
@@ -962,6 +955,7 @@ let currentHomework = [];
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
                 }
+                requestBody.is_eleven_plus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
 
                 const response = await fetch('/api/review', {
                     method: 'POST',
@@ -982,7 +976,6 @@ let currentHomework = [];
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log("Calling displayReview with review:", data.review);
                     displayReview(data.review);
                 } else {
                     alert('Error: ' + data.error);
@@ -999,7 +992,7 @@ let currentHomework = [];
             const container = document.getElementById('review-result');
             container.innerHTML = `
                 <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
-                <div class="review-output">${marked.parse(review)}</div>
+                <div class="review-output">${renderSafeMarkdown(review)}</div>
             `;
 
             // Make sure results section is visible
@@ -1086,7 +1079,7 @@ let currentHomework = [];
             container.innerHTML = `
                 ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
                 <h3 style="margin-top: 20px; margin-bottom: 20px;">Deep Explanation</h3>
-                <div class="review-output">${marked.parse(explanation)}</div>
+                <div class="review-output">${renderSafeMarkdown(explanation)}</div>
             `;
 
             document.getElementById('results').style.display = 'block';
@@ -1188,7 +1181,7 @@ let currentHomework = [];
                     </h3>
                     <div class="homework-content">
                         <div class="question-column" style="border-left-color: #f57c00;">
-                            ${marked.parse(practiceContent)}
+                            ${renderSafeMarkdown(practiceContent)}
                         </div>
                         <div class="answer-column">
                             <h4 style="color: #f57c00;">Your Answers:</h4>
@@ -1247,7 +1240,7 @@ let currentHomework = [];
                     const container = document.getElementById('review-result');
                     container.innerHTML = `
                         <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice Feedback</h3>
-                        <div class="review-output" style="border-left-color: #f57c00;">${marked.parse(data.review)}</div>
+                        <div class="review-output" style="border-left-color: #f57c00;">${renderSafeMarkdown(data.review)}</div>
                     `;
                     document.getElementById('results').style.display = 'block';
                 } else {

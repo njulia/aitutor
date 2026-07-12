@@ -64,19 +64,16 @@ ai_tutor/
 │   ├── homework_generator.py     # 作业生成逻辑
 │   ├── homework_manager.py       # 作业保存/加载/批改/CSV 管理
 │   ├── homework_rag.py           # RAG 系统（ChromaDB）用于作业存储和搜索
+│   ├── elevenplus_rag.py         # 11+ 知识库 RAG 系统
 │   ├── file_utils.py             # 文件读取工具（图片 OCR、PDF、DOCX、文本）
 │   │
 │   ├── ui/
 │   │   ├── shared.py             # 共享 UI 工具（档案解析、作业显示）
 │   │   └── tui.py                # 终端 UI（CLI 模式）
 │   │
-│   ├── elevenplus/               # 11+ 考试准备模块
-│   │   ├── elevenplus_rag.py     # 11+ 知识库 RAG 系统
-│   │   ├── prompts.py            # 11+ 专用提示模板
-│   │   └── generate_11plus_*.py  # 11+ 作业生成器
+│   │── scripts/                  # 批量生成脚本
+│   │   └── elevenplus/           # 11+ 作业生成器 
 │   │
-│   └── scripts/                  # 批量生成脚本
-│
 ├── templates/
 │   ├── app.html                  # 主 AI 辅导 Web 应用（SPA）
 │   ├── homework.html             # 作业显示模板

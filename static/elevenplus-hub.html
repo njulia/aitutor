@@ -9,7 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="/static/js/marked-lite.js"></script>
+<script src="/static/js/safe_markdown.js"></script>
 
 <style>
   :root{
@@ -457,7 +458,7 @@ function renderHomeworkBlocks(homeworkList, containerEl){
   containerEl.innerHTML = homeworkList.map((hw, idx) => `
     <div class="hw-block" data-idx="${idx}" data-subject="${hw.subject}" data-doc-id="${hw.doc_id || ''}">
       <h3>${hw.subject}</h3>
-      <div class="hw-content">${marked.parse(hw.content)}</div>
+      <div class="hw-content">${renderSafeMarkdown(hw.content)}</div>
       <textarea class="answer-box" placeholder="Write your answers here…"></textarea>
     </div>
   `).join('');
@@ -480,7 +481,7 @@ async function checkAnswers(homeworkList, containerEl, reviewEl, checkBtn){
     const homeworkText = homeworkList.map(h=>h.content).join('\n\n');
     const data = await requestReview(homeworkText, combined.join('\n\n'), homeworkList[0].subject);
     if(data.success){
-      reviewEl.innerHTML = `<div class="review-output">${marked.parse(data.review)}</div>`;
+      reviewEl.innerHTML = `<div class="review-output">${renderSafeMarkdown(data.review)}</div>`;
     }else{
       alert('Error: ' + data.error);
     }

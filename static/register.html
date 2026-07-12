@@ -300,6 +300,9 @@
 
                 if (data.success) {
                     showSuccess('Account created successfully! Redirecting...');
+                    // Store user info
+                    localStorage.setItem('student_id', email);
+                    localStorage.setItem('student_email', email);
                     setTimeout(() => {
                         window.location.href = '/app';
                     }, 1500);

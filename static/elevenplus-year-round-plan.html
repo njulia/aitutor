@@ -1,666 +1,1065 @@
 <!DOCTYPE html>
 <html lang="en-GB">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>11+ Practice &amp; 52-Week Study Plan | Homework Magic</title>
-<meta name="description" content="Generate 11+ practice questions instantly, or follow a structured 52-week plan across Maths, English, Verbal and Non-Verbal Reasoning.">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11+ Year-Round Study Plan | Homework Magic</title>
+    <meta name="description" content="A child-friendly 52-week 11+ study plan covering Maths, English, Verbal Reasoning and Non-Verbal Reasoning, with weekly practice and friendly marking.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="/elevenplus-year-round-plan">
+    <script src="/static/js/marked-lite.js" defer></script>
+    <script src="/static/js/safe_markdown.js" defer></script>
+    <style>
+        :root {
+            --ink: #243047;
+            --muted: #667085;
+            --paper: #f6f8fc;
+            --card: #ffffff;
+            --line: #dfe5f0;
+            --purple: #6c63d9;
+            --purple-dark: #5147b8;
+            --purple-soft: #efedff;
+            --green: #248a62;
+            --green-soft: #e9f7f0;
+            --amber: #b86b12;
+            --amber-soft: #fff3df;
+            --coral: #c44f5a;
+            --coral-soft: #ffeaed;
+            --blue: #2878b5;
+            --blue-soft: #e9f4fd;
+            --shadow: 0 14px 38px rgba(36, 48, 71, 0.09);
+            --radius: 18px;
+        }
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.55;
+        }
+        button, input, select, textarea { font: inherit; }
+        button { touch-action: manipulation; }
+        a { color: inherit; }
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            top: 8px;
+            padding: 10px 14px;
+            background: #fff;
+            border-radius: 10px;
+            z-index: 100;
+        }
+        .skip-link:focus { left: 8px; }
 
-<style>
-  :root{
-    --violet-1:#667eea;
-    --violet-2:#764ba2;
-    --ink:#2c2a3d;
-    --ink-soft:#655f7a;
-    --paper:#faf9fd;
-    --card:#ffffff;
-    --line:#e7e4f2;
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: rgba(255, 255, 255, 0.96);
+            border-bottom: 1px solid var(--line);
+            backdrop-filter: blur(10px);
+        }
+        .header-inner {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 14px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+        .brand {
+            text-decoration: none;
+            font-size: 1.18rem;
+            font-weight: 800;
+            color: var(--purple-dark);
+        }
+        .site-nav {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .site-nav a {
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 999px;
+            color: var(--muted);
+            font-weight: 650;
+            font-size: 0.92rem;
+        }
+        .site-nav a:hover,
+        .site-nav a:focus-visible,
+        .site-nav a[aria-current="page"] {
+            color: var(--purple-dark);
+            background: var(--purple-soft);
+            outline: none;
+        }
 
-    --phase-1:#3fa79f;   /* Foundations - teal */
-    --phase-1-soft:#e4f4f2;
-    --phase-2:#667eea;   /* Building Breadth - violet (brand) */
-    --phase-2-soft:#eceffd;
-    --phase-3:#e0954f;   /* Full-Paper Practice - amber */
-    --phase-3-soft:#fbf0e2;
-    --phase-4:#d1584f;   /* Exam Sprint - coral */
-    --phase-4-soft:#fbe9e7;
+        main {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 34px 22px 80px;
+        }
+        .hero {
+            overflow: hidden;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1.45fr 0.8fr;
+            gap: 30px;
+            align-items: center;
+            padding: 38px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #645bd4, #7d55b7);
+            color: #fff;
+            box-shadow: var(--shadow);
+        }
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            right: -80px;
+            bottom: -120px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+        }
+        .hero-copy { position: relative; z-index: 1; }
+        .eyebrow {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 7px 12px;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.12);
+            font-size: 0.86rem;
+            font-weight: 750;
+        }
+        h1 {
+            margin: 0 0 12px;
+            max-width: 720px;
+            font-size: clamp(2rem, 5vw, 3.55rem);
+            line-height: 1.06;
+            letter-spacing: -0.04em;
+        }
+        .hero p {
+            margin: 0;
+            max-width: 710px;
+            color: rgba(255,255,255,0.91);
+            font-size: 1.05rem;
+        }
+        .hero-stats {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .hero-stat {
+            padding: 18px;
+            border: 1px solid rgba(255,255,255,0.26);
+            border-radius: 16px;
+            background: rgba(255,255,255,0.12);
+            text-align: center;
+        }
+        .hero-stat strong {
+            display: block;
+            font-size: 1.8rem;
+            line-height: 1.1;
+        }
+        .hero-stat span { font-size: 0.82rem; opacity: 0.9; }
 
-    --radius:16px;
-    --shadow:0 10px 30px rgba(44,42,61,0.08);
-  }
+        .card {
+            margin-top: 24px;
+            padding: 26px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--card);
+            box-shadow: var(--shadow);
+        }
+        .section-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+        .section-heading h2 { margin: 0 0 4px; font-size: 1.45rem; }
+        .section-heading p { margin: 0; color: var(--muted); }
 
-  *{margin:0;padding:0;box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{
-    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
-    background:var(--paper);
-    color:var(--ink);
-    line-height:1.5;
-  }
-  .display{font-family:'Fraunces', Georgia, serif;}
-  .mono{font-family:'IBM Plex Mono', ui-monospace, monospace;}
+        .setup-grid {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+            gap: 14px;
+            align-items: end;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 750;
+            font-size: 0.9rem;
+        }
+        .field small { display: block; margin-top: 6px; color: var(--muted); }
+        input[type="date"], select {
+            width: 100%;
+            min-height: 46px;
+            padding: 10px 12px;
+            border: 2px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
+            color: var(--ink);
+        }
+        input:focus-visible, select:focus-visible, textarea:focus-visible {
+            outline: 3px solid rgba(108,99,217,0.18);
+            border-color: var(--purple);
+        }
+        .privacy-note {
+            margin: 15px 0 0;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: var(--green-soft);
+            color: #176044;
+            font-size: 0.88rem;
+        }
 
-  @media (prefers-reduced-motion: reduce){
-    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
-  }
+        .btn {
+            min-height: 46px;
+            padding: 11px 20px;
+            border: 0;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 800;
+            transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn:focus-visible { outline: 3px solid rgba(108,99,217,0.25); outline-offset: 2px; }
+        .btn:disabled { cursor: not-allowed; opacity: 0.55; transform: none; }
+        .btn-primary { background: linear-gradient(135deg, var(--purple), var(--purple-dark)); color: #fff; }
+        .btn-primary:hover { box-shadow: 0 8px 20px rgba(81,71,184,0.26); }
+        .btn-secondary { background: var(--purple-soft); color: var(--purple-dark); }
+        .btn-quiet { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+        .btn-danger { background: var(--coral-soft); color: #963943; }
 
-  a{color:inherit;}
+        .progress-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 22px;
+            align-items: center;
+        }
+        .progress-track {
+            height: 14px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #edf0f6;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--green), #50b78d);
+            transition: width 0.25s ease;
+        }
+        .progress-copy { margin-top: 8px; color: var(--muted); font-size: 0.9rem; }
+        .current-week-box {
+            min-width: 146px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: var(--purple-soft);
+            color: var(--purple-dark);
+            text-align: center;
+        }
+        .current-week-box strong { display: block; font-size: 1.55rem; }
+        .current-week-box span { font-size: 0.8rem; font-weight: 700; }
 
-  /* ---------- Header ---------- */
-  header.site{
-    background:var(--card);
-    border-bottom:1px solid var(--line);
-    padding:18px 0;
-    position:sticky; top:0; z-index:40;
-  }
-  .site-inner{
-    max-width:1180px; margin:0 auto; padding:0 24px;
-    display:flex; align-items:center; justify-content:space-between; gap:20px;
-  }
-  .brand{
-    font-size:1.3rem; font-weight:700;
-    background:linear-gradient(135deg,var(--violet-1),var(--violet-2));
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  }
-  .brand-sub{font-size:0.78rem; color:var(--ink-soft); margin-top:-2px;}
+        .phase-list {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+        .phase-card {
+            padding: 16px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+        }
+        .phase-card strong { display: block; margin-bottom: 4px; }
+        .phase-card span { color: var(--muted); font-size: 0.84rem; }
+        .phase-foundations { background: var(--green-soft); }
+        .phase-build { background: var(--blue-soft); }
+        .phase-timed { background: var(--amber-soft); }
+        .phase-ready { background: var(--coral-soft); }
 
-  nav.top-tabs{display:flex; gap:8px;}
-  .top-tab{
-    border:none; background:var(--paper); color:var(--ink-soft);
-    padding:11px 22px; border-radius:999px; font-size:0.95rem; font-weight:600;
-    cursor:pointer; transition:all .2s ease;
-  }
-  .top-tab:hover{background:var(--phase-2-soft); color:var(--violet-1);}
-  .top-tab.active{
-    background:linear-gradient(135deg,var(--violet-1),var(--violet-2));
-    color:#fff;
-  }
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(13, minmax(44px, 1fr));
+            gap: 8px;
+        }
+        .week-button {
+            position: relative;
+            aspect-ratio: 1;
+            min-width: 0;
+            border: 2px solid transparent;
+            border-radius: 11px;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 850;
+        }
+        .week-button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+        .week-button:focus-visible { outline: 3px solid rgba(36,48,71,0.24); outline-offset: 2px; }
+        .week-button[data-phase="foundations"] { background: var(--green); }
+        .week-button[data-phase="build"] { background: var(--blue); }
+        .week-button[data-phase="timed"] { background: var(--amber); }
+        .week-button[data-phase="ready"] { background: var(--coral); }
+        .week-button.is-current { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(36,48,71,0.12); }
+        .week-button.is-selected { outline: 3px solid var(--purple); outline-offset: 2px; }
+        .week-button.is-complete::after {
+            content: "✓";
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            background: rgba(20,35,35,0.55);
+            font-size: 1.1rem;
+        }
 
-  main{max-width:1180px; margin:0 auto; padding:40px 24px 80px;}
-  .panel{display:none;}
-  .panel.active{display:block; animation:fadein .35s ease;}
-  @keyframes fadein{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+        .week-detail {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 22px;
+            align-items: start;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--line);
+        }
+        .phase-badge {
+            display: inline-block;
+            margin-bottom: 9px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: var(--purple-soft);
+            color: var(--purple-dark);
+            font-size: 0.76rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .week-detail h3 { margin: 0 0 7px; font-size: 1.45rem; }
+        .week-detail p { margin: 0; color: var(--muted); }
+        .topic-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin-top: 15px;
+        }
+        .topic-chip {
+            padding: 9px 12px;
+            border: 1px solid var(--line);
+            border-radius: 11px;
+            background: var(--paper);
+            font-size: 0.88rem;
+        }
+        .topic-chip b { color: var(--ink); }
+        .week-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+            min-width: 220px;
+        }
+        .review-option {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--paper);
+            color: var(--muted);
+            font-size: 0.84rem;
+        }
+        .review-option input { margin-top: 3px; }
 
-  /* ---------- Shared card ---------- */
-  .card{
-    background:var(--card); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:28px;
-  }
-  .card + .card{margin-top:24px;}
+        .loading {
+            display: none;
+            padding: 36px;
+            text-align: center;
+            color: var(--muted);
+        }
+        .loading.is-active { display: block; }
+        .spinner {
+            width: 42px;
+            height: 42px;
+            margin: 0 auto 12px;
+            border: 4px solid var(--line);
+            border-top-color: var(--purple);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-  h1.page-title{font-size:1.9rem; font-weight:600; margin-bottom:6px;}
-  p.page-sub{color:var(--ink-soft); font-size:1rem; margin-bottom:28px; max-width:640px;}
+        .practice-card { margin-top: 18px; }
+        .practice-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .practice-header h3 { margin: 0; }
+        .source-badge {
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: var(--green-soft);
+            color: #176044;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+        .question-content {
+            padding: 18px;
+            border-left: 4px solid var(--purple);
+            border-radius: 12px;
+            background: var(--purple-soft);
+            overflow-x: auto;
+        }
+        .question-content h1, .question-content h2, .question-content h3,
+        .feedback h1, .feedback h2, .feedback h3 { margin: 0.75em 0 0.35em; }
+        .question-content p, .feedback p { margin: 0.65em 0; }
+        .question-content li, .feedback li { margin: 0.3em 0; }
+        .answer-box {
+            width: 100%;
+            min-height: 150px;
+            margin-top: 13px;
+            padding: 14px;
+            resize: vertical;
+            border: 2px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
+            color: var(--ink);
+        }
+        .practice-actions {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        .feedback {
+            margin-top: 16px;
+            padding: 18px;
+            border-left: 4px solid var(--green);
+            border-radius: 12px;
+            background: var(--green-soft);
+        }
+        .status-message {
+            margin-top: 16px;
+            padding: 13px 15px;
+            border-radius: 12px;
+            background: var(--amber-soft);
+            color: #7f4b10;
+        }
+        .hidden { display: none !important; }
+        footer {
+            padding: 28px 22px 42px;
+            color: var(--muted);
+            text-align: center;
+            font-size: 0.86rem;
+        }
 
-  /* ---------- Practice tab ---------- */
-  .subject-grid{
-    display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-    gap:10px; margin:14px 0 26px;
-  }
-  .subject-pill{
-    border:2px solid var(--line); border-radius:12px; padding:13px;
-    text-align:center; cursor:pointer; font-weight:600; font-size:0.95rem;
-    transition:all .2s ease; user-select:none;
-  }
-  .subject-pill:hover{border-color:var(--violet-1); background:var(--phase-2-soft);}
-  .subject-pill.selected{
-    background:linear-gradient(135deg,var(--violet-1),var(--violet-2));
-    border-color:transparent; color:#fff;
-  }
-
-  .btn{
-    border:none; border-radius:999px; padding:13px 28px; font-size:0.95rem;
-    font-weight:700; cursor:pointer; transition:all .2s ease;
-  }
-  .btn-primary{background:linear-gradient(135deg,var(--violet-1),var(--violet-2)); color:#fff;}
-  .btn-primary:hover{transform:translateY(-1px); box-shadow:0 6px 18px rgba(102,126,234,.35);}
-  .btn-primary:disabled{opacity:0.55; cursor:not-allowed; transform:none; box-shadow:none;}
-  .btn-ghost{background:var(--paper); color:var(--ink); border:1px solid var(--line);}
-  .btn-ghost:hover{border-color:var(--violet-1); color:var(--violet-1);}
-
-  .loading{display:none; text-align:center; padding:50px 0;}
-  .loading.active{display:block;}
-  .spinner{
-    width:44px; height:44px; margin:0 auto 16px;
-    border:4px solid var(--line); border-top-color:var(--violet-1);
-    border-radius:50%; animation:spin 0.9s linear infinite;
-  }
-  @keyframes spin{to{transform:rotate(360deg);}}
-
-  .hw-block{border:1px solid var(--line); border-radius:14px; padding:22px; margin-top:18px;}
-  .hw-block h3{
-    display:inline-block; background:linear-gradient(135deg,var(--violet-1),var(--violet-2));
-    color:#fff; padding:6px 16px; border-radius:8px; font-size:1rem; margin-bottom:16px;
-  }
-  .hw-content{
-    background:var(--phase-2-soft); border-left:4px solid var(--violet-1);
-    border-radius:10px; padding:18px; white-space:pre-wrap; line-height:1.8; font-size:0.96rem;
-  }
-  .answer-box{
-    width:100%; min-height:140px; margin-top:14px; padding:14px;
-    border:2px solid var(--line); border-radius:10px; font-family:inherit; font-size:0.95rem;
-    resize:vertical;
-  }
-  .answer-box:focus{outline:none; border-color:var(--violet-1);}
-
-  .review-output{
-    background:#eefaf0; border-left:4px solid #47b768; border-radius:10px;
-    padding:20px; margin-top:20px; line-height:1.75;
-  }
-  .review-output p{margin:0.6em 0;}
-
-  /* ---------- Plan tab ---------- */
-  .hero{
-    background:linear-gradient(135deg,var(--violet-1),var(--violet-2));
-    border-radius:var(--radius); padding:34px 32px; color:#fff;
-    display:flex; flex-wrap:wrap; align-items:center; gap:28px; justify-content:space-between;
-  }
-  .hero-week{
-    font-family:'Fraunces', serif; font-size:3.2rem; font-weight:600; line-height:1;
-  }
-  .hero-week span{font-size:1.1rem; font-weight:500; opacity:.85; display:block; margin-top:4px;}
-  .hero-phase{font-size:1rem; font-weight:600; opacity:.95;}
-  .hero-blurb{max-width:420px; font-size:0.92rem; opacity:.9; margin-top:6px;}
-  .hero-actions{display:flex; gap:10px; flex-wrap:wrap;}
-  .hero .btn-ghost{background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.4);}
-  .hero .btn-ghost:hover{background:rgba(255,255,255,0.25); border-color:#fff; color:#fff;}
-
-  .legend{display:flex; gap:18px; flex-wrap:wrap; margin:22px 0 6px; font-size:0.85rem; color:var(--ink-soft);}
-  .legend-item{display:flex; align-items:center; gap:7px;}
-  .legend-dot{width:11px; height:11px; border-radius:50%;}
-
-  .week-strip{
-    display:grid; grid-template-columns:repeat(13, 1fr); gap:7px; margin-top:16px;
-  }
-  @media (max-width:780px){ .week-strip{grid-template-columns:repeat(8, 1fr);} }
-  @media (max-width:480px){ .week-strip{grid-template-columns:repeat(6, 1fr);} }
-
-  .week-cell{
-    aspect-ratio:1/1; border-radius:8px; display:flex; align-items:center; justify-content:center;
-    font-family:'IBM Plex Mono', monospace; font-size:0.78rem; font-weight:600;
-    cursor:pointer; border:2px solid transparent; color:#fff; position:relative;
-    transition:transform .15s ease;
-  }
-  .week-cell:hover{transform:scale(1.12); z-index:2;}
-  .week-cell.current{border-color:var(--ink); box-shadow:0 0 0 3px rgba(44,42,61,0.12);}
-  .week-cell.done::after{
-    content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.35); border-radius:6px; font-size:0.85rem;
-  }
-  .week-cell.selected{outline:3px solid var(--ink); outline-offset:2px;}
-
-  .week-detail{
-    margin-top:26px; padding-top:24px; border-top:1px solid var(--line);
-    display:flex; flex-wrap:wrap; gap:28px; justify-content:space-between; align-items:flex-start;
-  }
-  .week-detail-main{flex:1; min-width:280px;}
-  .week-badge{
-    display:inline-block; font-size:0.75rem; font-weight:700; text-transform:uppercase;
-    letter-spacing:0.04em; padding:4px 10px; border-radius:999px; margin-bottom:10px;
-  }
-  .week-detail h3{font-size:1.3rem; margin-bottom:4px;}
-  .week-detail .topic-row{display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;}
-  .topic-chip{
-    background:var(--paper); border:1px solid var(--line); border-radius:10px;
-    padding:9px 14px; font-size:0.87rem;
-  }
-  .topic-chip b{display:block; font-size:0.72rem; text-transform:uppercase; color:var(--ink-soft); font-weight:700; letter-spacing:.03em;}
-  .week-detail-actions{display:flex; gap:10px; flex-wrap:wrap; align-self:flex-start;}
-
-  .empty-note{color:var(--ink-soft); font-size:0.9rem; margin-top:8px;}
-
-  footer{text-align:center; color:var(--ink-soft); font-size:0.85rem; padding:30px 0;}
-</style>
+        @media (max-width: 920px) {
+            .hero { grid-template-columns: 1fr; }
+            .phase-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .week-grid { grid-template-columns: repeat(8, minmax(42px, 1fr)); }
+            .setup-grid { grid-template-columns: 1fr 1fr; }
+            .setup-grid .btn { grid-column: 1 / -1; }
+        }
+        @media (max-width: 680px) {
+            .header-inner { align-items: flex-start; flex-direction: column; }
+            .site-nav { justify-content: flex-start; }
+            main { padding: 22px 14px 60px; }
+            .hero, .card { padding: 21px; }
+            .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .setup-grid, .progress-grid, .week-detail { grid-template-columns: 1fr; }
+            .week-actions { min-width: 0; }
+            .week-grid { grid-template-columns: repeat(6, minmax(40px, 1fr)); }
+            .phase-list { grid-template-columns: 1fr; }
+            .section-heading { flex-direction: column; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+        }
+    </style>
 </head>
 <body>
-
-<header class="site">
-  <div class="site-inner">
-    <div>
-      <div class="brand">✨ Homework Magic — 11+</div>
-      <div class="brand-sub">Practice on demand, or follow the year-round plan</div>
+<a class="skip-link" href="#main-content">Skip to the study plan</a>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/">✨ Homework Magic</a>
+        <nav class="site-nav" aria-label="Main navigation">
+            <a href="/">Home</a>
+            <a href="/elevenplus-practice">11+ Practice</a>
+            <a href="/elevenplus-year-round-plan" aria-current="page">Year-Round Plan</a>
+            <a href="/progress">Progress</a>
+            <a href="/login">Parent Login</a>
+        </nav>
     </div>
-    <nav class="top-tabs">
-      <button class="top-tab active" data-tab="practice" onclick="switchTab('practice')">🎯 Practice Now</button>
-      <button class="top-tab" data-tab="plan" onclick="switchTab('plan')">📅 52-Week Plan</button>
-    </nav>
-  </div>
 </header>
 
-<main>
-
-  <!-- ================= PRACTICE TAB ================= -->
-  <section id="panel-practice" class="panel active">
-    <div class="card">
-      <h1 class="page-title">Generate 11+ practice</h1>
-      <p class="page-sub">Pick one or more subjects and get a fresh set of exam-style questions right now.</p>
-
-      <div class="subject-grid" id="subject-grid"></div>
-
-      <div style="display:flex; gap:12px; flex-wrap:wrap;">
-        <button class="btn btn-primary" id="generate-btn" onclick="generatePractice()">Generate Practice</button>
-        <button class="btn btn-ghost" id="clear-btn" onclick="clearPractice()" style="display:none;">New Set</button>
-      </div>
-    </div>
-
-    <div class="loading" id="practice-loading">
-      <div class="spinner"></div>
-      <p style="color:var(--ink-soft);">Putting together your questions…</p>
-    </div>
-
-    <div id="practice-results"></div>
-  </section>
-
-  <!-- ================= PLAN TAB ================= -->
-  <section id="panel-plan" class="panel">
-    <div class="card">
-      <div class="hero">
-        <div>
-          <div class="hero-week" id="hero-week">Week 1<span id="hero-week-sub">of 52</span></div>
+<main id="main-content">
+    <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+            <div class="eyebrow">📅 A steady plan, one week at a time</div>
+            <h1 id="page-title">Your 52-week 11+ study journey</h1>
+            <p>Build strong foundations first, add exam skills gradually, then practise calmly under timed conditions. Each week has one clear focus and an optional light-review subject.</p>
         </div>
-        <div>
-          <div class="hero-phase" id="hero-phase">Foundations</div>
-          <div class="hero-blurb" id="hero-blurb"></div>
+        <div class="hero-stats" aria-label="Plan summary">
+            <div class="hero-stat"><strong>52</strong><span>manageable weeks</span></div>
+            <div class="hero-stat"><strong>4</strong><span>11+ subjects</span></div>
+            <div class="hero-stat"><strong>20</strong><span>minutes per session</span></div>
+            <div class="hero-stat"><strong>4</strong><span>learning phases</span></div>
         </div>
-        <div class="hero-actions">
-          <button class="btn btn-ghost" onclick="jumpToCurrentWeek()">Go to current week</button>
-          <button class="btn btn-ghost" onclick="resetPlanProgress()">Reset progress</button>
+    </section>
+
+    <section class="card" aria-labelledby="setup-title">
+        <div class="section-heading">
+            <div>
+                <h2 id="setup-title">Set up the plan</h2>
+                <p>Choose when Week 1 begins and a comfortable session length.</p>
+            </div>
         </div>
-      </div>
+        <div class="setup-grid">
+            <div class="field">
+                <label for="start-date">Week 1 start date</label>
+                <input id="start-date" type="date">
+                <small>The current week is calculated from this date.</small>
+            </div>
+            <div class="field">
+                <label for="session-length">Suggested session length</label>
+                <select id="session-length">
+                    <option value="15">15 minutes</option>
+                    <option value="20" selected>20 minutes</option>
+                    <option value="25">25 minutes</option>
+                    <option value="30">30 minutes</option>
+                </select>
+                <small>Short, regular practice is usually easier to sustain.</small>
+            </div>
+            <button class="btn btn-primary" id="save-plan-btn" type="button">Save plan</button>
+        </div>
+        <p class="privacy-note">🔒 The start date, completed weeks and session length are saved only in this browser. No child name, school or location is requested.</p>
+    </section>
 
-      <div class="legend" id="legend"></div>
+    <section class="card" aria-labelledby="progress-title">
+        <div class="section-heading">
+            <div>
+                <h2 id="progress-title">Plan progress</h2>
+                <p>Celebrate steady practice rather than perfect scores.</p>
+            </div>
+            <button class="btn btn-danger" id="reset-plan-btn" type="button">Reset progress</button>
+        </div>
+        <div class="progress-grid">
+            <div>
+                <div class="progress-track" role="progressbar" aria-label="Completed weeks" aria-valuemin="0" aria-valuemax="52" aria-valuenow="0" id="progress-track">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="progress-copy" id="progress-copy">0 of 52 weeks complete</div>
+            </div>
+            <div class="current-week-box">
+                <strong id="current-week-number">1</strong>
+                <span>current week</span>
+            </div>
+        </div>
+    </section>
 
-      <div class="week-strip" id="week-strip"></div>
+    <section class="card" aria-labelledby="weeks-title">
+        <div class="section-heading">
+            <div>
+                <h2 id="weeks-title">Choose a week</h2>
+                <p>Select any week to see its goal and generate matching practice.</p>
+            </div>
+            <button class="btn btn-secondary" id="jump-current-btn" type="button">Go to current week</button>
+        </div>
 
-      <div class="week-detail" id="week-detail"></div>
-    </div>
+        <div class="phase-list" aria-label="Plan phases">
+            <div class="phase-card phase-foundations"><strong>Weeks 1–13: Foundations</strong><span>Core number, reading, vocabulary and pattern skills.</span></div>
+            <div class="phase-card phase-build"><strong>Weeks 14–26: Build breadth</strong><span>Wider topics and more challenging reasoning.</span></div>
+            <div class="phase-card phase-timed"><strong>Weeks 27–39: Timed practice</strong><span>Mixed questions, accuracy and sensible pacing.</span></div>
+            <div class="phase-card phase-ready"><strong>Weeks 40–52: Exam ready</strong><span>Mocks, weak-area review and confidence.</span></div>
+        </div>
 
-    <div class="loading" id="plan-loading">
-      <div class="spinner"></div>
-      <p style="color:var(--ink-soft);">Putting together this week's questions…</p>
-    </div>
+        <div class="week-grid" id="week-grid" aria-label="52-week plan"></div>
+        <div class="week-detail" id="week-detail"></div>
+    </section>
 
-    <div id="plan-results"></div>
-  </section>
-
+    <section id="practice-section" class="card hidden" aria-labelledby="practice-title">
+        <div class="section-heading">
+            <div>
+                <h2 id="practice-title">This week's practice</h2>
+                <p id="practice-subtitle">Complete the questions, then ask the tutor to check your answers.</p>
+            </div>
+            <button class="btn btn-quiet" id="clear-practice-btn" type="button">Clear practice</button>
+        </div>
+        <div class="loading" id="loading" role="status" aria-live="polite">
+            <div class="spinner" aria-hidden="true"></div>
+            <p>Finding suitable 11+ questions…</p>
+        </div>
+        <div id="practice-results"></div>
+        <div class="status-message hidden" id="status-message" role="alert"></div>
+    </section>
 </main>
 
-<footer>Made with 💜 Homework Magic — your plan is saved on this device.</footer>
+<footer>Homework Magic supports calm, age-appropriate practice. A parent or guardian should check the exam format used by the target school.</footer>
 
 <script>
-/* =========================================================================
-   Shared setup
-   ========================================================================= */
-marked.setOptions({ breaks:true, gfm:true });
+(function () {
+    'use strict';
 
-let ELEVEN_SUBJECTS = [];       // filled from /api/subjects
-let selectedSubjects = new Set();
+    const STORAGE_KEY = 'homework_magic_11plus_year_plan_v2';
+    const DEFAULT_STATE = {
+        startDate: new Date().toISOString().slice(0, 10),
+        sessionLength: 20,
+        completedWeeks: [],
+        selectedWeek: 1
+    };
 
-function switchTab(tab){
-  document.querySelectorAll('.top-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('panel-'+tab).classList.add('active');
-}
+    const PHASES = {
+        foundations: { name: 'Foundations', range: 'Weeks 1–13' },
+        build: { name: 'Build breadth', range: 'Weeks 14–26' },
+        timed: { name: 'Timed practice', range: 'Weeks 27–39' },
+        ready: { name: 'Exam ready', range: 'Weeks 40–52' }
+    };
 
-async function loadSubjects(){
-  try{
-    const res = await fetch('/api/subjects');
-    const data = await res.json();
-    ELEVEN_SUBJECTS = data.eleven_plus || [];
-  }catch(e){
-    console.error('Failed to load subjects', e);
-    ELEVEN_SUBJECTS = ['Maths','English','Verbal Reasoning','Non-Verbal Reasoning'];
-  }
-  renderSubjectGrid();
-  buildPlan(); // plan needs ELEVEN_SUBJECTS to map focus areas onto real subject names
-}
+    const WEEK_PLAN = [
+        ['foundations','maths','english','Place value and mental arithmetic','Read, compare and calculate with whole numbers confidently.'],
+        ['foundations','english','maths','Finding information in a text','Retrieve clear facts and explain where the evidence appears.'],
+        ['foundations','vr','english','Synonyms, antonyms and word links','Notice how words are connected by meaning.'],
+        ['foundations','nvr','maths','Shape groups and odd-one-out','Describe the visual rule that joins a group of shapes.'],
+        ['foundations','maths','vr','The four operations','Choose efficient written and mental methods.'],
+        ['foundations','english','nvr','Grammar and punctuation','Identify word classes and punctuate sentences accurately.'],
+        ['foundations','vr','maths','Letter sequences','Spot alphabetical movement and repeated rules.'],
+        ['foundations','nvr','english','Completing visual patterns','Track changes in shape, position, number and shading.'],
+        ['foundations','maths','english','Fractions of amounts','Use multiplication and division to find fractions.'],
+        ['foundations','english','vr','Vocabulary in context','Use clues around an unfamiliar word to infer its meaning.'],
+        ['foundations','vr','nvr','Simple letter and number codes','Apply one clear coding rule accurately.'],
+        ['foundations','nvr','maths','Rotations and reflections','Recognise turns, mirror images and orientation.'],
+        ['foundations','maths','english','Foundation checkpoint','Review number, reading and reasoning without rushing.'],
 
-function renderSubjectGrid(){
-  const grid = document.getElementById('subject-grid');
-  grid.innerHTML = ELEVEN_SUBJECTS.map(s => `
-    <div class="subject-pill ${s==='Maths' ? 'selected':''}" data-subject="${s}" onclick="toggleSubject(this)">${s}</div>
-  `).join('');
-  ELEVEN_SUBJECTS.forEach(s => { if(s==='Maths') selectedSubjects.add(s); });
-}
+        ['build','maths','english','Decimals and percentages','Move between fractions, decimals and percentages.'],
+        ['build','english','vr','Inference and deduction','Combine evidence from different parts of a text.'],
+        ['build','vr','nvr','Word analogies','Identify the relationship between one pair and apply it to another.'],
+        ['build','nvr','maths','Visual matrices','Find the rule across rows and down columns.'],
+        ['build','maths','english','Ratio and proportion','Compare quantities and scale simple situations.'],
+        ['build','english','vr','Cloze passages','Choose words that fit meaning, grammar and tone.'],
+        ['build','vr','english','Hidden words and word building','Find letter patterns inside and across words.'],
+        ['build','nvr','maths','Visual series','Predict the next image from two or more changing features.'],
+        ['build','maths','nvr','Angles, shape and measure','Reason about properties, perimeter, area and units.'],
+        ['build','english','maths','Spelling patterns and precision','Apply common spelling rules and check tricky words.'],
+        ['build','vr','english','Logical statements','Decide what must, may or cannot be true.'],
+        ['build','nvr','maths','Nets and spatial reasoning','Imagine folds, faces and three-dimensional movement.'],
+        ['build','english','maths','Breadth checkpoint','Mix comprehension, vocabulary and multi-step maths.'],
 
-function toggleSubject(el){
-  const s = el.dataset.subject;
-  el.classList.toggle('selected');
-  if(selectedSubjects.has(s)) selectedSubjects.delete(s); else selectedSubjects.add(s);
-}
+        ['timed','maths','english','Multi-step word problems','Plan before calculating and check whether the answer is sensible.'],
+        ['timed','english','vr','Timed comprehension','Balance careful evidence-finding with steady pace.'],
+        ['timed','vr','nvr','Mixed verbal reasoning','Switch between code, sequence and vocabulary question types.'],
+        ['timed','nvr','maths','Mixed non-verbal reasoning','Switch rules carefully while keeping visual accuracy.'],
+        ['timed','maths','english','Data, tables and graphs','Extract information and solve problems from data.'],
+        ['timed','english','maths','Grammar under time pressure','Work accurately without overchecking every item.'],
+        ['timed','vr','english','Codes and sequences under time','Record working briefly and move on from stubborn questions.'],
+        ['timed','nvr','maths','Rotation and matrix practice','Use elimination to compare answer choices quickly.'],
+        ['timed','maths','vr','Algebraic patterns','Use symbols, sequences and inverse operations.'],
+        ['timed','english','vr','Vocabulary and cloze practice','Use roots, sentence meaning and grammar together.'],
+        ['timed','vr','english','Verbal speed and accuracy','Keep a steady rhythm while checking the rule.'],
+        ['timed','nvr','maths','Non-verbal speed and accuracy','Scan all visual features before choosing.'],
+        ['timed','maths','english','Half-paper checkpoint','Practise a longer mixed set with planned breaks between sections.'],
 
-/* =========================================================================
-   Practice generation (shared logic used by both tabs)
-   ========================================================================= */
-async function requestPractice(subjects){
-  const res = await fetch('/api/generate', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      quick_select: true,
-      subjects: subjects,
-      is_eleven_plus: true,
-      mode: 'homework'
-    })
-  });
-  if(res.status === 402){ alert('Subscription required for this feature.'); window.location.href='/pricing'; return null; }
-  if(res.status === 401){ alert('Please login or register to use this feature.'); window.location.href='/login'; return null; }
-  return res.json();
-}
+        ['ready','maths','english','Maths exam technique','Estimate, show compact working and return to skipped questions.'],
+        ['ready','english','vr','English exam technique','Read questions closely and support answers with evidence.'],
+        ['ready','vr','nvr','Verbal reasoning exam technique','Recognise question families and use elimination.'],
+        ['ready','nvr','maths','Non-verbal reasoning exam technique','Track each changing feature before considering options.'],
+        ['ready','maths','english','Maths weak-area repair','Practise one topic that has recently caused mistakes.'],
+        ['ready','english','vr','English weak-area repair','Target one reading, vocabulary or grammar difficulty.'],
+        ['ready','vr','nvr','Verbal weak-area repair','Repeat a difficult reasoning type with careful feedback.'],
+        ['ready','nvr','maths','Non-verbal weak-area repair','Repeat a difficult visual rule with untimed accuracy first.'],
+        ['ready','maths','english','Mixed mini mock','Complete two short sections using realistic timing.'],
+        ['ready','english','vr','Practice paper review','Study mistakes and write one simple improvement rule.'],
+        ['ready','maths','nvr','Second practice paper review','Check whether earlier improvement rules are working.'],
+        ['ready','vr','english','Confidence and decision-making','Practise skipping, returning and making a best choice.'],
+        ['ready','english','maths','Light final review','Keep practice short, familiar and confidence-building.']
+    ].map(function (row, index) {
+        return {
+            week: index + 1,
+            phase: row[0],
+            primaryKey: row[1],
+            secondaryKey: row[2],
+            topic: row[3],
+            goal: row[4]
+        };
+    });
 
-async function requestReview(homework, answers, subject){
-  const res = await fetch('/api/review', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ homework, answers, subject })
-  });
-  return res.json();
-}
+    const FALLBACK_SUBJECTS = {
+        maths: 'Maths',
+        english: 'English',
+        vr: 'Verbal Reasoning',
+        nvr: 'Non-Verbal Reasoning'
+    };
 
-function renderHomeworkBlocks(homeworkList, containerEl){
-  containerEl.innerHTML = homeworkList.map((hw, idx) => `
-    <div class="hw-block" data-idx="${idx}" data-subject="${hw.subject}" data-doc-id="${hw.doc_id || ''}">
-      <h3>${hw.subject}</h3>
-      <div class="hw-content">${marked.parse(hw.content)}</div>
-      <textarea class="answer-box" placeholder="Write your answers here…"></textarea>
-    </div>
-  `).join('');
-}
+    let state = loadState();
+    let subjectMap = Object.assign({}, FALLBACK_SUBJECTS);
+    let activeHomework = [];
+    let activeWeek = null;
 
-async function checkAnswers(homeworkList, containerEl, reviewEl, checkBtn){
-  const blocks = containerEl.querySelectorAll('.hw-block');
-  let allAnswered = true;
-  let combined = [];
-  blocks.forEach((block, i) => {
-    const answer = block.querySelector('.answer-box').value.trim();
-    if(!answer) allAnswered = false;
-    combined.push(`--- ${homeworkList[i].subject} ---\n${answer}`);
-  });
-  if(!allAnswered){ alert('Please answer every question before checking.'); return; }
-
-  checkBtn.disabled = true;
-  checkBtn.textContent = 'Marking…';
-  try{
-    const homeworkText = homeworkList.map(h=>h.content).join('\n\n');
-    const data = await requestReview(homeworkText, combined.join('\n\n'), homeworkList[0].subject);
-    if(data.success){
-      reviewEl.innerHTML = `<div class="review-output">${marked.parse(data.review)}</div>`;
-    }else{
-      alert('Error: ' + data.error);
+    function loadState() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            if (!parsed || typeof parsed !== 'object') return Object.assign({}, DEFAULT_STATE);
+            return {
+                startDate: /^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate || '') ? parsed.startDate : DEFAULT_STATE.startDate,
+                sessionLength: [15,20,25,30].includes(Number(parsed.sessionLength)) ? Number(parsed.sessionLength) : 20,
+                completedWeeks: Array.isArray(parsed.completedWeeks)
+                    ? Array.from(new Set(parsed.completedWeeks.map(Number).filter(function (n) { return n >= 1 && n <= 52; })))
+                    : [],
+                selectedWeek: Number(parsed.selectedWeek) >= 1 && Number(parsed.selectedWeek) <= 52 ? Number(parsed.selectedWeek) : 1
+            };
+        } catch (_error) {
+            return Object.assign({}, DEFAULT_STATE);
+        }
     }
-  }catch(e){
-    console.error(e);
-    alert('Something went wrong while marking. Please try again.');
-  }finally{
-    checkBtn.disabled = false;
-    checkBtn.textContent = 'Check Answers';
-  }
-}
 
-/* ---------- Practice tab wiring ---------- */
-let currentPracticeHomework = [];
-
-async function generatePractice(){
-  if(selectedSubjects.size === 0){ alert('Please select at least one subject.'); return; }
-
-  document.getElementById('practice-loading').classList.add('active');
-  document.getElementById('practice-results').innerHTML = '';
-  document.getElementById('generate-btn').disabled = true;
-
-  const data = await requestPractice(Array.from(selectedSubjects));
-  document.getElementById('practice-loading').classList.remove('active');
-  document.getElementById('generate-btn').disabled = false;
-
-  if(!data) return;
-  if(!data.success){ alert('Error: ' + data.error); return; }
-
-  currentPracticeHomework = data.homework;
-  const results = document.getElementById('practice-results');
-  renderHomeworkBlocks(currentPracticeHomework, results);
-
-  const actions = document.createElement('div');
-  actions.style.textAlign = 'center';
-  actions.style.marginTop = '20px';
-  actions.innerHTML = `<button class="btn btn-primary" id="check-answers-btn">Check Answers</button>`;
-  results.appendChild(actions);
-
-  const reviewEl = document.createElement('div');
-  reviewEl.id = 'practice-review';
-  results.appendChild(reviewEl);
-
-  document.getElementById('check-answers-btn').onclick = () =>
-    checkAnswers(currentPracticeHomework, results, reviewEl, document.getElementById('check-answers-btn'));
-
-  document.getElementById('clear-btn').style.display = 'inline-block';
-}
-
-function clearPractice(){
-  currentPracticeHomework = [];
-  document.getElementById('practice-results').innerHTML = '';
-  document.getElementById('clear-btn').style.display = 'none';
-}
-
-/* =========================================================================
-   52-Week Plan
-   ========================================================================= */
-const PHASES = [
-  {
-    key:'foundations', name:'Foundations', range:[1,13], color:'var(--phase-1)', soft:'var(--phase-1-soft)',
-    blurb:'Rebuild the core number and language skills the real papers assume are already solid.',
-    topics:{
-      maths:['Number: Arithmetic & Mental Maths','Number: Fractions, Decimals & Percentages','Number: Primes, Factors & Multiples'],
-      english:['Spelling & Vocabulary','Grammar Foundations','Comprehension Basics'],
-      vr:['Letter & Number Codes','Word Relationships','Number Sequences'],
-      nvr:['Shape Families','Pattern Completion','Odd One Out']
+    function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
-  },
-  {
-    key:'breadth', name:'Building Breadth', range:[14,26], color:'var(--phase-2)', soft:'var(--phase-2-soft)',
-    blurb:'Bring in the topics that separate a solid paper from a top-tier one.',
-    topics:{
-      maths:['Ratio and Proportion','Algebra Basics','Shape, Space and Measures','Data Handling and Graphs'],
-      english:['Cloze Passages','Synonyms & Antonyms','Inference & Deduction'],
-      vr:['Analogies','Hidden Words','Logical Deduction'],
-      nvr:['Rotations & Reflections','Series & Sequences','Matrices']
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
-  },
-  {
-    key:'integration', name:'Full-Paper Practice', range:[27,39], color:'var(--phase-3)', soft:'var(--phase-3-soft)',
-    blurb:'Combine skills under timed, exam-shaped conditions rather than one topic at a time.',
-    topics:{
-      maths:['Worded Problem Solving','Speed, Distance and Time','Sequences and Patterns'],
-      english:['Mixed Comprehension','Precis & Summary','Timed Writing'],
-      vr:['Mixed Timed Practice','Statement Logic','Code Cracking'],
-      nvr:['Mixed Timed Practice','Nets & 3D Shapes','Figure Analogies']
+
+    function currentWeekNumber() {
+        const start = new Date(state.startDate + 'T00:00:00');
+        if (Number.isNaN(start.getTime())) return 1;
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        const elapsed = Math.floor((now.getTime() - start.getTime()) / 604800000) + 1;
+        return Math.max(1, Math.min(52, elapsed));
     }
-  },
-  {
-    key:'sprint', name:'Exam Sprint', range:[40,52], color:'var(--phase-4)', soft:'var(--phase-4-soft)',
-    blurb:'Non-routine reasoning, full timed mocks, and tidying up whichever topics are still shaky.',
-    topics:{
-      maths:['Non-Routine Reasoning (Top-School Style)','Full Timed Mock Paper','Weak-Topic Review'],
-      english:['Full Timed Mock Paper','Weak-Topic Review','Exam Technique'],
-      vr:['Full Timed Mock Paper','Weak-Topic Review'],
-      nvr:['Full Timed Mock Paper','Weak-Topic Review']
+
+    async function loadSubjectNames() {
+        try {
+            const response = await fetch('/api/subjects', { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('Could not load subjects');
+            const data = await response.json();
+            const subjects = Array.isArray(data.eleven_plus) ? data.eleven_plus : [];
+            function find(predicate, fallback) {
+                return subjects.find(predicate) || fallback;
+            }
+            subjectMap = {
+                maths: find(function (s) { return /math/i.test(s); }, FALLBACK_SUBJECTS.maths),
+                english: find(function (s) { return /english/i.test(s); }, FALLBACK_SUBJECTS.english),
+                vr: find(function (s) { return /verbal/i.test(s) && !/non[- ]?verbal/i.test(s); }, FALLBACK_SUBJECTS.vr),
+                nvr: find(function (s) { return /non[- ]?verbal/i.test(s); }, FALLBACK_SUBJECTS.nvr)
+            };
+        } catch (error) {
+            console.warn(error);
+        }
     }
-  }
-];
-const FOCUS_ORDER = ['maths','english','vr','nvr'];
 
-let PLAN_WEEKS = [];          // built once ELEVEN_SUBJECTS is known
-let SUBJECT_MAP = {};         // 'maths' -> actual subject string from API
-let planProgress = { startedWeek1On:null, completedWeeks:[] };
-let selectedWeek = null;
-
-function mapSubjectNames(){
-  const find = (needle) => ELEVEN_SUBJECTS.find(s => s.toLowerCase().includes(needle)) || ELEVEN_SUBJECTS[0];
-  SUBJECT_MAP = {
-    maths: find('math'),
-    english: find('english'),
-    vr: ELEVEN_SUBJECTS.find(s => s.toLowerCase().includes('verbal') && !s.toLowerCase().includes('non')) || find('verbal'),
-    nvr: ELEVEN_SUBJECTS.find(s => s.toLowerCase().includes('non-verbal') || s.toLowerCase().includes('non verbal')) || ELEVEN_SUBJECTS[ELEVEN_SUBJECTS.length-1]
-  };
-}
-
-function buildPlan(){
-  mapSubjectNames();
-  PLAN_WEEKS = [];
-  let focusCursor = 0;
-  const topicCursor = {maths:0, english:0, vr:0, nvr:0};
-
-  PHASES.forEach(phase => {
-    for(let w = phase.range[0]; w <= phase.range[1]; w++){
-      const focusKey = FOCUS_ORDER[focusCursor % FOCUS_ORDER.length];
-      focusCursor++;
-      const secondaryKey = FOCUS_ORDER[focusCursor % FOCUS_ORDER.length];
-
-      const focusTopics = phase.topics[focusKey];
-      const topic = focusTopics[topicCursor[focusKey] % focusTopics.length];
-      topicCursor[focusKey]++;
-
-      PLAN_WEEKS.push({
-        week: w,
-        phase: phase,
-        focusKey: focusKey,
-        focusSubject: SUBJECT_MAP[focusKey],
-        secondarySubject: SUBJECT_MAP[secondaryKey],
-        topic: topic
-      });
+    function renderSetup() {
+        document.getElementById('start-date').value = state.startDate;
+        document.getElementById('session-length').value = String(state.sessionLength);
     }
-  });
 
-  loadPlanProgress();
-  renderLegend();
-  renderWeekStrip();
-  renderHero();
-  selectWeek(currentWeekNumber());
-}
+    function renderProgress() {
+        const complete = state.completedWeeks.length;
+        const percent = Math.round((complete / 52) * 100);
+        const current = currentWeekNumber();
+        document.getElementById('progress-bar').style.width = percent + '%';
+        document.getElementById('progress-copy').textContent = complete + ' of 52 weeks complete (' + percent + '%)';
+        document.getElementById('current-week-number').textContent = String(current);
+        const track = document.getElementById('progress-track');
+        track.setAttribute('aria-valuenow', String(complete));
+    }
 
-/* ---- progress persistence (localStorage; see note to team re: backend) ---- */
-function loadPlanProgress(){
-  try{
-    const raw = localStorage.getItem('elevenplus_plan_progress');
-    if(raw) planProgress = JSON.parse(raw);
-  }catch(e){ /* ignore corrupt storage */ }
-  if(!planProgress.startedWeek1On){
-    planProgress.startedWeek1On = new Date().toISOString();
-    savePlanProgress();
-  }
-}
-function savePlanProgress(){
-  localStorage.setItem('elevenplus_plan_progress', JSON.stringify(planProgress));
-}
-function resetPlanProgress(){
-  if(!confirm('Reset your 52-week plan progress? This clears your saved starting date and completed weeks.')) return;
-  planProgress = { startedWeek1On: new Date().toISOString(), completedWeeks: [] };
-  savePlanProgress();
-  renderWeekStrip();
-  renderHero();
-  selectWeek(1);
-}
-function currentWeekNumber(){
-  const start = new Date(planProgress.startedWeek1On);
-  const now = new Date();
-  const diffWeeks = Math.floor((now - start) / (7*24*60*60*1000)) + 1;
-  return Math.min(Math.max(diffWeeks, 1), 52);
-}
+    function renderWeeks() {
+        const current = currentWeekNumber();
+        const grid = document.getElementById('week-grid');
+        grid.innerHTML = WEEK_PLAN.map(function (week) {
+            const classes = ['week-button'];
+            if (week.week === current) classes.push('is-current');
+            if (week.week === state.selectedWeek) classes.push('is-selected');
+            if (state.completedWeeks.includes(week.week)) classes.push('is-complete');
+            const label = 'Week ' + week.week + ': ' + week.topic + (state.completedWeeks.includes(week.week) ? ', complete' : '');
+            return '<button type="button" class="' + classes.join(' ') + '" data-week="' + week.week + '" data-phase="' + week.phase + '" aria-label="' + escapeHtml(label) + '">' + week.week + '</button>';
+        }).join('');
 
-function renderLegend(){
-  document.getElementById('legend').innerHTML = PHASES.map(p => `
-    <div class="legend-item"><span class="legend-dot" style="background:${p.color}"></span>${p.name} (wk ${p.range[0]}–${p.range[1]})</div>
-  `).join('');
-}
+        grid.querySelectorAll('[data-week]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                selectWeek(Number(button.dataset.week));
+            });
+        });
+    }
 
-function renderWeekStrip(){
-  const cur = currentWeekNumber();
-  document.getElementById('week-strip').innerHTML = PLAN_WEEKS.map(w => {
-    const classes = ['week-cell'];
-    if(w.week === cur) classes.push('current');
-    if(planProgress.completedWeeks.includes(w.week)) classes.push('done');
-    if(w.week === selectedWeek) classes.push('selected');
-    return `<div class="${classes.join(' ')}" style="background:${w.phase.color}" onclick="selectWeek(${w.week})" title="Week ${w.week}: ${w.phase.name}">${w.week}</div>`;
-  }).join('');
-}
+    function renderWeekDetail() {
+        const week = WEEK_PLAN[state.selectedWeek - 1];
+        const phase = PHASES[week.phase];
+        const complete = state.completedWeeks.includes(week.week);
+        document.getElementById('week-detail').innerHTML =
+            '<div>' +
+                '<span class="phase-badge">' + escapeHtml(phase.name) + ' · ' + escapeHtml(phase.range) + '</span>' +
+                '<h3>Week ' + week.week + ': ' + escapeHtml(week.topic) + '</h3>' +
+                '<p>' + escapeHtml(week.goal) + '</p>' +
+                '<div class="topic-chips">' +
+                    '<span class="topic-chip"><b>Main subject:</b> ' + escapeHtml(subjectMap[week.primaryKey]) + '</span>' +
+                    '<span class="topic-chip"><b>Light review:</b> ' + escapeHtml(subjectMap[week.secondaryKey]) + '</span>' +
+                    '<span class="topic-chip"><b>Suggested routine:</b> 4 × ' + state.sessionLength + ' minutes</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="week-actions">' +
+                '<label class="review-option"><input id="include-review-subject" type="checkbox"> <span>Also generate a short set for <b>' + escapeHtml(subjectMap[week.secondaryKey]) + '</b>. This may take a little longer.</span></label>' +
+                '<button class="btn btn-primary" id="generate-week-btn" type="button">Generate Week ' + week.week + ' practice</button>' +
+                '<button class="btn btn-secondary" id="complete-week-btn" type="button">' + (complete ? '✓ Week complete' : 'Mark week complete') + '</button>' +
+            '</div>';
 
-function renderHero(){
-  const cur = currentWeekNumber();
-  const w = PLAN_WEEKS[cur-1];
-  document.getElementById('hero-week').innerHTML = `Week ${cur}<span>of 52</span>`;
-  document.getElementById('hero-phase').textContent = w.phase.name;
-  document.getElementById('hero-blurb').textContent = w.phase.blurb;
-}
+        document.getElementById('generate-week-btn').addEventListener('click', generateSelectedWeek);
+        document.getElementById('complete-week-btn').addEventListener('click', toggleSelectedWeekComplete);
+    }
 
-function jumpToCurrentWeek(){ selectWeek(currentWeekNumber()); document.getElementById('week-detail').scrollIntoView({behavior:'smooth', block:'nearest'}); }
+    function selectWeek(weekNumber) {
+        state.selectedWeek = Math.max(1, Math.min(52, weekNumber));
+        saveState();
+        renderWeeks();
+        renderWeekDetail();
+    }
 
-function selectWeek(weekNum){
-  selectedWeek = weekNum;
-  renderWeekStrip();
-  const w = PLAN_WEEKS[weekNum-1];
-  const isDone = planProgress.completedWeeks.includes(weekNum);
+    function toggleSelectedWeekComplete() {
+        const week = state.selectedWeek;
+        const index = state.completedWeeks.indexOf(week);
+        if (index >= 0) state.completedWeeks.splice(index, 1);
+        else state.completedWeeks.push(week);
+        state.completedWeeks.sort(function (a, b) { return a - b; });
+        saveState();
+        renderProgress();
+        renderWeeks();
+        renderWeekDetail();
+    }
 
-  document.getElementById('week-detail').innerHTML = `
-    <div class="week-detail-main">
-      <span class="week-badge" style="background:${w.phase.soft}; color:${w.phase.color};">${w.phase.name}</span>
-      <h3>Week ${w.week}: ${w.topic}</h3>
-      <p class="empty-note" style="margin-top:2px;">Primary focus this week</p>
-      <div class="topic-row">
-        <div class="topic-chip"><b>Focus subject</b>${w.focusSubject}</div>
-        <div class="topic-chip"><b>Topic</b>${w.topic}</div>
-        <div class="topic-chip"><b>Light review</b>${w.secondarySubject}</div>
-      </div>
-    </div>
-    <div class="week-detail-actions">
-      <button class="btn btn-primary" onclick="generateWeekPractice(${w.week})">Generate this week's practice</button>
-      <button class="btn btn-ghost" onclick="toggleWeekComplete(${w.week})">${isDone ? '✓ Marked complete' : 'Mark week complete'}</button>
-    </div>
-  `;
-}
+    function showStatus(message) {
+        const status = document.getElementById('status-message');
+        status.textContent = message;
+        status.classList.remove('hidden');
+    }
 
-function toggleWeekComplete(weekNum){
-  const i = planProgress.completedWeeks.indexOf(weekNum);
-  if(i === -1) planProgress.completedWeeks.push(weekNum); else planProgress.completedWeeks.splice(i,1);
-  savePlanProgress();
-  renderWeekStrip();
-  selectWeek(weekNum);
-}
+    function clearStatus() {
+        const status = document.getElementById('status-message');
+        status.textContent = '';
+        status.classList.add('hidden');
+    }
 
-async function generateWeekPractice(weekNum){
-  const w = PLAN_WEEKS[weekNum-1];
-  document.getElementById('plan-loading').classList.add('active');
-  document.getElementById('plan-results').innerHTML = '';
+    function setLoading(active) {
+        document.getElementById('loading').classList.toggle('is-active', active);
+    }
 
-  const data = await requestPractice([w.focusSubject]);
-  document.getElementById('plan-loading').classList.remove('active');
-  if(!data) return;
-  if(!data.success){ alert('Error: ' + data.error); return; }
+    async function generateSelectedWeek() {
+        const week = WEEK_PLAN[state.selectedWeek - 1];
+        const includeReview = document.getElementById('include-review-subject').checked;
+        const subjects = [subjectMap[week.primaryKey]];
+        if (includeReview && subjectMap[week.secondaryKey] !== subjectMap[week.primaryKey]) {
+            subjects.push(subjectMap[week.secondaryKey]);
+        }
 
-  const results = document.getElementById('plan-results');
-  renderHomeworkBlocks(data.homework, results);
+        activeWeek = week;
+        activeHomework = [];
+        clearStatus();
+        document.getElementById('practice-section').classList.remove('hidden');
+        document.getElementById('practice-results').innerHTML = '';
+        document.getElementById('practice-subtitle').textContent = 'Week ' + week.week + ': ' + week.topic;
+        setLoading(true);
+        document.getElementById('practice-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const actions = document.createElement('div');
-  actions.style.textAlign = 'center';
-  actions.style.marginTop = '20px';
-  actions.innerHTML = `<button class="btn btn-primary" id="plan-check-btn">Check Answers</button>`;
-  results.appendChild(actions);
+        try {
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    profile: {
+                        year_group: 5,
+                        age: 10,
+                        learning_goals: [week.topic, week.goal],
+                        weak_areas: [],
+                        plan_week: week.week,
+                        plan_phase: week.phase,
+                        preferred_session_minutes: state.sessionLength,
+                        description: '11+ year-round plan Week ' + week.week + '. Focus: ' + week.topic + '. Goal: ' + week.goal
+                    },
+                    subjects: subjects,
+                    is_eleven_plus: true,
+                    mode: 'homework'
+                })
+            });
 
-  const reviewEl = document.createElement('div');
-  results.appendChild(reviewEl);
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (response.status === 402) {
+                window.location.href = '/pricing';
+                return;
+            }
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'Practice could not be generated.');
+            activeHomework = Array.isArray(data.homework) ? data.homework : [];
+            if (!activeHomework.length) throw new Error('No practice was returned for this week.');
+            renderPractice();
+        } catch (error) {
+            console.error(error);
+            showStatus(error.message || 'Something went wrong. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    }
 
-  document.getElementById('plan-check-btn').onclick = () =>
-    checkAnswers(data.homework, results, reviewEl, document.getElementById('plan-check-btn'));
+    function renderPractice() {
+        const results = document.getElementById('practice-results');
+        results.innerHTML = activeHomework.map(function (item, index) {
+            return '<article class="practice-card" data-index="' + index + '">' +
+                '<div class="practice-header"><h3>' + escapeHtml(item.subject || '11+ Practice') + '</h3>' +
+                (item.from_rag ? '<span class="source-badge">From practice library</span>' : '') + '</div>' +
+                '<div class="question-content">' + renderSafeMarkdown(item.content || '') + '</div>' +
+                '<label class="field" for="answer-' + index + '"><span style="display:block;margin-top:13px;font-weight:750;">Your answers</span></label>' +
+                '<textarea class="answer-box" id="answer-' + index + '" data-index="' + index + '" placeholder="Write your answers here. You can number them 1, 2, 3…"></textarea>' +
+                '<div class="feedback hidden" id="feedback-' + index + '" aria-live="polite"></div>' +
+            '</article>';
+        }).join('') +
+        '<div class="practice-actions">' +
+            '<button class="btn btn-primary" id="check-practice-btn" type="button">Check answers</button>' +
+            '<button class="btn btn-secondary" id="finish-week-btn" type="button">Mark Week ' + activeWeek.week + ' complete</button>' +
+        '</div>';
 
-  results.scrollIntoView({behavior:'smooth', block:'start'});
-}
+        document.getElementById('check-practice-btn').addEventListener('click', reviewPractice);
+        document.getElementById('finish-week-btn').addEventListener('click', function () {
+            if (!state.completedWeeks.includes(activeWeek.week)) {
+                state.completedWeeks.push(activeWeek.week);
+                state.completedWeeks.sort(function (a, b) { return a - b; });
+                saveState();
+                renderProgress();
+                renderWeeks();
+                renderWeekDetail();
+            }
+            showStatus('Week ' + activeWeek.week + ' is marked complete. Well done for keeping up the routine!');
+        });
+    }
 
-/* =========================================================================
-   Init
-   ========================================================================= */
-document.addEventListener('DOMContentLoaded', loadSubjects);
+    async function reviewPractice() {
+        const button = document.getElementById('check-practice-btn');
+        const answers = activeHomework.map(function (_item, index) {
+            return document.getElementById('answer-' + index).value.trim();
+        });
+        if (answers.some(function (answer) { return !answer; })) {
+            showStatus('Please write an answer for each subject before checking.');
+            return;
+        }
+
+        clearStatus();
+        button.disabled = true;
+        button.textContent = 'Checking…';
+
+        try {
+            for (let index = 0; index < activeHomework.length; index += 1) {
+                const item = activeHomework[index];
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        homework: item.content,
+                        answers: answers[index],
+                        subject: item.subject || subjectMap[activeWeek.primaryKey],
+                        profile: {
+                            year_group: 5,
+                            age: 10,
+                            learning_goals: [activeWeek.topic, activeWeek.goal],
+                            plan_week: activeWeek.week,
+                            plan_phase: activeWeek.phase
+                        },
+                        from_rag: Boolean(item.from_rag),
+                        homework_doc_id: item.doc_id || null,
+                        is_eleven_plus: true
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || 'The tutor could not check these answers.');
+                const feedback = document.getElementById('feedback-' + index);
+                feedback.innerHTML = renderSafeMarkdown(data.review || '');
+                feedback.classList.remove('hidden');
+            }
+            showStatus('Your feedback is ready. Read one improvement point, then try it next time.');
+        } catch (error) {
+            console.error(error);
+            showStatus(error.message || 'Something went wrong while checking. Please try again.');
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Check answers';
+        }
+    }
+
+    function savePlanSettings() {
+        const startDate = document.getElementById('start-date').value;
+        const sessionLength = Number(document.getElementById('session-length').value);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+            alert('Please choose a valid start date.');
+            return;
+        }
+        state.startDate = startDate;
+        state.sessionLength = [15,20,25,30].includes(sessionLength) ? sessionLength : 20;
+        state.selectedWeek = currentWeekNumber();
+        saveState();
+        renderAll();
+    }
+
+    function resetPlan() {
+        if (!window.confirm('Reset the start date and all completed weeks for this browser?')) return;
+        state = Object.assign({}, DEFAULT_STATE, { completedWeeks: [] });
+        saveState();
+        renderAll();
+        document.getElementById('practice-section').classList.add('hidden');
+        document.getElementById('practice-results').innerHTML = '';
+    }
+
+    function renderAll() {
+        renderSetup();
+        renderProgress();
+        renderWeeks();
+        renderWeekDetail();
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        await loadSubjectNames();
+        if (!state.selectedWeek || state.selectedWeek === 1) state.selectedWeek = currentWeekNumber();
+        renderAll();
+
+        document.getElementById('save-plan-btn').addEventListener('click', savePlanSettings);
+        document.getElementById('reset-plan-btn').addEventListener('click', resetPlan);
+        document.getElementById('jump-current-btn').addEventListener('click', function () {
+            selectWeek(currentWeekNumber());
+            document.getElementById('week-detail').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        document.getElementById('clear-practice-btn').addEventListener('click', function () {
+            activeHomework = [];
+            activeWeek = null;
+            clearStatus();
+            document.getElementById('practice-results').innerHTML = '';
+            document.getElementById('practice-section').classList.add('hidden');
+        });
+    });
+}());
 </script>
-
 </body>
 </html>

@@ -10,7 +10,8 @@
     <meta property="og:description" content="Generate and review homework with AI">
     
     <!-- Markdown to HTML parser -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="/static/js/marked-lite.js"></script>
+    <script src="/static/js/safe_markdown.js"></script>
     
     <link rel="stylesheet" href="/static/css/app.css">
 </head>
@@ -24,6 +25,7 @@
   <a href="/ks2-homework">KS2</a>
   <a href="/elevenplus-practice">11+</a>
   <a href="/elevenplus/articles">11+ Articles</a>
+  <a href="/memory">Memory</a>
   <a href="/progress">Progress</a>
   <a href="/check-my-homework">Mark Homework</a>
     <a href="/login">Login</a> <!-- Added Login link -->
@@ -59,20 +61,7 @@
         <!-- Combined Homework Generator Tab -->
         <div id="homework" class="content active">
             <div class="card">
-                <p style="color: #666; margin-bottom: 30px;">
-                    Describe yourself to generate personalized homework
-                </p>
-
-                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
-                    <div class="form-group">
-                        <label>Describe the Student</label>
-                        <textarea id="homework-profile" rows="5"
-                            placeholder="e.g. Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics...">
-Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
-</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Mode Selection</label>
+                <label>Mode Selection</label>
                         <div class="mode-selection">
                             <label>
                                 <input type="radio" name="homework-mode" value="homework" checked>
@@ -80,28 +69,36 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                             </label>
                             <label>
                                 <input type="radio" name="homework-mode" value="tutor">
-                                Tutor Mode
+                                Tutor Moden (One question at a time)
                             </label>
                         </div>
+                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
+                    <div class="form-group">
+                        <label>Ask Me</label>
+                        <textarea id="homework-profile" rows="5"
+                            placeholder="e.g. Ana is a 8-year-old student in Year 3 in London. She has a particular interest in mathematics...">
+Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
+</textarea>
+                    </div>
+                    <div class="form-group">
                         <button class="btn btn-primary" onclick="generateSmartHomework()">
                             Smart Homework
                         </button>
                     </div>
                 </div>
 
-                <!-- ADDED LINE HERE WITH SPACING -->
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
+<!--                &lt;!&ndash; ADDED LINE HERE WITH SPACING &ndash;&gt;-->
+<!--                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">-->
 
-                <p style="color: #666; margin-bottom: 30px;">
-                    Select one subject and year group to generate homework
-                </p>
+                <label>Or select one subject and year group to generate homework</label>
+
                 <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
-                        <label>Subjects</label>
+<!--                        <label>Subjects</label>-->
                         <div class="subject-grid" id="homework-subjects"></div>
                     </div>
                     <div class="form-group" style="min-width: 150px;">
-                        <label>Year Group</label>
+<!--                        <label>Year Group</label>-->
                         <select id="homework-year" style="width: 100%;">
                             <option value="1">Year 1</option>
                             <option value="2">Year 2</option>
@@ -122,19 +119,8 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
         <!-- 11+ Practice Tab -->
         <div id="eleven" class="content">
             <div class="card">
-                <p style="color: #666; margin-bottom: 30px;">
-                     Describe yourself to generate personalized 11+ practice
-                </p>
-                <div class="homework-grid">
-                    <div class="form-group">
-                        <label>Describe the Student</label>
-                        <textarea id="eleven-profile" rows="6">
-Ana is a 10 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
-</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Mode Selection</label>
-                        <div class="mode-selection">
+                <label>Mode Selection</label>
+                <div class="mode-selection">
                             <label>
                                 <input type="radio" name="eleven-mode" value="homework" checked>
                                 Homework Mode (All questions at once)
@@ -143,21 +129,27 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                                 <input type="radio" name="eleven-mode" value="tutor">
                                 Tutor Mode (One question at a time)
                             </label>
-                        </div>
+                </div>
+                <div class="homework-grid">
+                    <div class="form-group">
+                        <label>Ask Me</label>
+                        <textarea id="eleven-profile" rows="6">
+Ana is a 11 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
+</textarea>
+                    </div>
+                    <div class="form-group">
                         <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
                         Smart 11+ Practice
                         </button>
                     </div>
                 </div>
-                <!-- ADDED LINE HERE WITH SPACING -->
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
 
-                <p style="color: #666; margin-bottom: 30px;">
-                    Pick one subject and get a fresh set of exam-style questions right now.
-                </p>
+<!--                &lt;!&ndash; ADDED LINE HERE WITH SPACING &ndash;&gt;-->
+<!--                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">-->
+
+                <label>Or pick one subject and get a fresh set of exam-style questions right now.</label>
                 <div class="homework-grid">
                     <div class="form-group">
-                        <label>Subjects</label>
                         <div class="subject-grid" id="eleven-subjects"></div>
                     </div>
                     <div class="form-group" style="min-width: 150px;">
@@ -170,6 +162,11 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                     </div>
                </div>
             </div>
+        </div>
+
+        <!-- 11+ Year Round Plan Tab -->
+        <div id="eleven-year-round" class="content">
+            <iframe src="/static/elevenplus-year-round-plan.html" style="width: 100%; height: 80vh; border: none;"></iframe>
         </div>
 
         <!-- Review Tab -->

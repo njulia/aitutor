@@ -1,0 +1,101 @@
+name: Automated tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aitutor
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: aitutor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aitutor -d aitutor_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TESTING: "true"
+      DEV_MODE: "true"
+      DATABASE_URL: postgresql+psycopg://aitutor:test-password@localhost:5432/aitutor_test
+      ADMIN_EMAILS: admin@example.com
+      STORE_RAW_AI_CONTENT: "false"
+      EMBEDDING_PROVIDER: local
+      CHROMA_DB_PATH: /tmp/chroma_test
+      APP_BASE_URL: http://127.0.0.1:5000
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install browser
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Compile Python
+        run: |
+          python -m compileall web_app.py src
+
+      - name: Run unit and API tests
+        run: |
+          pytest tests/unit tests/api \
+            --cov=src \
+            --cov=web_app \
+            --cov-report=term-missing \
+            --cov-fail-under=70
+
+      - name: Start website
+        run: |
+          uvicorn web_app:app \
+            --host 127.0.0.1 \
+            --port 5000 \
+            > /tmp/aitutor.log 2>&1 &
+
+          for attempt in {1..30}; do
+            if curl --fail http://127.0.0.1:5000/api/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          cat /tmp/aitutor.log
+          exit 1
+
+      - name: Run browser tests
+        run: |
+          pytest tests/e2e \
+            --browser chromium \
+            --tracing retain-on-failure \
+            --screenshot only-on-failure
+
+      - name: Upload browser failures
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-results
+          path: test-results/
+          if-no-files-found: ignore

@@ -1,155 +1,166 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""PostgreSQL-ready progress and authentication persistence.
 
+Production: set ``DATABASE_URL=postgresql+psycopg://...``.
+Local development and tests fall back to SQLite. Raw learner questions,
+answers and AI feedback are not stored unless ``STORE_RAW_LEARNER_CONTENT`` is
+explicitly enabled by the operator.
 """
-学生学习进度数据库模块
+from __future__ import annotations
 
-使用 SQLite 存储学生的学习记录、成绩、进度追踪等数据。
-支持 UK GDPR 合规：数据本地存储，可删除学生记录。
-"""
-
-import logging
+import binascii
+import hashlib
+import hmac
 import os
-import sqlite3
-import threading
 import uuid
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from collections import defaultdict
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    and_,
+    create_engine,
+    delete,
+    func,
+    insert,
+    or_,
+    select,
+    update,
+)
+from sqlalchemy.exc import IntegrityError
 
-# 数据库文件路径
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-DB_PATH = os.path.join(DB_DIR, "progress.db")
+from src.webapp.db import engine_options, normalise_database_url
 
-# 单例连接（线程安全）
-_local = threading.local()
+_DEFAULT = Path(__file__).resolve().parents[1] / "data" / "aitutor.db"
+_URL = normalise_database_url(os.getenv("PROGRESS_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{_DEFAULT}")
+_kwargs: Dict[str, Any] = engine_options(_URL)
+_engine = create_engine(_URL, **_kwargs)
+metadata = MetaData()
+
+progress_students = Table(
+    "progress_students", metadata,
+    Column("student_id", String(80), primary_key=True),
+    Column("name", String(80), nullable=False, default="Learner"),
+    Column("year_group", Integer, nullable=False, default=3),
+    Column("age", Integer, nullable=False, default=7),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column("is_active", Boolean, nullable=False, default=True),
+)
+homework_sessions = Table(
+    "homework_sessions", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("subject", String(80), nullable=False, index=True),
+    Column("year_group", Integer, nullable=False, default=3),
+    Column("homework_content", Text, nullable=True),
+    Column("student_answers", Text, nullable=True),
+    Column("score", Float, nullable=True),
+    Column("max_score", Float, nullable=True),
+    Column("review_text", Text, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+)
+topic_progress = Table(
+    "topic_progress", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("subject", String(80), nullable=False),
+    Column("topic", String(80), nullable=False),
+    Column("questions_attempted", Integer, nullable=False, default=0),
+    Column("questions_correct", Integer, nullable=False, default=0),
+    Column("accuracy", Float, nullable=False, default=0.0),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("student_id", "subject", "topic", name="uq_progress_topic"),
+)
+practice_sessions = Table(
+    "practice_sessions", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("subject", String(80), nullable=False),
+    Column("topic", String(80), nullable=False),
+    Column("questions_count", Integer, nullable=False, default=0),
+    Column("correct_count", Integer, nullable=False, default=0),
+    Column("duration_seconds", Integer, nullable=False, default=0),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+legacy_subscriptions = Table(
+    "legacy_local_subscriptions", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("customer_email", String(254), nullable=False, index=True),
+    Column("customer_name", String(80), nullable=False),
+    Column("status", String(30), nullable=False),
+    Column("product_name", String(80), nullable=False),
+    Column("duration_days", Integer, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("is_dev", Boolean, nullable=False, default=True),
+)
+auth_users = Table(
+    "auth_users", metadata,
+    Column("username", String(254), primary_key=True),
+    Column("password_hash", String(128), nullable=False),
+    Column("salt", String(64), nullable=False),
+    Column("is_test", Boolean, nullable=False, default=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+ai_requests = Table(
+    "ai_requests", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("request_id", String(100), nullable=False, index=True),
+    Column("timestamp", DateTime(timezone=True), nullable=False, index=True),
+    Column("provider", String(80), nullable=False),
+    Column("model", String(120), nullable=False),
+    Column("operation", String(80), nullable=True),
+    Column("prompt_tokens", Integer, nullable=True),
+    Column("completion_tokens", Integer, nullable=True),
+    Column("total_tokens", Integer, nullable=True),
+    Column("latency_ms", Float, nullable=True),
+    Column("status", String(30), nullable=False),
+    Column("error_message", Text, nullable=True),
+    Column("prompt_text", Text, nullable=True),
+    Column("response_text", Text, nullable=True),
+    Column("rag_context", Text, nullable=True),
+    Column("student_id", String(80), nullable=True, index=True),
+    Column("subject", String(80), nullable=True),
+    Column("homework_doc_id", String(100), nullable=True),
+    Column("langfuse_trace_id", String(100), nullable=True),
+    Column("metadata_json", Text, nullable=True),
+)
+metadata.create_all(_engine)
 
 
-def _get_db() -> sqlite3.Connection:
-    """获取当前线程的数据库连接"""
-    if not hasattr(_local, "conn") or _local.conn is None:
-        os.makedirs(DB_DIR, exist_ok=True)
-        _local.conn = sqlite3.connect(DB_PATH)
-        _local.conn.row_factory = sqlite3.Row
-        _local.conn.execute("PRAGMA journal_mode=WAL")
-        _local.conn.execute("PRAGMA foreign_keys=ON")
-    return _local.conn
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _dict(row: Any) -> Dict[str, Any]:
+    data = dict(row._mapping)
+    for key, value in list(data.items()):
+        if isinstance(value, datetime):
+            data[key] = value.isoformat()
+        elif isinstance(value, bool):
+            data[key] = int(value)
+    return data
 
 
 def init_db() -> None:
-    """初始化数据库表结构"""
-    conn = _get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS students (
-            student_id TEXT PRIMARY KEY,
-            name TEXT NOT NULL DEFAULT 'Student',
-            year_group INTEGER NOT NULL DEFAULT 3,
-            age INTEGER NOT NULL DEFAULT 7,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
+    metadata.create_all(_engine)
 
-        CREATE TABLE IF NOT EXISTS homework_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            year_group INTEGER NOT NULL DEFAULT 3,
-            homework_content TEXT,
-            student_answers TEXT,
-            score REAL,
-            review_text TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (student_id) REFERENCES students(student_id)
-        );
 
-        CREATE TABLE IF NOT EXISTS topic_progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            topic TEXT NOT NULL,
-            questions_attempted INTEGER NOT NULL DEFAULT 0,
-            questions_correct INTEGER NOT NULL DEFAULT 0,
-            accuracy REAL NOT NULL DEFAULT 0.0,
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (student_id) REFERENCES students(student_id),
-            UNIQUE(student_id, subject, topic)
-        );
-
-        CREATE TABLE IF NOT EXISTS practice_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            topic TEXT NOT NULL,
-            questions_count INTEGER NOT NULL DEFAULT 0,
-            correct_count INTEGER NOT NULL DEFAULT 0,
-            duration_seconds INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (student_id) REFERENCES students(student_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id TEXT PRIMARY KEY,
-            customer_email TEXT NOT NULL,
-            customer_name TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            product_name TEXT NOT NULL,
-            duration_days INTEGER NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            expires_at TEXT NOT NULL,
-            is_dev INTEGER NOT NULL DEFAULT 0
-        );
-
-        -- Users table for persistent login
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS ai_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id TEXT NOT NULL,
-            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-            provider TEXT NOT NULL,
-            model TEXT NOT NULL,
-            operation TEXT,
-            prompt_tokens INTEGER,
-            completion_tokens INTEGER,
-            total_tokens INTEGER,
-            latency_ms REAL,
-            status TEXT NOT NULL DEFAULT 'success',
-            error_message TEXT,
-            prompt_text TEXT,
-            response_text TEXT,
-            rag_context TEXT,
-            student_id TEXT,
-            subject TEXT,
-            homework_doc_id TEXT,
-            langfuse_trace_id TEXT,
-            metadata_json TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_homework_student ON homework_sessions(student_id);
-        CREATE INDEX IF NOT EXISTS idx_homework_subject ON homework_sessions(subject);
-        CREATE INDEX IF NOT EXISTS idx_topic_student ON topic_progress(student_id);
-        CREATE INDEX IF NOT EXISTS idx_practice_student ON practice_sessions(student_id);
-        CREATE INDEX IF NOT EXISTS idx_subscriptions_email ON subscriptions(customer_email);
-        CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
-        CREATE INDEX IF NOT EXISTS idx_ai_requests_timestamp ON ai_requests(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_ai_requests_provider ON ai_requests(provider);
-        CREATE INDEX IF NOT EXISTS idx_ai_requests_status ON ai_requests(status);
-        CREATE INDEX IF NOT EXISTS idx_ai_requests_student ON ai_requests(student_id);
-
-        -- Additional performance indexes
-        CREATE INDEX IF NOT EXISTS idx_students_created_at ON students(created_at);
-        CREATE INDEX IF NOT EXISTS idx_homework_created_at ON homework_sessions(created_at);
-        CREATE INDEX IF NOT EXISTS idx_students_year_group ON students(year_group);
-    """)
-    conn.commit()
-    logger.info("[DB] 数据库初始化完成: %s", DB_PATH)
+def _raw_storage_enabled() -> bool:
+    return os.getenv("STORE_RAW_LEARNER_CONTENT", "false").lower() in {"1", "true", "yes", "on"}
 
 
 def save_homework_session(
@@ -160,660 +171,299 @@ def save_homework_session(
     student_answers: str,
     score: float = None,
     review_text: str = None,
-) -> int:
-    """保存一次作业批改记录
-
-    Returns:
-        新记录的 ID
-    """
-    conn = _get_db()
-    # 确保学生存在
-    conn.execute(
-        "INSERT OR IGNORE INTO students (student_id, year_group) VALUES (?, ?)",
-        (student_id, year_group),
-    )
-    cursor = conn.execute(
-        """INSERT INTO homework_sessions
-           (student_id, subject, year_group, homework_content, student_answers, score, review_text)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (student_id, subject, year_group, homework_content, student_answers, score, review_text),
-    )
-    conn.commit()
-    return cursor.lastrowid
+    max_score: float = 10,
+) -> str:
+    now = _now()
+    session_id = f"hw_{uuid.uuid4().hex}"
+    store_raw = _raw_storage_enabled()
+    with _engine.begin() as conn:
+        if not conn.execute(select(progress_students.c.student_id).where(progress_students.c.student_id == student_id)).first():
+            try:
+                conn.execute(insert(progress_students).values(
+                    student_id=student_id, name="Learner", year_group=int(year_group), age=max(5, min(12, int(year_group)+4)),
+                    created_at=now, updated_at=now, is_active=True,
+                ))
+            except IntegrityError:
+                pass
+        conn.execute(insert(homework_sessions).values(
+            id=session_id, student_id=student_id, subject=subject[:80], year_group=int(year_group),
+            homework_content=homework_content if store_raw else None,
+            student_answers=student_answers if store_raw else None,
+            score=score, max_score=max_score,
+            review_text=review_text if store_raw else None,
+            created_at=now,
+        ))
+    return session_id
 
 
 def get_progress_summary(student_id: str) -> Dict[str, Any]:
-    """获取学生的学习进度汇总"""
-    conn = _get_db()
-
-    # 总作业数
-    total = conn.execute(
-        "SELECT COUNT(*) FROM homework_sessions WHERE student_id = ?",
-        (student_id,),
-    ).fetchone()[0]
-
-    # 平均分
-    avg_score = conn.execute(
-        "SELECT AVG(score) FROM homework_sessions WHERE student_id = ? AND score IS NOT NULL",
-        (student_id,),
-    ).fetchone()[0]
-
-    # 各科成绩
-    subject_stats = conn.execute(
-        """SELECT subject, COUNT(*) as count, AVG(score) as avg_score
-           FROM homework_sessions
-           WHERE student_id = ? AND score IS NOT NULL
-           GROUP BY subject""",
-        (student_id,),
-    ).fetchall()
-
-    # 最近一次作业
-    latest = conn.execute(
-        """SELECT subject, score, created_at FROM homework_sessions
-           WHERE student_id = ?
-           ORDER BY created_at DESC LIMIT 1""",
-        (student_id,),
-    ).fetchone()
-
+    with _engine.begin() as conn:
+        rows = conn.execute(
+            select(
+                homework_sessions.c.subject, homework_sessions.c.score,
+                homework_sessions.c.max_score, homework_sessions.c.created_at,
+            )
+            .where(homework_sessions.c.student_id == student_id)
+            .order_by(homework_sessions.c.created_at.desc())
+        ).all()
+    graded = []
+    by_subject: Dict[str, List[float]] = defaultdict(list)
+    for row in rows:
+        data = row._mapping
+        if data["score"] is None or not data["max_score"]:
+            continue
+        ratio = max(0.0, min(float(data["score"]) / float(data["max_score"]), 1.0))
+        graded.append(ratio)
+        by_subject[str(data["subject"])].append(ratio)
+    overall_accuracy = round(sum(graded) / len(graded) * 100, 1) if graded else 0
+    subjects = [
+        {
+            "subject": subject,
+            "count": len(values),
+            "avg_accuracy": round(sum(values) / len(values) * 100, 1),
+        }
+        for subject, values in sorted(by_subject.items())
+    ]
+    latest = rows[0]._mapping if rows else None
     return {
         "student_id": student_id,
-        "total_sessions": total,
-        "average_score": round(avg_score, 1) if avg_score else None,
-        "subjects": [
-            {"subject": row["subject"], "count": row["count"], "avg_score": round(row["avg_score"], 1)}
-            for row in subject_stats
-        ],
+        "total_sessions": len(rows),
+        "graded_sessions": len(graded),
+        "average_accuracy": overall_accuracy,
+        # Kept for older clients; this is now an accuracy percentage.
+        "average_score": overall_accuracy,
+        "subjects": subjects,
         "latest_session": dict(latest) if latest else None,
     }
 
 
 def get_score_history(student_id: str, subject: str = None, limit: int = 50) -> List[Dict]:
-    """获取学生的成绩历史"""
-    conn = _get_db()
+    q = select(homework_sessions.c.subject, homework_sessions.c.score, homework_sessions.c.max_score, homework_sessions.c.created_at).where(and_(homework_sessions.c.student_id == student_id, homework_sessions.c.score.is_not(None)))
     if subject:
-        rows = conn.execute(
-            """SELECT subject, score, created_at FROM homework_sessions
-               WHERE student_id = ? AND subject = ? AND score IS NOT NULL
-               ORDER BY created_at DESC LIMIT ?""",
-            (student_id, subject, limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """SELECT subject, score, created_at FROM homework_sessions
-               WHERE student_id = ? AND score IS NOT NULL
-               ORDER BY created_at DESC LIMIT ?""",
-            (student_id, limit),
-        ).fetchall()
-    return [dict(r) for r in rows]
+        q = q.where(homework_sessions.c.subject == subject)
+    with _engine.begin() as conn:
+        rows = conn.execute(q.order_by(homework_sessions.c.created_at.desc()).limit(max(1, min(limit, 500)))).all()
+    return [_dict(r) for r in rows]
 
 
 def get_topic_progress(student_id: str, subject: str = None) -> List[Dict]:
-    """获取学生的各知识点掌握情况"""
-    conn = _get_db()
+    q = select(topic_progress.c.subject, topic_progress.c.topic, topic_progress.c.questions_attempted, topic_progress.c.questions_correct, topic_progress.c.accuracy, topic_progress.c.updated_at).where(topic_progress.c.student_id == student_id)
     if subject:
-        rows = conn.execute(
-            """SELECT subject, topic, questions_attempted, questions_correct, accuracy, updated_at
-               FROM topic_progress WHERE student_id = ? AND subject = ?
-               ORDER BY accuracy ASC""",
-            (student_id, subject),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """SELECT subject, topic, questions_attempted, questions_correct, accuracy, updated_at
-               FROM topic_progress WHERE student_id = ?
-               ORDER BY subject, accuracy ASC""",
-            (student_id,),
-        ).fetchall()
-    return [dict(r) for r in rows]
+        q = q.where(topic_progress.c.subject == subject)
+    with _engine.begin() as conn:
+        rows = conn.execute(q.order_by(topic_progress.c.accuracy.asc())).all()
+    return [_dict(r) for r in rows]
 
 
 def get_daily_goal_stats(student_id: str, daily_goal: int = 1) -> Dict[str, Any]:
-    """获取学生每日目标完成情况统计
-
-    Args:
-        student_id: 学生ID
-        daily_goal: 每天目标完成作业数，默认1
-
-    Returns:
-        包含每日目标完成率、活跃天数等统计
-    """
-    conn = _get_db()
-
-    # 按天统计作业完成数
-    daily_counts = conn.execute(
-        """SELECT DATE(created_at) as date, COUNT(*) as count
-           FROM homework_sessions
-           WHERE student_id = ?
-           GROUP BY DATE(created_at)
-           ORDER BY date""",
-        (student_id,),
-    ).fetchall()
-
-    if not daily_counts:
-        return {
-            "total_active_days": 0,
-            "total_days_with_data": 0,
-            "goal_met_days": 0,
-            "daily_goal_rate": 0,
-            "daily_breakdown": [],
-        }
-
-    total_active_days = len(daily_counts)
-    goal_met_days = sum(1 for d in daily_counts if d["count"] >= daily_goal)
-
-    # 计算从首次活动到今天的天数（含不活跃日）
-    first_date_str = daily_counts[0]["date"]
-    last_date_str = daily_counts[-1]["date"]
-    first_date = datetime.strptime(first_date_str, "%Y-%m-%d")
-    last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
-    total_span_days = (last_date - first_date).days + 1
-
-    # 每日明细
-    daily_breakdown = [
-        {"date": d["date"], "count": d["count"], "goal_met": d["count"] >= daily_goal}
-        for d in daily_counts
-    ]
-
+    since = _now() - timedelta(days=30)
+    with _engine.begin() as conn:
+        timestamps = conn.execute(select(homework_sessions.c.created_at).where(and_(homework_sessions.c.student_id == student_id, homework_sessions.c.created_at >= since))).scalars().all()
+    counts: Dict[date, int] = defaultdict(int)
+    for stamp in timestamps:
+        counts[stamp.date()] += 1
+    active_days = len(counts)
+    completed_days = sum(1 for value in counts.values() if value >= daily_goal)
     return {
-        "total_active_days": total_active_days,
-        "total_span_days": total_span_days,
-        "goal_met_days": goal_met_days,
-        "daily_goal_rate": round(goal_met_days / total_active_days * 100, 1) if total_active_days else 0,
         "daily_goal": daily_goal,
-        "daily_breakdown": daily_breakdown,
+        "active_days": active_days,
+        "days_goal_met": completed_days,
+        "daily_goal_rate": round((completed_days / active_days * 100), 1) if active_days else 0,
+        "daily_counts": [{"date": day.isoformat(), "count": counts[day]} for day in sorted(counts)],
     }
 
 
 def get_streak_info(student_id: str) -> Dict[str, Any]:
-    """计算学生的连续学习天数（当前连续 & 历史最长）"""
-    conn = _get_db()
-
-    daily_counts = conn.execute(
-        """SELECT DATE(created_at) as date
-           FROM homework_sessions
-           WHERE student_id = ?
-           GROUP BY DATE(created_at)
-           ORDER BY date""",
-        (student_id,),
-    ).fetchall()
-
-    if not daily_counts:
-        return {"current_streak": 0, "best_streak": 0}
-
-    dates = sorted(
-        datetime.strptime(d["date"], "%Y-%m-%d").date()
-        for d in daily_counts
-    )
-
-    # 计算连续天数
-    best_streak = 1
-    current_streak = 1
-    running_streak = 1
-
-    for i in range(1, len(dates)):
-        if (dates[i] - dates[i - 1]).days == 1:
-            running_streak += 1
+    with _engine.begin() as conn:
+        stamps = conn.execute(select(homework_sessions.c.created_at).where(homework_sessions.c.student_id == student_id)).scalars().all()
+    days = sorted({stamp.date() for stamp in stamps})
+    if not days:
+        return {"current_streak": 0, "longest_streak": 0, "last_active_date": None}
+    longest = current = 1
+    for previous, current_day in zip(days, days[1:]):
+        if (current_day - previous).days == 1:
+            current += 1
+            longest = max(longest, current)
         else:
-            running_streak = 1
-        best_streak = max(best_streak, running_streak)
-
-    # 当前连续：从今天或昨天往回数
-    from datetime import date as date_type
-    today = date_type.today()
-    if dates[-1] == today or (today - dates[-1]).days == 1:
-        current_streak = 1
-        for i in range(len(dates) - 1, 0, -1):
-            if (dates[i] - dates[i - 1]).days == 1:
-                current_streak += 1
+            current = 1
+    today = _now().date()
+    if (today - days[-1]).days > 1:
+        current = 0
+    else:
+        current = 1
+        cursor = days[-1]
+        for prior in reversed(days[:-1]):
+            if (cursor - prior).days == 1:
+                current += 1
+                cursor = prior
             else:
                 break
-    else:
-        current_streak = 0
-
-    return {"current_streak": current_streak, "best_streak": best_streak}
+    return {"current_streak": current, "longest_streak": longest, "last_active_date": days[-1].isoformat()}
 
 
 def get_accuracy_rate(student_id: str) -> Dict[str, Any]:
-    """获取学生的综合正确率统计
-
-    Returns:
-        包含总正确率、各科正确率、正确率趋势
-    """
-    conn = _get_db()
-
-    # 从 topic_progress 表获取综合正确率
-    topic_stats = conn.execute(
-        """SELECT SUM(questions_attempted) as total_q,
-                  SUM(questions_correct) as total_correct
-           FROM topic_progress
-           WHERE student_id = ?""",
-        (student_id,),
-    ).fetchone()
-
-    total_q = topic_stats["total_q"] or 0
-    total_correct = topic_stats["total_correct"] or 0
-    overall_accuracy = round(total_correct / total_q * 100, 1) if total_q > 0 else None
-
-    # 各科正确率
-    subject_accuracy = conn.execute(
-        """SELECT subject,
-                  SUM(questions_attempted) as total_q,
-                  SUM(questions_correct) as total_correct
-           FROM topic_progress
-           WHERE student_id = ?
-           GROUP BY subject""",
-        (student_id,),
-    ).fetchall()
-
-    by_subject = []
-    for row in subject_accuracy:
-        q = row["total_q"] or 0
-        c = row["total_correct"] or 0
-        by_subject.append({
-            "subject": row["subject"],
-            "accuracy": round(c / q * 100, 1) if q > 0 else 0,
-            "questions_attempted": q,
-            "questions_correct": c,
-        })
-
-    # 按作业会话计算正确率趋势（最近10次）
-    score_trend = conn.execute(
-        """SELECT subject, score, created_at
-           FROM homework_sessions
-           WHERE student_id = ? AND score IS NOT NULL
-           ORDER BY created_at DESC
-           LIMIT 10""",
-        (student_id,),
-    ).fetchall()
-
-    trend = []
-    for s in reversed(list(score_trend)):
-        pct = round(s["score"] * 10, 1) if s["score"] is not None else 0
-        trend.append({
-            "subject": s["subject"],
-            "accuracy": pct,
-            "created_at": s["created_at"],
-        })
-
-    return {
-        "overall_accuracy": overall_accuracy,
-        "total_questions": total_q,
-        "total_correct": total_correct,
-        "by_subject": by_subject,
-        "accuracy_trend": trend,
-    }
+    with _engine.begin() as conn:
+        rows = conn.execute(select(homework_sessions.c.score, homework_sessions.c.max_score).where(and_(homework_sessions.c.student_id == student_id, homework_sessions.c.score.is_not(None)))).all()
+    ratios = [float(r._mapping["score"]) / float(r._mapping["max_score"] or 10) for r in rows if float(r._mapping["max_score"] or 10) > 0]
+    rate = round(sum(ratios) / len(ratios) * 100, 1) if ratios else 0
+    return {"accuracy_rate": rate, "graded_sessions": len(ratios)}
 
 
-def generate_progress_feedback(
-    total_sessions: int,
-    avg_accuracy: float,
-    current_streak: int,
-    daily_goal_rate: float,
-) -> Dict[str, str]:
-    """根据学生数据生成积极鼓励性的反馈文案
-
-    Returns:
-        包含标题、正文、小贴士的字典
-    """
-    # 总体评价
+def generate_progress_feedback(total_sessions: int, avg_accuracy: float, current_streak: int, daily_goal_rate: float) -> str:
     if total_sessions == 0:
-        return {
-            "headline": "Ready to Begin Your Journey!",
-            "message": "Every great achievement starts with a single step. Complete your first homework to start tracking your amazing progress!",
-            "tip": "Tip: Try to complete at least one homework session each day to build a strong learning habit.",
-        }
+        return "Ready to begin! Try one short activity and celebrate the effort."
+    if avg_accuracy >= 85:
+        return "Excellent work! Keep practising and try a slightly harder challenge next."
+    if avg_accuracy >= 65:
+        return "Good progress. Review one tricky topic and take it step by step."
+    return "Every try helps your brain grow. Practise one small step at a time and ask for a hint when needed."
 
-    # 根据正确率生成评价
-    if avg_accuracy >= 90:
-        accuracy_msg = "Outstanding work! Your accuracy is exceptional -- you're truly mastering these topics!"
-    elif avg_accuracy >= 75:
-        accuracy_msg = "Great job! You're showing a strong understanding of the material. Keep pushing for even higher scores!"
-    elif avg_accuracy >= 60:
-        accuracy_msg = "Good effort! You're building a solid foundation. With a bit more practice, you'll see your scores climb even higher!"
-    else:
-        accuracy_msg = "Every mistake is a chance to learn something new. You're making progress, and that's what matters most!"
-
-    # 根据连续天数生成评价
-    if current_streak >= 7:
-        streak_msg = f"Incredible! You've been learning for {current_streak} days in a row -- your dedication is paying off!"
-    elif current_streak >= 3:
-        streak_msg = f"Well done! A {current_streak}-day streak shows real commitment. Keep the momentum going!"
-    elif current_streak >= 1:
-        streak_msg = f"You're on a {current_streak}-day streak! Consistency is the key to success -- keep it up!"
-    else:
-        streak_msg = "Start a new streak today! Even one session counts -- you've got this!"
-
-    # 根据每日目标完成率
-    if daily_goal_rate >= 90:
-        goal_msg = "You're hitting your daily goals almost every day -- what fantastic discipline!"
-    elif daily_goal_rate >= 60:
-        goal_msg = "You're meeting your daily goals more often than not. That's a great habit forming!"
-    elif daily_goal_rate > 0:
-        goal_msg = "You've started building your daily learning habit. Each day you practise brings you closer to your goals!"
-    else:
-        goal_msg = "Set a daily goal and work towards it -- even one small session each day makes a big difference over time!"
-
-    # 综合标题
-    if total_sessions >= 20 and avg_accuracy >= 80:
-        headline = "You're a Learning Superstar!"
-    elif total_sessions >= 10:
-        headline = "Fantastic Progress -- Keep Going!"
-    elif total_sessions >= 5:
-        headline = "You're Building Great Momentum!"
-    else:
-        headline = "Great Start -- Your Journey Is Taking Off!"
-
-    return {
-        "headline": headline,
-        "message": f"{accuracy_msg} {streak_msg}",
-        "tip": goal_msg,
-    }
-
-
-# ---- 管理员接口 ----
 
 def list_all_students(limit: int = 100, offset: int = 0) -> List[Dict]:
-    """列出所有学生（管理员用）"""
-    conn = _get_db()
-    rows = conn.execute(
-        """SELECT s.student_id, s.name, s.year_group, s.age, s.created_at, s.is_active,
-           u.username as email,
-           COUNT(h.id) as total_sessions,
-           AVG(h.score) as avg_score
-           FROM students s
-           LEFT JOIN homework_sessions h ON s.student_id = h.student_id
-           LEFT JOIN users u ON s.student_id = u.username
-           GROUP BY s.student_id
-           ORDER BY s.created_at DESC
-           LIMIT ? OFFSET ?""",
-        (limit, offset),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    with _engine.begin() as conn:
+        rows = conn.execute(select(progress_students).order_by(progress_students.c.created_at.desc()).limit(max(1,min(limit,10000))).offset(max(0,offset))).all()
+    return [_dict(r) for r in rows]
 
 
 def get_student_detail(student_id: str) -> Optional[Dict]:
-    """获取学生详细信息（管理员用）"""
-    conn = _get_db()
-    student = conn.execute(
-        "SELECT * FROM students WHERE student_id = ?", (student_id,)
-    ).fetchone()
-    if not student:
-        return None
-
-    result = dict(student)
-    result["sessions"] = [
-        dict(r) for r in conn.execute(
-            """SELECT id, subject, score, created_at FROM homework_sessions
-               WHERE student_id = ? ORDER BY created_at DESC LIMIT 20""",
-            (student_id,),
-        ).fetchall()
-    ]
-    result["topics"] = get_topic_progress(student_id)
-    return result
+    with _engine.begin() as conn:
+        row = conn.execute(select(progress_students).where(progress_students.c.student_id == student_id)).first()
+        if not row:
+            return None
+        sessions = conn.execute(select(homework_sessions.c.id, homework_sessions.c.subject, homework_sessions.c.score, homework_sessions.c.created_at).where(homework_sessions.c.student_id == student_id).order_by(homework_sessions.c.created_at.desc()).limit(20)).all()
+    data = _dict(row)
+    data["sessions"] = [_dict(r) for r in sessions]
+    data["topics"] = get_topic_progress(student_id)
+    return data
 
 
 def update_student(student_id: str, **kwargs) -> bool:
-    """更新学生信息（管理员用）"""
-    conn = _get_db()
     allowed = {"name", "year_group", "age", "is_active"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
+    values = {key: value for key, value in kwargs.items() if key in allowed}
+    if not values:
         return False
-    updates["updated_at"] = datetime.utcnow().isoformat()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [student_id]
-    conn.execute(f"UPDATE students SET {set_clause} WHERE student_id = ?", values)
-    conn.commit()
-    return conn.total_changes > 0
+    values["updated_at"] = _now()
+    with _engine.begin() as conn:
+        result = conn.execute(update(progress_students).where(progress_students.c.student_id == student_id).values(**values))
+    return bool(result.rowcount)
 
 
 def delete_student(student_id: str) -> bool:
-    """删除学生及所有相关数据（UK GDPR 合规：被遗忘权）"""
-    conn = _get_db()
-    conn.execute("DELETE FROM topic_progress WHERE student_id = ?", (student_id,))
-    conn.execute("DELETE FROM practice_sessions WHERE student_id = ?", (student_id,))
-    conn.execute("DELETE FROM homework_sessions WHERE student_id = ?", (student_id,))
-    conn.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
-    conn.commit()
-    return conn.total_changes > 0
+    with _engine.begin() as conn:
+        conn.execute(delete(topic_progress).where(topic_progress.c.student_id == student_id))
+        conn.execute(delete(practice_sessions).where(practice_sessions.c.student_id == student_id))
+        conn.execute(delete(homework_sessions).where(homework_sessions.c.student_id == student_id))
+        result = conn.execute(delete(progress_students).where(progress_students.c.student_id == student_id))
+    return bool(result.rowcount)
 
 
 def create_student(name: str, year_group: int = 3, age: int = 8) -> Dict[str, Any]:
-    """创建新学生记录（管理员用）
-
-    自动生成 UUID 作为 student_id。
-
-    Returns:
-        包含新学生信息的字典
-    """
-    conn = _get_db()
-    student_id = uuid.uuid4().hex[:12]
-    now = datetime.utcnow().isoformat()
-    conn.execute(
-        """INSERT INTO students (student_id, name, year_group, age, created_at, updated_at, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, 1)""",
-        (student_id, name, year_group, age, now, now),
-    )
-    conn.commit()
-    logger.info("[DB] 新学生已创建: %s (%s)", student_id, name)
-    return {
-        "student_id": student_id,
-        "name": name,
-        "year_group": year_group,
-        "age": age,
-        "is_active": 1,
-        "created_at": now,
-    }
+    student_id = f"legacy_{uuid.uuid4().hex[:12]}"
+    now = _now()
+    with _engine.begin() as conn:
+        conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, created_at=now, updated_at=now, is_active=True))
+    return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "is_active": 1, "created_at": now.isoformat()}
 
 
 def get_all_sessions_summary() -> Dict[str, Any]:
-    """获取所有作业会话的汇总统计（管理员用）"""
-    conn = _get_db()
-    total = conn.execute("SELECT COUNT(*) FROM homework_sessions").fetchone()[0]
-    avg_score = conn.execute(
-        "SELECT AVG(score) FROM homework_sessions WHERE score IS NOT NULL"
-    ).fetchone()[0]
-    by_subject = conn.execute(
-        """SELECT subject, COUNT(*) as count, AVG(score) as avg_score
-           FROM homework_sessions WHERE score IS NOT NULL
-           GROUP BY subject ORDER BY count DESC"""
-    ).fetchall()
-    by_day = conn.execute(
-        """SELECT DATE(created_at) as date, COUNT(*) as count
-           FROM homework_sessions
-           WHERE created_at >= datetime('now', '-30 days')
-           GROUP BY DATE(created_at) ORDER BY date"""
-    ).fetchall()
-    return {
-        "total_sessions": total,
-        "average_score": round(avg_score, 1) if avg_score else None,
-        "by_subject": [dict(r) for r in by_subject],
-        "daily_activity": [dict(r) for r in by_day],
-    }
-
-
-# ---- 本地订阅管理（开发模式绕过 Stripe） ----
-
-
-# ---- 用户认证（持久化用户，密码哈希） ----
-import hashlib
-import binascii
-import os
+    with _engine.begin() as conn:
+        total = conn.execute(select(func.count()).select_from(homework_sessions)).scalar_one()
+        avg = conn.execute(select(func.avg(homework_sessions.c.score)).where(homework_sessions.c.score.is_not(None))).scalar()
+        subjects = conn.execute(select(homework_sessions.c.subject, func.count().label("count"), func.avg(homework_sessions.c.score).label("avg_score")).where(homework_sessions.c.score.is_not(None)).group_by(homework_sessions.c.subject)).all()
+    return {"total_sessions": int(total or 0), "average_score": round(float(avg),1) if avg is not None else None, "by_subject": [{"subject":r._mapping["subject"],"count":int(r._mapping["count"]),"avg_score":round(float(r._mapping["avg_score"]),1)} for r in subjects], "daily_activity": []}
 
 
 def _hash_password(password: str, salt_hex: str) -> str:
-    """Return hex-encoded PBKDF2-HMAC-SHA256 hash."""
     salt = bytes.fromhex(salt_hex)
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100_000)
-    return binascii.hexlify(dk).decode('ascii')
+    return binascii.hexlify(hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 310_000)).decode()
 
 
 def create_user(username: str, password: str) -> Dict[str, Any]:
-    """Create a new user with salted password hash. Raises if user exists."""
-    conn = _get_db()
-    # Check exists
-    existing = conn.execute("SELECT username FROM users WHERE username = ?", (username,)).fetchone()
-    if existing:
-        raise ValueError("User already exists")
-
+    email = username.strip().lower()
     salt = os.urandom(16).hex()
-    password_hash = _hash_password(password, salt)
-    now = datetime.utcnow().isoformat()
-    conn.execute(
-        "INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
-        (username, password_hash, salt, now),
-    )
-    conn.commit()
-    return {"username": username, "created_at": now}
+    now = _now()
+    try:
+        with _engine.begin() as conn:
+            conn.execute(insert(auth_users).values(username=email, password_hash=_hash_password(password,salt), salt=salt, is_test=False, created_at=now))
+    except IntegrityError as exc:
+        raise ValueError("User already exists") from exc
+    return {"username": email, "created_at": now.isoformat()}
 
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    conn = _get_db()
-    row = conn.execute("SELECT username, password_hash, salt, created_at FROM users WHERE username = ?", (username,)).fetchone()
-    return dict(row) if row else None
+    with _engine.begin() as conn:
+        row = conn.execute(select(auth_users).where(auth_users.c.username == username.strip().lower())).first()
+    return _dict(row) if row else None
 
 
 def verify_user_credentials(username: str, password: str) -> bool:
     user = get_user_by_username(username)
-    if not user:
-        return False
-    salt = user.get('salt')
-    expected_hash = user.get('password_hash')
-    if not salt or not expected_hash:
-        return False
-    calc = _hash_password(password, salt)
-    # Use constant-time compare
-    import hmac
-    return hmac.compare_digest(calc, expected_hash)
+    return bool(user and hmac.compare_digest(_hash_password(password, user["salt"]), user["password_hash"]))
 
 
 def ensure_user_columns():
-    """Ensure optional columns exist on users table (migration-safe)."""
-    conn = _get_db()
-    try:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
-        if 'is_test' not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
-            conn.commit()
-            logger.info("[DB] Added users.is_test column")
-        # Ensure index exists for fast lookups
-        try:
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_is_test ON users(is_test)")
-            conn.commit()
-        except Exception as e:
-            logger.warning("Could not create idx_users_is_test: %s", e)
-    except Exception as e:
-        logger.warning("Could not ensure user columns: %s", e)
+    return None
 
 
 def set_user_test_flag(username: str, is_test: bool) -> bool:
-    """Mark a persistent user as a test account (bypass payment checks).
-
-    Returns True if update affected a row.
-    """
-    ensure_user_columns()
-    conn = _get_db()
-    val = 1 if is_test else 0
-    conn.execute("UPDATE users SET is_test = ? WHERE username = ?", (val, username))
-    conn.commit()
-    return conn.total_changes > 0
+    with _engine.begin() as conn:
+        result = conn.execute(update(auth_users).where(auth_users.c.username == username.strip().lower()).values(is_test=bool(is_test)))
+    return bool(result.rowcount)
 
 
 def is_user_test(username: str) -> bool:
-    """Return True if the user is marked as a test account."""
-    ensure_user_columns()
-    conn = _get_db()
-    row = conn.execute("SELECT is_test FROM users WHERE username = ?", (username,)).fetchone()
-    if not row:
-        return False
-    return bool(row["is_test"])
+    user = get_user_by_username(username)
+    return bool(user and user.get("is_test"))
 
 
-def create_local_subscription(
-    customer_email: str,
-    customer_name: str,
-    product_name: str,
-    duration_days: int,
-) -> Dict[str, Any]:
-    """创建本地订阅记录（开发模式使用，绕过 Stripe）"""
-    conn = _get_db()
-    sub_id = "dev_" + uuid.uuid4().hex[:12]
-    now = datetime.utcnow()
-    expires = now + timedelta(days=duration_days)
-    now_str = now.isoformat()
-    expires_str = expires.isoformat()
-
-    conn.execute(
-        """INSERT INTO subscriptions
-           (id, customer_email, customer_name, status, product_name, duration_days, created_at, expires_at, is_dev)
-           VALUES (?, ?, ?, 'active', ?, ?, ?, ?, 1)""",
-        (sub_id, customer_email, customer_name, product_name, duration_days, now_str, expires_str),
-    )
-    conn.commit()
-    logger.info("[DB] 本地订阅已创建: %s (%s - %s)", sub_id, customer_email, product_name)
-    return {
-        "subscription_id": sub_id,
-        "customer_email": customer_email,
-        "customer_name": customer_name,
-        "status": "active",
-        "product_name": product_name,
-        "duration_days": duration_days,
-        "created_at": now_str,
-        "expires_at": expires_str,
-        "is_dev": True,
-    }
+def create_local_subscription(customer_email: str, customer_name: str, product_name: str, duration_days: int) -> Dict[str, Any]:
+    now = _now(); expires = now + timedelta(days=duration_days); sub_id=f"dev_{uuid.uuid4().hex[:12]}"
+    with _engine.begin() as conn:
+        conn.execute(insert(legacy_subscriptions).values(id=sub_id, customer_email=customer_email.strip().lower(), customer_name=customer_name[:80], status="active", product_name=product_name[:80], duration_days=duration_days, created_at=now, expires_at=expires, is_dev=True))
+    return {"subscription_id":sub_id,"customer_email":customer_email,"customer_name":customer_name,"status":"active","product_name":product_name,"duration_days":duration_days,"created_at":now.isoformat(),"expires_at":expires.isoformat(),"is_dev":True}
 
 
 def list_local_subscriptions(limit: int = 100) -> List[Dict]:
-    """列出所有本地订阅"""
-    conn = _get_db()
-    rows = conn.execute(
-        """SELECT id, customer_email, customer_name, status, product_name,
-                  duration_days, created_at, expires_at, is_dev
-           FROM subscriptions
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        (limit,),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    with _engine.begin() as conn:
+        rows=conn.execute(select(legacy_subscriptions).order_by(legacy_subscriptions.c.created_at.desc()).limit(max(1,min(limit,1000)))).all()
+    return [_dict(r) for r in rows]
 
 
 def get_local_subscriptions_by_email(customer_email: str) -> List[Dict]:
-    """根据 email 查询订阅"""
-    conn = _get_db()
-    rows = conn.execute(
-        """SELECT id, customer_email, customer_name, status, product_name,
-                  duration_days, created_at, expires_at, is_dev
-           FROM subscriptions
-           WHERE customer_email = ?
-           ORDER BY created_at DESC""",
-        (customer_email,),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    with _engine.begin() as conn:
+        rows=conn.execute(select(legacy_subscriptions).where(legacy_subscriptions.c.customer_email==customer_email.strip().lower()).order_by(legacy_subscriptions.c.created_at.desc())).all()
+    return [_dict(r) for r in rows]
 
 
 def get_local_subscription_stats() -> Dict[str, Any]:
-    """获取本地订阅统计"""
-    conn = _get_db()
-    total = conn.execute("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'").fetchone()[0]
+    items = list_local_subscriptions()
+    now = _now()
+    active = [
+        item for item in items
+        if item.get("status") == "active"
+        and item.get("expires_at") is not None
+        and item["expires_at"] > now
+    ]
     return {
-        "active_subscriptions": total,
+        "active_subscriptions": len(active),
         "estimated_revenue_gbp": 0,
-        "subscriptions": list_local_subscriptions(),
+        "subscriptions": items,
     }
 
 
-# ---- 管理员：列出所有持久化用户（auth users） ----
 def list_all_users(limit: int = 100, offset: int = 0):
-    """列出所有注册用户（包含 is_test 标记）"""
-    conn = _get_db()
-    rows = conn.execute(
-        "SELECT username, created_at, COALESCE(is_test, 0) as is_test FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        (limit, offset),
-    ).fetchall()
-    return [dict(r) for r in rows]
+    with _engine.begin() as conn:
+        rows=conn.execute(select(auth_users.c.username,auth_users.c.created_at,auth_users.c.is_test).order_by(auth_users.c.created_at.desc()).limit(max(1,min(limit,1000))).offset(max(0,offset))).all()
+    return [_dict(r) for r in rows]
 
 
-# 初始化时创建表
 init_db()
-ensure_user_columns()
+
+
+def delete_user_account(username: str) -> bool:
+    """Erase the parent login and legacy billing records for this email."""
+    clean = username.strip().lower()
+    with _engine.begin() as conn:
+        conn.execute(delete(legacy_subscriptions).where(legacy_subscriptions.c.customer_email == clean))
+        result = conn.execute(delete(auth_users).where(auth_users.c.username == clean))
+    return bool(result.rowcount)

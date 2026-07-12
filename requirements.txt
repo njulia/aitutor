@@ -1,29 +1,28 @@
-# Core dependencies
-fastapi
-uvicorn[standard]
-python-multipart
-pydantic
-chromadb
-requests
-stripe
+# Web
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pydantic>=2.7
+python-dotenv>=1.0
+jinja2>=3.1
 
-# Local embedding model (zero API cost for RAG)
-sentence-transformers
+# PostgreSQL / persistence
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
 
-# Observability (self-hosted Langfuse)
-langfuse>=2.0.0
+# Billing
+stripe>=11,<15
 
-# Optional but recommended
-python-dotenv
-jinja2
+# RAG and provider clients
+chromadb>=0.5
+requests>=2.32
+sentence-transformers>=3.0
 
-# For image handling
-Pillow
+# Observability
+langfuse>=2.0
 
-# For document parsing
-python-docx
+# Files and images
+Pillow>=10
+python-docx>=1.1
+pypdf>=5.0
 
-# test
-pytest>=8.0
-pytest-asyncio>=0.23
-httpx>=0.27

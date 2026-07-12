@@ -143,109 +143,43 @@ def get_evaluation_summary() -> Dict[str, Any]:
 # ---- 订阅管理 ----
 
 def get_subscription_overview() -> Dict[str, Any]:
-    """获取订阅概览
+    """Return locally materialised entitlements.
 
-    开发模式：从本地数据库读取，不依赖 Stripe。
-    生产模式：从 Stripe 获取数据。
+    Stripe webhooks are the source of change, while PostgreSQL is the source
+    used by the application and dashboard. This avoids slow live list calls and
+    keeps entitlement decisions deterministic.
     """
     if is_dev_mode():
         from src.progress_db import get_local_subscription_stats
-        return get_local_subscription_stats()
-
-    try:
-        import stripe
-        subscriptions = stripe.Subscription.list(limit=100, status="active")
-        active_count = len(subscriptions.data)
-
-        total_revenue = sum(
-            sub.items.data[0].price.unit_amount * 0.01
-            for sub in subscriptions.data
-            if sub.items.data
-        )
-
-        return {
-            "active_subscriptions": active_count,
-            "estimated_revenue_gbp": round(total_revenue, 2),
-            "subscriptions": [
-                {
-                    "id": sub.id,
-                    "customer": sub.customer,
-                    "status": sub.status,
-                    "created": datetime.fromtimestamp(sub.created).isoformat(),
-                    "trial_end": datetime.fromtimestamp(sub.trial_end).isoformat() if sub.trial_end else None,
-                    "current_period_end": datetime.fromtimestamp(sub.current_period_end).isoformat() if sub.current_period_end else None,
-                }
-                for sub in subscriptions.data[:20]
-            ],
-        }
-    except ImportError:
-        return {"error": "Stripe not installed", "active_subscriptions": 0}
-    except Exception as e:
-        logger.warning("[Admin] Stripe 查询失败: %s", e)
-        return {"error": str(e), "active_subscriptions": 0}
+        legacy = get_local_subscription_stats()
+    else:
+        legacy = None
+    from src.webapp.account_store import get_subscription_stats
+    result = get_subscription_stats()
+    if legacy and legacy.get("active_subscriptions"):
+        result["legacy_dev_subscriptions"] = legacy
+    return result
 
 
 def create_admin_subscription(email: str, name: str, duration: str) -> Dict[str, Any]:
-    """管理员手动创建订阅
+    """Create a local test entitlement only in development.
 
-    开发模式：直接写入本地数据库，不依赖 Stripe。
-    生产模式：通过 Stripe 创建客户和订阅。
-
-    Args:
-        email: 客户邮箱
-        name: 客户姓名
-        duration: "5_days" 或 "30_days"
-
-    Returns:
-        包含订阅信息的字典
+    Production subscriptions must start in authenticated Stripe Checkout and
+    become active only after a signed webhook has been processed.
     """
+    if not is_dev_mode():
+        raise ValueError(
+            "Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks."
+        )
     duration_days = {"5_days": 5, "30_days": 30}
     if duration not in duration_days:
         raise ValueError("Invalid duration, must be '5_days' or '30_days'")
-
-    product_name = (
-        "5-Day Premium Access" if duration == "5_days" else "30-Day Premium Access"
+    from src.progress_db import create_local_subscription
+    product_name = "5-Day Premium Access" if duration == "5_days" else "30-Day Premium Access"
+    return create_local_subscription(
+        customer_email=email, customer_name=name, product_name=product_name,
+        duration_days=duration_days[duration],
     )
-
-    # 开发模式：直接写入本地数据库
-    if is_dev_mode():
-        from src.progress_db import create_local_subscription
-        return create_local_subscription(
-            customer_email=email,
-            customer_name=name,
-            product_name=product_name,
-            duration_days=duration_days[duration],
-        )
-
-    # 生产模式：通过 Stripe 创建
-    import stripe
-
-    trial_end = datetime.utcnow() + timedelta(days=duration_days[duration])
-    trial_end_ts = int(trial_end.timestamp())
-
-    customer = stripe.Customer.create(email=email, name=name)
-
-    price_map = {
-        "5_days": "price_5day_subscription",
-        "30_days": "price_30day_subscription",
-    }
-
-    subscription = stripe.Subscription.create(
-        customer=customer.id,
-        items=[{"price": price_map[duration]}],
-        trial_end=trial_end_ts,
-    )
-
-    return {
-        "subscription_id": subscription.id,
-        "customer_id": customer.id,
-        "customer_email": email,
-        "customer_name": name,
-        "status": subscription.status,
-        "product_name": product_name,
-        "duration": duration,
-        "trial_end": trial_end.isoformat(),
-    }
 
 
 # ---- 管理员认证（简单 token 验证） ----

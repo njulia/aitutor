@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Language Homework Tabs</title>
     <!-- Marked.js library to parse Markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/js/marked-lite.js"></script>
+<script src="/static/js/safe_markdown.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
@@ -151,7 +152,7 @@
                     const rawText = sourceEl.textContent || sourceEl.text;
                     // Replaces literal '\n' text characters inside script tags with actual line breaks
                     const formattedText = rawText.replace(/\\n/g, '\n');
-                    targetEl.innerHTML = marked.parse(formattedText);
+                    targetEl.innerHTML = renderSafeMarkdown(formattedText);
                 }
             } catch (error) {
                 console.error(`Error parsing markdown for tab index ${index}:`, error);

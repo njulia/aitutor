@@ -12,29 +12,24 @@
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 from src.llm_client import LLMClient, format_prompt, build_messages
 from src.cache import homework_cache, subject_extraction_cache, make_cache_key
 from src.models import (
-    UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS, KEY_STAGES, get_homework_time_by_age,
+    UK_PRIMARY_SUBJECTS, KEY_STAGES, get_homework_time_by_age,
     YEAR_GROUP_AGE,
 )
 from src.homework_rag import (
     store_homework, search_homework, get_student_previous_topics,
-    search_homework_answers,
 )
-from src.elevenplus.elevenplus_rag import (
+from src.elevenplus_rag import (
     store_homework as elevenplus_store_homework,
     search_homework as elevenplus_search_homework,
     get_student_previous_topics as elevenplus_get_student_previous_topics,
-    search_homework_answers as elevenplus_search_homework_answers,
-)
-from src.elevenplus.prompts import (
-    HOMEWORK_PROMPT_11PLUS, RAG_PROMPT_11PLUS,
 )
 from src.prompts import (
-    HOMEWORK_PROMPT, HOMEWORK_ANSWER_PROMPT, SUBJECT_EXTRACTION_PROMPT,
+    HOMEWORK_PROMPT, SUBJECT_EXTRACTION_PROMPT, HOMEWORK_PROMPT_11PLUS,
 )
 
 
@@ -46,7 +41,7 @@ def _is_eleven_plus_subject(subject: str) -> bool:
     return subject in ("Verbal Reasoning", "Non-Verbal Reasoning")
 
 
-def generate_homewor_by_tools(subject, year_group, student_id, cache_key, store_homework_func):
+def generate_homewor_by_tools(subject, year_group, student_id, cache_key, store_homework_func, age=None):
     # --- TOOL OFFLOADING ---
     # Map subjects to tools
     TOOL_MAP = {
@@ -87,7 +82,8 @@ def generate_homewor_by_tools(subject, year_group, student_id, cache_key, store_
                     year_group=year_group,
                     subject=subject,
                     student_id=student_id,
-                    answers=answers
+                    answers=answers,
+                    age=age
                 )
 
                 # Update cache
@@ -159,7 +155,7 @@ def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str,
     search_query = " ".join(learning_goals + weak_areas + [subject])
 
     # # Create homework with tools
-    # content, doc_id, from_rag = generate_homewor_by_tools(subject, year_group, student_id, cache_key, _store_homework)
+    # content, doc_id, from_rag = generate_homewor_by_tools(subject, year_group, student_id, cache_key, _store_homework, age=age)
     # if content and doc_id and not from_rag:
     #     return content, doc_id, from_rag
 

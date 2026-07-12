@@ -81,15 +81,20 @@ let currentHomework = [];
         }
 
         // 检查是否需要订阅才能使用高级功能
-        async function requireSubscription(featureName) {
+        async function requireSubscription(featureName, isFree = false) {
+            // If the feature/content is free, we don't need to check subscription
+            if (isFree) return true;
+
             // Paid features always require a logged-in user with a real student_id
             if (!currentStudentId) { // currentStudentId is only set for logged-in users
-                alert(`Please login or register to use ${featureName}.`);
+                saveStateToSessionStorage();
+                // alert(`Please login or register to use ${featureName}.`);
                 window.location.href = '/login'; // Redirect to login/register
                 return false;
             }
             const subscribed = await checkSubscription(); // Check subscription for the logged-in user
             if (!subscribed) {
+                saveStateToSessionStorage();
                 alert(`${featureName} requires a subscription. Please subscribe to continue.`);
                 window.location.href = '/pricing';
                 return false;
@@ -100,6 +105,27 @@ let currentHomework = [];
         // 状态保存（用于在功能切换时保留答案和批改结果）
         let savedHomeworkState = null;
         let savedButtonsHTML = null;
+
+        function saveStateToSessionStorage() {
+            const state = {
+                homework: currentHomework,
+                profile: currentProfile,
+                subject: currentSubject,
+                answers: {},
+                reviewHTML: document.getElementById('review-result').innerHTML,
+                mode: currentHomeworkMode,
+                questionIndex: currentQuestionIndex,
+                questionAnswers: currentQuestionAnswers
+            };
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                state.answers[input.dataset.subject] = input.value;
+            });
+            try {
+                sessionStorage.setItem('homeworkState', JSON.stringify(state));
+            } catch(e) {
+                console.error('Failed to save state to sessionStorage:', e);
+            }
+        }
 
         function saveCurrentState() {
             // 只保存一次，避免后续操作覆盖原始状态
@@ -153,7 +179,7 @@ let currentHomework = [];
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', function() {
             loadSubjects();
-            checkDevMode(); // Check dev mode on load
+            checkAdminAccess(); // Show admin tools only to configured administrators
 
             // Update UI based on login status
             if (currentStudentId) {
@@ -282,7 +308,6 @@ let currentHomework = [];
 
                 if (data.success) {
                     extractedContent = data.content;
-                    console.log('Extracted content:', extractedContent);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -334,7 +359,6 @@ let currentHomework = [];
 
                 if (data.success) {
                     extractedContent = data.content;
-                    console.log('Extracted content:', extractedContent);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -350,7 +374,6 @@ let currentHomework = [];
             fetch('/api/subjects')
                 .then(response => response.json())
                 .then(data => {
-                    console.log("Subjects received:", data);
                     renderSubjects('homework-subjects', data.primary);
                     renderSubjects('eleven-subjects', data.eleven_plus);
 
@@ -501,12 +524,14 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) {
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) {
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -572,12 +597,14 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) {
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) {
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -636,12 +663,14 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) { // Payment Required - subscription required
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) { // Unauthorized - login required
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -698,12 +727,14 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) { // Payment Required - subscription required
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) { // Unauthorized - login required
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -752,7 +783,7 @@ let currentHomework = [];
                     <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
                     <div class="homework-content">
                         <div class="question-column">
-                            ${formatQuestions(marked.parse(hw.content))}
+                            ${formatQuestions(renderSafeMarkdown(hw.content))}
                         </div>
                         <div class="answer-column">
                             <h4>Your Answer:</h4>
@@ -783,7 +814,7 @@ let currentHomework = [];
                     <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
                     <div class="homework-content">
                         <div class="question-column">
-                            ${formatQuestions(marked.parse(hw.content))}
+                            ${formatQuestions(renderSafeMarkdown(hw.content))}
                         </div>
                         <div class="answer-column">
                             <h4>Your Answer:</h4>
@@ -836,6 +867,7 @@ let currentHomework = [];
                         is_tutor_mode: true, // Indicate tutor mode review
                         from_rag: hw.from_rag, // Pass from_rag status
                         homework_doc_id: hw.doc_id, // Source RAG document
+                        is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
                             : currentQuestionIndex // Backward-compatible fallback
@@ -843,12 +875,14 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) { // Payment Required - subscription required
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) { // Unauthorized - login required
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -913,7 +947,8 @@ let currentHomework = [];
         async function reviewHomework() {
             // 检查登录和订阅状态
             if (!currentStudentId) {
-                alert('Please login to use Mark Homework.');
+                saveStateToSessionStorage();
+                // alert('Please login to use Mark Homework.');
                 window.location.href = '/login';
                 return;
             }
@@ -943,11 +978,6 @@ let currentHomework = [];
         }
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
-            console.log("=== Starting Review ===");
-            console.log("Homework:", homework);
-            console.log("Answers:", answers);
-            console.log("Subject:", subject);
-            console.log("Doc ID:", homeworkDocId);
 
             showLoading();
 
@@ -962,6 +992,7 @@ let currentHomework = [];
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
                 }
+                requestBody.is_eleven_plus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
 
                 const response = await fetch('/api/review', {
                     method: 'POST',
@@ -970,19 +1001,20 @@ let currentHomework = [];
                 });
 
                 if (response.status === 402) {
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) {
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log("Calling displayReview with review:", data.review);
                     displayReview(data.review);
                 } else {
                     alert('Error: ' + data.error);
@@ -999,7 +1031,7 @@ let currentHomework = [];
             const container = document.getElementById('review-result');
             container.innerHTML = `
                 <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
-                <div class="review-output">${marked.parse(review)}</div>
+                <div class="review-output">${renderSafeMarkdown(review)}</div>
             `;
 
             // Make sure results section is visible
@@ -1007,8 +1039,10 @@ let currentHomework = [];
         }
 
         async function ExplainDeep() {
+            const isFree = currentHomework && currentHomework.length > 0 && currentHomework.every(h => h.from_rag);
+
             // Check subscription first
-            if (!await requireSubscription('Explain in Detail')) return;
+            if (!await requireSubscription('Explain in Detail', isFree)) return;
 
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
@@ -1050,17 +1084,20 @@ let currentHomework = [];
                         answers: combinedAnswers,
                         subject: subject,
                         profile: { student_id: currentStudentId }, // Pass student_id for subscription check
-                        review_feedback: reviewFeedback
+                        review_feedback: reviewFeedback,
+                        from_rag: isFree
                     })
                 });
 
                 if (response.status === 402) { // Payment Required - subscription required
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) { // Unauthorized - login required
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -1086,7 +1123,7 @@ let currentHomework = [];
             container.innerHTML = `
                 ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
                 <h3 style="margin-top: 20px; margin-bottom: 20px;">Deep Explanation</h3>
-                <div class="review-output">${marked.parse(explanation)}</div>
+                <div class="review-output">${renderSafeMarkdown(explanation)}</div>
             `;
 
             document.getElementById('results').style.display = 'block';
@@ -1099,8 +1136,10 @@ let currentHomework = [];
         }
 
         async function ImprovePractice() {
+            const isFree = currentHomework && currentHomework.length > 0 && currentHomework.every(h => h.from_rag);
+
             // Check subscription first
-            if (!await requireSubscription('Help me improve')) return;
+            if (!await requireSubscription('Help me improve', isFree)) return;
 
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
@@ -1142,17 +1181,20 @@ let currentHomework = [];
                         answers: combinedAnswers,
                         subject: subject,
                         profile: { student_id: currentStudentId }, // Pass student_id for subscription check
-                        review_feedback: reviewFeedback
+                        review_feedback: reviewFeedback,
+                        from_rag: isFree
                     })
                 });
 
                 if (response.status === 402) { // Payment Required - subscription required
+                    saveStateToSessionStorage();
                     alert('Subscription required for this feature.');
                     window.location.href = '/pricing';
                     return;
                 }
                 if (response.status === 401) { // Unauthorized - login required
-                    alert('Please login or register to use this feature.');
+                    saveStateToSessionStorage();
+                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -1188,7 +1230,7 @@ let currentHomework = [];
                     </h3>
                     <div class="homework-content">
                         <div class="question-column" style="border-left-color: #f57c00;">
-                            ${marked.parse(practiceContent)}
+                            ${renderSafeMarkdown(practiceContent)}
                         </div>
                         <div class="answer-column">
                             <h4 style="color: #f57c00;">Your Answers:</h4>
@@ -1247,7 +1289,7 @@ let currentHomework = [];
                     const container = document.getElementById('review-result');
                     container.innerHTML = `
                         <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice Feedback</h3>
-                        <div class="review-output" style="border-left-color: #f57c00;">${marked.parse(data.review)}</div>
+                        <div class="review-output" style="border-left-color: #f57c00;">${renderSafeMarkdown(data.review)}</div>
                     `;
                     document.getElementById('results').style.display = 'block';
                 } else {
@@ -1283,41 +1325,35 @@ let currentHomework = [];
             if (!await requireSubscription('Track Progress')) return;
 
             // Save current state to sessionStorage, so it can be restored when returning from pricing page
-            const state = {
-                homework: currentHomework,
-                profile: currentProfile,
-                subject: currentSubject,
-                answers: {},
-                reviewHTML: document.getElementById('review-result').innerHTML,
-                mode: currentHomeworkMode, // Save current mode
-                questionIndex: currentQuestionIndex, // Save current question index
-                questionAnswers: currentQuestionAnswers // Save tutor mode answers
-            };
-            document.querySelectorAll('.answer-input-inline').forEach(input => {
-                state.answers[input.dataset.subject] = input.value;
-            });
-            try {
-                sessionStorage.setItem('homeworkState', JSON.stringify(state));
-            } catch(e) {
-                console.error('Failed to save state to sessionStorage:', e);
-            }
+            saveStateToSessionStorage();
             window.location.href = '/progress'; // Redirect to progress page
         }
 
         // ---- Admin Tools Functions ----
-        let isDevMode = false; // Will be set by checkDevMode
+        let isAdminUser = false;
 
-        async function checkDevMode() {
+        async function checkAdminAccess() {
+            const adminTab = document.getElementById('admin-tools-tab');
+            if (!adminTab) return;
+
+            // Hidden by default. Only the server can make it visible after
+            // checking the authenticated user's email against ADMIN_EMAILS.
+            adminTab.style.display = 'none';
             try {
-                const response = await fetch('/api/admin/dev-mode-status'); // New endpoint to check dev mode
+                const response = await fetch('/api/admin/access-status', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!response.ok) return;
+
                 const data = await response.json();
-                isDevMode = data.is_dev_mode;
-                if (isDevMode) {
-                    document.getElementById('admin-tools-tab').style.display = 'block';
+                isAdminUser = data.is_admin === true;
+                if (isAdminUser) {
+                    adminTab.style.display = 'block';
                 }
             } catch (error) {
-                console.error('Failed to check dev mode status:', error);
-                isDevMode = false; // Assume not dev mode if check fails
+                console.error('Failed to check admin access:', error);
+                isAdminUser = false;
             }
         }
 

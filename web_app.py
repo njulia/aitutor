@@ -24,10 +24,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from passlib.context import CryptContext  # For password hashing
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+from src.webapp.runtime import configure_cors, install_hardening, owner_key, run_blocking, validate_database_configuration, public_error
+from src.webapp.session_store import TutorSessionStore
+from src.webapp.upload_utils import stream_upload_to_temp
+from src.webapp.memory_store import get_memory_store, infer_topic, infer_misconception
 
 
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -61,10 +64,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 llm = None
 initialized = False
-tutor_sessions: Dict[str, Dict[str, Any]] = {}
+tutor_session_store = TutorSessionStore()
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def secure_filename(filename: str) -> str:
@@ -89,8 +90,14 @@ def initialize() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Warm up LLM on startup."""
+    """Warm services and apply retention cleanup."""
+    validate_database_configuration()
     initialize()
+    try:
+        await asyncio.to_thread(get_memory_store().purge_expired)
+        await asyncio.to_thread(tutor_session_store.purge_expired)
+    except Exception:
+        logger.exception("Startup retention cleanup failed")
     yield
 
 
@@ -156,7 +163,13 @@ def user_has_subscription(req: Optional[Request] = None, student_id: Optional[st
         # Backward-compatible lookup while old subscriptions are migrated.
         if _dev_mode:
             from src.progress_db import get_local_subscriptions_by_email
-            return any(s.get("status") == "active" for s in get_local_subscriptions_by_email(username))
+            now = datetime.now(UTC)
+            return any(
+                item.get("status") == "active"
+                and item.get("expires_at") is not None
+                and item["expires_at"] > now
+                for item in get_local_subscriptions_by_email(username)
+            )
         return False
     except Exception as exc:
         logger.warning("Subscription check failed: %s", exc)
@@ -170,13 +183,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+configure_cors(app)
+install_hardening(app, require_admin=_require_admin)
 
 
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
@@ -259,15 +267,15 @@ def resolve_profile(
         if parsed:
             profile = parsed
         else:
-            profile.setdefault("year_group", 3)
-            profile.setdefault("age", 7)
+            profile.setdefault("year_group", 6)
+            profile.setdefault("age", 11)
             profile.setdefault("student_id", "student_custom")
 
     if student_id:
         profile["student_id"] = student_id
 
     if not profile.get("student_id"):
-        profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
+        profile["student_id"] = f"student_{profile.get('year_group', 6)}_default"
 
     return profile
 
@@ -295,12 +303,81 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
     return new_anon_session_id, None, new_anon_session_id
 
 
+async def _add_learning_memory(profile: dict, username: Optional[str], student_id: str) -> tuple[dict, Optional[str]]:
+    """Attach a small structured memory summary; never attach raw conversations."""
+    if not username or student_id.startswith("anon_"):
+        return profile, None
+    try:
+        from src.webapp.account_store import ensure_account, student_belongs_to_account
+        account = await run_blocking(ensure_account, username, limit_concurrency=False)
+        belongs = await run_blocking(student_belongs_to_account, student_id, account["id"], limit_concurrency=False)
+        if not belongs:
+            return profile, None
+        context = await run_blocking(
+            get_memory_store().prompt_context, student_id, account["id"], limit_concurrency=False
+        )
+        if context:
+            existing = str(profile.get("learning_needs") or "").strip()
+            profile["learning_needs"] = (existing + " " + context).strip()[:900]
+        return profile, account["id"]
+    except Exception:
+        logger.exception("Could not load learning memory")
+        return profile, None
+
+
+async def _record_learning_memory(
+    *,
+    account_id: Optional[str],
+    student_id: str,
+    subject: str,
+    homework: str,
+    profile: dict,
+    result: dict,
+    source: str,
+    from_rag: bool = False,
+) -> bool:
+    if not account_id or not result.get("success"):
+        return False
+    score = result.get("score")
+    maximum = result.get("max_score")
+    if score is None or not maximum:
+        return False
+    ratio = max(0.0, min(float(score) / float(maximum), 1.0))
+    topic = infer_topic(subject, homework, profile.get("topic"))
+    misconception = infer_misconception(result.get("review", ""), ratio)
+    try:
+        return await run_blocking(
+            get_memory_store().record_event,
+            student_id=student_id,
+            account_id=account_id,
+            subject=subject,
+            topic=topic,
+            outcome=ratio,
+            attempted=int(result.get("attempted") or maximum or 1),
+            correct_count=(
+                int(result["correct_count"]) if result.get("correct_count") is not None else round(ratio * int(maximum))
+            ),
+            difficulty=profile.get("difficulty"),
+            misconception_code=misconception,
+            source=source,
+            metadata={
+                "mode": "tutor" if source == "tutor_review" else "homework",
+                "from_rag": bool(from_rag),
+                "year_group": int(profile.get("year_group", 6)),
+            },
+            limit_concurrency=False,
+        )
+    except Exception:
+        logger.exception("Could not update structured learning memory")
+        return False
+
+
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
     """为多个科目生成作业（并行执行以降低延迟）"""
     from src.homework_generator import generate_homework_parallel
 
     if not profile.get("student_id"):
-        profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
+        profile["student_id"] = f"student_{profile.get('year_group', 6)}_default"
 
     return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
 
@@ -354,6 +431,11 @@ async def eleven_plus():
     return _static_page("static", "elevenplus-practice.html")
 
 
+@app.get("/elevenplus-year-round-plan")
+async def elevenplus_year_round_plan():
+    return _static_page("static", "elevenplus-year-round-plan.html")
+
+
 @app.get("/check-my-homework")
 async def check_homework():
     return _static_page("static", "check-my-homework.html")
@@ -377,6 +459,11 @@ async def login_page():
 @app.get("/progress")
 async def progress_page():
     return _static_page("static", "progress.html")
+
+
+@app.get("/memory")
+async def memory_page():
+    return _static_page("static", "memory.html")
 
 
 @app.get("/app")
@@ -414,7 +501,7 @@ async def elevenplus_grammar_guide():
     return _static_page("static", "elevenplus", "uk_grammar_guide.html")
 
 
-@app.get("/elevenplus/uk-11plus-vocabulary-list")
+@app.get("/elevenplus/11plus-vocabulary-list")
 async def elevenplus_vocabulary_list():
     return _static_page("static", "elevenplus", "uk_11plus_vocabulary_list.html")
 
@@ -449,20 +536,15 @@ async def health():
 
 @app.get("/api/client-id")
 async def get_client_id(request: Request):
-    """Get a unique client ID based on IP address for anonymous users."""
-    # Get client IP - handle proxy headers
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "unknown"
-
-    # Generate a stable ID from IP
-    import hashlib
-    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:12]
-    anon_id = f"anon_{ip_hash}"
-
-    return {"client_id": anon_id, "ip": client_ip}
+    """Return a random cookie-backed ID without collecting or exposing an IP."""
+    resolved_id, _username, new_anon_id = _get_user_or_anonymous_id(request)
+    response = JSONResponse({"client_id": resolved_id})
+    if new_anon_id:
+        response.set_cookie(
+            "anon_session_id", new_anon_id, httponly=True, samesite="lax",
+            secure=not _dev_mode, max_age=24 * 60 * 60,
+        )
+    return response
 
 
 @app.get("/api/subjects")
@@ -507,6 +589,9 @@ async def api_generate(req: Request, request: ProfileRequest):
             year=request.year,
             student_id=request.student_id,
         )
+        profile, _memory_account_id = await _add_learning_memory(
+            profile, logged_in_username, resolved_student_id
+        )
         subjects = request.subjects
 
         # If no subjects selected, use LLM to extract from description
@@ -519,7 +604,7 @@ async def api_generate(req: Request, request: ProfileRequest):
             if description:
                 from src.ui.shared import parse_profile_from_natural_language
                 # 放到线程池执行，避免阻塞事件循环
-                parsed = await asyncio.to_thread(parse_profile_from_natural_language, description, llm)
+                parsed = await run_blocking(parse_profile_from_natural_language, description, llm)
                 if parsed:
                     # Update profile with parsed data
                     profile.update(parsed)
@@ -533,9 +618,11 @@ async def api_generate(req: Request, request: ProfileRequest):
                 )
 
         # Generate homework for all subjects（放到线程池执行，避免阻塞事件循环）
-        all_homework_results = await asyncio.to_thread(
+        all_homework_results = await run_blocking(
             generate_homework_with_profile, profile, subjects, request.is_eleven_plus
         )
+        for homework_item in all_homework_results:
+            homework_item["is_eleven_plus"] = bool(request.is_eleven_plus)
 
         if request.mode == "tutor":
             individual_questions = []
@@ -543,9 +630,11 @@ async def api_generate(req: Request, request: ProfileRequest):
                 # Split each subject's homework content into individual questions
                 split_questions = _split_homework_into_questions(hw_block["content"], hw_block["subject"])
                 # Preserve RAG metadata on each split question
-                for q in split_questions:
+                for source_index, q in enumerate(split_questions):
                     q["doc_id"] = hw_block.get("doc_id")
                     q["from_rag"] = bool(hw_block.get("from_rag", False))
+                    q["question_index"] = source_index
+                    q["is_eleven_plus"] = bool(request.is_eleven_plus)
                 individual_questions.extend(split_questions)
 
             # Check subscription for tutor mode (only for non-RAG questions)
@@ -559,7 +648,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                                         "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
                     resp = JSONResponse(content=response_content)
                     if new_anon_session_id:
-                        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+                        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
                     return resp
                 else:
                     # No RAG questions and no subscription for tutor mode
@@ -573,18 +662,18 @@ async def api_generate(req: Request, request: ProfileRequest):
                 response_content = {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
                 resp = JSONResponse(content=response_content)
                 if new_anon_session_id:
-                    resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+                    resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
                 return resp
         else:  # Default to homework mode
             response_content = {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
             resp = JSONResponse(content=response_content)
             if new_anon_session_id:
-                resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+                resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
             return resp
     except Exception as exc:
         logger.error("Error generating homework: %s", exc)
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500, content={"success": False, "error": public_error(exc)}
         )
 
 
@@ -598,6 +687,9 @@ async def api_review(req: Request, request_body: ReviewRequest):
         # Ensure profile has the resolved student_id
         profile = request_body.profile or {}
         profile["student_id"] = resolved_student_id
+        profile, memory_account_id = await _add_learning_memory(
+            profile, logged_in_username, resolved_student_id
+        )
 
         # If this is a tutor-mode review and the question is not from RAG, require subscription
         if request_body.is_tutor_mode and not request_body.from_rag:
@@ -608,30 +700,41 @@ async def api_review(req: Request, request_body: ReviewRequest):
                                         content={"success": False, "error": "Login required to use tutor mode review for AI-generated questions."})
                 return JSONResponse(status_code=402,
                                     content={"success": False, "error": "Tutor mode review for AI-generated questions requires an active subscription."})
-
-        if request_body.session_id and request_body.session_id in tutor_sessions:
-            session = tutor_sessions[request_body.session_id]
-            session_profile = session.get("profile", {})
-            profile = {**session_profile, **profile} # Merge, request_body.profile takes precedence
+        if request_body.session_id:
+            session_owner = owner_key(logged_in_username or resolved_student_id)
+            session = await run_blocking(tutor_session_store.get, request_body.session_id, session_owner, limit_concurrency=False)
+            if session:
+                profile = {**session.get("profile", {}), **profile}
 
         # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
+        result = await run_blocking(
             review_homework,
             request_body.homework, request_body.answers, request_body.subject, profile,
             is_tutor_mode=request_body.is_tutor_mode,
             homework_doc_id=request_body.homework_doc_id,
             question_index=request_body.question_index,
+            is_eleven_plus=request_body.is_eleven_plus,
             llm_client=llm,
         )
         
+        result["memory_updated"] = await _record_learning_memory(
+            account_id=memory_account_id,
+            student_id=resolved_student_id,
+            subject=request_body.subject,
+            homework=request_body.homework,
+            profile=profile,
+            result=result,
+            source="tutor_review" if request_body.is_tutor_mode else "homework_review",
+            from_rag=bool(request_body.from_rag),
+        )
         resp = JSONResponse(content=result)
         if new_anon_session_id:
-            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
         return resp
     except Exception as exc:
         logger.error("Error reviewing homework: %s", exc)
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500, content={"success": False, "error": public_error(exc)}
         )
 
 
@@ -642,20 +745,23 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
 
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-        # ExplainDeep is a paid feature - require login and active subscription
-        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
-        if not has_sub:
-            if logged_in_username is None:
-                return JSONResponse(status_code=401,
-                                    content={"success": False, "error": "Login required to use Explain in Detail."})
-            return JSONResponse(status_code=402, content={"success": False,
-                                                          "error": "Explain in Detail requires an active subscription."})
+        # ExplainDeep is a paid feature - require login and active subscription (unless from free RAG resource)
+        if not request_body.from_rag:
+            has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+            if not has_sub:
+                if logged_in_username is None:
+                    return JSONResponse(status_code=401,
+                                        content={"success": False, "error": "Login required to use Explain in Detail."})
+                return JSONResponse(status_code=402, content={"success": False,
+                                                              "error": "Explain in Detail requires an active subscription."})
 
         profile = request_body.profile or {}
-        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
+        profile["student_id"] = resolved_student_id
+        profile, _memory_account_id = await _add_learning_memory(
+            profile, logged_in_username, resolved_student_id
+        )
 
-        # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
+        result = await run_blocking(
             explain_deep,
             request_body.homework, request_body.answers, request_body.subject,
             profile, request_body.review_feedback, llm_client=llm
@@ -663,12 +769,12 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         
         resp = JSONResponse(content=result)
         if new_anon_session_id:
-            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
         return resp
     except Exception as exc:
         logger.error("Error in explain_deep endpoint: %s", exc)
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500, content={"success": False, "error": public_error(exc)}
         )
 
 
@@ -679,20 +785,23 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
 
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-        # ImprovePractice is a paid feature - require login and active subscription
-        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
-        if not has_sub:
-            if logged_in_username is None:
-                return JSONResponse(status_code=401,
-                                    content={"success": False, "error": "Login required to use Help me improve."})
-            return JSONResponse(status_code=402,
-                                content={"success": False, "error": "Help me improve requires an active subscription."})
+        # ImprovePractice is a paid feature - require login and active subscription (unless from free RAG resource)
+        if not request_body.from_rag:
+            has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+            if not has_sub:
+                if logged_in_username is None:
+                    return JSONResponse(status_code=401,
+                                        content={"success": False, "error": "Login required to use Help me improve."})
+                return JSONResponse(status_code=402,
+                                    content={"success": False, "error": "Help me improve requires an active subscription."})
 
         profile = request_body.profile or {}
-        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
+        profile["student_id"] = resolved_student_id
+        profile, _memory_account_id = await _add_learning_memory(
+            profile, logged_in_username, resolved_student_id
+        )
 
-        # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
+        result = await run_blocking(
             improve_practice,
             request_body.homework, request_body.answers, request_body.subject,
             profile, request_body.review_feedback, llm_client=llm
@@ -700,12 +809,12 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         
         resp = JSONResponse(content=result)
         if new_anon_session_id:
-            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+            resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
         return resp
     except Exception as exc:
         logger.error("Error in improve_practice endpoint: %s", exc)
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500, content={"success": False, "error": public_error(exc)}
         )
 
 
@@ -719,11 +828,14 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
         if logged_in_username is None: # Not logged in
             return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
         
-        # Ensure the requested student_id matches the logged-in user's student_id
-        # This prevents one user from viewing another's progress.
-        user_info = get_user_by_username(logged_in_username)
-        if not user_info or user_info.get("student_id") != student_id:
-            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this student's progress."})
+        # Parent accounts may own more than one learner profile.
+        from src.webapp.account_store import ensure_account, student_belongs_to_account
+        account = await run_blocking(ensure_account, logged_in_username, limit_concurrency=False)
+        owns_student = await run_blocking(
+            student_belongs_to_account, student_id, account["id"], limit_concurrency=False
+        )
+        if not owns_student:
+            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this learner's progress."})
 
         if not user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username):
             return JSONResponse(status_code=402, content={"success": False,
@@ -740,26 +852,25 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
         )
 
         # 获取原始数据
-        raw_summary = get_progress_summary(student_id)
-        score_history = get_score_history(student_id, subject)
-        topics = get_topic_progress(student_id, subject)
+        raw_summary = await run_blocking(get_progress_summary, student_id, limit_concurrency=False)
+        score_history = await run_blocking(get_score_history, student_id, subject, limit_concurrency=False)
+        topics = await run_blocking(get_topic_progress, student_id, subject, limit_concurrency=False)
 
         # 新增指标
-        daily_goal = get_daily_goal_stats(student_id)
-        streak = get_streak_info(student_id)
-        accuracy = get_accuracy_rate(student_id)
+        daily_goal = await run_blocking(get_daily_goal_stats, student_id, limit_concurrency=False)
+        streak = await run_blocking(get_streak_info, student_id, limit_concurrency=False)
+        accuracy = await run_blocking(get_accuracy_rate, student_id, limit_concurrency=False)
 
         # 转换为前端期望的格式
         total_sessions = raw_summary.get("total_sessions", 0)
-        avg_score = raw_summary.get("average_score")
-        avg_accuracy_pct = round(avg_score * 10, 1) if avg_score else 0
+        avg_accuracy_pct = float(raw_summary.get("average_accuracy", 0) or 0)
 
         # 转换科目数据
         by_subject = []
         for subj in raw_summary.get("subjects", []):
             by_subject.append({
                 "subject": subj["subject"],
-                "avg_accuracy": round(subj["avg_score"] * 10, 1) if subj.get("avg_score") else 0,
+                "avg_accuracy": float(subj.get("avg_accuracy", 0) or 0),
                 "total_sessions": subj["count"],
             })
 
@@ -770,7 +881,7 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
             score_history_formatted.append({
                 "subject": s.get("subject", ""),
                 "score": score_val,
-                "max_score": 10,
+                "max_score": s.get("max_score", 10) or 10,
                 "created_at": s.get("created_at", ""),
             })
 
@@ -801,7 +912,7 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
     except Exception as exc:
         logger.error("Error getting progress: %s", exc)
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500, content={"success": False, "error": public_error(exc)}
         )
 
 
@@ -817,116 +928,55 @@ async def get_quick_profile(year: int):
     return {"success": True, "profile": profile}
 
 
+def _request_session_owner(request: Request) -> tuple[str, Optional[str]]:
+    resolved_id, username, new_anon_id = _get_user_or_anonymous_id(request)
+    return owner_key(username or resolved_id), new_anon_id
+
+
 @app.post("/api/sessions")
-async def create_session():
-    """Create a tutoring session (replaces Gradio gr.State)."""
-    session_id = str(uuid.uuid4())
-    tutor_sessions[session_id] = {
-        "homework": [],
-        "profile": {},
-        "student_answers": "",
-        "doc_id": "",
-        "year_group": 3,
-        "subject": "Maths",
-        "created_at": datetime.utcnow().isoformat(),
-    }
-    return {"success": True, "session_id": session_id}
+async def create_session(request: Request):
+    session_owner, new_anon_id = _request_session_owner(request)
+    payload = {"homework": [], "profile": {}, "student_answers": "", "doc_id": "", "year_group": 6, "subject": "Maths"}
+    session = await run_blocking(tutor_session_store.create, session_owner, payload, limit_concurrency=False)
+    response = JSONResponse({"success": True, "session_id": session["session_id"]})
+    if new_anon_id:
+        response.set_cookie("anon_session_id", new_anon_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24*60*60)
+    return response
 
 
 @app.get("/api/sessions/{session_id}")
-async def get_session(session_id: str):
-    session = tutor_sessions.get(session_id)
+async def get_session(request: Request, session_id: str):
+    owner, _ = _request_session_owner(request)
+    session = await run_blocking(tutor_session_store.get, session_id, owner, limit_concurrency=False)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"success": True, "session": session}
 
 
 @app.put("/api/sessions/{session_id}")
-async def update_session(session_id: str, request: SessionUpdateRequest):
-    if session_id not in tutor_sessions:
+async def update_session(request: Request, session_id: str, body: SessionUpdateRequest):
+    owner, _ = _request_session_owner(request)
+    session = await run_blocking(tutor_session_store.update, session_id, owner, body.model_dump(exclude_unset=True), limit_concurrency=False)
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    session = tutor_sessions[session_id]
-    updates = request.model_dump(exclude_unset=True)
-    session.update(updates)
-    session["updated_at"] = datetime.utcnow().isoformat()
     return {"success": True, "session": session}
 
 
 @app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: str):
-    if session_id not in tutor_sessions:
+async def delete_session(request: Request, session_id: str):
+    owner, _ = _request_session_owner(request)
+    deleted = await run_blocking(tutor_session_store.delete, session_id, owner, limit_concurrency=False)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
-    del tutor_sessions[session_id]
     return {"success": True}
 
 
 @app.post("/api/create-subscription")
-async def create_subscription(request: SubscriptionRequest):
-    try:
-        duration_days = {"5_days": 5, "30_days": 30}
-        if request.duration not in duration_days:
-            raise HTTPException(status_code=400, detail="Invalid duration")
-
-        product_name = (
-            "5-Day Premium Access" if request.duration == "5_days" else "30-Day Premium Access"
-        )
-
-        # 开发模式：直接写入本地数据库
-        if _dev_mode:
-            from src.progress_db import create_local_subscription
-            result = create_local_subscription(
-                customer_email=request.email,
-                customer_name=request.name,
-                product_name=product_name,
-                duration_days=duration_days[request.duration],
-            )
-            return {
-                "success": True,
-                "subscription_id": result["subscription_id"],
-                "customer_id": "dev_customer",
-                "product_name": product_name,
-                "description": f"Dev mode: {product_name}",
-                "duration": request.duration,
-            }
-
-        # 生产模式：通过 Stripe 创建
-        import stripe
-        customer = stripe.Customer.create(
-            email=request.email,
-            name=request.name,
-        )
-
-        if request.duration == "5_days":
-            plan_id = "price_5day_subscription"
-            description = "Access to all premium features for 5 days"
-        else:
-            plan_id = "price_30day_subscription"
-            description = "Access to all premium features for 30 days"
-
-        subscription = stripe.Subscription.create(
-            customer=customer.id,
-            items=[{"price": plan_id}],
-            payment_behavior="default_incomplete",
-            expand=["latest_invoice.payment_intent"]
-        )
-
-        return {
-            "success": True,
-            "subscription_id": subscription.id,
-            "client_secret": subscription.latest_invoice.payment_intent.client_secret,
-            "customer_id": customer.id,
-            "product_name": product_name,
-            "description": description,
-            "duration": request.duration
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Error creating subscription: %s", exc)
-        return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
-        )
+async def create_subscription_legacy():
+    raise HTTPException(
+        status_code=410,
+        detail="This billing endpoint has been replaced by authenticated Stripe Checkout.",
+    )
 
 
 @app.get("/api/check-subscription")
@@ -943,7 +993,7 @@ async def check_subscription_api(req: Request):
     }
     resp = JSONResponse(content=response_content)
     if new_anon_session_id:
-        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
+        resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=24 * 60 * 60)
     return resp
 
 
@@ -981,11 +1031,11 @@ async def api_register(request: AuthRequest):
         token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
         secure_flag = not _dev_mode
-        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag)
+        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag, max_age=12 * 60 * 60)
         return resp
     except Exception as exc:
         logger.error("Error in register: %s", exc)
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Registration error: {str(exc)}"})
+        return JSONResponse(status_code=500, content={"success": False, "error": public_error(exc, "Registration could not be completed. Please try again.")})
 
 
 @app.post("/api/login")
@@ -1008,17 +1058,21 @@ async def api_login(request: AuthRequest):
         token = generate_token(username)
         resp = JSONResponse({"success": True, "username": username})
         secure_flag = not _dev_mode
-        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag)
+        resp.set_cookie("session", token, httponly=True, samesite="lax", secure=secure_flag, max_age=12 * 60 * 60)
         return resp
     except Exception as exc:
         logger.error("Error in login: %s", exc)
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Login error: {str(exc)}"})
+        return JSONResponse(status_code=500, content={"success": False, "error": public_error(exc, "Login could not be completed. Please try again.")})
 
 
 @app.post("/api/logout")
-async def api_logout():
+async def api_logout(request: Request):
+    from src.auth_tokens import revoke_token
+    token = request.cookies.get("session") or request.headers.get("Authorization")
+    if token:
+        await run_blocking(revoke_token, token, limit_concurrency=False)
     resp = JSONResponse({"success": True})
-    resp.delete_cookie("session")
+    resp.delete_cookie("session", httponly=True, samesite="lax", secure=not _dev_mode)
     return resp
 
 
@@ -1058,7 +1112,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         raise
     except Exception as exc:
         logger.error("Error uploading file: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=public_error(exc, "That file could not be processed.")) from exc
 
 
 @app.post("/api/upload-photo")
@@ -1076,7 +1130,7 @@ async def upload_photo(request: Request, request_body: PhotoRequest):
         raise
     except Exception as exc:
         logger.error("Error uploading photo: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=public_error(exc, "That file could not be processed.")) from exc
 
 
 @app.post("/api/feedback")
@@ -1402,7 +1456,15 @@ async def admin_embedding_cache_cleanup(req: Request):
 
 # Account, student and account-level subscription module
 from src.webapp.account_routes import build_account_router
-app.include_router(build_account_router(resolve_username=_resolve_username, require_admin=_require_admin))
+app.include_router(build_account_router(resolve_username=_resolve_username, require_admin=_require_admin, session_store=tutor_session_store))
+
+# Parent-account Stripe Checkout and verified webhook billing
+from src.webapp.billing import build_billing_router
+app.include_router(build_billing_router(resolve_username=_resolve_username))
+
+# Parent-controlled structured learning memory
+from src.webapp.memory_routes import build_memory_router
+app.include_router(build_memory_router(resolve_username=_resolve_username))
 
 # User message and admin reply module
 from src.webapp.message_routes import create_message_router
@@ -1448,7 +1510,7 @@ Press Ctrl+C to stop
     )
 
     # uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
-    uvicorn.run("web_app:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("web_app:app", host="0.0.0.0", port=port, reload=_dev_mode, workers=1 if _dev_mode else int(os.getenv("WEB_CONCURRENCY", "2")))
 
 
 if __name__ == "__main__":

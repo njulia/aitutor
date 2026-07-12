@@ -1,47 +1,51 @@
-"""Pydantic request models used by the FastAPI application."""
+from __future__ import annotations
+
 from typing import Optional
 from pydantic import BaseModel, Field
 
 class ProfileRequest(BaseModel):
     profile: dict = Field(default_factory=dict)
-    subjects: list = Field(default_factory=list)
+    subjects: list = Field(default_factory=list, max_length=12)
     quick_select: bool = False
     year: Optional[int] = None
     student_id: Optional[str] = None
     is_eleven_plus: bool = False
-    mode: Optional[str] = "homework"  # Added mode field
+    mode: Optional[str] = "homework"
 
 
 class ReviewRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
     session_id: Optional[str] = None
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
-    homework_doc_id: Optional[str] = None  # RAG document id if available
-    question_index: Optional[int] = Field(default=None, ge=0)  # Zero-based index inside the source homework document
+    homework_doc_id: Optional[str] = None
+    question_index: Optional[int] = Field(default=None, ge=0)
+    is_eleven_plus: bool = False
 
 
 class ExplainDeepRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
+    review_feedback: Optional[str] = Field(default=None, max_length=20_000)
+    from_rag: Optional[bool] = False
 
 
 class ImprovePracticeRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
+    review_feedback: Optional[str] = Field(default=None, max_length=20_000)
+    from_rag: Optional[bool] = False
 
 
 class PhotoRequest(BaseModel):
-    photo: str
+    photo: str = Field(min_length=1, max_length=24_000_000)
 
 
 class SessionUpdateRequest(BaseModel):
@@ -57,7 +61,7 @@ class FeedbackRequest(BaseModel):
     trace_id: Optional[str] = None
     score: float = Field(..., description="评分: 1.0 = thumbs up, 0.0 = thumbs down")
     name: str = Field(default="user_feedback", description="评分类型")
-    comment: Optional[str] = Field(default=None, description="可选文字反馈")
+    comment: Optional[str] = Field(default=None, max_length=1000, description="可选文字反馈")
 
 
 class AdminUserCreateRequest(BaseModel):
@@ -71,7 +75,7 @@ class AdminSubscriptionCreateRequest(BaseModel):
     """管理员创建订阅请求"""
     email: str
     name: str
-    duration: str  # "5_days" 或 "30_days"
+    duration: str
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -84,13 +88,13 @@ class AdminUserUpdateRequest(BaseModel):
 class SubscriptionRequest(BaseModel):
     email: str
     name: str
-    duration: str  # "5_days" or "30_days"
+    duration: str
 
 
 class AuthRequest(BaseModel):
-    username: str = None
-    email: str = None
-    password: str
+    username: Optional[str] = Field(default=None, max_length=254)
+    email: Optional[str] = Field(default=None, max_length=254)
+    password: str = Field(min_length=1, max_length=256)
 
     def get_username(self) -> str:
         """Get username from either username or email field"""

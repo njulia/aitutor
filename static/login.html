@@ -144,6 +144,7 @@
                     // Store user info (e.g., username/email as student_id for now)
                     localStorage.setItem('student_id', data.username); // Assuming username is email
                     localStorage.setItem('student_email', data.username);
+                    // Clear only specific items if needed, but DO NOT clear sessionStorage which has the homework state
                     setTimeout(() => {
                         window.location.href = '/app'; // Redirect to the main app page
                     }, 1000);

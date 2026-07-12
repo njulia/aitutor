@@ -1,27 +1,11 @@
-"""Question parsing and matching helpers for Tutor Mode."""
+from __future__ import annotations
+
 import logging
 import re
 import uuid
 from typing import Dict, List
 
 logger = logging.getLogger(__name__)
-
-def normalize_question(text: str) -> str:
-    """Normalize a question for backward-compatible text matching.
-
-    A numeric prefix is removed only when it is clearly a label such as
-    ``1.``, ``1)``, ``(1)`` or ``Question 1``. This deliberately preserves
-    arithmetic that starts with a number, for example ``10 - 4 = ?``.
-    """
-    text = text.strip().lower()
-    text = re.sub(
-        r'^\s*(?:(?:question\s+)\d+\s*[.)、:]?\s*|\(\d+\)\s*|\d+[.)、:]\s*)',
-        '',
-        text,
-        flags=re.IGNORECASE,
-    )
-    return re.sub(r'\s+', ' ', text)
-
 
 def _split_homework_into_questions(homework_content: str, subject: str) -> List[Dict[str, str]]:
     """
@@ -46,7 +30,7 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
         numbered_parts = numbered_parts[1:] # Discard the intro part
 
     i = 0
-    while len(numbered_parts) > 1 and i < len(numbered_parts):
+    while i < len(numbered_parts):
         if re.match(r'^\s*\d+\.', numbered_parts[i]):  # This is a delimiter (e.g., "1.")
             question_number_prefix = numbered_parts[i].strip()
             question_text_segment = numbered_parts[i + 1].strip() if i + 1 < len(numbered_parts) else ""
@@ -134,11 +118,8 @@ def _split_homework_into_questions(homework_content: str, subject: str) -> List[
     # Filter out any empty content questions that might arise from splitting
     extracted_questions = [q for q in extracted_questions if q["content"].strip()]
 
-    # Assign a stable zero-based index within the original RAG document.
-    # Tutor mode sends this index back during review, so answer lookup does not
-    # depend on the displayed question text or its numbering.
+    # Assign unique IDs to each question
     for i, q in enumerate(extracted_questions):
-        q["question_index"] = i
         q["question_id"] = f"{subject}_{uuid.uuid4().hex[:8]}_{i + 1}"
 
     return extracted_questions

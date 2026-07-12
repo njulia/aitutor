@@ -1,7 +1,7 @@
 import random
 import re
 import logging
-from typing import Dict, List, Any, Tuple
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ def generate_math_homework_tool(year_group: int, topic: str = None) -> Dict[str,
     """
     Python tool to generate math homework for a specific year group and topic.
     """
-    from src.scripts.homework_math_generator import generate_math_homework as _gen_math, MATH_TOPICS_BY_YEAR
+    from scripts.homework_math_generator import generate_math_homework as _gen_math, MATH_TOPICS_BY_YEAR
     
     if not topic:
         topics = MATH_TOPICS_BY_YEAR.get(year_group, ["General Arithmetic"])
@@ -29,7 +29,7 @@ def generate_science_homework_tool(year_group: int, topic: str = None) -> Dict[s
     """
     Python tool to generate science homework.
     """
-    from src.scripts.homework_science_generator import generate_science_homework as _gen_science, SCIENCE_TOPICS_BY_YEAR
+    from scripts.homework_science_generator import generate_science_homework as _gen_science, SCIENCE_TOPICS_BY_YEAR
     
     if not topic:
         topics = SCIENCE_TOPICS_BY_YEAR.get(year_group, ["General Science"])
@@ -49,7 +49,7 @@ def generate_english_homework_tool(year_group: int, topic: str = None) -> Dict[s
     """
     Python tool to generate english homework.
     """
-    from src.scripts.homework_english_generator import generate_english_homework as _gen_english, ENGLISH_TOPICS_BY_YEAR
+    from scripts.homework_english_generator import generate_english_homework as _gen_english, ENGLISH_TOPICS_BY_YEAR
     
     if not topic:
         topics = ENGLISH_TOPICS_BY_YEAR.get(year_group, ["General English"])

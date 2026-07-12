@@ -1,138 +1,147 @@
-"""FastAPI router for user messages and admin replies."""
+"""Parent/guardian support messages backed by the main relational database."""
 from __future__ import annotations
 
 import os
+import secrets
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import Column, DateTime, MetaData, String, Table, Text, and_, create_engine, delete, insert, select, update
 
-from .email_service import send_support_reply
-from .message_models import AdminMessageReplyRequest, AdminMessageStatusRequest, UserMessageCreateRequest
-from .message_store import MessageStore
+from .db import engine_options, normalise_database_url
+
+_MESSAGE_ENGINE = None
+_MESSAGE_TABLE = None
 
 
-def create_message_router(
-    *,
-    resolve_identity: Callable[[Request], tuple[str, Optional[str], Optional[str]]],
-    project_root: str,
-    store: Optional[MessageStore] = None,
-) -> APIRouter:
+class MessageCreate(BaseModel):
+    subject: str = Field(min_length=2, max_length=120)
+    message: str = Field(min_length=2, max_length=4000)
+    contact_email: Optional[str] = Field(default=None, max_length=254)
+
+
+class MessageReply(BaseModel):
+    reply: str = Field(min_length=2, max_length=4000)
+
+
+class StatusChange(BaseModel):
+    status: str
+
+
+def create_message_router(resolve_identity, project_root: str):
+    global _MESSAGE_ENGINE, _MESSAGE_TABLE
+    url = normalise_database_url(os.getenv("MESSAGE_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{Path(project_root) / 'data' / 'messages.db'}")
+    kwargs: Dict[str, Any] = engine_options(url)
+    engine = create_engine(url, **kwargs)
+    metadata = MetaData()
+    messages = Table(
+        "support_messages", metadata,
+        Column("id", String(80), primary_key=True),
+        Column("access_token", String(100), nullable=False),
+        Column("owner_id", String(100), nullable=False, index=True),
+        Column("subject", String(120), nullable=False),
+        Column("message", Text, nullable=False),
+        Column("contact_email", String(254), nullable=True),
+        Column("reply", Text, nullable=True),
+        Column("status", String(30), nullable=False, index=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
+    metadata.create_all(engine)
+    _MESSAGE_ENGINE = engine
+    _MESSAGE_TABLE = messages
     router = APIRouter()
-    message_store = store or MessageStore()
-    static_root = Path(project_root) / "static"
 
-    def require_admin(request: Request) -> None:
-        configured = os.getenv("ADMIN_API_KEY", "").strip()
-        if configured and request.headers.get("X-Admin-Key") != configured:
-            raise HTTPException(status_code=403, detail="Admin access denied")
-
-    def logged_in_email(request: Request) -> Optional[str]:
-        _user_id, username, _cookie = resolve_identity(request)
-        return username.lower() if username else None
-
-    @router.get("/messages")
-    async def messages_page():
-        return FileResponse(static_root / "messages.html")
-
-    @router.get("/admin/messages")
-    async def admin_messages_page():
-        return FileResponse(static_root / "admin-messages.html")
+    def serialise(row: Any, *, admin: bool = False) -> Dict[str, Any]:
+        data = dict(row._mapping)
+        data.pop("access_token", None)
+        if not admin:
+            data.pop("contact_email", None)
+        for key in ("created_at", "updated_at"):
+            if hasattr(data.get(key), "isoformat"):
+                data[key] = data[key].isoformat()
+        return data
 
     @router.post("/api/messages")
-    async def create_message(request: Request, body: UserMessageCreateRequest):
-        user_id, username, new_cookie = resolve_identity(request)
-        email = (username or (str(body.email) if body.email else "")).strip().lower()
-        if not email:
-            raise HTTPException(status_code=400, detail="Email is required for anonymous messages")
-        result = message_store.create_message(
-            user_id=None if user_id.startswith("anon_") else user_id,
-            user_email=email,
-            subject=body.subject,
-            category=body.category,
-            message=body.message,
-        )
-        response = JSONResponse({"success": True, "message": result})
-        if new_cookie:
-            response.set_cookie("anon_session_id", new_cookie, httponly=True, samesite="lax")
+    async def create_message(body: MessageCreate, request: Request):
+        owner_id, username, new_anon = resolve_identity(request)
+        now = datetime.now(UTC)
+        message_id = f"msg_{uuid.uuid4().hex}"
+        token = secrets.token_urlsafe(24)
+        with engine.begin() as conn:
+            conn.execute(insert(messages).values(
+                id=message_id, access_token=token, owner_id=owner_id,
+                subject=body.subject.strip(), message=body.message.strip(),
+                contact_email=username or body.contact_email,
+                reply=None, status="open", created_at=now, updated_at=now,
+            ))
+        response = {"success": True, "message_id": message_id, "access_token": token}
+        if new_anon:
+            response["anonymous_session_created"] = True
         return response
 
-    @router.get("/api/messages")
-    async def list_my_messages(request: Request, access_token: Optional[str] = None, email: Optional[str] = None):
-        account_email = logged_in_email(request)
-        lookup_email = account_email or (email or "").strip().lower()
-        if not lookup_email and not access_token:
-            raise HTTPException(status_code=401, detail="Login, email or access token required")
-        items = message_store.list_for_user(email=lookup_email, access_token=access_token)
-        return {"success": True, "messages": items}
-
     @router.get("/api/messages/{message_id}")
-    async def get_my_message(request: Request, message_id: int, access_token: Optional[str] = None):
-        item = message_store.get_for_user(
-            message_id,
-            email=logged_in_email(request),
-            access_token=access_token,
-        )
-        if not item:
+    async def read_message(message_id: str, request: Request, access_token: Optional[str] = None):
+        owner_id, _username, _ = resolve_identity(request)
+        with engine.begin() as conn:
+            row = conn.execute(select(messages).where(messages.c.id == message_id)).first()
+        if not row or (row._mapping["owner_id"] != owner_id and row._mapping["access_token"] != access_token):
             raise HTTPException(status_code=404, detail="Message not found")
-        return {"success": True, "message": item}
+        return {"success": True, "message": serialise(row)}
 
     @router.get("/api/admin/messages")
-    async def admin_list_messages(
-        request: Request,
-        status: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-    ):
-        require_admin(request)
-        return {"success": True, "messages": message_store.list_admin(status=status, limit=min(limit, 500), offset=offset)}
+    async def admin_messages(limit: int = 100):
+        with engine.begin() as conn:
+            rows = conn.execute(select(
+                messages.c.id, messages.c.subject, messages.c.status,
+                messages.c.created_at, messages.c.updated_at,
+            ).order_by(messages.c.created_at.desc()).limit(max(1, min(limit, 500)))).all()
+        return {"success": True, "messages": [serialise(row, admin=True) for row in rows]}
 
     @router.get("/api/admin/messages/{message_id}")
-    async def admin_get_message(request: Request, message_id: int):
-        require_admin(request)
-        item = message_store.get_message(message_id)
-        if not item:
+    async def admin_message(message_id: str):
+        with engine.begin() as conn:
+            row = conn.execute(select(messages).where(messages.c.id == message_id)).first()
+        if not row:
             raise HTTPException(status_code=404, detail="Message not found")
-        return {"success": True, "message": item}
+        return {"success": True, "message": serialise(row, admin=True)}
 
     @router.post("/api/admin/messages/{message_id}/reply")
-    async def admin_reply(request: Request, message_id: int, body: AdminMessageReplyRequest):
-        require_admin(request)
-        item = message_store.get_message(message_id)
-        if not item:
+    async def admin_reply(message_id: str, body: MessageReply):
+        with engine.begin() as conn:
+            result = conn.execute(update(messages).where(messages.c.id == message_id).values(
+                reply=body.reply.strip(), status="replied", updated_at=datetime.now(UTC)
+            ))
+        if not result.rowcount:
             raise HTTPException(status_code=404, detail="Message not found")
-
-        email_status, email_error = ("not_requested", None)
-        if body.send_email:
-            email_status, email_error = send_support_reply(
-                recipient=item["user_email"],
-                original_subject=item["subject"],
-                original_message=item["message"],
-                reply=body.reply,
-                admin_name=body.admin_name,
-            )
-
-        updated = message_store.add_reply(
-            message_id=message_id,
-            admin_name=body.admin_name,
-            reply=body.reply,
-            email_status=email_status,
-            email_error=email_error,
-        )
-        return {
-            "success": True,
-            "message": updated,
-            "email_status": email_status,
-            "email_error": email_error,
-        }
+        return {"success": True}
 
     @router.patch("/api/admin/messages/{message_id}/status")
-    async def admin_update_status(request: Request, message_id: int, body: AdminMessageStatusRequest):
-        require_admin(request)
-        updated = message_store.update_status(message_id, body.status)
-        if not updated:
+    async def admin_status(message_id: str, body: StatusChange):
+        if body.status not in {"open", "pending", "replied", "closed"}:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        with engine.begin() as conn:
+            result = conn.execute(update(messages).where(messages.c.id == message_id).values(
+                status=body.status, updated_at=datetime.now(UTC)
+            ))
+        if not result.rowcount:
             raise HTTPException(status_code=404, detail="Message not found")
-        return {"success": True, "message": updated}
+        return {"success": True}
 
     return router
+
+
+def delete_messages_for_owners(owner_ids) -> int:
+    """Erase support records belonging to pseudonymous learner/session owners."""
+    if _MESSAGE_ENGINE is None or _MESSAGE_TABLE is None:
+        return 0
+    clean_ids = [str(value) for value in owner_ids if value]
+    if not clean_ids:
+        return 0
+    with _MESSAGE_ENGINE.begin() as conn:
+        result = conn.execute(delete(_MESSAGE_TABLE).where(_MESSAGE_TABLE.c.owner_id.in_(clean_ids)))
+    return int(result.rowcount or 0)
