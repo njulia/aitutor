@@ -72,10 +72,10 @@ class AdminUserCreateRequest(BaseModel):
 
 
 class AdminSubscriptionCreateRequest(BaseModel):
-    """管理员创建订阅请求"""
     email: str
     name: str
     duration: str
+    plan: Optional[str] = "homework_monthly"
 
 
 class AdminUserUpdateRequest(BaseModel):

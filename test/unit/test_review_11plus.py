@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from src.webapp.review_service import review_homework
 
-def test_review_homework_11plus_context_preservation():
+def test_review_homework_11plus_uses_explain_deep():
     # Mock LLM client
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "Excellent work!"
@@ -12,9 +12,8 @@ def test_review_homework_11plus_context_preservation():
     student_answers = "D"
     subject = "Maths"
     
-    # We need to mock format_prompt to see what it receives, 
-    # OR we can mock build_messages if we want to see the final prompt.
-    # But since review_service.py imports format_prompt locally, we'll patch it.
+    # In the updated implementation, 11plus review calls explain_deep.
+    # explain_deep uses EXPLAIN_DEEP_PROMPT which has different kwargs.
     
     with patch("src.llm_client.format_prompt") as mock_format:
         mock_format.return_value = "Mocked Prompt"
@@ -27,13 +26,14 @@ def test_review_homework_11plus_context_preservation():
             llm_client=mock_llm
         )
         
-        # Verify format_prompt was called with the correct 'question' argument
+        # Verify format_prompt was called (via explain_deep) with expected 11plus/deep context
         args, kwargs = mock_format.call_args
-        assert "question" in kwargs
-        assert homework_content in kwargs["question"]
-        assert student_answers in kwargs["question"]
-        assert "Question:" in kwargs["question"]
-        assert "Student Answer:" in kwargs["question"]
+        assert "homework_content" in kwargs
+        assert kwargs["homework_content"] == homework_content
+        assert "student_answer" in kwargs
+        assert kwargs["student_answer"] == student_answers
+        assert "subject" in kwargs
+        assert "year_group" in kwargs
 
 def test_review_homework_non_11plus_behavior():
     # Mock LLM client

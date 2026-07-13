@@ -638,7 +638,7 @@ CURRICULUM = [
 # Structured Question Generator
 # ---------------------------------------------------------------------------
 def get_questions_for_week(week_num: int) -> list:
-    """Generate exactly 3 structured Verbal Reasoning questions for the week."""
+    """Generate 10 homework questions for the specified week."""
     # Deterministic seeding
     random.seed(week_num)
     
@@ -657,8 +657,8 @@ def get_questions_for_week(week_num: int) -> list:
     
     questions = []
     
-    # Let's generate 3 questions of the specific topic type!
-    for q_id in range(1, 4):
+    # Let's generate 10 questions of the specific topic type!
+    for q_id in range(1, 11):
         seed_val = week_num * 10 + q_id
         random.seed(seed_val)
         
@@ -934,7 +934,7 @@ def generate_markdown_plan() -> str:
         "3. **Term 3 (Weeks 27-39)**: Word Building & Puzzles",
         "4. **Term 4 (Weeks 40-52)**: Exam Strategy, Mixed Drills & Advanced Logic",
         "",
-        "Each week contains core focus objectives and a **Homework Set of 3 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
+        "Each week contains core focus objectives and a **Homework Set of 10 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
         "",
         "---",
         ""
@@ -954,6 +954,7 @@ def generate_markdown_plan() -> str:
             
             md.append(f"### 📝 Homework Set {week['weekNum']}\n")
             questions = get_questions_for_week(week["weekNum"])
+            md.append(f"*(This week includes {len(questions)} selective-school style practice questions)*\n")
             for q in questions:
                 md.append(f"#### Q{q['id']}. {q['questionText']}")
                 md.append("**Options:**")
@@ -1021,35 +1022,43 @@ def main():
             batch_data = []
             for term in full_plan_data:
                 for week in term["weeks"]:
-                    # Create readable content string
+                    # Store only questions in the RAG document. Answers and worked
+                    # explanations stay in metadata and are returned only after marking.
                     content_str = (
                         f"11+ Verbal Reasoning 52-Week Plan - Term {term['termId']} - Week {week['weekNum']}\n"
                         f"Topic Focus: {week['focus']}\n"
                         f"Syllabus: {week['topic']}\n"
-                        f"Objectives:\n" + "\n".join([f"- {o}" for o in week['objectives']]) + "\n\n"
+                        "QUESTIONS\n\n"
                     )
-                    
+                    answer_records = []
                     for idx, q in enumerate(week["homeworkSet"], 1):
-                        content_str += (
-                            f"Homework Question {idx}:\n"
-                            f"{q['questionText']}\n"
-                            f"Options: {', '.join(q['options'])}\n"
-                            f"Correct Answer: {q['correctLetter']} ({q['correctValue']})\n"
-                            f"Explanation: {q['explanation']}\n"
-                            f"Coaching Strategy: {q['tip']}\n\n"
-                        )
-                    
+                        content_str += f"{idx}. {q['questionText']}\n"
+                        for option_index, option in enumerate(q["options"]):
+                            letter = chr(65 + option_index)
+                            content_str += f"{letter}) {option}\n"
+                        content_str += "\n"
+                        answer_records.append({
+                            "question": f"{idx}. {q['questionText']}",
+                            "options": q["options"],
+                            "answer": q["correctValue"],
+                            "correct_letter": q["correctLetter"],
+                            "explanation": q["explanation"],
+                            "tip": q["tip"],
+                        })
+
                     metadata = {
                         "year_group": 6,
-                        "subject": "VerbalReasoning",
+                        "subject": "VerbalReasoning-1year",
                         "key_stage": "11+",
                         "topic": week["topic"],
                         "week_num": week["weekNum"],
                         "term_id": term["termId"],
+                        "content_type": "year_round",
                         "exam_style": "GL & Selective School Style",
-                        "created_at": datetime.now().isoformat()
+                        "correct_answers": json.dumps(answer_records, ensure_ascii=False),
+                        "created_at": datetime.now().isoformat(),
                     }
-                    
+
                     batch_data.append({
                         "content": content_str,
                         "metadata": metadata,

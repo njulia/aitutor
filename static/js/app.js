@@ -14,46 +14,29 @@ let currentHomework = [];
         let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
         let currentQuestionIndex = 0;
         let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
-        let currentStudentId = localStorage.getItem('student_id'); // Only for logged-in users
-        let currentStudentEmail = localStorage.getItem('student_email'); // Only for logged-in users
-        let anonymousClientId = null; // IP-based ID for anonymous users
+        localStorage.removeItem('student_id');
+        localStorage.removeItem('student_email');
+        let currentStudentId = localStorage.getItem('auth_state') === 'logged_in' ? 'authenticated' : null;
+        let currentStudentEmail = null;
+        let anonymousClientId = null; // Server-issued random cookie ID
 
-        // Get effective student ID: logged-in user's email, or anonymous IP-based ID
+        // Get the server-resolved learner ID. It is backed by an HttpOnly
+        // cookie and is never derived from an IP address.
         async function getEffectiveStudentId() {
-            // If logged in, return the user's email
-            if (currentStudentId) {
-                return currentStudentId;
-            }
-            // If we already have an anonymous ID, return it
-            if (anonymousClientId) {
-                return anonymousClientId;
-            }
-            // Check localStorage for cached anonymous ID
-            const cached = localStorage.getItem('anonymous_client_id');
-            if (cached) {
-                anonymousClientId = cached;
-                return cached;
-            }
-            // Fetch IP-based ID from server
+            if (anonymousClientId) return anonymousClientId;
             try {
-                const resp = await fetch('/api/client-id');
+                const resp = await fetch('/api/client-id', {credentials: 'same-origin'});
                 const data = await resp.json();
-                anonymousClientId = data.client_id;
-                localStorage.setItem('anonymous_client_id', anonymousClientId);
+                anonymousClientId = data.client_id || null;
                 return anonymousClientId;
-            } catch (e) {
-                console.error('Failed to get client ID:', e);
-                // Fallback to a random ID
-                anonymousClientId = 'anon_' + Math.random().toString(36).substring(2, 14);
-                localStorage.setItem('anonymous_client_id', anonymousClientId);
-                return anonymousClientId;
+            } catch (error) {
+                console.error('Failed to get learner ID:', error);
+                return null;
             }
         }
 
-        // Synchronous version for places that can't await
         function getEffectiveStudentIdSync() {
-            if (currentStudentId) return currentStudentId;
-            return localStorage.getItem('anonymous_client_id') || null;
+            return anonymousClientId;
         }
 
 
@@ -61,42 +44,46 @@ let currentHomework = [];
         let hasSubscription = null; // null = 未检查, true/false = 已检查
 
         // 检查订阅状态
-        async function checkSubscription() {
-            if (hasSubscription !== null) return hasSubscription; // Already checked
-            
+        async function checkSubscription(plan = null) {
+            // Always check if plan is specified, otherwise use cached status
+            if (plan === null && hasSubscription !== null) return hasSubscription;
+
             // If not logged in, the backend will handle anonymous session ID and return has_subscription: false
-            const url = `/api/check-subscription`;
+            const url = plan ? `/api/check-subscription?plan=${encodeURIComponent(plan)}` : `/api/check-subscription`;
             try {
                 const resp = await fetch(url);
                 const data = await resp.json();
-                hasSubscription = data.has_subscription === true;
-                // The backend sets the anon_session_id cookie. Frontend doesn't need to store it in localStorage.
-                // currentStudentId is only for logged-in users.
-                return hasSubscription;
+                const result = data.has_subscription === true;
+                if (plan === null) hasSubscription = result;
+                
+                // Extra check for 11+ Premium specifically if requested
+                if (plan === 'elevenplus_monthly' && !result) {
+                    console.warn('11+ Premium subscription check failed');
+                }
+                
+                return result;
             } catch(e) {
                 console.error('Failed to check subscription:', e);
-                hasSubscription = false;
+                if (plan === null) hasSubscription = false;
                 return false;
             }
         }
 
         // 检查是否需要订阅才能使用高级功能
-        async function requireSubscription(featureName, isFree = false) {
+        async function requireSubscription(featureName, isFree = false, plan = null) {
             // If the feature/content is free, we don't need to check subscription
             if (isFree) return true;
 
             // Paid features always require a logged-in user with a real student_id
             if (!currentStudentId) { // currentStudentId is only set for logged-in users
-                saveStateToSessionStorage();
-                // alert(`Please login or register to use ${featureName}.`);
-                window.location.href = '/login'; // Redirect to login/register
+                redirectToLogin()
                 return false;
             }
-            const subscribed = await checkSubscription(); // Check subscription for the logged-in user
+            const subscribed = await checkSubscription(plan); // Check subscription for the logged-in user
             if (!subscribed) {
-                saveStateToSessionStorage();
-                alert(`${featureName} requires a subscription. Please subscribe to continue.`);
-                window.location.href = '/pricing';
+                const planName = plan === 'elevenplus_monthly' ? '11+ Premium' : 'Premium';
+                alert(`${featureName} requires a ${planName} subscription. Please subscribe to continue.`);
+                redirectToPricing();
                 return false;
             }
             return true;
@@ -124,6 +111,58 @@ let currentHomework = [];
                 sessionStorage.setItem('homeworkState', JSON.stringify(state));
             } catch(e) {
                 console.error('Failed to save state to sessionStorage:', e);
+            }
+        }
+
+        function safeNextPath(path) {
+            return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')
+                ? path : '/app';
+        }
+
+        function redirectToLogin(resumeSessionId = null) {
+            saveStateToSessionStorage();
+            const next = resumeSessionId
+                ? `/app?resume_session=${encodeURIComponent(resumeSessionId)}`
+                : '/app';
+            sessionStorage.setItem('postLoginPath', next);
+            window.location.assign(`/login?next=${encodeURIComponent(safeNextPath(next))}`);
+        }
+
+        function redirectToPricing(resumeSessionId = null) {
+            saveStateToSessionStorage();
+            if (resumeSessionId) sessionStorage.setItem('resumeSessionId', resumeSessionId);
+            window.location.assign('/pricing');
+        }
+
+        async function restoreResumableSession() {
+            const params = new URLSearchParams(window.location.search);
+            const sessionId = params.get('resume_session') || sessionStorage.getItem('resumeSessionId');
+            if (!sessionId) return false;
+            try {
+                let response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/claim`, {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                if (response.status === 404 || response.status === 401) {
+                    response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+                        credentials: 'same-origin'
+                    });
+                }
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success || !data.session) return false;
+                const session = data.session;
+                currentHomework = session.homework || [];
+                currentProfile = session.profile || {};
+                currentHomeworkMode = session.mode || 'homework';
+                currentQuestionIndex = 0;
+                currentQuestionAnswers = {};
+                if (currentHomeworkMode === 'tutor') displayTutorQuestion(0);
+                else displayHomework(currentHomework);
+                sessionStorage.removeItem('resumeSessionId');
+                history.replaceState({}, '', '/app');
+                return true;
+            } catch (error) {
+                console.error('Could not restore saved homework:', error);
+                return false;
             }
         }
 
@@ -177,9 +216,10 @@ let currentHomework = [];
         });
 
         // Initialize subjects and check dev mode
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             loadSubjects();
             checkAdminAccess(); // Show admin tools only to configured administrators
+            const resumedPendingHomework = await restoreResumableSession();
 
             // Update UI based on login status
             if (currentStudentId) {
@@ -195,9 +235,9 @@ let currentHomework = [];
                 setTimeout(() => switchTab(tabParam), 100);
             }
 
-            // 从 sessionStorage 恢复状态
+            // Restore local UI state only when no server-side pending homework won.
             try {
-                const savedStr = sessionStorage.getItem('homeworkState');
+                const savedStr = resumedPendingHomework ? null : sessionStorage.getItem('homeworkState');
                 if (savedStr) {
                     sessionStorage.removeItem('homeworkState');
                     const state = JSON.parse(savedStr);
@@ -223,6 +263,9 @@ let currentHomework = [];
                                         input.value = state.answers[input.dataset.subject];
                                     }
                                 });
+                                if (window.HomeworkQuestionRenderer) {
+                                    window.HomeworkQuestionRenderer.restoreFromProxies(document);
+                                }
                                 // 恢复批改结果
                                 if (state.reviewHTML) {
                                     document.getElementById('review-result').innerHTML = state.reviewHTML;
@@ -244,25 +287,31 @@ let currentHomework = [];
         });
 
         // Logout functionality
-        document.getElementById('logout-link').addEventListener('click', function(event) {
+        document.getElementById('logout-link').addEventListener('click', async function(event) {
             event.preventDefault();
+            try {
+                await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+            } catch (error) {
+                console.error('Logout request failed:', error);
+            }
             localStorage.removeItem('student_id');
             localStorage.removeItem('student_email');
+            localStorage.removeItem('auth_state');
             currentStudentId = null;
             currentStudentEmail = null;
-            hasSubscription = null; // Reset subscription status
-            window.location.href = '/'; // Redirect to home or login page
+            hasSubscription = null;
+            window.location.assign('/');
         });
 
         // Input method handling
-        function setInputMethod(method) {
+        function setInputMethod(method, selectedButton = null) {
             currentInputMethod = method;
 
             // Update tab styles
             document.querySelectorAll('.input-method-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            event.target.classList.add('active');
+            if (selectedButton) selectedButton.classList.add('active');
 
             // Hide all content
             document.querySelectorAll('.input-method-content').forEach(content => {
@@ -440,18 +489,12 @@ let currentHomework = [];
             return Array.from(selected).map(el => el.dataset.subject);
         }
 
-        function switchTab(tabId) {
+        function switchTab(tabId, selectedButton = null) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
 
-            // Find the tab button - either from event or by onclick attribute
-            let tabButton = event && event.target ? event.target : null;
-            if (!tabButton) {
-                tabButton = document.querySelector(`.tab[onclick*="${tabId}"]`);
-            }
-            if (tabButton) {
-                tabButton.classList.add('active');
-            }
+            const tabButton = selectedButton || document.querySelector(`.tab[onclick*="${tabId}"]`);
+            if (tabButton) tabButton.classList.add('active');
             document.getElementById(tabId).classList.add('active');
         }
 
@@ -493,22 +536,6 @@ let currentHomework = [];
             return 'homework'; // Default to homework mode
         }
 
-        function extractChoices(content) {
-            // Regex to match choices like A) ..., B) ..., C) ..., etc. or A. ..., B. ..., C. ...
-            // We look for patterns starting with a letter and a closing parenthesis or dot, followed by space or newline
-            const choiceRegex = /([A-E])[\)\.]\s*([^\n]+)/g;
-            const choices = [];
-            let match;
-            while ((match = choiceRegex.exec(content)) !== null) {
-                choices.push({
-                    id: match[1],
-                    text: match[2].trim()
-                });
-            }
-            // Only return if we found at least 2 choices (minimum for multiple choice)
-            return choices.length >= 2 ? choices : null;
-        }
-
         // Generate Homework - uses selected subjects directly
         async function generateHomework() {
             const year = parseInt(document.getElementById('homework-year').value);
@@ -548,20 +575,16 @@ let currentHomework = [];
                     })
                 });
 
+                const data = await response.json().catch(() => ({}));
                 if (response.status === 402) {
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
                 if (response.status === 401) {
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
 
                 if (data.success) {
                     currentHomework = data.homework;
@@ -621,20 +644,16 @@ let currentHomework = [];
                     })
                 });
 
+                const data = await response.json().catch(() => ({}));
                 if (response.status === 402) {
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
                 if (response.status === 401) {
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
 
                 if (data.success) {
                     currentHomework = data.homework;
@@ -687,20 +706,16 @@ let currentHomework = [];
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
 
                 if (data.success) {
                     currentHomework = data.homework;
@@ -727,7 +742,7 @@ let currentHomework = [];
 
         async function generateCustomHomeworkEleven() {
             // Check subscription first
-            if (!await requireSubscription('Smart 11+ Practice')) return;
+            if (!await requireSubscription('Smart 11+ Practice', false, 'elevenplus_monthly')) return;
 
             const profileText = document.getElementById('eleven-profile').value;
             const subjects = getSelectedSubjects('eleven-subjects');
@@ -751,20 +766,16 @@ let currentHomework = [];
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
 
                 if (data.success) {
                     currentHomework = data.homework;
@@ -801,42 +812,42 @@ let currentHomework = [];
             return formatted;
         }
 
-        function displayHomework(homeworkList) {
-            const container = document.getElementById('homework-results');
-            container.innerHTML = homeworkList.map((hw, idx) => {
-                const choices = extractChoices(hw.content);
-                const answerHtml = choices ? `
-                    <div class="choices-container" data-question-idx="${idx}">
-                        ${choices.map(choice => `
-                            <label class="choice-item">
-                                <input type="radio" name="answer-${idx}" value="${choice.id}" data-subject="${hw.subject}">
-                                <span class="choice-prefix">${choice.id})</span>
-                                <span class="choice-text">${choice.text}</span>
-                            </label>
-                        `).join('')}
-                    </div>
-                ` : `
-                    <textarea class="answer-input-inline"
-                              placeholder="Write your answer here..."
-                              data-subject="${hw.subject}"></textarea>
-                `;
-
-                return `
-                    <div class="homework-block">
-                        <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
-                        <div class="homework-content">
-                            <div class="question-column">
-                                ${formatQuestions(renderSafeMarkdown(hw.content))}
-                            </div>
-                            <div class="answer-column">
-                                <h4>Your Answer:</h4>
-                                ${answerHtml}
-                            </div>
+        function renderStandardHomeworkBlock(hw, idx) {
+            return `
+                <div class="homework-block" data-homework-index="${idx}">
+                    <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(renderSafeMarkdown(hw.content))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answer:</h4>
+                            <textarea class="answer-input-inline"
+                                      placeholder="Write your answer here..."
+                                      data-subject="${hw.subject}"
+                                      data-homework-index="${idx}"></textarea>
                         </div>
                     </div>
-                `;
+                </div>
+            `;
+        }
+
+        function displayHomework(homeworkList) {
+            const container = document.getElementById('homework-results');
+            const renderer = window.HomeworkQuestionRenderer;
+            const list = Array.isArray(homeworkList) ? homeworkList : [];
+
+            container.innerHTML = list.map((hw, idx) => {
+                if (renderer && renderer.hasChoiceQuestions(hw)) {
+                    return renderer.renderResponseBlock(hw, idx, {
+                        headerText: hw.subject || 'Homework',
+                        groupPrefix: 'homework-choice'
+                    });
+                }
+                return renderStandardHomeworkBlock(hw, idx);
             }).join('');
 
+            if (renderer) renderer.bindAll(container);
             showResults();
             document.getElementById('homework-buttons').style.display = 'block';
             document.getElementById('tutor-mode-buttons').style.display = 'none';
@@ -845,65 +856,56 @@ let currentHomework = [];
         function displayTutorQuestion(index) {
             if (index >= currentHomework.length) {
                 alert('You have completed all questions!');
-                clearResults(); // Or show a completion message
+                clearResults();
                 return;
             }
 
             const hw = currentHomework[index];
-            const choices = extractChoices(hw.content);
             const savedAnswer = currentQuestionAnswers[index] || '';
-
-            const answerHtml = choices ? `
-                <div class="choices-container" id="tutor-choices-container">
-                    ${choices.map(choice => `
-                        <label class="choice-item">
-                            <input type="radio" name="tutor-answer" value="${choice.id}" 
-                                   data-subject="${hw.subject}" 
-                                   ${savedAnswer === choice.id ? 'checked' : ''}>
-                            <span class="choice-prefix">${choice.id})</span>
-                            <span class="choice-text">${choice.text}</span>
-                        </label>
-                    `).join('')}
-                </div>
-            ` : `
-                <textarea class="answer-input-inline"
-                          id="tutor-answer-input"
-                          placeholder="Write your answer here..."
-                          data-subject="${hw.subject}">${savedAnswer}</textarea>
-            `;
-
+            const renderer = window.HomeworkQuestionRenderer;
             const container = document.getElementById('homework-results');
-            container.innerHTML = `
-                <div class="homework-block">
-                    <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
-                    <div class="homework-content">
-                        <div class="question-column">
-                            ${formatQuestions(renderSafeMarkdown(hw.content))}
-                        </div>
-                        <div class="answer-column">
-                            <h4>Your Answer:</h4>
-                            ${answerHtml}
+
+            if (renderer && renderer.hasChoiceQuestions(hw)) {
+                container.innerHTML = renderer.renderResponseBlock(hw, index, {
+                    outerClass: 'homework-block question-response-block tutor-multiple-choice-block',
+                    headerText: `${hw.subject || 'Homework'} (Question ${index + 1} of ${currentHomework.length})`,
+                    groupPrefix: 'tutor-choice',
+                    proxyId: 'tutor-answer-input',
+                    savedAnswer: savedAnswer
+                });
+                const block = container.querySelector('.question-response-block');
+                renderer.bindBlock(block, value => {
+                    currentQuestionAnswers[index] = value;
+                });
+            } else {
+                container.innerHTML = `
+                    <div class="homework-block">
+                        <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                        <div class="homework-content">
+                            <div class="question-column">
+                                ${formatQuestions(renderSafeMarkdown(hw.content))}
+                            </div>
+                            <div class="answer-column">
+                                <h4>Your Answer:</h4>
+                                <textarea class="answer-input-inline"
+                                          id="tutor-answer-input"
+                                          placeholder="Write your answer here..."
+                                          data-subject="${hw.subject}">${savedAnswer}</textarea>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
 
             showResults();
             document.getElementById('homework-buttons').style.display = 'none';
             document.getElementById('tutor-mode-buttons').style.display = 'block';
-            document.getElementById('review-result').innerHTML = ''; // Clear previous review
+            document.getElementById('review-result').innerHTML = '';
         }
 
         async function reviewCurrentQuestion() {
-            let studentAnswer = '';
-            const choiceContainer = document.getElementById('tutor-choices-container');
-            if (choiceContainer) {
-                const selected = choiceContainer.querySelector('input[name="tutor-answer"]:checked');
-                studentAnswer = selected ? selected.value : '';
-            } else {
-                const answerInput = document.getElementById('tutor-answer-input');
-                studentAnswer = answerInput ? answerInput.value.trim() : '';
-            }
+            const answerInput = document.getElementById('tutor-answer-input');
+            const studentAnswer = answerInput ? answerInput.value.trim() : '';
 
             if (!studentAnswer) {
                 alert('Please select or enter your answer for this question!');
@@ -938,20 +940,16 @@ let currentHomework = [];
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
 
                 if (data.success) {
                     displayReview(data.review);
@@ -967,18 +965,11 @@ let currentHomework = [];
         }
 
         function nextQuestion() {
-            // Save the current answer before moving to the next question
-            const choiceContainer = document.getElementById('tutor-choices-container');
-            if (choiceContainer) {
-                const selected = choiceContainer.querySelector('input[name="tutor-answer"]:checked');
-                currentQuestionAnswers[currentQuestionIndex] = selected ? selected.value : '';
-            } else {
-                const answerInput = document.getElementById('tutor-answer-input');
-                if (answerInput) {
-                    currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
-                }
+            // Save the current answer before moving to the next question.
+            const answerInput = document.getElementById('tutor-answer-input');
+            if (answerInput) {
+                currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
             }
-
             currentQuestionIndex++;
             displayTutorQuestion(currentQuestionIndex);
         }
@@ -995,16 +986,6 @@ let currentHomework = [];
                 const answer = input.value.trim();
                 if (answer) {
                     allAnswers.push(`--- ${subject} ---\n${answer}`);
-                }
-            });
-
-            // Choice answers
-            const choiceContainers = document.querySelectorAll('.choices-container');
-            choiceContainers.forEach(container => {
-                const selected = container.querySelector('input:checked');
-                if (selected) {
-                    const subject = selected.dataset.subject;
-                    allAnswers.push(`--- ${subject} ---\n${selected.value}`);
                 }
             });
 
@@ -1072,6 +1053,7 @@ let currentHomework = [];
                 // Add doc_id if available (for RAG answer lookup)
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
+                    requestBody.is_eleven_plus = currentHomework.some(item => item.is_eleven_plus === true);
                 }
                 requestBody.is_eleven_plus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
 
@@ -1161,6 +1143,9 @@ let currentHomework = [];
             showLoading();
 
             try {
+                const homeworkDocId = currentHomework[0]?.doc_id || null;
+                const isElevenPlus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
+
                 const response = await fetch('/api/explain-deep', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1170,24 +1155,22 @@ let currentHomework = [];
                         subject: subject,
                         profile: { student_id: currentStudentId }, // Pass student_id for subscription check
                         review_feedback: reviewFeedback,
-                        from_rag: isFree
+                        from_rag: isFree,
+                        homework_doc_id: homeworkDocId,
+                        is_eleven_plus: isElevenPlus
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
                 
                 if (response.status === 504) {
                     alert('That took too long. Please try again or use a shorter question.');
@@ -1268,6 +1251,9 @@ let currentHomework = [];
             showLoading();
 
             try {
+                const homeworkDocId = currentHomework[0]?.doc_id || null;
+                const isElevenPlus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
+
                 const response = await fetch('/api/improve-practice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1277,24 +1263,22 @@ let currentHomework = [];
                         subject: subject,
                         profile: { student_id: currentStudentId }, // Pass student_id for subscription check
                         review_feedback: reviewFeedback,
-                        from_rag: isFree
+                        from_rag: isFree,
+                        homework_doc_id: homeworkDocId,
+                        is_eleven_plus: isElevenPlus
                     })
                 });
 
-                if (response.status === 402) { // Payment Required - subscription required
-                    saveStateToSessionStorage();
-                    alert('Subscription required for this feature.');
-                    window.location.href = '/pricing';
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
                     return;
                 }
-                if (response.status === 401) { // Unauthorized - login required
-                    saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
-                    window.location.href = '/login';
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-
-                const data = await response.json();
                 
                 if (response.status === 504) {
                     alert('That took too long. Please try again or use a shorter question.');
@@ -1316,40 +1300,51 @@ let currentHomework = [];
         }
 
         function displayPracticeQuestions(practiceContent, subject) {
-            // 将练习内容显示在题目区域，学生可以在旁边输入答案
             const container = document.getElementById('homework-results');
+            const renderer = window.HomeworkQuestionRenderer;
 
-            // 保存练习内容用于后续批改
             currentPracticeContent = practiceContent;
             currentPracticeSubject = subject;
             isPracticeMode = true;
 
-            container.innerHTML = `
-                <div class="homework-block">
-                    <h3 class="subject-header" style="background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);">
-                        Practice - ${subject}
-                    </h3>
-                    <div class="homework-content">
-                        <div class="question-column" style="border-left-color: #f57c00;">
-                            ${renderSafeMarkdown(practiceContent)}
-                        </div>
-                        <div class="answer-column">
-                            <h4 style="color: #f57c00;">Your Answers:</h4>
-                            <textarea class="answer-input-inline"
-                                      id="practice-answer-input"
-                                      style="border-color: #f57c00;"
-                                      placeholder="Work through the practice questions above and write your answers here..."></textarea>
+            const practiceItem = {
+                subject: subject,
+                content: practiceContent,
+                questions: renderer ? renderer.parseQuestions(practiceContent) : []
+            };
+            if (renderer && renderer.hasChoiceQuestions(practiceItem)) {
+                container.innerHTML = renderer.renderResponseBlock(practiceItem, 0, {
+                    outerClass: 'homework-block question-response-block practice-question-block',
+                    headerClass: 'subject-header practice-subject-header',
+                    headerText: `Practice - ${subject}`,
+                    groupPrefix: 'practice-choice',
+                    proxyId: 'practice-answer-input'
+                });
+                renderer.bindAll(container);
+            } else {
+                container.innerHTML = `
+                    <div class="homework-block">
+                        <h3 class="subject-header practice-subject-header">Practice - ${subject}</h3>
+                        <div class="homework-content">
+                            <div class="question-column practice-question-column">
+                                ${renderSafeMarkdown(practiceContent)}
+                            </div>
+                            <div class="answer-column">
+                                <h4 class="practice-answer-heading">Your Answers:</h4>
+                                <textarea class="answer-input-inline practice-answer-input"
+                                          id="practice-answer-input"
+                                          placeholder="Work through the practice questions above and write your answers here..."></textarea>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
 
-            // 更新按钮区域
             const resultsCard = document.querySelector('#results .card');
             const buttonArea = resultsCard.querySelector('div[style*="text-align: center"]');
             if (buttonArea) {
                 buttonArea.innerHTML = `
-                    <button class="btn btn-primary" onclick="checkPracticeAnswers()" style="background: linear-gradient(135deg, #f57c00, #ff9800);">
+                    <button class="btn btn-primary practice-check-button" onclick="checkPracticeAnswers()">
                         Check Answers
                     </button>
                     <button class="btn btn-secondary" onclick="exitPracticeMode()">
@@ -1358,7 +1353,6 @@ let currentHomework = [];
                 `;
             }
 
-            // 清空之前的批改结果
             document.getElementById('review-result').innerHTML = '';
             document.getElementById('results').style.display = 'block';
         }
@@ -1428,12 +1422,7 @@ let currentHomework = [];
             // Save current state to sessionStorage, so it can be restored when returning from pricing page
             saveStateToSessionStorage();
             
-            // Append student_id if logged in
-            let url = '/progress';
-            if (currentStudentId) {
-                url += `?student_id=${encodeURIComponent(currentStudentId)}`;
-            }
-            window.location.href = url; // Redirect to progress page
+            window.location.href = '/progress';
         }
 
         // ---- Admin Tools Functions ----

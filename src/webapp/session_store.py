@@ -159,6 +159,49 @@ class TutorSessionStore:
                     return self._decode(updated)
         raise RuntimeError("Session was changed by too many concurrent requests")
 
+    def claim(self, session_id: str, from_owner_key: str, to_owner_key: str) -> Optional[Dict[str, Any]]:
+        """Move a short-lived anonymous session to the signed-in account owner.
+
+        The caller must know the session ID and still possess the anonymous
+        cookie that created it. This supports returning to generated homework
+        after login without putting the homework into a URL or browser storage.
+        """
+        if not session_id or not from_owner_key or not to_owner_key:
+            return None
+        now = self._now()
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                update(self.table)
+                .where(
+                    and_(
+                        self.table.c.session_id == session_id,
+                        self.table.c.owner_key == from_owner_key,
+                        self.table.c.expires_at > now,
+                    )
+                )
+                .values(
+                    owner_key=to_owner_key,
+                    updated_at=now,
+                    expires_at=now + timedelta(seconds=self.ttl_seconds),
+                    version=self.table.c.version + 1,
+                )
+            )
+            if not result.rowcount:
+                row = conn.execute(
+                    select(self.table).where(
+                        and_(
+                            self.table.c.session_id == session_id,
+                            self.table.c.owner_key == to_owner_key,
+                            self.table.c.expires_at > now,
+                        )
+                    )
+                ).first()
+                return self._decode(row) if row else None
+            row = conn.execute(
+                select(self.table).where(self.table.c.session_id == session_id)
+            ).first()
+        return self._decode(row) if row else None
+
     def delete(self, session_id: str, owner_key: str) -> bool:
         with self.engine.begin() as conn:
             result = conn.execute(

@@ -24,12 +24,29 @@ def compact_text(value: Any, max_chars: int, *, keep_tail: int = 0) -> str:
 
 def compact_profile(profile: Dict[str, Any] | None) -> Dict[str, Any]:
     source = profile or {}
-    allowed = ("student_id", "year_group", "age", "key_stage", "english_level", "learning_needs")
+    allowed = (
+        "student_id",
+        "year_group",
+        "age",
+        "key_stage",
+        "english_level",
+        "learning_needs",
+        "learning_goals",
+        "weak_areas",
+        "plan_week",
+        "plan_phase",
+        "preferred_session_minutes",
+    )
     result: Dict[str, Any] = {}
     for key in allowed:
         if key in source and source[key] not in (None, ""):
             value = source[key]
-            result[key] = compact_text(value, 240) if isinstance(value, str) else value
+            if isinstance(value, str):
+                result[key] = compact_text(value, 240)
+            elif isinstance(value, list):
+                result[key] = [compact_text(item, 120) for item in value[:6] if item not in (None, "")]
+            else:
+                result[key] = value
     return result
 
 

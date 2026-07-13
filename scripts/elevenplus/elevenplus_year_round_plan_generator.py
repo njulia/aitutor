@@ -884,33 +884,41 @@ def main():
             batch_data = []
             for term in full_plan_data:
                 for week in term["weeks"]:
-                    # Create readable content string
+                    # Store only questions in the RAG document. Answers and worked
+                    # explanations stay in metadata and are returned only after marking.
                     content_str = (
-                            f"11+ Maths 52-Week Plan - Term {term['termId']} - Week {week['weekNum']}\n"
-                            f"Topic Focus: {week['focus']}\n"
-                            f"Syllabus: {week['topic']}\n"
-                            f"Objectives:\n" + "\n".join([f"- {o}" for o in week['objectives']]) + "\n\n"
+                        f"11+ Maths 52-Week Plan - Term {term['termId']} - Week {week['weekNum']}\n"
+                        f"Topic Focus: {week['focus']}\n"
+                        f"Syllabus: {week['topic']}\n"
+                        "QUESTIONS\n\n"
                     )
-
+                    answer_records = []
                     for idx, q in enumerate(week["homeworkSet"], 1):
-                        content_str += (
-                            f"Homework Question {idx}:\n"
-                            f"{q['questionText']}\n"
-                            f"Options: {', '.join(q['options'])}\n"
-                            f"Correct Answer: {q['correctLetter']} ({q['correctValue']})\n"
-                            f"Explanation: {q['explanation']}\n"
-                            f"Coaching Strategy: {q['tip']}\n\n"
-                        )
+                        content_str += f"{idx}. {q['questionText']}\n"
+                        for option_index, option in enumerate(q["options"]):
+                            letter = chr(65 + option_index)
+                            content_str += f"{letter}) {option}\n"
+                        content_str += "\n"
+                        answer_records.append({
+                            "question": f"{idx}. {q['questionText']}",
+                            "options": q["options"],
+                            "answer": q["correctValue"],
+                            "correct_letter": q["correctLetter"],
+                            "explanation": q["explanation"],
+                            "tip": q["tip"],
+                        })
 
                     metadata = {
                         "year_group": 6,
-                        "subject": "Maths",
+                        "subject": "Maths-1year",
                         "key_stage": "11+",
                         "topic": week["topic"],
                         "week_num": week["weekNum"],
                         "term_id": term["termId"],
+                        "content_type": "year_round",
                         "exam_style": "GL & Selective School Style",
-                        "created_at": datetime.now().isoformat()
+                        "correct_answers": json.dumps(answer_records, ensure_ascii=False),
+                        "created_at": datetime.now().isoformat(),
                     }
 
                     batch_data.append({

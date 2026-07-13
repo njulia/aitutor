@@ -582,7 +582,7 @@ CURRICULUM = [
 ]
 
 def get_questions_for_week(week_num: int) -> list:
-    """Generate 3 homework questions for the specified week."""
+    """Generate 10 homework questions for the specified week."""
     # Custom deterministic randomizer based on week_num as a seed
     seed = week_num
     
@@ -734,46 +734,72 @@ def get_questions_for_week(week_num: int) -> list:
             "explanation": "Let's test option A: (4 + 6) × 3 - 2.\n- Solve inside brackets first: 4 + 6 = 10\n- Next, multiply: 10 × 3 = 30\n- Finally, subtract: 30 - 2 = 28. This is correct!",
             "tip": "Work backwards from the options provided instead of trying to guess where brackets go from scratch!"
         })
-    else:
-        # Find week metadata from the CURRICULUM
-        current_week = None
-        for term in CURRICULUM:
-            for week in term["weeks"]:
-                if week["weekNum"] == week_num:
-                    current_week = week
-                    break
-            if current_week:
+
+    # Fill up to 10 questions for ALL weeks
+    current_week = None
+    for term in CURRICULUM:
+        for week in term["weeks"]:
+            if week["weekNum"] == week_num:
+                current_week = week
                 break
+        if current_week:
+            break
+    
+    focus = current_week["focus"] if current_week else "General Practice"
+    
+    while len(questions) < 10:
+        q_id = len(questions) + 1
+        # Use offset for variety
+        v1 = rand_num(10, 50, q_id * 10)
+        v2 = rand_num(2, 9, q_id * 20)
         
-        focus = current_week["focus"] if current_week else "General Practice"
-        
-        questions.append({
-            "id": 1,
-            "questionText": f"An exam question tests your knowledge of [{focus}]. Solve the following: A student has some counters. If they group them into piles of 5, they have 3 left over. If they group them into piles of 6, they have 4 left over. What is the smallest possible number of counters they could have?",
-            "options": ["13", "18", "23", "28", "33"],
-            "correctLetter": "D",
-            "correctValue": "28",
-            "explanation": "Let's find a number N that leaves a remainder of 3 when divided by 5, and a remainder of 4 when divided by 6.\n- Multiples of 5 plus 3: 8, 13, 18, 23, 28, 33...\n- Multiples of 6 plus 4: 10, 16, 22, 28, 34...\nThe smallest common number in both lists is 28.",
-            "tip": "Notice that in both cases, the remainder is exactly 2 less than the group size (5-3 = 2, and 6-4 = 2). This means the answer is simply the LCM of 5 and 6 (which is 30) minus 2: 30 - 2 = 28!"
-        })
-        questions.append({
-            "id": 2,
-            "questionText": f"A selective school workbook presents a challenge for [{focus}]: If 3/5 of a class are girls, and there are 12 boys in the class, how many students are there in total?",
-            "options": ["18", "20", "24", "30", "36"],
-            "correctLetter": "D",
-            "correctValue": "30",
-            "explanation": "If 3/5 of the class are girls, then the remaining 2/5 of the class must be boys.\nWe are told that 2/5 of the class is equal to 12 boys.\n- To find 1/5 of the class, divide by 2: 12 ÷ 2 = 6 students.\n- To find the whole class (5/5), multiply by 5: 6 × 5 = 30 students.",
-            "tip": "Visualize fractions as block diagrams! 2 blocks represent the boys (12), so each block represents 6. The total class has 5 blocks, which is 5 × 6 = 30."
-        })
-        questions.append({
-            "id": 3,
-            "questionText": f"To master [{focus}], solve: A recipe requires 150g of flour to make 6 cupcakes. How much flour is required to make 10 cupcakes?",
-            "options": ["200g", "225g", "250g", "300g", "1500g"],
-            "correctLetter": "C",
-            "correctValue": "250g",
-            "explanation": "This is a direct proportion question. Let's find the unitary value first:\n- Flour for 1 cupcake: 150g ÷ 6 = 25g.\n- Flour for 10 cupcakes: 25g × 10 = 250g.",
-            "tip": "Alternatively, notice that 10 is 5/3 of 6. Multiply 150g by 5/3: 150 ÷ 3 = 50, and 50 × 5 = 250g."
-        })
+        if "Arithmetic" in focus or "Addition" in focus:
+            correct = v1 + v2
+            questions.append({
+                "id": q_id,
+                "questionText": f"What is {v1} + {v2}?",
+                "options": [str(correct), str(correct+1), str(correct-1), str(correct+2), str(correct-2)],
+                "correctLetter": "A",
+                "correctValue": str(correct),
+                "explanation": f"Adding {v1} and {v2} gives {correct}.",
+                "tip": "Use column addition for larger numbers."
+            })
+        elif "Multiplication" in focus:
+            correct = v1 * v2
+            questions.append({
+                "id": q_id,
+                "questionText": f"Calculate {v1} × {v2}.",
+                "options": [str(correct), str(correct+v2), str(correct-v2), str(correct+1), str(correct-1)],
+                "correctLetter": "A",
+                "correctValue": str(correct),
+                "explanation": f"{v1} times {v2} is {correct}.",
+                "tip": "Recall your times tables for faster calculation!"
+            })
+        elif "Division" in focus:
+            prod = v1 * v2
+            questions.append({
+                "id": q_id,
+                "questionText": f"What is {prod} ÷ {v2}?",
+                "options": [str(v1), str(v1+1), str(v1-1), str(v1+2), str(v1-2)],
+                "correctLetter": "A",
+                "correctValue": str(v1),
+                "explanation": f"{prod} divided by {v2} is {v1}.",
+                "tip": "Division is the inverse of multiplication."
+            })
+        else:
+            # Fallback for other topics using a more generic word problem
+            val = rand_num(100, 500, q_id * 30)
+            reduction = rand_num(10, 90, q_id * 40)
+            correct = val - reduction
+            questions.append({
+                "id": q_id,
+                "questionText": f"A student has {val} stickers and gives {reduction} to a friend. How many stickers does the student have left?",
+                "options": [str(correct), str(correct+1), str(correct-1), str(correct+10), str(correct-10)],
+                "correctLetter": "A",
+                "correctValue": str(correct),
+                "explanation": f"{val} minus {reduction} equals {correct}.",
+                "tip": "Subtract carefully, especially when borrowing is required."
+            })
 
     return questions
 
@@ -794,7 +820,7 @@ def generate_markdown_plan() -> str:
         "3. **Term 3 (Weeks 27-39)**: Shape, Space, Measures & Data Handling",
         "4. **Term 4 (Weeks 40-52)**: Advanced Problem Solving, Non-Routine Reasoning & Exam Mastery",
         "",
-        "Each week contains core focus objectives and a **Homework Set of 3 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
+        "Each week contains core focus objectives and a **Homework Set of 10 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
         "",
         "---",
         ""
@@ -814,6 +840,7 @@ def generate_markdown_plan() -> str:
             
             md.append(f"### 📝 Homework Set {week['weekNum']}\n")
             questions = get_questions_for_week(week["weekNum"])
+            md.append(f"*(This week includes {len(questions)} selective-school style practice questions)*\n")
             for q in questions:
                 md.append(f"#### Q{q['id']}. {q['questionText']}")
                 md.append("**Options:**")
@@ -878,35 +905,43 @@ def main():
             batch_data = []
             for term in full_plan_data:
                 for week in term["weeks"]:
-                    # Create readable content string
+                    # Store only questions in the RAG document. Answers and worked
+                    # explanations stay in metadata and are returned only after marking.
                     content_str = (
                         f"11+ Maths 52-Week Plan - Term {term['termId']} - Week {week['weekNum']}\n"
                         f"Topic Focus: {week['focus']}\n"
                         f"Syllabus: {week['topic']}\n"
-                        f"Objectives:\n" + "\n".join([f"- {o}" for o in week['objectives']]) + "\n\n"
+                        "QUESTIONS\n\n"
                     )
-                    
+                    answer_records = []
                     for idx, q in enumerate(week["homeworkSet"], 1):
-                        content_str += (
-                            f"Homework Question {idx}:\n"
-                            f"{q['questionText']}\n"
-                            f"Options: {', '.join(q['options'])}\n"
-                            f"Correct Answer: {q['correctLetter']} ({q['correctValue']})\n"
-                            f"Explanation: {q['explanation']}\n"
-                            f"Coaching Strategy: {q['tip']}\n\n"
-                        )
-                    
+                        content_str += f"{idx}. {q['questionText']}\n"
+                        for option_index, option in enumerate(q["options"]):
+                            letter = chr(65 + option_index)
+                            content_str += f"{letter}) {option}\n"
+                        content_str += "\n"
+                        answer_records.append({
+                            "question": f"{idx}. {q['questionText']}",
+                            "options": q["options"],
+                            "answer": q["correctValue"],
+                            "correct_letter": q["correctLetter"],
+                            "explanation": q["explanation"],
+                            "tip": q["tip"],
+                        })
+
                     metadata = {
                         "year_group": 6,
-                        "subject": "Maths",
+                        "subject": "Maths-1year",
                         "key_stage": "11+",
                         "topic": week["topic"],
                         "week_num": week["weekNum"],
                         "term_id": term["termId"],
+                        "content_type": "year_round",
                         "exam_style": "GL & Selective School Style",
-                        "created_at": datetime.now().isoformat()
+                        "correct_answers": json.dumps(answer_records, ensure_ascii=False),
+                        "created_at": datetime.now().isoformat(),
                     }
-                    
+
                     batch_data.append({
                         "content": content_str,
                         "metadata": metadata,

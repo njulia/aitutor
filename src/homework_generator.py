@@ -18,231 +18,212 @@ from src.llm_client import LLMClient, format_prompt, build_messages
 from src.cache import homework_cache, subject_extraction_cache, make_cache_key
 from src.models import (
     UK_PRIMARY_SUBJECTS, KEY_STAGES, get_homework_time_by_age,
-    YEAR_GROUP_AGE,
+    YEAR_GROUP_AGE, is_eleven_plus_subject as is_known_eleven_plus_subject,
+    subject_display_name,
 )
 from src.homework_rag import (
-    store_homework, search_homework, get_student_previous_topics,
+    store_homework, search_homework, search_homework_by_metadata,
+    get_student_previous_topics,
 )
 from src.elevenplus_rag import (
     store_homework as elevenplus_store_homework,
     search_homework as elevenplus_search_homework,
+    search_homework_by_metadata as elevenplus_search_homework_by_metadata,
     get_student_previous_topics as elevenplus_get_student_previous_topics,
+    get_homework_questions as elevenplus_get_homework_questions,
+    format_questions_only as elevenplus_format_questions_only,
 )
 from src.prompts import (
     HOMEWORK_PROMPT, SUBJECT_EXTRACTION_PROMPT, HOMEWORK_PROMPT_11PLUS,
     RAG_PROMPT_11PLUS,
 )
+from src.webapp.homework_assignment_store import get_assignment_store
+from src.webapp.prompt_budget import compact_profile, compact_text
+from src.webapp.question_utils import parse_public_questions
 
 
 logger = logging.getLogger(__name__)
 
 
 def _is_eleven_plus_subject(subject: str) -> bool:
-    """判断是否为 11+ 专属科目（不属于普通小学课程）"""
-    return subject in ("Verbal Reasoning", "Non-Verbal Reasoning")
+    """Recognise ordinary and 52-week 11+ subject identifiers."""
+    return is_known_eleven_plus_subject(subject)
 
 
-def generate_homewor_by_tools(subject, year_group, student_id, cache_key, store_homework_func, age=None):
-    # --- TOOL OFFLOADING ---
-    # Map subjects to tools
-    TOOL_MAP = {
-        "Maths": "generate_math_homework_tool",
-        "Science": "generate_science_homework_tool",
-        "English": "generate_english_homework_tool"
-    }
 
-    if subject in TOOL_MAP:
-        try:
-            from src.tools.math_tools import (
-                generate_math_homework_tool,
-                generate_science_homework_tool,
-                generate_english_homework_tool
-            )
-            tool_func_name = TOOL_MAP[subject]
-            tool_func = locals().get(tool_func_name) or globals().get(tool_func_name)
+def generate_homework_for_subject(
+    student_profile: Dict[str, Any],
+    subject: str,
+    llm: LLMClient,
+    is_eleven_plus: bool = False,
+) -> tuple:
+    """Return unseen RAG homework first; call the LLM only after an exact RAG miss.
 
-            # Since we imported them directly, they might not be in locals/globals
-            # as expected by the logic above if imported inside the try.
-            # Let's just use a simple if-else or direct call.
-            if subject == "Maths":
-                tool_func = generate_math_homework_tool
-            elif subject == "Science":
-                tool_func = generate_science_homework_tool
-            elif subject == "English":
-                tool_func = generate_english_homework_tool
-
-            if tool_func:
-                logger.info("[Tool] Using Python tool to generate %s homework for Year %d", subject, year_group)
-                tool_result = tool_func(year_group)
-                content = tool_result["content"]
-                answers = tool_result["answers"]
-
-                # Store to RAG for consistency
-                doc_id = store_homework_func(
-                    content=content,
-                    year_group=year_group,
-                    subject=subject,
-                    student_id=student_id,
-                    answers=answers,
-                    age=age
-                )
-
-                # Update cache
-                homework_cache.set(cache_key, {"content": content, "doc_id": doc_id, "from_rag": False})
-                return content, doc_id, False
-        except Exception as tool_exc:
-            logger.warning("[Tool] %s tool failed, falling back to RAG/LLM: %s", subject, tool_exc)
-            return None, None, None
-    # --- END TOOL OFFLOADING ---
-
-
-def generate_homework_for_subject(student_profile: Dict[str, Any], subject: str, llm: LLMClient, is_eleven_plus: bool = False) -> tuple:
-    """为指定科目生成作业（每次都生成新作业，避免重复以前的内容）
-
-    优先从 RAG 中检索已有作业，命中则直接返回（零 LLM 调用）。
-    未命中则调用 LLM 生成并存入 RAG。
-
-    Args:
-        student_profile: 学生信息字典
-        subject: 科目名称
-        llm: LLMClient 实例
-        is_eleven_plus: 是否来自 11+ Practice 标签页（所有科目按 Year 6 难度）
-
-    Returns:
-        (作业内容字符串, doc_id, from_rag)
+    Assignment history is stored separately from the shared RAG library. This
+    makes no-repeat behaviour reliable across workers without storing child
+    answers or personal profile text in Chroma.
     """
-    # 11+ Practice 标签页或 11+ 专属科目，始终按 Year 6 难度生成
-    if is_eleven_plus or _is_eleven_plus_subject(subject):
+    if is_eleven_plus:
         year_group = 6
-        age = 11  # 11+ 考试针对 Year 6 (10-11岁)
+        age = 11
     else:
-        year_group = student_profile.get("year_group", 6)
-        age = student_profile.get("age") or YEAR_GROUP_AGE.get(year_group, 11)
-    
+        year_group = int(student_profile.get("year_group", 6))
+        age = int(student_profile.get("age") or YEAR_GROUP_AGE.get(year_group, 11))
+
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
-    student_id = student_profile.get("student_id", "")
-
-    # 根据 is_eleven_plus 选择对应的 RAG 存储
-    if is_eleven_plus:
-        _store_homework = elevenplus_store_homework
-        _search_homework = elevenplus_search_homework
-        _get_previous_topics = elevenplus_get_student_previous_topics
-    else:
-        _store_homework = store_homework
-        _search_homework = search_homework
-        _get_previous_topics = get_student_previous_topics
-
-    # 1. 检查内存缓存（同学科同年级的作业可直接复用）
-    # 注意：为了让同一用户点击“生成”时能看到不同内容，我们跳过内存缓存，
-    # 直接进入 RAG 检索（带去重逻辑）或 LLM 生成。
-    # 这里我们选择禁用 generate_homework_for_subject 的入口查询以满足“不重复”需求。
-    cache_key = make_cache_key("homework", str(year_group), str(age), subject, student_id)
-    
-    # 获取该学生该科目的历史作业，用于避免重复
+    learner_key = str(student_profile.get("student_id") or "anonymous")[:100]
+    plan_week = 0
     try:
-        previous_topics = _get_previous_topics(student_id, subject)
-        if previous_topics:
-            logger.info("[RAG] Found %d previous homework for %s in %s - will avoid duplicates",
-                        len(previous_topics), student_id, subject)
-    except Exception as e:
-        logger.warning("[RAG] Failed to get previous topics: %s", e)
+        requested_week = int(student_profile.get("plan_week") or 0)
+        if 1 <= requested_week <= 52:
+            plan_week = requested_week
+    except (TypeError, ValueError):
+        plan_week = 0
+
+    subject_label = subject_display_name(subject)
+    content_kind = (
+        f"elevenplus_week_{plan_week:02d}"
+        if is_eleven_plus and plan_week
+        else ("elevenplus" if is_eleven_plus else "primary")
+    )
+
+    if is_eleven_plus:
+        store_func = elevenplus_store_homework
+        semantic_search = elevenplus_search_homework
+        metadata_search = elevenplus_search_homework_by_metadata
+        previous_topics_func = elevenplus_get_student_previous_topics
+    else:
+        store_func = store_homework
+        semantic_search = search_homework
+        metadata_search = search_homework_by_metadata
+        previous_topics_func = get_student_previous_topics
+
+    cache_key = make_cache_key(
+        "homework",
+        str(year_group),
+        str(age),
+        subject,
+        learner_key,
+        str(plan_week),
+        "|".join(str(item) for item in student_profile.get("learning_goals", [])[:4]),
+        "|".join(str(item) for item in student_profile.get("weak_areas", [])[:4]),
+    )
+    assignment_store = get_assignment_store()
+
+    learning_goals = [compact_text(item, 120) for item in student_profile.get("learning_goals", []) if item]
+    weak_areas = [compact_text(item, 120) for item in student_profile.get("weak_areas", []) if item]
+    has_personalised_query = bool(learning_goals or weak_areas)
+
+    try:
+        # Exact metadata lookup is faster and avoids creating an embedding for
+        # the common year/subject request. Semantic search is reserved for a
+        # real learning-goal query.
+        if is_eleven_plus and plan_week:
+            # The 52-week plan must never drift to another week. Use a hard
+            # metadata filter rather than a similarity query based on topic text.
+            candidates = metadata_search(
+                year_group=year_group,
+                subject=subject,
+                week_num=plan_week,
+                content_type="year_round",
+                k=20,
+            )
+        elif has_personalised_query:
+            query = compact_text(" ".join(learning_goals + weak_areas + [subject_label]), 600)
+            candidates = semantic_search(
+                query=query, year_group=year_group, subject=subject, k=50
+            )
+        else:
+            candidates = metadata_search(year_group=year_group, subject=subject, k=100)
+
+        if candidates:
+            candidate_by_id = {str(item.get("doc_id")): item for item in candidates if item.get("doc_id")}
+            claimed_id = assignment_store.claim_first_unseen(
+                learner_key,
+                list(candidate_by_id),
+                subject=subject,
+                year_group=year_group,
+                content_kind=content_kind,
+            )
+            if claimed_id:
+                selected = candidate_by_id[claimed_id]
+                content = str(selected.get("content") or "").strip()
+                if content:
+                    homework_cache.set(
+                        cache_key,
+                        {"content": content, "doc_id": claimed_id, "from_rag": True},
+                    )
+                    logger.info(
+                        "[RAG] Assigned unseen %s homework for Year %d, week=%s, doc_id=%s",
+                        subject, year_group, plan_week or "general", claimed_id,
+                    )
+                    return content, claimed_id, True
+            logger.info("[RAG] No unseen exact candidates remain for %s Year %d", subject, year_group)
+    except Exception:
+        logger.exception("[RAG] Homework lookup failed for %s Year %d", subject, year_group)
+
+    # RAG miss: build a compact, privacy-minimised prompt. The learner ID and
+    # free-text description are intentionally excluded from the model input.
+    try:
+        previous_topics = previous_topics_func(learner_key, subject)
+    except Exception:
         previous_topics = []
 
-    # 3. 搜索 RAG 中是否有相关作业
-    learning_goals = student_profile.get("learning_goals", [])
-    weak_areas = student_profile.get("weak_areas", [])
-    search_query = " ".join(learning_goals + weak_areas + [subject])
-
-    # # Create homework with tools
-    # content, doc_id, from_rag = generate_homewor_by_tools(subject, year_group, student_id, cache_key, _store_homework, age=age)
-    # if content and doc_id and not from_rag:
-    #     return content, doc_id, from_rag
-
-    try:
-        # Increase k to get more variety and pick one randomly
-        rag_results = _search_homework(
-            query=search_query,
-            year_group=year_group,
-            subject=subject,
-            k=10,
-        )
-
-        # 如果 RAG 中有相关作业，过滤掉最近已做的作业，然后随机选择
-        if rag_results:
-            import random
-            
-            # 过滤掉已做过的主题（简单通过内容前 100 字符匹配）
-            prev_prefixes = set(t[:100] for t in previous_topics)
-            fresh_results = [r for r in rag_results if r["content"][:100] not in prev_prefixes]
-            
-            if fresh_results:
-                selected_homework = random.choice(fresh_results)
-                homework_content = selected_homework["content"]
-                doc_id = selected_homework["doc_id"]
-                logger.info("[RAG] Found matching homework in RAG for %s (Year %d, %s), selected doc_id: %s", 
-                            subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)
-                # 写入内存缓存
-                homework_cache.set(cache_key, {"content": homework_content, "doc_id": doc_id, "from_rag": True})
-                return homework_content, doc_id, True
-            else:
-                logger.info("[RAG] All matching homework in RAG for %s were previously done, will generate new.", subject)
-    except Exception as e:
-        logger.warning("[RAG] Failed to search homework: %s", e)
-
-    # 4. RAG 中没有相关作业，调用 LLM 生成新作业
-    logger.info("[Homework] No matching homework in RAG, generating new for %s (Year %d, %s)", subject, year_group, "11+" if is_eleven_plus else "normal")
-
-    # 构建历史主题上下文
     previous_context = ""
     if previous_topics:
-        previous_context = "\n\nIMPORTANT - Previously covered topics (DO NOT repeat ANY of these):\n"
-        for i, topic in enumerate(previous_topics[-8:], 1):
-            previous_context += f"{i}. {topic}\n"
-        previous_context += "\nPlease create completely NEW homework that does not cover any of the topics above.\n"
+        previews = [compact_text(topic, 180) for topic in previous_topics[-6:]]
+        previous_context = (
+            "Previously used material. Create different questions:\n- "
+            + "\n- ".join(previews)
+        )
 
-    # 调用 LLM 生成作业
-    if is_eleven_plus:
-        prompt_template = RAG_PROMPT_11PLUS
-    else:
-        prompt_template = HOMEWORK_PROMPT
-
+    prompt_profile = compact_profile(student_profile)
+    prompt_profile.pop("student_id", None)
+    prompt_template = RAG_PROMPT_11PLUS if is_eleven_plus else HOMEWORK_PROMPT
     prompt_text = format_prompt(
         prompt_template,
-        student_profile=json.dumps(student_profile, ensure_ascii=False, indent=2),
-        subject=subject,
+        student_profile=json.dumps(prompt_profile, ensure_ascii=False, separators=(",", ":")),
+        subject=compact_text(subject_label, 80),
         homework_time=homework_time,
         year_group=year_group,
         age=age,
-        previous_topics=previous_context,
-        index=len(previous_topics) + 1,  # For RAG_PROMPT_11PLUS if needed, but we use HOMEWORK_PROMPT_11PLUS
+        previous_topics=compact_text(previous_context, 1_500),
+        index=len(previous_topics) + 1,
     )
-    messages = build_messages(prompt_text)
-    result = llm.complete(messages)
+    result = str(llm.complete(build_messages(prompt_text))).strip()
+    if not result:
+        raise RuntimeError("The homework generator returned an empty response")
 
-    # 5. 将新生成的作业存储到对应的 RAG 中
     doc_id = None
     try:
-        doc_id = _store_homework(
-            homework_content=result,
-            year_group=year_group,
-            subject=subject,
-            homework_minutes=homework_time,
-            key_stage=KEY_STAGES.get(year_group, "KS2"),
-            english_level=student_profile.get("english_level", "Beginner"),
-            student_id=student_id,
-            age=age,
+        store_kwargs = {
+            "homework_content": result,
+            "year_group": year_group,
+            "subject": subject,
+            "homework_minutes": homework_time,
+            "key_stage": KEY_STAGES.get(year_group, "KS2"),
+            "english_level": student_profile.get("english_level"),
+            "student_id": None,  # shared library content must not be owned by one learner
+            "age": age,
+        }
+        if is_eleven_plus and plan_week:
+            store_kwargs.update(
+                {
+                    "week_num": plan_week,
+                    "content_type": "year_round",
+                    "topic": learning_goals[0] if learning_goals else f"Week {plan_week}",
+                }
+            )
+        doc_id = store_func(**store_kwargs)
+        assignment_store.record(
+            learner_key, doc_id, subject=subject, year_group=year_group, content_kind=content_kind
         )
-        logger.info("[RAG] Stored NEW homework for %s in %s (Year %d, %s), doc_id: %s",
-                     student_id, subject, year_group, "11+" if is_eleven_plus else "normal", doc_id)
-    except Exception as e:
-        logger.warning("[RAG] Failed to store homework for %s: %s", subject, e)
+    except Exception:
+        logger.exception("[RAG] Could not store generated %s homework", subject)
 
-    # 写入内存缓存
     homework_cache.set(cache_key, {"content": result, "doc_id": doc_id, "from_rag": False})
-
     return result, doc_id, False
-
 
 def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
     """从用户提示词中提取科目（带缓存）
@@ -337,6 +318,44 @@ def generate_multiday_homework(student_profile: Dict[str, Any], subjects: List[s
     return homework_plan
 
 
+def _public_homework_result(
+    *,
+    subject: str,
+    content: str,
+    doc_id: Any,
+    from_rag: bool,
+    student_profile: Dict[str, Any],
+    is_eleven_plus: bool,
+) -> Dict[str, Any]:
+    """Build an API result and remove answer material from weekly practice."""
+    result: Dict[str, Any] = {
+        "subject": subject,
+        "subject_label": subject_display_name(subject),
+        "content": content,
+        "doc_id": doc_id,
+        "from_rag": from_rag,
+    }
+
+    # Every generated worksheet receives the same answer-free question model.
+    # The browser uses it to render explicit options as single-choice controls
+    # for Years 1-6 and all 11+ modes. Text questions remain text responses.
+    public_questions = parse_public_questions(content)
+    if public_questions:
+        result["questions"] = public_questions
+    try:
+        plan_week = int(student_profile.get("plan_week") or 0)
+    except (TypeError, ValueError):
+        plan_week = 0
+    if is_eleven_plus and 1 <= plan_week <= 52:
+        questions = elevenplus_get_homework_questions(doc_id, content)
+        if questions:
+            result["questions"] = questions
+            result["content"] = elevenplus_format_questions_only(questions)
+        result["plan_week"] = plan_week
+        result["content_type"] = "year_round"
+    return result
+
+
 def generate_homework_parallel(
     student_profile: Dict[str, Any],
     subjects: List[str],
@@ -365,14 +384,22 @@ def generate_homework_parallel(
         for subject in subjects:
             try:
                 content, doc_id, from_rag = generate_homework_for_subject(student_profile, subject, llm, is_eleven_plus=is_eleven_plus)
-                results.append({"subject": subject, "content": content, "doc_id": doc_id, "from_rag": from_rag})
+                results.append(_public_homework_result(
+                    subject=subject,
+                    content=content,
+                    doc_id=doc_id,
+                    from_rag=from_rag,
+                    student_profile=student_profile,
+                    is_eleven_plus=is_eleven_plus,
+                ))
             except Exception as exc:
                 logger.error("[Homework] 生成 %s 失败: %s", subject, exc)
-                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None, "from_rag": False})
+                results.append({"subject": subject, "content": "We could not prepare this homework just now. Please try again.", "doc_id": None, "from_rag": False})
         return results
 
-    results = []
-    workers = min(len(subjects), max_workers)
+    result_by_subject: Dict[str, Dict[str, Any]] = {}
+    configured_workers = max(1, min(int(__import__("os").getenv("HOMEWORK_SUBJECT_WORKERS", str(max_workers))), 8))
+    workers = min(len(subjects), configured_workers)
     logger.info(
         "[Homework] 并行生成 %d 个科目作业 (workers=%d, 11+=%s)",
         len(subjects), workers, is_eleven_plus,
@@ -388,10 +415,17 @@ def generate_homework_parallel(
             subject = future_to_subject[future]
             try:
                 content, doc_id, from_rag = future.result()
-                results.append({"subject": subject, "content": content, "doc_id": doc_id, "from_rag": from_rag})
+                result_by_subject[subject] = _public_homework_result(
+                    subject=subject,
+                    content=content,
+                    doc_id=doc_id,
+                    from_rag=from_rag,
+                    student_profile=student_profile,
+                    is_eleven_plus=is_eleven_plus,
+                )
                 logger.info("[Homework] 并行生成完成: %s", subject)
             except Exception as exc:
                 logger.error("[Homework] 并行生成 %s 失败: %s", subject, exc)
-                results.append({"subject": subject, "content": f"Error: {exc}", "doc_id": None, "from_rag": False})
+                result_by_subject[subject] = {"subject": subject, "content": "We could not make this subject just now. Please try again.", "doc_id": None, "from_rag": False}
 
-    return results
+    return [result_by_subject[subject] for subject in subjects if subject in result_by_subject]

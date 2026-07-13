@@ -1,6 +1,8 @@
 import os # Added this line
 import logging
 import time
+import json
+import re
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -15,8 +17,209 @@ logger = logging.getLogger(__name__)
 RAG_MAX_RETRIES = 3
 RAG_RETRY_DELAY = 2  # 秒
 
+_YEAR_ROUND_BLOCK_RE = re.compile(
+    r"Homework Question\s+(?P<number>\d+)\s*:\s*\n"
+    r"(?P<question>.*?)\n"
+    r"Options:\s*(?P<options>.*?)\n"
+    r"Correct Answer:\s*(?:Option\s*)?(?P<letter>[A-H])\s*\((?P<answer>.*?)\)\s*\n"
+    r"Explanation:\s*(?P<explanation>.*?)\n"
+    r"(?:Coaching Strategy|Coach(?:ing)? Tip):\s*(?P<tip>.*?)"
+    r"(?=\n\nHomework Question\s+\d+\s*:|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _split_legacy_options(value: str) -> List[str]:
+    """Split the old comma-joined option format without breaking 1,000 or quotes."""
+    text = str(value or "").strip()
+    if not text:
+        return []
+
+    parts: List[str] = []
+    buffer: List[str] = []
+    quote: Optional[str] = None
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char in {'"', "'"}:
+            previous = text[index - 1] if index else ""
+            following = text[index + 1] if index + 1 < len(text) else ""
+            is_apostrophe = char == "'" and previous.isalnum() and following.isalnum()
+            if not is_apostrophe:
+                if quote is None:
+                    quote = char
+                elif quote == char:
+                    quote = None
+            buffer.append(char)
+            index += 1
+            continue
+
+        if char == "," and index + 1 < len(text) and text[index + 1] == " ":
+            if quote is None:
+                candidate = "".join(buffer).strip()
+                if candidate:
+                    parts.append(candidate)
+                buffer = []
+                index += 2
+                continue
+
+        buffer.append(char)
+        index += 1
+
+    candidate = "".join(buffer).strip()
+    if candidate:
+        parts.append(candidate)
+    return parts
+
+
+def _normalise_answer_records(raw_answers: Any) -> List[Dict[str, Any]]:
+    if not raw_answers:
+        return []
+    if isinstance(raw_answers, str):
+        try:
+            raw_answers = json.loads(raw_answers)
+        except (TypeError, json.JSONDecodeError):
+            return []
+    if not isinstance(raw_answers, list):
+        return []
+
+    records: List[Dict[str, Any]] = []
+    for index, item in enumerate(raw_answers, start=1):
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question") or item.get("questionText") or "").strip()
+        answer = str(
+            item.get("answer")
+            or item.get("correctValue")
+            or item.get("correct_answer")
+            or ""
+        ).strip()
+        options = item.get("options") if isinstance(item.get("options"), list) else []
+        options = [str(option).strip() for option in options if str(option).strip()]
+        if not question or not answer:
+            continue
+        if not re.match(r"^\s*\d+[.)]\s*", question):
+            question = f"{index}. {question}"
+        records.append(
+            {
+                "question": question,
+                "answer": answer,
+                "options": options,
+                "correct_letter": str(
+                    item.get("correct_letter")
+                    or item.get("correctLetter")
+                    or item.get("letter")
+                    or ""
+                ).strip().upper(),
+                "explanation": str(item.get("explanation") or "").strip(),
+                "tip": str(item.get("tip") or item.get("coaching_strategy") or "").strip(),
+            }
+        )
+    return records
+
+
+def extract_year_round_answer_records(content: str) -> List[Dict[str, Any]]:
+    """Recover structured answers from legacy year-round documents.
+
+    Older generators stored answers and explanations inside the document rather
+    than metadata. This parser supports those records so existing RAG databases
+    continue to work after the safer question-only format is introduced.
+    """
+    records: List[Dict[str, Any]] = []
+    for match in _YEAR_ROUND_BLOCK_RE.finditer(str(content or "").strip()):
+        number = int(match.group("number"))
+        records.append(
+            {
+                "question": f"{number}. {match.group('question').strip()}",
+                "answer": match.group("answer").strip(),
+                "options": _split_legacy_options(match.group("options")),
+                "correct_letter": match.group("letter").strip().upper(),
+                "explanation": match.group("explanation").strip(),
+                "tip": match.group("tip").strip(),
+            }
+        )
+    return records
+
+
+def extract_multiple_choice_questions(content: str) -> List[Dict[str, Any]]:
+    """Extract question stems and options without returning answer material."""
+    text = str(content or "").replace("\r\n", "\n").replace("\r", "\n")
+    legacy = extract_year_round_answer_records(text)
+    if legacy:
+        return questions_from_answer_records(legacy)
+
+    # LLM fallback and new RAG records use one option per line. Ignore every
+    # answer/explanation section before parsing so answer keys never reach UI.
+    questions_only = re.split(
+        r"(?im)^\s*#{0,6}\s*(?:answers?|answer key|explanations?|worked solutions?|bonus)\b.*$",
+        text,
+        maxsplit=1,
+    )[0]
+    question_re = re.compile(r"^\s*(?:Question\s*)?(\d+)[.)]\s+(.+?)\s*$", re.I)
+    option_re = re.compile(r"^\s*(?:[-*]\s*)?\(?([A-H])\)?[.)]\s+(.+?)\s*$", re.I)
+    questions: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
+    for raw_line in questions_only.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        question_match = question_re.match(line)
+        if question_match:
+            if current and len(current["options"]) >= 2:
+                questions.append(current)
+            current = {
+                "number": int(question_match.group(1)),
+                "question": question_match.group(2).strip(),
+                "options": [],
+            }
+            continue
+        option_match = option_re.match(line)
+        if option_match and current is not None:
+            current["options"].append(
+                {"label": option_match.group(1).upper(), "text": option_match.group(2).strip()}
+            )
+    if current and len(current["options"]) >= 2:
+        questions.append(current)
+    return questions
+
+
+def questions_from_answer_records(records: Any) -> List[Dict[str, Any]]:
+    """Return the public, answer-free shape consumed by the browser."""
+    normalised = _normalise_answer_records(records)
+    questions: List[Dict[str, Any]] = []
+    for index, record in enumerate(normalised, start=1):
+        match = re.match(r"^\s*(\d+)[.)]\s*(.*)$", record["question"], re.DOTALL)
+        number = int(match.group(1)) if match else index
+        question = match.group(2).strip() if match else record["question"]
+        options = [
+            {"label": chr(65 + option_index), "text": option}
+            for option_index, option in enumerate(record.get("options") or [])
+        ]
+        if question and len(options) >= 2:
+            questions.append({"number": number, "question": question, "options": options})
+    return questions
+
+
+def format_questions_only(questions: List[Dict[str, Any]]) -> str:
+    """Create a readable question-only fallback string for API clients."""
+    lines = ["QUESTIONS"]
+    for index, item in enumerate(questions, start=1):
+        number = int(item.get("number") or index)
+        lines.append(f"{number}. {str(item.get('question') or '').strip()}")
+        for option_index, option in enumerate(item.get("options") or []):
+            if isinstance(option, dict):
+                label = str(option.get("label") or chr(65 + option_index)).strip().upper()
+                text = str(option.get("text") or "").strip()
+            else:
+                label = chr(65 + option_index)
+                text = str(option).strip()
+            if text:
+                lines.append(f"{label}) {text}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
 # RAG storage directory
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH") or os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
 # If data was moved to data_archive, fall back to that path
 if not os.path.exists(CHROMA_DB_PATH):
@@ -170,8 +373,10 @@ class ElevenPlusRAGStore:
             metadatas.append(self._sanitize_metadata(metadata))
             doc_ids.append(doc_id)
 
-        self.collection.add(documents=texts, metadatas=metadatas, ids=doc_ids)
-        logger.info(f"[RAG] Added {len(doc_ids)} homework documents in batch")
+        # Deterministic year-round document IDs must be safely regeneratable.
+        # Upsert keeps ingestion idempotent and avoids deleting the collection first.
+        self.collection.upsert(documents=texts, metadatas=metadatas, ids=doc_ids)
+        logger.info(f"[RAG] Upserted {len(doc_ids)} homework documents in batch")
         return doc_ids
 
     def search(
@@ -278,6 +483,21 @@ class ElevenPlusRAGStore:
         except Exception as e:
             logger.error(f"[RAG] Failed to delete document {doc_id}: {e}")
             return False
+
+    def delete_student_homework(self, student_id: str) -> int:
+        """Delete legacy 11+ documents that directly reference one learner."""
+        learner = str(student_id or "").strip()
+        if not learner or self.collection is None:
+            return 0
+        try:
+            result = self.collection.get(where={"student_id": learner}, include=[])
+            ids = list(result.get("ids") or [])
+            if ids:
+                self.collection.delete(ids=ids)
+            return len(ids)
+        except Exception:
+            logger.exception("[RAG] Failed to erase legacy 11+ homework for learner %s", learner)
+            return 0
 
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the RAG store
@@ -426,16 +646,28 @@ class ElevenPlusRAGStore:
                 return None
 
             metadata = result["metadatas"][0]
-            correct_answers = metadata.get("correct_answers")
-            if correct_answers:
-                # Parse JSON string back to list
+            raw_correct_answers = metadata.get("correct_answers")
+            decoded_answers: Any = raw_correct_answers
+            if isinstance(raw_correct_answers, str):
                 try:
-                    import json
-                    correct_answers = json.loads(correct_answers)
-                    logger.info(f"[RAG] 找到 doc_id={doc_id} 的正确答案")
-                except (json.JSONDecodeError, TypeError):
-                    logger.warning(f"[RAG] doc_id={doc_id} 的正确答案格式错误，返回原始字符串")
-            return correct_answers
+                    decoded_answers = json.loads(raw_correct_answers)
+                except (TypeError, json.JSONDecodeError):
+                    decoded_answers = raw_correct_answers
+
+            correct_answers = _normalise_answer_records(decoded_answers)
+            if correct_answers:
+                logger.info("[RAG] Found structured answers for doc_id=%s", doc_id)
+                return correct_answers
+            if isinstance(decoded_answers, list) and decoded_answers:
+                # Preserve older answer-only lists for the generic 11+ review path.
+                return decoded_answers
+
+            documents = result.get("documents") or []
+            legacy_records = extract_year_round_answer_records(documents[0] if documents else "")
+            if legacy_records:
+                logger.info("[RAG] Recovered legacy year-round answers for doc_id=%s", doc_id)
+                return legacy_records
+            return None
         except Exception as e:
             logger.error(f"[RAG] 获取正确答案失败: {e}")
             return None
@@ -463,6 +695,9 @@ def store_homework(
         student_id: str = None,
         correct_answers: str = None,
         age: Optional[int] = None,
+        week_num: Optional[int] = None,
+        content_type: Optional[str] = None,
+        topic: Optional[str] = None,
 ) -> str:
     """Store a homework document in the RAG store
 
@@ -499,6 +734,12 @@ def store_homework(
         metadata["correct_answers"] = correct_answers
     if age is not None:
         metadata["age"] = int(age)
+    if week_num is not None:
+        metadata["week_num"] = int(week_num)
+    if content_type:
+        metadata["content_type"] = str(content_type)
+    if topic:
+        metadata["topic"] = str(topic)
 
     return store.add_homework(homework_content, metadata)
 
@@ -539,10 +780,99 @@ def search_homework(
     return store.search(query, k=k, filters=filters if filters else None)
 
 
+
+def _subject_aliases(subject: str) -> List[str]:
+    """Return exact new keys first, followed by safe legacy aliases."""
+    canonical = str(subject or "").strip()
+    has_year_suffix = canonical.casefold().endswith("-1year")
+    base = canonical[:-6] if has_year_suffix else canonical
+    folded = re.sub(r"[\s_-]+", "", base).casefold()
+
+    if folded in {"maths", "mathematics"}:
+        aliases = ["Maths-1year", "Maths"] if has_year_suffix else ["Maths"]
+    elif folded == "english":
+        aliases = ["English-1year", "English"] if has_year_suffix else ["English"]
+    elif folded == "verbalreasoning":
+        aliases = (
+            ["VerbalReasoning-1year", "Verbal Reasoning-1year", "Verbal Reasoning", "VerbalReasoning"]
+            if has_year_suffix
+            else ["Verbal Reasoning", "VerbalReasoning"]
+        )
+    elif folded == "nonverbalreasoning":
+        aliases = (
+            [
+                "NonVerbalReasoning-1year",
+                "Non-Verbal Reasoning-1year",
+                "Non Verbal Reasoning-1year",
+                "Non-Verbal Reasoning",
+                "NonVerbalReasoning",
+                "Non Verbal Reasoning",
+            ]
+            if has_year_suffix
+            else ["Non-Verbal Reasoning", "NonVerbalReasoning", "Non Verbal Reasoning"]
+        )
+    else:
+        aliases = [canonical]
+
+    # Preserve order while avoiding duplicate metadata queries.
+    return list(dict.fromkeys(alias for alias in aliases if alias))
+
+
+def search_homework_by_metadata(
+    year_group: int,
+    subject: str,
+    k: int = 50,
+    week_num: Optional[int] = None,
+    content_type: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Return exact metadata candidates without creating a query embedding.
+
+    ``week_num`` is a hard filter for the 52-week plan. Subject aliases keep
+    older RAG databases compatible with the canonical spaced subject names.
+    """
+    store = get_elevenplus_rag_store()
+    merged: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    aliases = _subject_aliases(subject)
+    prefer_exact_year_round = str(subject or "").strip().casefold().endswith("-1year")
+    for alias_index, alias in enumerate(aliases):
+        filters: Dict[str, Any] = {"year_group": int(year_group), "subject": alias}
+        if week_num is not None:
+            filters["week_num"] = int(week_num)
+        if content_type:
+            filters["content_type"] = str(content_type)
+        alias_results = store.search_by_metadata(filters, k=k)
+        for item in alias_results:
+            doc_id = str(item.get("doc_id") or "")
+            if doc_id and doc_id not in seen:
+                seen.add(doc_id)
+                merged.append(item)
+            if len(merged) >= k:
+                return merged
+        # New 52-week records are authoritative. Query legacy aliases only
+        # when the exact new key has no records, reducing database work.
+        if prefer_exact_year_round and alias_index == 0 and alias_results:
+            return merged
+    return merged
+
+
+def get_homework_questions(doc_id: Optional[str], content: str = "") -> List[Dict[str, Any]]:
+    """Return answer-free structured questions for the year-round browser UI."""
+    records = search_homework_answers(doc_id) if doc_id else None
+    questions = questions_from_answer_records(records)
+    if questions:
+        return questions
+    return extract_multiple_choice_questions(content)
+
 def get_student_homework_history(student_id: str, subject: str = None) -> List[Dict[str, Any]]:
     """Get homework history for a student"""
     store = get_elevenplus_rag_store()
     return store.get_student_homework_history(student_id, subject)
+
+
+def delete_student_homework(student_id: str) -> int:
+    """Erase legacy learner-owned documents from the 11+ RAG."""
+    return get_elevenplus_rag_store().delete_student_homework(student_id)
 
 
 def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
@@ -551,7 +881,7 @@ def get_student_previous_topics(student_id: str, subject: str) -> List[str]:
     return store.get_student_previous_topics(student_id, subject)
 
 
-def search_homework_answers(doc_id: str) -> Optional[str]:
+def search_homework_answers(doc_id: str) -> Optional[list]:
     """通过 doc_id 获取正确答案
 
     Args:

@@ -396,9 +396,17 @@
             </div>
             <div class="form-group">
                 <label>Plan</label>
+                <select id="addSubPlan">
+                    <option value="homework_monthly">Homework Premium</option>
+                    <option value="elevenplus_monthly">11+ Premium</option>
+                    <option value="family_monthly">Family Premium</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Duration</label>
                 <select id="addSubDuration">
-                    <option value="5_days">5-Day Premium Access</option>
-                    <option value="30_days">30-Day Premium Access</option>
+                    <option value="5_days">5-Day Access</option>
+                    <option value="30_days">30-Day Access</option>
                 </select>
             </div>
             <div class="actions">
@@ -627,7 +635,8 @@
         function openAddSubModal() {
             document.getElementById('addSubName').value = '';
             document.getElementById('addSubEmail').value = '';
-            document.getElementById('addSubDuration').value = '5_days';
+            document.getElementById('addSubPlan').value = 'homework_monthly';
+            document.getElementById('addSubDuration').value = '30_days';
             document.getElementById('addSubModal').classList.add('show');
         }
 
@@ -638,6 +647,7 @@
         async function createSubscription() {
             const name = document.getElementById('addSubName').value.trim();
             const email = document.getElementById('addSubEmail').value.trim();
+            const plan = document.getElementById('addSubPlan').value;
             const duration = document.getElementById('addSubDuration').value;
             if (!name) { alert('Please enter a customer name'); return; }
             if (!email) { alert('Please enter a customer email'); return; }
@@ -645,7 +655,7 @@
                 const resp = await fetch(API + '/subscriptions', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: name, email: email, duration: duration })
+                    body: JSON.stringify({ name: name, email: email, plan: plan, duration: duration })
                 });
                 const data = await resp.json();
                 if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }

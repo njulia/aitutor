@@ -417,9 +417,20 @@ def get_active_subscription(account_id: str) -> Optional[Dict[str, Any]]:
     return _dict(row)
 
 
-def account_has_active_subscription(email: str) -> bool:
+def account_has_active_subscription(email: str, required_plans: Optional[List[str]] = None) -> bool:
     account = get_account_by_email(email)
-    return bool(account and get_active_subscription(account["id"]))
+    if not account:
+        return False
+    sub = get_active_subscription(account["id"])
+    if not sub:
+        return False
+    if required_plans:
+        # family_monthly is a super-set that includes everything
+        effective_required = set(required_plans)
+        if sub.get("plan") == "family_monthly":
+            return True
+        return sub.get("plan") in effective_required
+    return True
 
 
 def get_account_overview(email: str) -> Dict[str, Any]:

@@ -714,6 +714,23 @@
             `;
         }
 
+        function displaySubjectName(subject) {
+            const value = String(subject || '').trim();
+            const folded = value.replace(/-1year$/i, '').replace(/[\s_-]+/g, '').toLowerCase();
+            const labels = {
+                maths: 'Maths',
+                mathematics: 'Maths',
+                english: 'English',
+                verbalreasoning: 'Verbal Reasoning',
+                nonverbalreasoning: 'Non-Verbal Reasoning'
+            };
+            return labels[folded] || value;
+        }
+
+        function subjectColourKey(subject) {
+            return displaySubjectName(subject);
+        }
+
         function renderAccuracyRate(accuracyRate) {
             const ringValue = document.getElementById('accuracy-ring-value');
             const detailsContainer = document.getElementById('accuracy-details');
@@ -766,11 +783,11 @@
             }
 
             detailsContainer.innerHTML = bySubject.map((s, i) => {
-                const color = subjectColors[s.subject] || defaultColors[i % defaultColors.length];
+                const color = subjectColors[subjectColourKey(s.subject)] || defaultColors[i % defaultColors.length];
                 return `
                     <div class="accuracy-detail-row">
                         <span class="accuracy-subject-dot" style="background: ${color}"></span>
-                        <span class="accuracy-detail-label">${s.subject}</span>
+                        <span class="accuracy-detail-label">${displaySubjectName(s.subject)}</span>
                         <span class="accuracy-detail-value">${s.accuracy}%</span>
                         <span style="color: #aaa; font-size: 0.85em;">(${s.questions_correct}/${s.questions_attempted})</span>
                     </div>
@@ -828,7 +845,7 @@
                 'Science': '#11998e',
                 'Spanish': '#ff6a00',
             };
-            const bgColors = sorted.map(s => subjectColors[s.subject] || '#764ba2');
+            const bgColors = sorted.map(s => subjectColors[subjectColourKey(s.subject)] || '#764ba2');
 
             const chart = new Chart(ctx, {
                 type: 'line',
@@ -856,7 +873,7 @@
                             callbacks: {
                                 label: function(ctx) {
                                     const item = sorted[ctx.dataIndex];
-                                    return `${item.subject}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
+                                    return `${displaySubjectName(item.subject)}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
                                 }
                             }
                         }
@@ -877,7 +894,7 @@
             const ctx = document.getElementById('subjectChart');
             if (!ctx || bySubject.length === 0) return;
 
-            const labels = bySubject.map(s => s.subject);
+            const labels = bySubject.map(s => displaySubjectName(s.subject));
             const accuracies = bySubject.map(s => s.avg_accuracy);
             const sessions = bySubject.map(s => s.total_sessions);
 

@@ -431,6 +431,69 @@
         .feedback h1, .feedback h2, .feedback h3 { margin: 0.75em 0 0.35em; }
         .question-content p, .feedback p { margin: 0.65em 0; }
         .question-content li, .feedback li { margin: 0.3em 0; }
+        .practice-question-list {
+            display: grid;
+            gap: 16px;
+        }
+        .practice-question {
+            margin: 0;
+            padding: 18px;
+            border: 2px solid var(--line);
+            border-radius: 14px;
+            background: #fff;
+        }
+        .practice-question legend {
+            width: 100%;
+            padding: 0 4px 10px;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+        .question-number-label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--purple-dark);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .choice-list {
+            display: grid;
+            gap: 9px;
+        }
+        .choice-option {
+            display: grid;
+            grid-template-columns: auto auto 1fr;
+            align-items: start;
+            gap: 10px;
+            padding: 12px;
+            border: 2px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .choice-option:hover,
+        .choice-option:has(input:checked) {
+            border-color: var(--purple);
+            background: var(--purple-soft);
+        }
+        .choice-option input {
+            width: 20px;
+            height: 20px;
+            margin: 1px 0 0;
+            accent-color: var(--purple);
+        }
+        .choice-letter {
+            display: inline-grid;
+            place-items: center;
+            min-width: 25px;
+            height: 25px;
+            border-radius: 8px;
+            background: var(--purple-soft);
+            color: var(--purple-dark);
+            font-weight: 850;
+        }
+        .choice-text { line-height: 1.45; }
         .answer-box {
             width: 100%;
             min-height: 150px;
@@ -701,11 +764,24 @@
     });
 
     const FALLBACK_SUBJECTS = {
-        maths: 'Maths',
-        english: 'English',
-        vr: 'Verbal Reasoning',
-        nvr: 'Non-Verbal Reasoning'
+        maths: 'Maths-1year',
+        english: 'English-1year',
+        vr: 'VerbalReasoning-1year',
+        nvr: 'NonVerbalReasoning-1year'
     };
+
+    function displaySubjectName(subject) {
+        const value = String(subject || '').trim();
+        const folded = value.replace(/-1year$/i, '').replace(/[\s_-]+/g, '').toLowerCase();
+        const labels = {
+            maths: 'Maths',
+            mathematics: 'Maths',
+            english: 'English',
+            verbalreasoning: 'Verbal Reasoning',
+            nonverbalreasoning: 'Non-Verbal Reasoning'
+        };
+        return labels[folded] || value;
+    }
 
     let state = loadState();
     let subjectMap = Object.assign({}, FALLBACK_SUBJECTS);
@@ -742,6 +818,15 @@
             .replace(/'/g, '&#39;');
     }
 
+    function markdownToSafeHtml(value) {
+        if (typeof window.renderSafeMarkdown === 'function') {
+            return window.renderSafeMarkdown(String(value == null ? '' : value));
+        }
+        return '<pre style="white-space:pre-wrap;margin:0;">' +
+            escapeHtml(String(value == null ? '' : value)) +
+            '</pre>';
+    }
+
     function currentWeekNumber() {
         const start = new Date(state.startDate + 'T00:00:00');
         if (Number.isNaN(start.getTime())) return 1;
@@ -756,7 +841,9 @@
             const response = await fetch('/api/subjects', { credentials: 'same-origin' });
             if (!response.ok) throw new Error('Could not load subjects');
             const data = await response.json();
-            const subjects = Array.isArray(data.eleven_plus) ? data.eleven_plus : [];
+            const subjects = Array.isArray(data.eleven_plus_year_round)
+                ? data.eleven_plus_year_round
+                : [];
             function find(predicate, fallback) {
                 return subjects.find(predicate) || fallback;
             }
@@ -816,13 +903,13 @@
                 '<h3>Week ' + week.week + ': ' + escapeHtml(week.topic) + '</h3>' +
                 '<p>' + escapeHtml(week.goal) + '</p>' +
                 '<div class="topic-chips">' +
-                    '<span class="topic-chip"><b>Main subject:</b> ' + escapeHtml(subjectMap[week.primaryKey]) + '</span>' +
-                    '<span class="topic-chip"><b>Light review:</b> ' + escapeHtml(subjectMap[week.secondaryKey]) + '</span>' +
+                    '<span class="topic-chip"><b>Main subject:</b> ' + escapeHtml(displaySubjectName(subjectMap[week.primaryKey])) + '</span>' +
+                    '<span class="topic-chip"><b>Light review:</b> ' + escapeHtml(displaySubjectName(subjectMap[week.secondaryKey])) + '</span>' +
                     '<span class="topic-chip"><b>Suggested routine:</b> 4 × ' + state.sessionLength + ' minutes</span>' +
                 '</div>' +
             '</div>' +
             '<div class="week-actions">' +
-                '<label class="review-option"><input id="include-review-subject" type="checkbox"> <span>Also generate a short set for <b>' + escapeHtml(subjectMap[week.secondaryKey]) + '</b>. This may take a little longer.</span></label>' +
+                '<label class="review-option"><input id="include-review-subject" type="checkbox"> <span>Also generate a short set for <b>' + escapeHtml(displaySubjectName(subjectMap[week.secondaryKey])) + '</b>. This may take a little longer.</span></label>' +
                 '<button class="btn btn-primary" id="generate-week-btn" type="button">Generate Week ' + week.week + ' practice</button>' +
                 '<button class="btn btn-secondary" id="complete-week-btn" type="button">' + (complete ? '✓ Week complete' : 'Mark week complete') + '</button>' +
             '</div>';
@@ -926,15 +1013,73 @@
         }
     }
 
+    function normalisePracticeOptions(options) {
+        if (!Array.isArray(options)) return [];
+        return options.map(function (option, optionIndex) {
+            if (typeof option === 'string') {
+                return { label: String.fromCharCode(65 + optionIndex), text: option.trim() };
+            }
+            return {
+                label: String(option && option.label || String.fromCharCode(65 + optionIndex)).trim().toUpperCase(),
+                text: String(option && (option.text || option.value) || '').trim()
+            };
+        }).filter(function (option) { return option.text; });
+    }
+
+    function getPracticeQuestions(item) {
+        if (!item || !Array.isArray(item.questions)) return [];
+        return item.questions.map(function (question, questionIndex) {
+            return {
+                number: Number(question.number) || questionIndex + 1,
+                question: String(question.question || question.questionText || '').trim(),
+                options: normalisePracticeOptions(question.options)
+            };
+        }).filter(function (question) {
+            return question.question && question.options.length >= 2;
+        });
+    }
+
+    function stripAnswerMaterial(content) {
+        return String(content || '')
+            .split(/^\s*#{0,6}\s*(?:ANSWERS?|ANSWER KEY|EXPLANATIONS?|WORKED SOLUTIONS?|BONUS)\b.*$/im)[0]
+            .replace(/^\s*Correct Answer:.*$/gim, '')
+            .replace(/^\s*Explanation:.*$/gim, '')
+            .replace(/^\s*Coaching Strategy:.*$/gim, '')
+            .trim();
+    }
+
+    function renderChoiceQuestion(question, homeworkIndex, questionIndex) {
+        const inputName = 'weekly-choice-' + homeworkIndex + '-' + questionIndex;
+        const options = question.options.map(function (option) {
+            return '<label class="choice-option">' +
+                '<input type="radio" name="' + escapeHtml(inputName) + '" value="' + escapeHtml(option.text) + '" data-option-label="' + escapeHtml(option.label) + '">' +
+                '<span class="choice-letter" aria-hidden="true">' + escapeHtml(option.label) + '</span>' +
+                '<span class="choice-text">' + markdownToSafeHtml(option.text) + '</span>' +
+            '</label>';
+        }).join('');
+        return '<fieldset class="practice-question" data-question-index="' + questionIndex + '" data-question-number="' + question.number + '">' +
+            '<legend><span class="question-number-label">Question ' + question.number + '</span>' +
+            escapeHtml(question.question) + '</legend>' +
+            '<div class="choice-list">' + options + '</div>' +
+        '</fieldset>';
+    }
+
     function renderPractice() {
         const results = document.getElementById('practice-results');
         results.innerHTML = activeHomework.map(function (item, index) {
+            const questions = getPracticeQuestions(item);
+            const questionArea = questions.length
+                ? '<div class="practice-question-list">' + questions.map(function (question, questionIndex) {
+                    return renderChoiceQuestion(question, index, questionIndex);
+                }).join('') + '</div>'
+                : '<div class="question-content">' + markdownToSafeHtml(stripAnswerMaterial(item.content || '')) + '</div>' +
+                  '<label class="field" for="answer-' + index + '"><span style="display:block;margin-top:13px;font-weight:750;">Your answers</span></label>' +
+                  '<textarea class="answer-box" id="answer-' + index + '" data-index="' + index + '" placeholder="Write your answers here. You can number them 1, 2, 3…"></textarea>';
+
             return '<article class="practice-card" data-index="' + index + '">' +
-                '<div class="practice-header"><h3>' + escapeHtml(item.subject || '11+ Practice') + '</h3>' +
-                (item.from_rag ? '<span class="source-badge">From practice library</span>' : '') + '</div>' +
-                '<div class="question-content">' + renderSafeMarkdown(item.content || '') + '</div>' +
-                '<label class="field" for="answer-' + index + '"><span style="display:block;margin-top:13px;font-weight:750;">Your answers</span></label>' +
-                '<textarea class="answer-box" id="answer-' + index + '" data-index="' + index + '" placeholder="Write your answers here. You can number them 1, 2, 3…"></textarea>' +
+                '<div class="practice-header"><h3>' + escapeHtml(item.subject_label || displaySubjectName(item.subject) || '11+ Practice') + '</h3>' +
+                (item.from_rag ? '<span class="source-badge">From practice library · Week ' + activeWeek.week + '</span>' : '') + '</div>' +
+                questionArea +
                 '<div class="feedback hidden" id="feedback-' + index + '" aria-live="polite"></div>' +
             '</article>';
         }).join('') +
@@ -957,13 +1102,31 @@
         });
     }
 
+    function collectAnswersForItem(item, homeworkIndex) {
+        const questions = getPracticeQuestions(item);
+        if (!questions.length) {
+            const textarea = document.getElementById('answer-' + homeworkIndex);
+            const value = textarea ? textarea.value.trim() : '';
+            return value || null;
+        }
+
+        const block = document.querySelector('.practice-card[data-index="' + homeworkIndex + '"]');
+        const answers = [];
+        for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
+            const selected = block.querySelector('.practice-question[data-question-index="' + questionIndex + '"] input:checked');
+            if (!selected) return null;
+            answers.push(questions[questionIndex].number + '. ' + selected.value);
+        }
+        return answers.join('\n');
+    }
+
     async function reviewPractice() {
         const button = document.getElementById('check-practice-btn');
-        const answers = activeHomework.map(function (_item, index) {
-            return document.getElementById('answer-' + index).value.trim();
+        const answers = activeHomework.map(function (item, index) {
+            return collectAnswersForItem(item, index);
         });
         if (answers.some(function (answer) { return !answer; })) {
-            showStatus('Please write an answer for each subject before checking.');
+            showStatus('Please tick one answer for every question before checking.');
             return;
         }
 
@@ -997,10 +1160,10 @@
                 const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.error || 'The tutor could not check these answers.');
                 const feedback = document.getElementById('feedback-' + index);
-                feedback.innerHTML = renderSafeMarkdown(data.review || '');
+                feedback.innerHTML = markdownToSafeHtml(data.review || '');
                 feedback.classList.remove('hidden');
             }
-            showStatus('Your feedback is ready. Read one improvement point, then try it next time.');
+            showStatus('Your answers are checked. Read the worked steps, then try one similar question without looking.');
         } catch (error) {
             console.error(error);
             showStatus(error.message || 'Something went wrong while checking. Please try again.');

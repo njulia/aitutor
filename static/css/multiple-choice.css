@@ -143,3 +143,127 @@
         height: 34px;
     }
 }
+
+.question-response-block .question-response-list {
+    margin-top: 4px;
+}
+
+.free-response-question {
+    display: block;
+}
+
+.free-response-heading {
+    margin-bottom: 16px;
+}
+
+.free-response-label {
+    display: block;
+    margin: 0 0 8px;
+    color: #4f5680;
+    font-size: 0.95rem;
+    font-weight: 750;
+}
+
+.question-response-input {
+    width: 100%;
+    min-height: 94px;
+    padding: 13px 15px;
+    border: 2px solid #d9ddea;
+    border-radius: 13px;
+    background: #fff;
+    color: #30313a;
+    font: inherit;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.question-response-input:focus-visible {
+    outline: 3px solid rgba(102, 126, 234, 0.25);
+    outline-offset: 2px;
+    border-color: #667eea;
+}
+
+.question-answer-proxy[hidden] {
+    display: none !important;
+}
+
+/* A clear tick appears after a learner selects an option, while the input
+   remains a true radio control so only one answer can be chosen. */
+.multiple-choice-option-body::after {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border: 2px solid #c6cade;
+    border-radius: 50%;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.multiple-choice-option input[type="radio"]:checked + .multiple-choice-option-body::after {
+    content: '✓';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-color: #667eea;
+    background: #667eea;
+    color: #fff;
+    font-size: 0.86rem;
+    font-weight: 900;
+}
+
+.multiple-choice-option-body {
+    grid-template-columns: 42px minmax(0, 1fr) 22px;
+}
+
+@media (max-width: 640px) {
+    .multiple-choice-option-body {
+        grid-template-columns: 38px minmax(0, 1fr) 22px;
+    }
+}
+
+.question-response-group {
+    display: grid;
+    gap: 12px;
+}
+
+.question-context {
+    padding: 18px 20px;
+    border: 2px solid #d8e4ef;
+    border-left: 6px solid #4f7cac;
+    border-radius: 14px;
+    background: #f7fbff;
+    color: #28384a;
+    font-size: 1.02rem;
+    line-height: 1.65;
+}
+
+.question-context > :first-child {
+    margin-top: 0;
+}
+
+.question-context > :last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+    .question-context {
+        padding: 15px 16px;
+    }
+}
+
+.practice-subject-header,
+.practice-check-button {
+    background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%) !important;
+}
+
+.practice-question-column {
+    border-left-color: #f57c00 !important;
+}
+
+.practice-answer-heading {
+    color: #f57c00 !important;
+}
+
+.practice-answer-input {
+    border-color: #f57c00 !important;
+}

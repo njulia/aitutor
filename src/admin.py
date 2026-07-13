@@ -167,7 +167,7 @@ def get_subscription_overview() -> Dict[str, Any]:
     return result
 
 
-def create_admin_subscription(email: str, name: str, duration: str) -> Dict[str, Any]:
+def create_admin_subscription(email: str, name: str, duration: str, plan: str = "homework_monthly") -> Dict[str, Any]:
     """Create a local test entitlement only in development.
 
     Production subscriptions must start in authenticated Stripe Checkout and
@@ -180,12 +180,38 @@ def create_admin_subscription(email: str, name: str, duration: str) -> Dict[str,
     duration_days = {"5_days": 5, "30_days": 30}
     if duration not in duration_days:
         raise ValueError("Invalid duration, must be '5_days' or '30_days'")
+
     from src.progress_db import create_local_subscription
-    product_name = "5-Day Premium Access" if duration == "5_days" else "30-Day Premium Access"
-    return create_local_subscription(
+    from src.webapp.account_store import ensure_account, create_subscription
+
+    # 1. Create legacy subscription (for dev-mode compatibility)
+    product_map = {
+        "homework_monthly": "Homework Premium",
+        "elevenplus_monthly": "11+ Premium",
+        "family_monthly": "Family Premium"
+    }
+    product_name = product_map.get(plan, "Homework Premium")
+    if duration == "5_days":
+        product_name += " (5-Day Trial)"
+
+    legacy = create_local_subscription(
         customer_email=email, customer_name=name, product_name=product_name,
         duration_days=duration_days[duration],
     )
+
+    # 2. Also create a materialised entitlement in the new account store
+    account = ensure_account(email)
+    new_sub = create_subscription(
+        account_id=account["id"],
+        plan=plan,
+        status="active",
+        duration_days=duration_days[duration]
+    )
+
+    return {
+        "legacy": legacy,
+        "subscription": new_sub
+    }
 
 
 # ---- 管理员认证（简单 token 验证） ----

@@ -56,8 +56,8 @@ def _get_obs():
 
 # OpenAI 兼容 API（生产环境）
 DEFAULT_API_KEY = os.getenv("DEFAULT_API_KEY")
-DEFAULT_API_BASE = os.getenv("DEFAULT_ENDPOINT_OPENAI").rstrip("/") + "/"
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL")
+DEFAULT_API_BASE = (os.getenv("DEFAULT_ENDPOINT_OPENAI") or "https://api.openai.com/v1").rstrip("/") + "/"
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL") or "gpt-4.1-mini"
 VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL", "qwen-plus")
 
 # Ollama 本地模型（开发/测试）
@@ -66,9 +66,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llava:7b")
 
 # 重试配置
-MAX_RETRIES = 2
-RETRY_DELAY = 1  # 秒
-MAX_TIMEOUT = 180
+MAX_RETRIES = max(0, min(int(os.getenv("LLM_MAX_RETRIES", "1")), 4))
+RETRY_DELAY = max(0.1, float(os.getenv("LLM_RETRY_DELAY", "0.5")))
+MAX_TIMEOUT = max(5, min(int(os.getenv("LLM_TIMEOUT_SECONDS", "90")), 300))
 
 
 def get_llm_provider() -> str:
@@ -89,7 +89,7 @@ class LLMClient:
         api_key: str = None,
         api_base: str = None,
         temperature: float = 0.8,
-        max_tokens: int = 2048,
+        max_tokens: int = 1024,
     ):
         self.provider = get_llm_provider()
         self.temperature = temperature
@@ -116,9 +116,8 @@ class LLMClient:
 
             if not self.api_key:
                 raise ValueError(
-                    "QWEN_API_KEY 环境变量未设置，请先设置: "
-                    "export QWEN_API_KEY='your-key'\n"
-                    "或者设置 LLM_PROVIDER=ollama 使用本地模型"
+                    "DEFAULT_API_KEY is not configured. Set it for the API provider, "
+                    "or use LLM_PROVIDER=ollama for a local model."
                 )
             logger.info(
                 "[LLM] 使用 API 后端: model=%s base=%s",
@@ -187,7 +186,7 @@ class LLMClient:
         prompt: str,
         image_base64: str,
         temperature: float = 0,
-        max_tokens: int = 2048,
+        max_tokens: int = 1024,
     ) -> str:
         """发送带图片的视觉聊天请求（用于 OCR 等）
 
@@ -327,7 +326,7 @@ class LLMClient:
         prompt: str,
         image_base64: str,
         temperature: float = 0,
-        max_tokens: int = 2048,
+        max_tokens: int = 1024,
     ) -> str:
         """通过 Ollama 发送视觉请求"""
         url = f"{self.api_base}/api/chat"

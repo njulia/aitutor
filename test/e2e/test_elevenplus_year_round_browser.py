@@ -31,3 +31,36 @@ def test_year_round_progress_uses_browser_storage_not_child_identity(page: Page)
     assert "email" not in serialised
     assert "school" not in serialised
     assert "address" not in serialised
+
+
+def test_year_round_mcq_hides_answers_and_shows_worked_feedback(page: Page) -> None:
+    page.route(
+        "**/api/generate",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='''{"success":true,"homework":[{"subject":"Maths","content":"QUESTIONS\\n1. What is 4 + 5?\\nA) 8\\nB) 9\\n2. Which is one half?\\nA) 0.2\\nB) 0.5","questions":[{"number":1,"question":"What is 4 + 5?","options":[{"label":"A","text":"8"},{"label":"B","text":"9"}]},{"number":2,"question":"Which is one half?","options":[{"label":"A","text":"0.2"},{"label":"B","text":"0.5"}]}],"doc_id":"week_01","from_rag":true,"plan_week":1,"content_type":"year_round"}],"profile":{"plan_week":1},"mode":"homework"}''',
+        ),
+    )
+    page.route(
+        "**/api/review",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='''{"success":true,"review":"## How to work out each answer\\n\\n### Question 1: Correct\\n\\n**How to get it:** Add 4 and 5 to make 9.","from_rag_answers":true,"correct_count":2,"attempted":2}''',
+        ),
+    )
+
+    page.goto(f"{BASE_URL}/elevenplus-year-round-plan", wait_until="networkidle")
+    page.get_by_role("button", name="Generate Week 1 practice").click()
+
+    expect(page.locator(".practice-question")).to_have_count(2)
+    expect(page.locator('input[type="radio"]')).to_have_count(4)
+    expect(page.locator("#practice-results")).not_to_contain_text("Correct Answer")
+
+    page.locator(".practice-question").nth(0).locator("input").nth(1).check()
+    page.locator(".practice-question").nth(1).locator("input").nth(1).check()
+    page.get_by_role("button", name="Check answers").click()
+
+    expect(page.locator("#feedback-0")).to_contain_text("How to work out each answer")
+    expect(page.locator("#feedback-0")).to_contain_text("Add 4 and 5 to make 9")

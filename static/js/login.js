@@ -32,9 +32,14 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) throw new Error(data.error || data.detail || 'Login failed.');
-    localStorage.setItem('student_id', data.username || email);
-    localStorage.setItem('student_email', data.username || email);
-    window.location.assign('/app');
+    localStorage.setItem('auth_state', 'logged_in');
+    localStorage.removeItem('student_id');
+    localStorage.removeItem('student_email');
+    const params = new URLSearchParams(window.location.search);
+    const requestedNext = params.get('next') || sessionStorage.getItem('postLoginPath') || '/app';
+    const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';
+    sessionStorage.removeItem('postLoginPath');
+    window.location.assign(next);
   } catch (error) {
     showNotice(error.message || 'Login failed. Please try again.', 'error');
   } finally {

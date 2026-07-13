@@ -11,6 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="/static/js/marked-lite.js"></script>
 <script src="/static/js/safe_markdown.js"></script>
+<link rel="stylesheet" href="/static/css/multiple-choice.css">
+<script src="/static/js/multiple-choice.js"></script>
 
 <style>
   :root{
@@ -455,13 +457,26 @@ async function requestReview(homework, answers, subject){
 }
 
 function renderHomeworkBlocks(homeworkList, containerEl){
-  containerEl.innerHTML = homeworkList.map((hw, idx) => `
-    <div class="hw-block" data-idx="${idx}" data-subject="${hw.subject}" data-doc-id="${hw.doc_id || ''}">
-      <h3>${hw.subject}</h3>
-      <div class="hw-content">${renderSafeMarkdown(hw.content)}</div>
-      <textarea class="answer-box" placeholder="Write your answers here…"></textarea>
-    </div>
-  `).join('');
+  const renderer = window.HomeworkQuestionRenderer;
+  containerEl.innerHTML = homeworkList.map((hw, idx) => {
+    if (renderer && renderer.hasChoiceQuestions(hw)) {
+      return renderer.renderResponseBlock(hw, idx, {
+        outerClass: 'hw-block question-response-block',
+        headerClass: '',
+        headerText: hw.subject,
+        groupPrefix: 'elevenplus-hub-choice',
+        proxyClass: 'answer-box question-answer-proxy multiple-choice-answer-proxy'
+      });
+    }
+    return `
+      <div class="hw-block" data-idx="${idx}" data-subject="${hw.subject}" data-doc-id="${hw.doc_id || ''}">
+        <h3>${hw.subject}</h3>
+        <div class="hw-content">${renderSafeMarkdown(hw.content)}</div>
+        <textarea class="answer-box" placeholder="Write your answers here…"></textarea>
+      </div>
+    `;
+  }).join('');
+  if (renderer) renderer.bindAll(containerEl);
 }
 
 async function checkAnswers(homeworkList, containerEl, reviewEl, checkBtn){

@@ -51,8 +51,61 @@ ELEVEN_PLUS_SUBJECTS = [
     "Maths",
     "English",
     "Verbal Reasoning",
-    "Non-Verbal Reasoning"
+    "Non-Verbal Reasoning",
 ]
+
+# The 52-week plan uses separate RAG subject keys so weekly material cannot be
+# mixed with ordinary 11+ practice. These values are internal identifiers; the
+# UI should show the friendly names returned by ``subject_display_name``.
+YEAR_ROUND_SUBJECT_SUFFIX = "-1year"
+ELEVEN_PLUS_YEAR_ROUND_SUBJECTS = [
+    "Maths-1year",
+    "English-1year",
+    "VerbalReasoning-1year",
+    "NonVerbalReasoning-1year",
+]
+
+_SUBJECT_DISPLAY_NAMES = {
+    "maths": "Maths",
+    "mathematics": "Maths",
+    "english": "English",
+    "verbalreasoning": "Verbal Reasoning",
+    "nonverbalreasoning": "Non-Verbal Reasoning",
+}
+
+
+def _fold_subject_name(subject: str) -> str:
+    value = str(subject or "").strip()
+    if value.casefold().endswith(YEAR_ROUND_SUBJECT_SUFFIX):
+        value = value[:-len(YEAR_ROUND_SUBJECT_SUFFIX)]
+    return "".join(char for char in value.casefold() if char.isalnum())
+
+
+def subject_display_name(subject: str) -> str:
+    """Return a child-friendly subject label for internal or legacy keys."""
+    value = str(subject or "").strip()
+    return _SUBJECT_DISPLAY_NAMES.get(_fold_subject_name(value), value)
+
+
+def canonical_year_round_subject(subject: str) -> str:
+    """Convert a friendly/legacy 11+ subject name to its 52-week RAG key."""
+    folded = _fold_subject_name(subject)
+    mapping = {
+        "maths": "Maths-1year",
+        "mathematics": "Maths-1year",
+        "english": "English-1year",
+        "verbalreasoning": "VerbalReasoning-1year",
+        "nonverbalreasoning": "NonVerbalReasoning-1year",
+    }
+    return mapping.get(folded, str(subject or "").strip())
+
+
+def is_year_round_subject(subject: str) -> bool:
+    return canonical_year_round_subject(subject) in ELEVEN_PLUS_YEAR_ROUND_SUBJECTS and str(subject or "").strip().casefold().endswith(YEAR_ROUND_SUBJECT_SUFFIX)
+
+
+def is_eleven_plus_subject(subject: str) -> bool:
+    return subject_display_name(subject) in ELEVEN_PLUS_SUBJECTS
 
 # 科目对应的图标
 SUBJECT_ICONS = {
@@ -68,6 +121,10 @@ SUBJECT_ICONS = {
     "Latin": "Lat",
     "Spanish": "Spa",
     "Chinese": "Chi",
+    "Maths-1year": "123",
+    "English-1year": "ABC",
+    "VerbalReasoning-1year": "VR",
+    "NonVerbalReasoning-1year": "NVR",
 }
 
 

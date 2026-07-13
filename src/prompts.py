@@ -57,6 +57,9 @@ Generate homework that covers the relevant Programme of Study objectives for Yea
 - Subject title
 - Numbered tasks, each clearly worded
 - Brief examples where helpful
+- When a task is multiple-choice, put every choice on its own line using exactly
+  `A) choice`, `B) choice`, `C) choice` (and so on). Do not put several choices
+  on one line and do not reveal the correct choice in the student worksheet.
 
 ## Resources (link where relevant):
 - BBC Bitesize: https://www.bbc.co.uk/bitesize
@@ -107,21 +110,25 @@ Homework Content:
 Student's Answer/Work:
 {student_answer}
 
-{correct_answers_section} # This section is for LLM context, not for table generation
- 
- Please review the student's work and provide:
- 1. Overall assessment (Good/Needs Improvement/Excellent)
- 2. What the student did well
- 3. Areas that need correction or improvement
+{correct_answers_section}
 
- ## Learning Suggestions
- - 2-3 specific tips for improvement
- - Recommended practice activities
- 
- ## Encouragement
- - A motivating message to keep the student engaged
- 
- ## Score: X/10
+Please review the student's work and provide:
+1. Overall assessment (Good/Needs Improvement/Excellent)
+2. What the student did well
+3. Areas that need correction or improvement
+
+## Detailed Feedback per Question
+For each question, provide:
+- **Question X**: A very brief explanation of the correct method or why the student's answer was correct/incorrect.
+
+## Learning Suggestions
+- 2-3 specific tips for improvement
+- Recommended practice activities
+
+## Encouragement
+- A motivating message to keep the student engaged
+
+## Score: X/10
 
 Return the review in a clear, encouraging format appropriate for a primary school student.
 """
@@ -435,11 +442,15 @@ Student's Answers:
 Review Feedback (if available):
 {review_feedback}
 
+{correct_answers_section}
+
 Please provide a comprehensive deep explanation following this structure:
 
 ## Deep Explanation of Answers
 
-For EACH question in the homework:
+Please explain EVERY SINGLE question from the homework assignment. Do not skip any questions.
+
+For EACH question:
 1. Restate the question briefly
 2. Explain the correct answer step by step in simple, age-appropriate language
 3. Explain WHY this is the correct answer (the underlying concept or rule)
@@ -489,6 +500,8 @@ Student's Answers:
 Review Feedback (showing which answers were wrong):
 {review_feedback}
 
+{correct_answers_section}
+
 Your task:
 
 ## 1. Identify Weak Areas
@@ -500,6 +513,8 @@ For EACH weak area identified, generate 2-3 NEW practice questions that are simi
 - Be slightly varied so the student practises the concept, not just memorises the answer
 - Be clearly numbered and formatted
 - Be appropriate for a Year {year_group} student (age {age})
+- If a question has answer choices, put each choice on a separate line using
+  `A) choice`, `B) choice`, `C) choice` (and so on), without showing the answer.
 
 ## 3. Quick Revision Notes
 For each weak area, provide a brief, simple revision note (2-3 sentences) that reminds the student of the key rule or concept they need to know.
@@ -608,24 +623,27 @@ Create ONE complete homework set.
 
 Subject: {subject}
 Homework number: {index}
+Student and weekly-plan context: {student_profile}
 
 Requirements:
-- Designed for 30 minutes of work
 - UK 11+ difficulty (GL/CEM style but ORIGINAL questions only)
-- Must include:
-  1. 10 questions (increasing difficulty)
-  2. Full answers
-  3. Step-by-step explanations
-  4. One bonus challenge question
+- If the context contains plan_week, create exactly 3 multiple-choice questions
+  that match that week's learning_goals. Give five options (A-E) for each.
+- Otherwise create 10 questions of increasing difficulty plus one bonus challenge.
+- Keep the QUESTIONS section separate from the private answer material.
+- For every multiple-choice question, put each option on its own line using
+  exactly `A) choice` through `E) choice`.
+- Include full answers and clear step-by-step explanations only after a standalone
+  `ANSWERS` heading. The learner interface will hide that private section until marking.
+- Use short, child-friendly UK English.
 
-Subjects rules:
-- Maths: arithmetic, fractions, percentages, reasoning
-- English: comprehension + grammar + vocabulary
-- Verbal Reasoning: logic, sequences, word patterns
-- Non-Verbal Reasoning: shapes, rotations, matrices
+Subject rules:
+- Maths: arithmetic, fractions, percentages and reasoning
+- English: comprehension, grammar and vocabulary
+- Verbal Reasoning: logic, sequences and word patterns
+- Non-Verbal Reasoning: shapes, rotations and matrices
 
 Format clearly with headings:
-HOMEWORK
 QUESTIONS
 ANSWERS
 EXPLANATIONS

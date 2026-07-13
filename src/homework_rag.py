@@ -285,6 +285,28 @@ class HomeworkRAGStore:
         except Exception:
             return False
 
+    def delete_student_homework(self, student_id: str) -> int:
+        """Delete legacy RAG documents that directly reference one learner.
+
+        New shared-library documents do not store ``student_id``. This method
+        exists to erase records created by older application versions.
+        """
+        learner = str(student_id or "").strip()
+        if not learner:
+            return 0
+        try:
+            result = self.collection.get(where={"student_id": learner}, include=[])
+            ids = list(result.get("ids") or [])
+            if ids:
+                self._retry_write(
+                    lambda: self.collection.delete(ids=ids),
+                    f"delete legacy learner homework {learner}",
+                )
+            return len(ids)
+        except Exception:
+            logger.exception("[RAG] Failed to erase legacy homework for learner %s", learner)
+            return 0
+
     def get_stats(self) -> Dict[str, Any]:
         total = int(self.collection.count())
         subject_counts: Dict[str, int] = {}
@@ -511,8 +533,25 @@ def search_homework(
     return get_homework_rag_store().search(query, k=k, filters=filters or None)
 
 
+
+def search_homework_by_metadata(
+    year_group: int,
+    subject: str,
+    k: int = 50,
+) -> List[Dict[str, Any]]:
+    """Return exact year/subject candidates without creating a query embedding."""
+    return get_homework_rag_store().search_by_metadata(
+        {"year_group": int(year_group), "subject": str(subject)},
+        k=k,
+    )
+
 def get_student_homework_history(student_id: str, subject: Optional[str] = None) -> List[Dict[str, Any]]:
     return get_homework_rag_store().get_student_homework_history(student_id, subject)
+
+
+def delete_student_homework(student_id: str) -> int:
+    """Erase legacy learner-owned documents from the shared homework RAG."""
+    return get_homework_rag_store().delete_student_homework(student_id)
 
 
 def get_student_previous_topics(student_id: str, subject: str) -> List[str]:

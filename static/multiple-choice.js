@@ -1,26 +1,17 @@
-(function () {
+(function (root, factory) {
     'use strict';
-
-    const originalDisplayHomework = window.displayHomework;
-    const originalDisplayTutorQuestion = window.displayTutorQuestion;
-    const originalRestoreSavedState = window.restoreSavedState;
+    const api = factory(root || {});
+    if (root) root.HomeworkQuestionRenderer = api;
+    if (typeof module === 'object' && module.exports) module.exports = api;
+}(typeof window !== 'undefined' ? window : globalThis, function (root) {
+    'use strict';
 
     function cleanText(value) {
         return String(value || '')
             .trim()
-            .replace(/^#{1,6}\s+/, '')
-            .replace(/^\*\*(.*?)\*\*$/, '$1')
+            .replace(/^\s*#{1,6}\s+/, '')
+            .replace(/^\s*\*\*(.*?)\*\*\s*$/, '$1')
             .trim();
-    }
-
-    function renderMarkdown(value) {
-        if (typeof window.renderSafeMarkdown === 'function') {
-            return window.renderSafeMarkdown(String(value || ''));
-        }
-        if (window.marked && typeof window.marked.parse === 'function') {
-            return window.marked.parse(String(value || ''));
-        }
-        return escapeHtml(value).replace(/\n/g, '<br>');
     }
 
     function escapeHtml(value) {
@@ -36,385 +27,382 @@
         return escapeHtml(value).replace(/`/g, '&#096;');
     }
 
-    function parseMultipleChoiceQuestions(content) {
-        if (!content) return [];
-
-        const optionPattern = /^\s*(?:[-*]\s*)?(?:\*\*)?\(?([A-Ha-h])\)?[\)\].:\-](?:\*\*)?\s+(.+?)\s*$/;
-        const questionPattern = /^\s*(?:\*\*)?(?:question\s*)?(\d+)[\)\].:\-](?:\*\*)?\s+(.+?)\s*$/i;
-        const normalised = String(content)
-            .replace(/\r\n?/g, '\n')
-            .replace(/(\S)\s+(?=(?:\*\*)?\(?[A-Ha-h]\)?[\)\].:]\s+)/g, '$1\n');
-
-        const questions = [];
-        let current = null;
-        let preface = [];
-
-        function finishCurrent() {
-            if (!current) return;
-            const stem = cleanText(current.stemLines.join('\n'));
-            if (stem && current.options.length >= 2) {
-                questions.push({
-                    number: current.number || questions.length + 1,
-                    question: stem,
-                    options: current.options
-                });
-            }
-            current = null;
+    function renderMarkdown(value) {
+        if (typeof root.renderSafeMarkdown === 'function') {
+            return root.renderSafeMarkdown(String(value || ''));
         }
+        if (root.marked && typeof root.marked.parse === 'function') {
+            return root.marked.parse(String(value || ''));
+        }
+        return escapeHtml(value).replace(/\n/g, '<br>');
+    }
 
-        normalised.split('\n').forEach(function (rawLine) {
+    const questionPattern = /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?(?:(?:homework\s+)?question|q)?\s*\(?(\d+)\)?\s*(?:[\).:\-]|(?:\*\*)?\s*$)\s*(?:\*\*)?\s*(.*?)\s*$/i;
+    const optionPattern = /^\s*(?:[-*]\s*)?(?:\*\*)?\(?([A-Ha-h])\)?\s*[\).:\-]\s*(?:\*\*)?\s*(.+?)\s*$/;
+    const optionsLinePattern = /^\s*(?:\*\*)?options?(?:\*\*)?\s*:\s*(.*?)\s*$/i;
+    const privateHeadingPattern = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(?:answers?|correct\s+answers?|answer\s+key|solutions?|explanations?|worked\s+(?:answers?|solutions?|explanations?))(?:\*\*)?\s*:?\s*$/i;
+    const privateLinePattern = /^\s*(?:[-*]\s*)?(?:\*\*)?(?:correct\s+answer|answer|solution|explanation|worked\s+(?:answer|solution|explanation)|coaching\s+(?:strategy|tip)|(?:helpful|exam|11\+)?\s*tip)(?:\*\*)?\s*:/i;
+    const genericHeadingPattern = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(?:questions?|practice\s+questions?|homework(?:\s+set)?|tasks?)(?:\*\*)?\s*:?\s*$/i;
+    const contextTransitionPattern = /^(?:read|use|look at|study|refer to|for questions?\b|passage\b|the passage\b|read the (?:second|following|next))/i;
+
+    function stripPrivateSections(content) {
+        const kept = [];
+        const lines = String(content || '').replace(/\r\n?/g, '\n').split('\n');
+        for (const line of lines) {
+            if (privateHeadingPattern.test(line)) break;
+            kept.push(line);
+        }
+        return kept.join('\n').trim();
+    }
+
+    function normaliseInlineOptions(content) {
+        return String(content || '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/([^\n])\s+(?=(?:[-*]\s+)?(?:\*\*)?\(?[A-Ha-h]\)?[\).:]\s+)/g, '$1\n');
+    }
+
+    function splitCsvOptions(value) {
+        const text = String(value || '').trim();
+        if (!text) return [];
+        const values = [];
+        let current = '';
+        let quote = '';
+        for (let index = 0; index < text.length; index += 1) {
+            const char = text[index];
+            if ((char === '"' || char === "'") && (!quote || quote === char)) {
+                quote = quote ? '' : char;
+                current += char;
+            } else if (char === ',' && !quote) {
+                if (current.trim()) values.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        if (current.trim()) values.push(current.trim());
+        if (values.length < 2 || values.length > 8) return [];
+        return values.map(function (item, index) {
+            return {label: String.fromCharCode(65 + index), text: cleanText(item)};
+        });
+    }
+
+    function parseQuestionBlock(number, body) {
+        const stemLines = [];
+        const options = [];
+        const trailingLines = [];
+        let inOptions = false;
+        let inTrailingContext = false;
+        let gapAfterOptions = false;
+
+        for (const rawLine of String(body || '').split('\n')) {
             const line = rawLine.trim();
-            if (!line) return;
+            if (!line) {
+                if (inOptions) gapAfterOptions = true;
+                continue;
+            }
+            if (privateLinePattern.test(line) || privateHeadingPattern.test(line)) break;
 
-            const questionMatch = line.match(questionPattern);
-            if (questionMatch) {
-                finishCurrent();
-                current = {
-                    number: Number(questionMatch[1]),
-                    stemLines: [cleanText(questionMatch[2])],
-                    options: []
-                };
-                preface = [];
-                return;
+            if (inTrailingContext) {
+                trailingLines.push(cleanText(line));
+                continue;
+            }
+
+            const optionsLine = line.match(optionsLinePattern);
+            if (optionsLine) {
+                inOptions = true;
+                splitCsvOptions(optionsLine[1]).forEach(function (item) { options.push(item); });
+                gapAfterOptions = false;
+                continue;
             }
 
             const optionMatch = line.match(optionPattern);
             if (optionMatch) {
-                if (!current) {
-                    current = {
-                        number: questions.length + 1,
-                        stemLines: preface.slice(-4),
-                        options: []
-                    };
-                    preface = [];
-                }
-                current.options.push({
-                    label: optionMatch[1].toUpperCase(),
-                    text: cleanText(optionMatch[2])
-                });
-                return;
+                inOptions = true;
+                options.push({label: optionMatch[1].toUpperCase(), text: cleanText(optionMatch[2])});
+                gapAfterOptions = false;
+                continue;
             }
 
-            if (current) {
-                if (current.options.length) {
-                    const lastOption = current.options[current.options.length - 1];
-                    lastOption.text = (lastOption.text + ' ' + cleanText(line)).trim();
+            const cleaned = cleanText(line);
+            if (!cleaned || genericHeadingPattern.test(cleaned)) continue;
+            if (inOptions && options.length) {
+                const isContext = gapAfterOptions || contextTransitionPattern.test(cleaned);
+                if (isContext) {
+                    inTrailingContext = true;
+                    trailingLines.push(cleaned);
                 } else {
-                    current.stemLines.push(cleanText(line));
+                    options[options.length - 1].text = (options[options.length - 1].text + ' ' + cleaned).trim();
                 }
             } else {
-                preface.push(cleanText(line));
+                stemLines.push(cleaned);
             }
+        }
+
+        const stem = stemLines.join('\n').trim();
+        const validOptions = options.filter(function (item) { return item.text; });
+        if (!stem) return null;
+        const result = {
+            number: Number(number) || 1,
+            question: stem,
+            response_type: validOptions.length >= 2 ? 'single_choice' : 'text',
+            options: validOptions.length >= 2 ? validOptions : []
+        };
+        const trailingContext = trailingLines.filter(Boolean).join('\n').trim();
+        if (trailingContext) result._trailing_context = trailingContext;
+        return result;
+    }
+
+    function parseQuestions(content) {
+        const text = normaliseInlineOptions(stripPrivateSections(content));
+        const lines = text.split('\n');
+        const starts = [];
+        lines.forEach(function (line, lineIndex) {
+            const match = line.match(questionPattern);
+            if (match) starts.push({lineIndex: lineIndex, number: Number(match[1]), firstLine: cleanText(match[2])});
         });
 
-        finishCurrent();
+        if (!starts.length) {
+            const fallback = lines.filter(function (line) { return !genericHeadingPattern.test(line); }).join('\n').trim();
+            const parsed = fallback ? parseQuestionBlock(1, fallback) : null;
+            return parsed ? [parsed] : [];
+        }
+
+        const intro = lines.slice(0, starts[0].lineIndex)
+            .filter(function (line) { return line.trim() && !genericHeadingPattern.test(line); })
+            .join('\n')
+            .trim();
+        const questions = [];
+        let pendingContext = intro;
+        starts.forEach(function (start, index) {
+            const end = index + 1 < starts.length ? starts[index + 1].lineIndex : lines.length;
+            const body = [];
+            if (start.firstLine) body.push(start.firstLine);
+            body.push.apply(body, lines.slice(start.lineIndex + 1, end));
+            const parsed = parseQuestionBlock(start.number, body.join('\n'));
+            if (parsed) {
+                if (pendingContext) parsed.context = pendingContext;
+                pendingContext = String(parsed._trailing_context || '').trim();
+                delete parsed._trailing_context;
+                questions.push(parsed);
+            }
+        });
         return questions;
     }
 
     function normaliseOptions(options) {
         if (!Array.isArray(options)) return [];
-        return options
-            .map(function (option, index) {
-                if (typeof option === 'string') {
-                    return {
-                        label: String.fromCharCode(65 + index),
-                        text: cleanText(option)
-                    };
-                }
-                return {
-                    label: cleanText(option && option.label) || String.fromCharCode(65 + index),
-                    text: cleanText(option && (option.text || option.value || option.answer))
-                };
-            })
-            .filter(function (option) { return option.text; });
+        return options.map(function (option, index) {
+            if (typeof option === 'string') {
+                return {label: String.fromCharCode(65 + index), text: cleanText(option)};
+            }
+            return {
+                label: cleanText(option && option.label) || String.fromCharCode(65 + index),
+                text: cleanText(option && (option.text || option.value || option.answer))
+            };
+        }).filter(function (option) { return option.text; });
     }
 
-    function getMultipleChoiceQuestions(homeworkItem) {
-        if (!homeworkItem || !homeworkItem.is_eleven_plus) return [];
+    function normaliseStructuredQuestion(question, index) {
+        const options = normaliseOptions(question && question.options);
+        return {
+            number: Number(question && question.number) || index + 1,
+            question: cleanText(question && (question.question || question.question_text || question.text || '')),
+            context: cleanText(question && (question.context || question.passage || question.instructions || '')),
+            response_type: options.length >= 2 ? 'single_choice' : 'text',
+            options: options
+        };
+    }
 
-        if (Array.isArray(homeworkItem.questions)) {
-            const structured = homeworkItem.questions.map(function (question, index) {
-                return {
-                    number: Number(question.number) || index + 1,
-                    question: cleanText(question.question || question.question_text || ''),
-                    options: normaliseOptions(question.options)
-                };
-            }).filter(function (question) {
-                return question.question && question.options.length >= 2;
-            });
+    function getQuestions(homeworkItem) {
+        if (!homeworkItem) return [];
+        if (Array.isArray(homeworkItem.questions) && homeworkItem.questions.length) {
+            const structured = homeworkItem.questions
+                .map(normaliseStructuredQuestion)
+                .filter(function (question) { return question.question; });
             if (structured.length) return structured;
         }
-
         if (Array.isArray(homeworkItem.options)) {
             const options = normaliseOptions(homeworkItem.options);
-            const questionText = cleanText(homeworkItem.question_text || '');
-            if (questionText && options.length >= 2) {
-                return [{ number: 1, question: questionText, options: options }];
+            const question = cleanText(homeworkItem.question_text || homeworkItem.question || '');
+            if (question && options.length >= 2) {
+                return [{number: 1, question: question, context: cleanText(homeworkItem.context || ''), response_type: 'single_choice', options: options}];
             }
         }
-
-        return parseMultipleChoiceQuestions(homeworkItem.content || '');
+        return parseQuestions(homeworkItem.content || '');
     }
 
-    function optionInputName(homeworkIndex, questionIndex, tutorMode) {
-        if (tutorMode) return 'tutor-multiple-choice-answer';
-        return 'multiple-choice-' + homeworkIndex + '-' + questionIndex;
+    function hasChoiceQuestions(homeworkItem) {
+        return getQuestions(homeworkItem).some(function (question) {
+            return question.response_type === 'single_choice' && question.options.length >= 2;
+        });
     }
 
-    function renderQuestion(question, homeworkIndex, questionIndex, tutorMode, savedAnswer) {
-        const groupName = optionInputName(homeworkIndex, questionIndex, tutorMode);
-        const questionNumber = Number(question.number) || questionIndex + 1;
-        const optionsHtml = question.options.map(function (option) {
-            const answerValue = option.text;
-            const checked = savedAnswer && savedAnswer === answerValue ? ' checked' : '';
-            return '<label class="multiple-choice-option">' +
-                '<input class="multiple-choice-input" type="radio"' +
-                    ' name="' + escapeAttribute(groupName) + '"' +
-                    ' value="' + escapeAttribute(answerValue) + '"' +
-                    ' data-option-label="' + escapeAttribute(option.label) + '"' +
-                    ' data-question-number="' + questionNumber + '"' + checked + '>' +
-                '<span class="multiple-choice-option-body">' +
-                    '<span class="multiple-choice-letter" aria-hidden="true">' + escapeHtml(option.label) + '</span>' +
-                    '<span class="multiple-choice-option-text">' + renderMarkdown(option.text) + '</span>' +
-                '</span>' +
-            '</label>';
-        }).join('');
-
-        return '<fieldset class="multiple-choice-question" data-question-index="' + questionIndex + '">' +
-            '<legend>' +
-                '<span class="multiple-choice-question-number">Question ' + questionNumber + '</span>' +
-                '<span class="multiple-choice-question-text">' + renderMarkdown(question.question) + '</span>' +
-            '</legend>' +
-            '<div class="multiple-choice-options">' + optionsHtml + '</div>' +
-        '</fieldset>';
+    function inputName(prefix, homeworkIndex, questionIndex) {
+        return String(prefix || 'homework-choice') + '-' + homeworkIndex + '-' + questionIndex;
     }
 
-    function renderMultipleChoiceBlock(homeworkItem, homeworkIndex) {
-        const questions = getMultipleChoiceQuestions(homeworkItem);
+    function answerMapFromValue(value, questions) {
+        const map = new Map();
+        const text = String(value || '').trim();
+        if (!text) return map;
+        text.split(/\n+/).forEach(function (line) {
+            const match = line.match(/^\s*(\d+)[\).]\s*(.+?)\s*$/);
+            if (match) map.set(match[1], match[2]);
+        });
+        if (!map.size && questions.length === 1) map.set(String(questions[0].number || 1), text);
+        return map;
+    }
+
+    function renderQuestion(question, homeworkIndex, questionIndex, config, savedAnswers) {
+        const number = Number(question.number) || questionIndex + 1;
+        const saved = savedAnswers.get(String(number)) || '';
+        const heading = '<span class="multiple-choice-question-number">Question ' + number + '</span>' +
+            '<span class="multiple-choice-question-text">' + renderMarkdown(question.question) + '</span>';
+        const contextHtml = question.context
+            ? '<div class="question-context">' + renderMarkdown(question.context) + '</div>'
+            : '';
+        let controlHtml = '';
+
+        if (question.response_type === 'single_choice' && question.options.length >= 2) {
+            const groupName = inputName(config.groupPrefix, homeworkIndex, questionIndex);
+            const optionsHtml = question.options.map(function (option) {
+                const checked = saved === option.text || saved === option.label || saved === ('Option ' + option.label) ? ' checked' : '';
+                return '<label class="multiple-choice-option">' +
+                    '<input class="multiple-choice-input question-response-control" type="radio"' +
+                        ' name="' + escapeAttribute(groupName) + '"' +
+                        ' value="' + escapeAttribute(option.text) + '"' +
+                        ' data-option-label="' + escapeAttribute(option.label) + '"' + checked + '>' +
+                    '<span class="multiple-choice-option-body">' +
+                        '<span class="multiple-choice-letter" aria-hidden="true">' + escapeHtml(option.label) + '</span>' +
+                        '<span class="multiple-choice-option-text">' + renderMarkdown(option.text) + '</span>' +
+                    '</span>' +
+                '</label>';
+            }).join('');
+            controlHtml = '<fieldset class="multiple-choice-question question-response-item" data-question-number="' + number + '" data-response-type="single_choice">' +
+                '<legend>' + heading + '</legend>' +
+                '<div class="multiple-choice-options">' + optionsHtml + '</div>' +
+            '</fieldset>';
+        } else {
+            controlHtml = '<section class="multiple-choice-question free-response-question question-response-item" data-question-number="' + number + '" data-response-type="text">' +
+                '<div class="free-response-heading">' + heading + '</div>' +
+                '<label class="free-response-label" for="response-' + homeworkIndex + '-' + questionIndex + '">Your answer</label>' +
+                '<textarea class="question-response-input question-response-control" id="response-' + homeworkIndex + '-' + questionIndex + '"' +
+                    ' rows="3" placeholder="Write your answer here...">' + escapeHtml(saved) + '</textarea>' +
+            '</section>';
+        }
+        return '<div class="question-response-group">' + contextHtml + controlHtml + '</div>';
+    }
+
+    function renderResponseBlock(homeworkItem, homeworkIndex, options) {
+        const config = Object.assign({
+            outerClass: 'homework-block question-response-block',
+            headerClass: 'subject-header',
+            headerText: homeworkItem.subject || 'Homework',
+            groupPrefix: 'homework-choice',
+            proxyId: '',
+            proxyClass: 'answer-input-inline question-answer-proxy multiple-choice-answer-proxy',
+            savedAnswer: '',
+            showLibraryBadge: true
+        }, options || {});
+        const questions = getQuestions(homeworkItem);
         if (!questions.length) return '';
-
+        const savedAnswers = answerMapFromValue(config.savedAnswer, questions);
         const questionsHtml = questions.map(function (question, questionIndex) {
-            return renderQuestion(question, homeworkIndex, questionIndex, false, '');
+            return renderQuestion(question, homeworkIndex, questionIndex, config, savedAnswers);
         }).join('');
-
-        return '<div class="homework-block multiple-choice-block" data-homework-index="' + homeworkIndex + '">' +
-            '<h3 class="subject-header">' + escapeHtml(homeworkItem.subject || '11+ Practice') +
-                (homeworkItem.from_rag ? ' (Free - from library)' : '') + '</h3>' +
-            '<div class="multiple-choice-list">' + questionsHtml + '</div>' +
-            '<textarea class="answer-input-inline multiple-choice-answer-proxy" hidden' +
-                ' aria-hidden="true" tabindex="-1"' +
+        const proxyId = config.proxyId ? ' id="' + escapeAttribute(config.proxyId) + '"' : '';
+        const badge = config.showLibraryBadge && homeworkItem.from_rag ? ' (Free - from library)' : '';
+        return '<div class="' + escapeAttribute(config.outerClass) + '" data-homework-index="' + homeworkIndex + '"' +
+                ' data-subject="' + escapeAttribute(homeworkItem.subject || 'Maths') + '">' +
+            '<h3 class="' + escapeAttribute(config.headerClass) + '">' + escapeHtml(config.headerText) + escapeHtml(badge) + '</h3>' +
+            '<div class="multiple-choice-list question-response-list">' + questionsHtml + '</div>' +
+            '<textarea class="' + escapeAttribute(config.proxyClass) + '" hidden aria-hidden="true" tabindex="-1"' + proxyId +
                 ' data-subject="' + escapeAttribute(homeworkItem.subject || 'Maths') + '"' +
-                ' data-homework-index="' + homeworkIndex + '"></textarea>' +
+                ' data-homework-index="' + homeworkIndex + '">' + escapeHtml(config.savedAnswer || '') + '</textarea>' +
         '</div>';
     }
 
-    function renderStandardBlock(homeworkItem, homeworkIndex) {
-        const parsed = renderMarkdown(homeworkItem.content || '');
-        const formatted = typeof window.formatQuestions === 'function' ? window.formatQuestions(parsed) : parsed;
-        return '<div class="homework-block" data-homework-index="' + homeworkIndex + '">' +
-            '<h3 class="subject-header">' + escapeHtml(homeworkItem.subject || 'Homework') +
-                (homeworkItem.from_rag ? ' (Free - from library)' : '') + '</h3>' +
-            '<div class="homework-content">' +
-                '<div class="question-column">' + formatted + '</div>' +
-                '<div class="answer-column">' +
-                    '<h4>Your Answer:</h4>' +
-                    '<textarea class="answer-input-inline" placeholder="Write your answer here..."' +
-                        ' data-subject="' + escapeAttribute(homeworkItem.subject || 'Maths') + '"' +
-                        ' data-homework-index="' + homeworkIndex + '"></textarea>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
-    }
-
-    function syncHomeworkProxy(homeworkIndex) {
-        const block = document.querySelector('.multiple-choice-block[data-homework-index="' + homeworkIndex + '"]');
-        if (!block) return;
-        const proxy = block.querySelector('.multiple-choice-answer-proxy');
-        if (!proxy) return;
-
+    function syncBlock(block) {
+        if (!block) return '';
+        const proxy = block.querySelector('.question-answer-proxy');
         const answers = [];
-        block.querySelectorAll('.multiple-choice-question').forEach(function (questionElement, questionIndex) {
-            const selected = questionElement.querySelector('.multiple-choice-input:checked');
-            if (selected) {
-                const number = selected.dataset.questionNumber || String(questionIndex + 1);
-                answers.push(number + '. ' + selected.value);
+        block.querySelectorAll('.question-response-item').forEach(function (item, index) {
+            const number = item.dataset.questionNumber || String(index + 1);
+            let value = '';
+            if (item.dataset.responseType === 'single_choice') {
+                const selected = item.querySelector('.multiple-choice-input:checked');
+                value = selected ? selected.value.trim() : '';
+            } else {
+                const input = item.querySelector('.question-response-input');
+                value = input ? input.value.trim() : '';
             }
+            if (value) answers.push(number + '. ' + value);
         });
-        proxy.value = answers.join('\n');
+        const combined = answers.join('\n');
+        if (proxy) proxy.value = combined;
+        return combined;
     }
 
-    function restoreHomeworkSelectionsFromProxy() {
-        document.querySelectorAll('.multiple-choice-block').forEach(function (block) {
-            const proxy = block.querySelector('.multiple-choice-answer-proxy');
+    function bindBlock(block, onChange) {
+        if (!block) return;
+        block.querySelectorAll('.question-response-control').forEach(function (control) {
+            const eventName = control.matches('textarea, input[type="text"]') ? 'input' : 'change';
+            control.addEventListener(eventName, function () {
+                const value = syncBlock(block);
+                if (typeof onChange === 'function') onChange(value, block);
+            });
+        });
+        syncBlock(block);
+    }
+
+    function bindAll(container, onChange) {
+        const rootElement = container || (root.document && root.document);
+        if (!rootElement || !rootElement.querySelectorAll) return;
+        rootElement.querySelectorAll('.question-response-block').forEach(function (block) {
+            bindBlock(block, onChange);
+        });
+    }
+
+    function restoreFromProxies(container) {
+        const rootElement = container || (root.document && root.document);
+        if (!rootElement || !rootElement.querySelectorAll) return;
+        rootElement.querySelectorAll('.question-response-block').forEach(function (block) {
+            const proxy = block.querySelector('.question-answer-proxy');
             if (!proxy || !proxy.value.trim()) return;
-            const answerMap = new Map();
-            proxy.value.split(/\n+/).forEach(function (line) {
-                const match = line.match(/^\s*(\d+)[\).]\s*(.+?)\s*$/);
-                if (match) answerMap.set(match[1], match[2]);
-            });
-            block.querySelectorAll('.multiple-choice-input').forEach(function (input) {
-                input.checked = answerMap.get(input.dataset.questionNumber) === input.value;
+            const questions = Array.from(block.querySelectorAll('.question-response-item'));
+            const map = answerMapFromValue(proxy.value, questions.map(function (item, index) {
+                return {number: Number(item.dataset.questionNumber) || index + 1};
+            }));
+            questions.forEach(function (item, index) {
+                const number = item.dataset.questionNumber || String(index + 1);
+                const value = map.get(number) || '';
+                if (item.dataset.responseType === 'single_choice') {
+                    item.querySelectorAll('.multiple-choice-input').forEach(function (input) {
+                        input.checked = input.value === value || input.dataset.optionLabel === value;
+                    });
+                } else {
+                    const input = item.querySelector('.question-response-input');
+                    if (input) input.value = value;
+                }
             });
         });
     }
 
-    window.displayHomework = function (homeworkList) {
-        const list = Array.isArray(homeworkList) ? homeworkList : [];
-        const hasMultipleChoice = list.some(function (item) {
-            return getMultipleChoiceQuestions(item).length > 0;
-        });
-
-        if (!hasMultipleChoice && typeof originalDisplayHomework === 'function') {
-            originalDisplayHomework(homeworkList);
-            return;
-        }
-
-        const container = document.getElementById('homework-results');
-        container.innerHTML = list.map(function (homeworkItem, homeworkIndex) {
-            const multipleChoiceHtml = renderMultipleChoiceBlock(homeworkItem, homeworkIndex);
-            return multipleChoiceHtml || renderStandardBlock(homeworkItem, homeworkIndex);
-        }).join('');
-
-        container.querySelectorAll('.multiple-choice-input').forEach(function (input) {
-            input.addEventListener('change', function () {
-                const block = input.closest('.multiple-choice-block');
-                if (block) syncHomeworkProxy(block.dataset.homeworkIndex);
-            });
-        });
-
-        if (typeof window.showResults === 'function') window.showResults();
-        const homeworkButtons = document.getElementById('homework-buttons');
-        const tutorButtons = document.getElementById('tutor-mode-buttons');
-        if (homeworkButtons) homeworkButtons.style.display = 'block';
-        if (tutorButtons) tutorButtons.style.display = 'none';
-    };
-
-    window.displayTutorQuestion = function (index) {
-        if (!Array.isArray(currentHomework) || index >= currentHomework.length) {
-            alert('You have completed all questions!');
-            if (typeof window.clearResults === 'function') window.clearResults();
-            return;
-        }
-
-        const homeworkItem = currentHomework[index];
-        const questions = getMultipleChoiceQuestions(homeworkItem);
-        if (!questions.length && typeof originalDisplayTutorQuestion === 'function') {
-            originalDisplayTutorQuestion(index);
-            return;
-        }
-
-        const question = questions[0];
-        const savedAnswer = currentQuestionAnswers[index] || '';
-        const container = document.getElementById('homework-results');
-        container.innerHTML = '<div class="homework-block multiple-choice-block tutor-multiple-choice-block">' +
-            '<h3 class="subject-header">' + escapeHtml(homeworkItem.subject || '11+ Practice') +
-                ' (Question ' + (index + 1) + ' of ' + currentHomework.length + ')' +
-                (homeworkItem.from_rag ? ' (Free - from library)' : '') + '</h3>' +
-            '<div class="multiple-choice-list">' +
-                renderQuestion(question, index, 0, true, savedAnswer) +
-            '</div>' +
-            '<textarea class="answer-input-inline multiple-choice-answer-proxy" id="tutor-answer-input" hidden' +
-                ' aria-hidden="true" tabindex="-1" data-subject="' +
-                escapeAttribute(homeworkItem.subject || 'Maths') + '">' + escapeHtml(savedAnswer) + '</textarea>' +
-        '</div>';
-
-        const proxy = document.getElementById('tutor-answer-input');
-        container.querySelectorAll('.multiple-choice-input').forEach(function (input) {
-            input.addEventListener('change', function () {
-                proxy.value = input.value;
-                currentQuestionAnswers[index] = input.value;
-            });
-        });
-
-        if (typeof window.showResults === 'function') window.showResults();
-        const homeworkButtons = document.getElementById('homework-buttons');
-        const tutorButtons = document.getElementById('tutor-mode-buttons');
-        if (homeworkButtons) homeworkButtons.style.display = 'none';
-        if (tutorButtons) tutorButtons.style.display = 'block';
-        const reviewResult = document.getElementById('review-result');
-        if (reviewResult) reviewResult.innerHTML = '';
-    };
-
-    // Always send the original RAG question position when Tutor Mode is reviewed.
-    // The RAG metadata stores answers as an ordered list. Without question_index,
-    // the backend can accidentally use answer 1 for a later question.
-    window.reviewCurrentQuestion = async function () {
-        const answerInput = document.getElementById('tutor-answer-input');
-        const studentAnswer = answerInput ? answerInput.value.trim() : '';
-
-        if (!studentAnswer) {
-            alert('Please enter your answer for this question!');
-            return;
-        }
-
-        currentQuestionAnswers[currentQuestionIndex] = studentAnswer;
-
-        const homeworkItem = currentHomework[currentQuestionIndex];
-        if (!homeworkItem) {
-            alert('This question could not be found. Please generate the homework again.');
-            return;
-        }
-
-        const sourceQuestionIndex = Number.isInteger(homeworkItem.question_index)
-            ? homeworkItem.question_index
-            : currentQuestionIndex;
-
-        const requestBody = {
-            // full_content keeps the original number, giving the backend a second,
-            // text-based way to match the question if needed.
-            homework: homeworkItem.full_content || homeworkItem.content || '',
-            answers: studentAnswer,
-            subject: homeworkItem.subject || 'Maths',
-            profile: currentProfile || { student_id: currentStudentId },
-            is_tutor_mode: true,
-            from_rag: Boolean(homeworkItem.from_rag),
-            homework_doc_id: homeworkItem.doc_id || null,
-            question_index: sourceQuestionIndex,
-            is_eleven_plus: Boolean(homeworkItem.is_eleven_plus)
-        };
-
-        if (typeof window.showLoading === 'function') window.showLoading();
-
-        try {
-            const response = await fetch('/api/review', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (response.status === 402) {
-                alert('Subscription required for this feature.');
-                window.location.href = '/pricing';
-                return;
-            }
-            if (response.status === 401) {
-                alert('Please login or register to use this feature.');
-                window.location.href = '/login';
-                return;
-            }
-
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'The question could not be checked.');
-            }
-
-            if (typeof window.displayReview === 'function') {
-                window.displayReview(data.review || '');
-            }
-        } catch (error) {
-            console.error('Tutor review failed:', error);
-            alert(error.message || 'An error occurred during review');
-        } finally {
-            if (typeof window.hideLoading === 'function') window.hideLoading();
-        }
-    };
-
-    if (typeof originalRestoreSavedState === 'function') {
-        window.restoreSavedState = function () {
-            const restored = originalRestoreSavedState();
-            restoreHomeworkSelectionsFromProxy();
-            return restored;
-        };
+    function getBlockAnswer(block) {
+        return syncBlock(block);
     }
-})();
+
+    const api = {
+        parseQuestions: parseQuestions,
+        getQuestions: getQuestions,
+        hasChoiceQuestions: hasChoiceQuestions,
+        renderResponseBlock: renderResponseBlock,
+        bindBlock: bindBlock,
+        bindAll: bindAll,
+        syncBlock: syncBlock,
+        getBlockAnswer: getBlockAnswer,
+        restoreFromProxies: restoreFromProxies
+    };
+
+    return api;
+}));

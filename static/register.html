@@ -222,7 +222,7 @@
 
         <div class="divider">or</div>
 
-        <p class="login-link">Already have an account? <a href="/app">Sign in</a></p>
+        <p class="login-link">Already have an account? <a href="/login">Sign in</a></p>
 
         <p class="pricing-link">
             <a href="#" onclick="window.open('/pricing', '_blank', 'width=800,height=600'); return false;">View pricing plans</a>
@@ -300,12 +300,15 @@
 
                 if (data.success) {
                     showSuccess('Account created successfully! Redirecting...');
-                    // Store user info
-                    localStorage.setItem('student_id', email);
-                    localStorage.setItem('student_email', email);
+                    localStorage.setItem('auth_state', 'logged_in');
+                    localStorage.removeItem('student_id');
+                    localStorage.removeItem('student_email');
+                    const requestedNext = params.get('next') || sessionStorage.getItem('postLoginPath') || '/app';
+                    const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';
+                    sessionStorage.removeItem('postLoginPath');
                     setTimeout(() => {
-                        window.location.href = '/app';
-                    }, 1500);
+                        window.location.href = next;
+                    }, 800);
                 } else {
                     showError(data.error || 'Registration failed. Please try again.');
                     submitBtn.disabled = false;

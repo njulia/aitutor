@@ -29,7 +29,7 @@ Response: {"status": "ok", "initialized": true}
 GET /api/subjects
 Response: {
     "primary": ["Maths", "English", "Spanish", ...],
-    "eleven_plus": ["Maths", "English", "Verbal Reasoning", "Non-Verbal Reasoning"]
+    "eleven_plus": ["Maths", "English", "VerbalReasoning", "NonVerbalReasoning"]
 }
 ```
 

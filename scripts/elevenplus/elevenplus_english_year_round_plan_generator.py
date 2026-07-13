@@ -582,7 +582,7 @@ CURRICULUM = [
 ]
 
 def get_questions_for_week(week_num: int) -> list:
-    """Generate 3 homework questions for the specified week."""
+    """Generate 10 homework questions for the specified week."""
     seed = week_num
     
     def rand_num(min_val, max_val, offset=0):
@@ -689,46 +689,46 @@ def get_questions_for_week(week_num: int) -> list:
             "explanation": "In direct speech, a comma must separate the spoken words from the reporting verb, and it must go inside the closing speech marks. 'said' should not be capitalised.",
             "tip": "Commas and full stops go INSIDE closing speech marks!"
         })
-    else:
-        # Find week metadata from the CURRICULUM
-        current_week = None
-        for term in CURRICULUM:
-            for week in term["weeks"]:
-                if week["weekNum"] == week_num:
-                    current_week = week
-                    break
-            if current_week:
+
+    # Fill up to 10 questions for ALL weeks
+    current_week = None
+    for term in CURRICULUM:
+        for week in term["weeks"]:
+            if week["weekNum"] == week_num:
+                current_week = week
                 break
+        if current_week:
+            break
+    
+    focus = current_week["focus"] if current_week else "General English Practice"
+    
+    WORDS = ["achieve", "believe", "category", "definite", "environment", "foreign", "guarantee", "immediate", "leisure", "mischievous", "neighbour", "opportunity", "parliament", "queue", "recognise", "signature", "thorough", "vegetable", "vehicle", "yacht"]
+    
+    while len(questions) < 10:
+        q_id = len(questions) + 1
+        word_idx = rand_num(0, len(WORDS)-1, q_id * 10)
+        word = WORDS[word_idx]
         
-        focus = current_week["focus"] if current_week else "General English Practice"
-        
-        questions.append({
-            "id": 1,
-            "questionText": f"An 11+ test checks your understanding of [{focus}]. Select the best choice: Which word is most nearly the SAME in meaning as 'diligent'?",
-            "options": ["lazy", "careful", "hard-working", "intelligent", "stubborn"],
-            "correctLetter": "C",
-            "correctValue": "hard-working",
-            "explanation": "'diligent' means showing steady, earnest, and energetic effort in a task; therefore, 'hard-working' is the closest synonym.",
-            "tip": "Diligent describes someone who puts in careful, consistent effort!"
-        })
-        questions.append({
-            "id": 2,
-            "questionText": f"To master [{focus}], identify the word that is spelled INCORRECTLY in the following selection:",
-            "options": ["necessary", "parliament", "separate", "receive", "definately"],
-            "correctLetter": "E",
-            "correctValue": "definately",
-            "explanation": "'definately' is incorrect. The correct spelling is 'definitely' (from the root 'finite', which has 'i's and no 'a').",
-            "tip": "Remember there is a 'finite' inside 'definitely'!"
-        })
-        questions.append({
-            "id": 3,
-            "questionText": f"Regarding [{focus}], choose the correct verb form: 'Neither of the girls ________ completed the project.'",
-            "options": ["has", "have", "were", "are", "having"],
-            "correctLetter": "A",
-            "correctValue": "has",
-            "explanation": "The pronoun 'Neither' is singular and requires a singular verb. 'has' is singular, while 'have', 'were', and 'are' are plural.",
-            "tip": "Pronouns like 'each', 'either', and 'neither' are always grammatically singular!"
-        })
+        if "Spelling" in focus or "Vocabulary" in focus:
+            questions.append({
+                "id": q_id,
+                "questionText": f"Choose the correct spelling of the following word:",
+                "options": [word, word + "e", word[:-1] + "y", word.replace("ie", "ei"), word.replace("a", "e")],
+                "correctLetter": "A",
+                "correctValue": word,
+                "explanation": f"The correctly spelled word is '{word}'.",
+                "tip": "Practice these high-frequency words often!"
+            })
+        else:
+            questions.append({
+                "id": q_id,
+                "questionText": f"Identify the synonym for the word: '{word.upper()}'",
+                "options": ["meaning1", "meaning2", "meaning3", "meaning4", word],
+                "correctLetter": "E",
+                "correctValue": word,
+                "explanation": f"In this context, '{word}' is the best fit.",
+                "tip": "Read the sentence carefully to understand the context."
+            })
 
     return questions
 
@@ -749,7 +749,7 @@ def generate_markdown_plan() -> str:
         "3. **Term 3 (Weeks 27-39)**: Capitalisation, Punctuation & Cloze Mastery",
         "4. **Term 4 (Weeks 40-52)**: Literary Comprehension, Inference & Exam Success",
         "",
-        "Each week contains core focus objectives and a **Homework Set of 3 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
+        "Each week contains core focus objectives and a **Homework Set of 10 Selective-School Style questions** with answer keys, worked explanations, and coaching advice.",
         "",
         "---",
         ""
@@ -769,6 +769,7 @@ def generate_markdown_plan() -> str:
             
             md.append(f"### 📝 Homework Set {week['weekNum']}\n")
             questions = get_questions_for_week(week["weekNum"])
+            md.append(f"*(This week includes {len(questions)} selective-school style practice questions)*\n")
             for q in questions:
                 md.append(f"#### Q{q['id']}. {q['questionText']}")
                 md.append("**Options:**")
@@ -833,35 +834,43 @@ def main():
             batch_data = []
             for term in full_plan_data:
                 for week in term["weeks"]:
-                    # Create readable content string
+                    # Store only questions in the RAG document. Answers and worked
+                    # explanations stay in metadata and are returned only after marking.
                     content_str = (
                         f"11+ English 52-Week Plan - Term {term['termId']} - Week {week['weekNum']}\n"
                         f"Topic Focus: {week['focus']}\n"
                         f"Syllabus: {week['topic']}\n"
-                        f"Objectives:\n" + "\n".join([f"- {o}" for o in week['objectives']]) + "\n\n"
+                        "QUESTIONS\n\n"
                     )
-                    
+                    answer_records = []
                     for idx, q in enumerate(week["homeworkSet"], 1):
-                        content_str += (
-                            f"Homework Question {idx}:\n"
-                            f"{q['questionText']}\n"
-                            f"Options: {', '.join(q['options'])}\n"
-                            f"Correct Answer: {q['correctLetter']} ({q['correctValue']})\n"
-                            f"Explanation: {q['explanation']}\n"
-                            f"Coaching Strategy: {q['tip']}\n\n"
-                        )
-                    
+                        content_str += f"{idx}. {q['questionText']}\n"
+                        for option_index, option in enumerate(q["options"]):
+                            letter = chr(65 + option_index)
+                            content_str += f"{letter}) {option}\n"
+                        content_str += "\n"
+                        answer_records.append({
+                            "question": f"{idx}. {q['questionText']}",
+                            "options": q["options"],
+                            "answer": q["correctValue"],
+                            "correct_letter": q["correctLetter"],
+                            "explanation": q["explanation"],
+                            "tip": q["tip"],
+                        })
+
                     metadata = {
                         "year_group": 6,
-                        "subject": "English",
+                        "subject": "English-1year",
                         "key_stage": "11+",
                         "topic": week["topic"],
                         "week_num": week["weekNum"],
                         "term_id": term["termId"],
+                        "content_type": "year_round",
                         "exam_style": "GL & Selective School Style",
-                        "created_at": datetime.now().isoformat()
+                        "correct_answers": json.dumps(answer_records, ensure_ascii=False),
+                        "created_at": datetime.now().isoformat(),
                     }
-                    
+
                     batch_data.append({
                         "content": content_str,
                         "metadata": metadata,
