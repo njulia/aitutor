@@ -16,7 +16,7 @@ This setup uses Ollama for LLM and sentence-transformers for embeddings. Zero AP
 # Download from https://ollama.com
 
 # Pull required models
-ollama pull qwen2.5:7b        # Main LLM for homework generation/review
+ollama pull qwen3.5:2b        # Main LLM for homework generation/review
 ollama pull qwen3.6:35b       # AI coding (optional)
 ollama pull llava:7b          # Vision model for OCR (optional)
 ollama pull nomic-embed-text  # Embedding model (optional, fallback)
@@ -40,7 +40,7 @@ LLM_PROVIDER=ollama
 
 # Ollama settings
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_MODEL=qwen3.5:2b
 OLLAMA_VISION_MODEL=llava:7b
 
 # Embedding: "local" for sentence-transformers, "api" for cloud
@@ -85,11 +85,11 @@ curl http://localhost:5000/api/health
 ```env
 # LLM Backend
 LLM_PROVIDER=api
-QWEN_API_KEY=your-api-key
+DEFAULT_API_KEY=your-api-key
 
 # Embedding
 EMBEDDING_PROVIDER=api
-QWEN_API_KEY=your-embedding-key
+DEFAULT_API_KEY=your-embedding-key
 
 # Stripe
 STRIPE_SECRET_KEY=sk_live_...
@@ -133,23 +133,23 @@ CMD ["gunicorn", "web_app:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker"
 
 ## Environment Variables Reference
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM_PROVIDER` | `api` | LLM backend: `ollama` or `api` |
-| `QWEN_API_KEY` | - | API key for cloud LLM (required if `api`) |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama model name |
-| `OLLAMA_VISION_MODEL` | `llava:7b` | Ollama vision model |
-| `EMBEDDING_PROVIDER` | `local` | Embedding backend: `local` or `api` |
-| `LOCAL_EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local embedding model name |
-| `QWEN_API_KEY` | - | API key for cloud embeddings |
-| `STRIPE_SECRET_KEY` | - | Stripe secret key |
-| `ADMIN_TOKEN` | - | Admin authentication token |
-| `LANGFUSE_ENABLED` | `true` | Enable Langfuse tracing |
-| `LANGFUSE_PUBLIC_KEY` | - | Langfuse public key |
-| `LANGFUSE_SECRET_KEY` | - | Langfuse secret key |
-| `LANGFUSE_HOST` | `http://localhost:3000` | Langfuse server URL |
-| `PORT` | `5000` | Server port |
+| Variable                | Default                  | Description |
+|-------------------------|--------------------------|-------------|
+| `LLM_PROVIDER`          | `api`                    | LLM backend: `ollama` or `api` |
+| `DEFAULT_API_KEY`       | -                        | API key for cloud LLM (required if `api`) |
+| `OLLAMA_BASE_URL`       | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL`          | `qwen3.5:2b`             | Ollama model name |
+| `OLLAMA_VISION_MODEL`   | `llava:7b`               | Ollama vision model |
+| `EMBEDDING_PROVIDER`    | `local`                  | Embedding backend: `local` or `api` |
+| `LOCAL_EMBEDDING_MODEL` | `all-MiniLM-L6-v2`       | Local embedding model name |
+| `DEFAULT_API_KEY`       | -                        | API key for cloud embeddings |
+| `STRIPE_SECRET_KEY`     | -                        | Stripe secret key |
+| `ADMIN_TOKEN`           | -                        | Admin authentication token |
+| `LANGFUSE_ENABLED`      | `true`                   | Enable Langfuse tracing |
+| `LANGFUSE_PUBLIC_KEY`   | -                        | Langfuse public key |
+| `LANGFUSE_SECRET_KEY`   | -                        | Langfuse secret key |
+| `LANGFUSE_HOST`         | `http://localhost:3000`  | Langfuse server URL |
+| `PORT`                  | `5000`                   | Server port |
 
 ## Switching Between Dev and Prod
 
@@ -162,15 +162,15 @@ EMBEDDING_PROVIDER=local
 ### Production (Cloud API)
 ```env
 LLM_PROVIDER=api
-QWEN_API_KEY=your-key
+DEFAULT_API_KEY=your-key
 EMBEDDING_PROVIDER=api
-QWEN_API_KEY=your-key
+DEFAULT_API_KEY=your-key
 ```
 
 ### Hybrid (Local Embeddings + Cloud LLM)
 ```env
 LLM_PROVIDER=api
-QWEN_API_KEY=your-key
+DEFAULT_API_KEY=your-key
 EMBEDDING_PROVIDER=local
 ```
 
@@ -198,7 +198,7 @@ This is recommended for production to save on embedding API costs while using a 
 ```bash
 ollama unload qwen2.5:7b 
 or
-curl http://localhost:11434/api/chat -d '{"model": "qwen2.5:1.5b", "keep_alive": 0}'
+curl http://localhost:11434/api/chat -d '{"model": "qwen3.5:2b", "keep_alive": 0}'
 ```
 
 ### Embedding Model Download

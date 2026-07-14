@@ -13,42 +13,14 @@ RAG_WRITE_BATCH_SIZE = 250
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-def count_year_homework(year_group: int, subject) -> int:
+def count_year_homework(store, year_group: int, subject: str) -> int:
     """Count every stored subject document for one year."""
-    store = get_homework_rag_store()
-
-    where = {
-        "$and": [
-            {"year_group": year_group},
-            {"subject": subject},
-        ]
-    }
-
-    count = 0
-    offset = 0
-    page_size = 500
-
-    while True:
-        page = store.collection.get(
-            where=where,
-            limit=page_size,
-            offset=offset,
-        )
-
-        ids = page.get("ids") or []
-        count += len(ids)
-
-        if len(ids) < page_size:
-            break
-
-        offset += len(ids)
-
-    return count
+    where = {"year_group": year_group, "subject": subject}
+    return store.store.count_by_metadata(where)
 
 
-def clean_year_homeworks(year_group: int, subject: str) -> int:
+def clean_year_homeworks(store, year_group: int, subject: str) -> int:
     """清理指定年级的指定科目作业"""
-    store = get_homework_rag_store()
     results = store.search_by_metadata({"year_group": year_group, "subject": subject})
 
     if not results:
@@ -65,9 +37,8 @@ def clean_year_homeworks(year_group: int, subject: str) -> int:
     return deleted
 
 
-def clean_subject_homeworks(subject: str) -> int:
+def clean_subject_homeworks(store, subject: str) -> int:
     """清理指定科目作业"""
-    store = get_homework_rag_store()
     results = store.search_by_metadata({"subject": subject})
 
     if not results:
@@ -84,9 +55,8 @@ def clean_subject_homeworks(subject: str) -> int:
     return deleted
 
 
-def check_year_homework_exists(year_group: int, subject: str) -> bool:
+def check_year_homework_exists(store, year_group: int, subject: str) -> bool:
     """检查指定年级是否已有指定科目的作业"""
-    store = get_homework_rag_store()
     results = store.search(query="maths", k=1, filters={"year_group": year_group, "subject": subject})
     return len(results) > 0
 
@@ -100,8 +70,8 @@ def add_homework_in_batches(store, homework_items: list) -> int:
 
         # Make reruns safe when an earlier run stopped halfway.
         requested_ids = [item["doc_id"] for item in batch]
-        existing_result = store.collection.get(ids=requested_ids)
-        existing_ids = set(existing_result.get("ids") or [])
+        existing_result = store.store.get_by_ids(ids=requested_ids)
+        existing_ids = {r["doc_id"] for r in existing_result}
 
         new_items = [
             item for item in batch
@@ -119,3 +89,12 @@ def add_homework_in_batches(store, homework_items: list) -> int:
         )
 
     return added_total
+
+
+def get_rag_stats(store):
+    # 显示统计信息
+    stats = store.get_stats()
+    print(f"\nRAG 存储统计:")
+    print(f"  总文档数: {stats['total_documents']}")
+    print(f"  按主题分布: {stats['by_subject']}")
+    print(f"  按年级分布: {stats['by_year_group']}")

@@ -53,7 +53,7 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.homework_rag import get_homework_rag_store
-from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches
+from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -1858,7 +1858,7 @@ def main():
 
     for year in range(1, 7):
         expected = HOMEWORK_COUNT.get(year, 1000)
-        existing = count_year_homework(year, "Maths")
+        existing = count_year_homework(store, year, "Maths")
 
         if existing >= expected:
             print(f"  Year {year}: complete ({existing}/{expected})")
@@ -1884,12 +1884,7 @@ def main():
                 f"target total is {len(batch_data)}"
             )
 
-    # 显示统计信息
-    stats = store.get_stats()
-    print(f"\nRAG 存储统计:")
-    print(f"  总文档数: {stats['total_documents']}")
-    print(f"  按主题分布: {stats['by_subject']}")
-    print(f"  按年级分布: {stats['by_year_group']}")
+    get_rag_stats()
 
 
 if __name__ == "__main__":

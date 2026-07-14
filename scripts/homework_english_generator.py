@@ -14,7 +14,7 @@ import random
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.homework_rag import get_homework_rag_store
-from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, clean_subject_homeworks
+from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -985,7 +985,6 @@ def main():
     print("检查各年级English作业是否存在...\n")
 
     store = get_homework_rag_store()
-    clean_subject_homeworks("English")
     years_to_generate = []
 
     for year in range(1, 7):
@@ -1016,12 +1015,7 @@ def main():
                 f"target total is {len(batch_data)}"
             )
 
-    # 显示统计信息
-    stats = store.get_stats()
-    print(f"\nRAG 存储统计:")
-    print(f"  总文档数: {stats['total_documents']}")
-    print(f"  按主题分布: {stats['by_subject']}")
-    print(f"  按年级分布: {stats['by_year_group']}")
+    get_rag_stats(store)
 
 
 if __name__ == "__main__":

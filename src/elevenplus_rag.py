@@ -1,4 +1,4 @@
-import os # Added this line
+import os
 import logging
 import time
 import json
@@ -6,16 +6,15 @@ import re
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-try:
-    import chromadb
-except ImportError:
-    chromadb = None
+from .pgvector_store import PGVectorStore
 
 logger = logging.getLogger(__name__)
 
-# RAG 存储重试配置
+# Vector storage configuration
 RAG_MAX_RETRIES = 3
-RAG_RETRY_DELAY = 2  # 秒
+RAG_RETRY_DELAY = 2  # Seconds
+
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _YEAR_ROUND_BLOCK_RE = re.compile(
     r"Homework Question\s+(?P<number>\d+)\s*:\s*\n"
@@ -218,57 +217,26 @@ def format_questions_only(questions: List[Dict[str, Any]]) -> str:
         lines.append("")
     return "\n".join(lines).strip()
 
-# RAG storage directory
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH") or os.path.join(PROJECT_DIR, "data", "chroma_11plus_db")
-# If data was moved to data_archive, fall back to that path
-if not os.path.exists(CHROMA_DB_PATH):
-    alt = os.path.join(PROJECT_DIR, "data_archive", "chroma_11plus_db")
-    if os.path.exists(alt):
-        CHROMA_DB_PATH = alt
+# Convenience functions for direct use
+_elevenplus_rag_store = None
+
 
 class ElevenPlusRAGStore:
     def __init__(self, persist_directory: str = None):
-        self.persist_dir = persist_directory or CHROMA_DB_PATH
-
-        if chromadb is None:
-            logger.warning("[RAG] chromadb is not installed. ChromaDB capabilities will be disabled.")
-            self.client = None
-            self.embedding_function = None
-            self.collection = None
-
-            return
-
-        os.makedirs(self.persist_dir, exist_ok=True)
-
-        # 初始化 ChromaDB 客户端
-        self.client = chromadb.PersistentClient(path=self.persist_dir)
-
-        # 复用 homework_rag 的嵌入函数创建逻辑
         try:
             from src.homework_rag import _create_embedding_function
             self.embedding_function = _create_embedding_function()
         except ImportError:
-            # Fallback if homework_rag is not present in the same workspace yet
             self.embedding_function = None
 
-        # 作业集合
-        self.collection = self.client.get_or_create_collection(
-            name="elevenplus_collection",
-            embedding_function=self.embedding_function,
-            metadata={"hnsw:space": "cosine"},
-        )
-
+        self.store = PGVectorStore(collection_name="elevenplus_collection")
+        logger.info("[RAG] Using PGVectorStore for elevenplus_collection")
 
     def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Sanitize metadata to comply with ChromaDB's strict type requirements.
-        ChromaDB only supports str, int, float, or bool values for metadata.
-        Any None, list, dict, or other unsupported types must be converted to strings or removed.
-        """
         sanitized = {}
         for k, v in metadata.items():
             if v is None:
-                continue  # Drop None values to avoid ChromaDB conversion errors
+                continue
             if isinstance(v, (str, int, float, bool)):
                 sanitized[k] = v
             elif isinstance(v, (list, dict)):
@@ -302,35 +270,24 @@ class ElevenPlusRAGStore:
         Returns:
             The document ID
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. add_homework bypassed.")
-            return str(int(datetime.now().timestamp() * 1000))
-
         now = datetime.now()
         # 用毫秒时间戳生成唯一 ID
         doc_id = str(int(now.timestamp() * 1000))
 
-        # Ensure metadata has required fields and complies with ChromaDB rules
+        # Ensure metadata has required fields and complies with RAG rules
         metadata_copy = metadata.copy()
         metadata_copy.setdefault("created_at", now.isoformat())
         sanitized_metadata = self._sanitize_metadata(metadata_copy)
 
-        for attempt in range(1, RAG_MAX_RETRIES + 1):
-            try:
-                self.collection.add(
-                    documents=[homework_content],
-                    metadatas=[sanitized_metadata],
-                    ids=[doc_id],
-                )
-                logger.info(f"[RAG] Added homework document: {doc_id}")
-                return doc_id
-            except Exception as e:
-                if attempt < RAG_MAX_RETRIES:
-                    logger.warning(
-                        f"[RAG] Store attempt {attempt} failed for {doc_id}: {e}, retrying in {RAG_RETRY_DELAY}s...")
-                    time.sleep(RAG_RETRY_DELAY)
-                else:
-                    raise
+        embeddings = self.embedding_function([homework_content])
+        self.store.add_documents(
+            texts=[homework_content],
+            metadatas=[sanitized_metadata],
+            ids=[doc_id],
+            embeddings=embeddings
+        )
+        logger.info(f"[RAG] Added homework document: {doc_id}")
+        return doc_id
 
     def add_batch_homework(
             self,
@@ -347,11 +304,6 @@ class ElevenPlusRAGStore:
         Returns:
             List of document IDs
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. add_batch_homework bypassed.")
-            return [item.get("doc_id") or str(int(datetime.now().timestamp() * 1000) + i) for i, item in
-                    enumerate(homework_list)]
-
         texts = []
         metadatas = []
         doc_ids = []
@@ -373,9 +325,9 @@ class ElevenPlusRAGStore:
             metadatas.append(self._sanitize_metadata(metadata))
             doc_ids.append(doc_id)
 
-        # Deterministic year-round document IDs must be safely regeneratable.
         # Upsert keeps ingestion idempotent and avoids deleting the collection first.
-        self.collection.upsert(documents=texts, metadatas=metadatas, ids=doc_ids)
+        embeddings = self.embedding_function(texts)
+        self.store.add_documents(texts=texts, metadatas=metadatas, ids=doc_ids, embeddings=embeddings)
         logger.info(f"[RAG] Upserted {len(doc_ids)} homework documents in batch")
         return doc_ids
 
@@ -396,36 +348,21 @@ class ElevenPlusRAGStore:
         Returns:
             包含 'doc_id', 'content', 'metadata', 'score' 的字典列表
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. search bypassed.")
-            return []
-
-        where_clause = self._build_where_clause(filters) if filters else None
-
-        # 直接使用 collection 的 query 方法，嵌入由 embedding_function 自动处理
-        query_kwargs = {
-            "query_texts": [query],
-            "n_results": k,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where_clause:
-            query_kwargs["where"] = where_clause
-
-        raw = self.collection.query(**query_kwargs)
+        query_embeddings = self.embedding_function([query])
+        raw = self.store.search(
+            query_embedding=query_embeddings[0],
+            k=k,
+            filters=filters
+        )
 
         results = []
-        if raw and raw.get("ids") and raw["ids"][0]:
-            ids = raw["ids"][0]
-            docs = raw["documents"][0]
-            metas = raw["metadatas"][0]
-            dists = raw["distances"][0]
-            for i in range(len(ids)):
-                results.append({
-                    "doc_id": ids[i],
-                    "content": docs[i],
-                    "metadata": metas[i],
-                    "score": dists[i],
-                })
+        for item in raw:
+            results.append({
+                "doc_id": item["doc_id"],
+                "content": item["content"],
+                "metadata": item["metadata"],
+                "score": item["distance"],
+            })
 
         return results
 
@@ -444,24 +381,19 @@ class ElevenPlusRAGStore:
         Returns:
             List of dicts with 'content' and 'metadata'
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. search_by_metadata bypassed.")
-            return []
+        results = self.store.get_by_metadata(filters=filters, k=k)
 
-        where_clause = self._build_where_clause(filters)
-        results = self.collection.get(where=where_clause)
-
-        if not results or not results.get("ids"):
+        if not results:
             return []
 
         return [
             {
-                "doc_id": results["ids"][i],
-                "content": results["documents"][i],
-                "metadata": results["metadatas"][i],
+                "doc_id": r["doc_id"],
+                "content": r["content"],
+                "metadata": r["metadata"],
             }
-            for i in range(len(results["ids"]))
-        ][:k]
+            for r in results
+        ]
 
     def delete_homework(self, doc_id: str) -> bool:
         """Delete a homework document by ID
@@ -472,12 +404,8 @@ class ElevenPlusRAGStore:
         Returns:
             True if deleted, False otherwise
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. delete_homework bypassed.")
-            return False
-
         try:
-            self.collection.delete(ids=[doc_id])
+            self.store.delete(ids=[doc_id])
             logger.info(f"[RAG] Deleted homework document: {doc_id}")
             return True
         except Exception as e:
@@ -487,14 +415,10 @@ class ElevenPlusRAGStore:
     def delete_student_homework(self, student_id: str) -> int:
         """Delete legacy 11+ documents that directly reference one learner."""
         learner = str(student_id or "").strip()
-        if not learner or self.collection is None:
+        if not learner:
             return 0
         try:
-            result = self.collection.get(where={"student_id": learner}, include=[])
-            ids = list(result.get("ids") or [])
-            if ids:
-                self.collection.delete(ids=ids)
-            return len(ids)
+            return self.store.delete_by_metadata(filters={"student_id": learner})
         except Exception:
             logger.exception("[RAG] Failed to erase legacy 11+ homework for learner %s", learner)
             return 0
@@ -505,26 +429,25 @@ class ElevenPlusRAGStore:
         Returns:
             Dictionary with collection stats
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. get_stats bypassed.")
-            return {
-                "total_documents": 0,
-                "by_subject": {},
-                "by_year_group": {},
-            }
-
-        all_docs = self.collection.get()
-        total_docs = len(all_docs["ids"]) if all_docs.get("ids") else 0
-
-        # Count by subject
+        total_docs = self.store.count()
+        
+        # Count by subject and year_group
         subject_counts = {}
         year_counts = {}
-        if all_docs.get("metadatas"):
-            for meta in all_docs["metadatas"]:
+        
+        # To avoid loading everything, we can use a more efficient way if needed, 
+        # but for now follow the pattern of homework_rag
+        offset = 0
+        while offset < total_docs:
+            metas = self.store.get_stats_metadata(limit=500, offset=offset)
+            if not metas:
+                break
+            for meta in metas:
                 subject = meta.get("subject", "Unknown")
                 year_group = meta.get("year_group", "Unknown")
                 subject_counts[subject] = subject_counts.get(subject, 0) + 1
                 year_counts[year_group] = year_counts.get(year_group, 0) + 1
+            offset += len(metas)
 
         return {
             "total_documents": total_docs,
@@ -533,29 +456,8 @@ class ElevenPlusRAGStore:
         }
 
     def _build_where_clause(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Build ChromaDB where clause from filter dict
-
-        Args:
-            filters: Filter dictionary
-
-        Returns:
-            ChromaDB where clause
-        """
-        if not filters:
-            return {}
-
-        # ChromaDB requires $and for multiple conditions
-        conditions = []
-        for key, value in filters.items():
-            if value is not None:
-                conditions.append({key: value})
-
-        if len(conditions) == 1:
-            return conditions[0]
-        elif len(conditions) > 1:
-            return {"$and": conditions}
-
-        return {}
+        # Legacy for backward compatibility, not used by PGVectorStore directly
+        return filters
 
     def get_student_homework_history(
             self,
@@ -571,26 +473,22 @@ class ElevenPlusRAGStore:
         Returns:
             List of homework documents with metadata
         """
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. get_student_homework_history bypassed.")
-            return []
-
         filters = {"student_id": student_id}
         if subject:
             filters["subject"] = subject
 
-        results = self.collection.get(where=self._build_where_clause(filters))
+        results = self.store.get_by_metadata(filters=filters, k=500)
 
-        if not results or not results.get("ids"):
+        if not results:
             return []
 
         return [
             {
-                "doc_id": results["ids"][i],
-                "content": results["documents"][i],
-                "metadata": results["metadatas"][i],
+                "doc_id": r["doc_id"],
+                "content": r["content"],
+                "metadata": r["metadata"],
             }
-            for i in range(len(results["ids"]))
+            for r in results
         ]
 
     def get_student_previous_topics(
@@ -635,17 +533,13 @@ class ElevenPlusRAGStore:
             logger.warning("[RAG] doc_id 为空")
             return None
 
-        if self.collection is None:
-            logger.warning("[RAG] ChromaDB disabled. search_homework_answers bypassed.")
-            return None
-
         try:
-            result = self.collection.get(ids=[doc_id])
-            if not result or not result.get("ids"):
+            result = self.store.get_by_ids(ids=[doc_id])
+            if not result:
                 logger.warning(f"[RAG] 未找到 doc_id={doc_id} 对应的文档")
                 return None
 
-            metadata = result["metadatas"][0]
+            metadata = result[0]["metadata"]
             raw_correct_answers = metadata.get("correct_answers")
             decoded_answers: Any = raw_correct_answers
             if isinstance(raw_correct_answers, str):
@@ -662,8 +556,8 @@ class ElevenPlusRAGStore:
                 # Preserve older answer-only lists for the generic 11+ review path.
                 return decoded_answers
 
-            documents = result.get("documents") or []
-            legacy_records = extract_year_round_answer_records(documents[0] if documents else "")
+            content = result[0]["content"]
+            legacy_records = extract_year_round_answer_records(content)
             if legacy_records:
                 logger.info("[RAG] Recovered legacy year-round answers for doc_id=%s", doc_id)
                 return legacy_records

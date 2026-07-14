@@ -22,10 +22,9 @@ import random
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-try:
-    from src.elevenplus_rag import get_elevenplus_rag_store
-except ImportError:
-    get_elevenplus_rag_store = None
+from src.elevenplus_rag import get_elevenplus_rag_store
+from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
+
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -697,14 +696,11 @@ def main():
     batch_data = generate_11plus_nvr_batch(count=300)
 
     if batch_data and store:
-        store.add_batch_homework(batch_data)
+        add_homework_in_batches(store, batch_data)
         print(f"Successfully added {len(batch_data)} sets to the RAG Store.")
 
-    stats = store.get_stats()
-    print("\nRAG 存储统计:")
-    print(f"  总文档数: {stats['total_documents']}")
-    print(f"  按主题分布: {stats['by_subject']}")
-    print(f"  按年级分布: {stats['by_year_group']}")
+    get_rag_stats(store)
+
 
 if __name__ == "__main__":
     main()

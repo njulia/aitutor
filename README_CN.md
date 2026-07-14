@@ -32,7 +32,7 @@ FastAPI Web 应用，包含：
 
 ```bash
 # 设置 API Key
-export QWEN_API_KEY="your-api-key"
+export DEFAULT_API_KEY="your-api-key"
 
 # （可选）启用 LangSmith 追踪调试
 export LANGCHAIN_TRACING_V2="true"

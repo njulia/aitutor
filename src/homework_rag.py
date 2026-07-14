@@ -27,60 +27,55 @@ import uuid
 from datetime import datetime, UTC
 from typing import Any, Dict, Iterable, List, Optional
 
+from .pgvector_store import PGVectorStore
+
 logger = logging.getLogger(__name__)
 
+# Vector storage configuration
 RAG_MAX_RETRIES = max(1, min(int(os.getenv("RAG_MAX_RETRIES", "3")), 8))
 RAG_RETRY_DELAY = max(0.05, float(os.getenv("RAG_RETRY_DELAY", "0.4")))
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
 LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-QWEN_API_KEY = os.getenv("QWEN_API_KEY")
-QWEN_ENDPOINT = os.getenv("QWEN_ENDPOINT_OPENAI")
+DEFAULT_API_KEY = os.getenv("DEFAULT_API_KEY")
+DEFAULT_ENDPOINT = os.getenv("DEFAULT_ENDPOINT_OPENAI")
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH") or os.path.join(PROJECT_DIR, "data", "chroma_homework_db")
-CHROMA_HOST = os.getenv("CHROMA_HOST", "").strip()
-CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
-CHROMA_SSL = os.getenv("CHROMA_SSL", "false").lower() in {"1", "true", "yes"}
 MAX_QUERY_RESULTS = max(1, min(int(os.getenv("RAG_MAX_QUERY_RESULTS", "50")), 500))
 MAX_DOCUMENT_CHARS = max(1_000, int(os.getenv("RAG_MAX_DOCUMENT_CHARS", "100000")))
 STATS_PAGE_SIZE = max(100, min(int(os.getenv("RAG_STATS_PAGE_SIZE", "1000")), 10_000))
 
-if not CHROMA_HOST and not os.path.exists(CHROMA_DB_PATH):
-    archive_path = os.path.join(PROJECT_DIR, "data_archive", "chroma_homework_db")
-    if os.path.exists(archive_path):
-        CHROMA_DB_PATH = archive_path
-
-
-def _import_chroma():
-    try:
-        import chromadb
-    except ImportError as exc:
-        raise RuntimeError("chromadb is required for homework RAG") from exc
-    return chromadb
-
 
 def _create_embedding_function():
     if EMBEDDING_PROVIDER == "local":
-        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        # We need a function that takes text(s) and returns list of lists of floats
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
+        return lambda texts: model.encode(texts).tolist()
 
-        logger.info("[RAG] Using Chroma default local ONNX embedding function")
-        return DefaultEmbeddingFunction()
     if EMBEDDING_PROVIDER == "sentence_transformer":
-        from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
+        return lambda texts: model.encode(texts).tolist()
 
-        logger.info("[RAG] Using sentence-transformer model %s", LOCAL_EMBEDDING_MODEL)
-        return SentenceTransformerEmbeddingFunction(model_name=LOCAL_EMBEDDING_MODEL)
     if EMBEDDING_PROVIDER == "api":
-        if not QWEN_API_KEY:
-            raise ValueError("EMBEDDING_PROVIDER=api requires QWEN_API_KEY")
-        from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+        if not DEFAULT_API_KEY:
+            raise ValueError("EMBEDDING_PROVIDER=api requires DEFAULT_API_KEY")
+        import requests
+        
+        def api_embedding(texts: List[str]) -> List[List[float]]:
+            endpoint = DEFAULT_ENDPOINT or "https://api.openai.com/v1/embeddings"
+            model_name = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            headers = {"Authorization": f"Bearer {DEFAULT_API_KEY}"}
+            resp = requests.post(
+                endpoint,
+                headers=headers,
+                json={"input": texts, "model": model_name}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return [d["embedding"] for d in data["data"]]
+        
+        return api_embedding
 
-        kwargs: Dict[str, Any] = {
-            "model_name": os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-            "api_key": QWEN_API_KEY,
-        }
-        if QWEN_ENDPOINT:
-            kwargs["api_base"] = QWEN_ENDPOINT
-        return OpenAIEmbeddingFunction(**kwargs)
     raise ValueError(f"Unknown EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
 
 
@@ -98,39 +93,21 @@ def _bounded_k(k: int) -> int:
 
 class HomeworkRAGStore:
     def __init__(self, persist_directory: Optional[str] = None):
-        chromadb = _import_chroma()
-        self.persist_dir = persist_directory or CHROMA_DB_PATH
         self._write_lock = threading.RLock()
         self._chinese_lock = threading.Lock()
         self._chinese_collection = None
 
-        if CHROMA_HOST:
-            self.client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT, ssl=CHROMA_SSL)
-            logger.info("[RAG] Using server-backed Chroma at %s:%s", CHROMA_HOST, CHROMA_PORT)
-        else:
-            os.makedirs(self.persist_dir, exist_ok=True)
-            self.client = chromadb.PersistentClient(path=self.persist_dir)
-            logger.warning(
-                "[RAG] Using local PersistentClient. Set CHROMA_HOST for multi-instance production."
-            )
-
         self.embedding_function = _create_embedding_function()
-        self.collection = self.client.get_or_create_collection(
-            name="homework_collection",
-            embedding_function=self.embedding_function,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self.store = PGVectorStore(collection_name="homework_collection")
+        logger.info("[RAG] Using PGVectorStore for homework_collection")
 
     @property
     def chinese_collection(self):
         if self._chinese_collection is None:
             with self._chinese_lock:
                 if self._chinese_collection is None:
-                    self._chinese_collection = self.client.get_or_create_collection(
-                        name="chinese_collection",
-                        embedding_function=self.embedding_function,
-                        metadata={"hnsw:space": "cosine"},
-                    )
+                    self._chinese_collection = PGVectorStore(collection_name="chinese_collection")
+                    logger.info("[RAG] Using PGVectorStore for chinese_collection")
         return self._chinese_collection
 
     @staticmethod
@@ -183,7 +160,8 @@ class HomeworkRAGStore:
         sanitized.setdefault("created_at", now.isoformat())
 
         def add():
-            self.collection.add(documents=[content], metadatas=[sanitized], ids=[doc_id])
+            embeddings = self.embedding_function([content])
+            self.store.add_documents(texts=[content], metadatas=[sanitized], ids=[doc_id], embeddings=embeddings)
 
         self._retry_write(add, f"add document {doc_id}")
         logger.info("[RAG] Added homework document: %s", doc_id)
@@ -210,7 +188,12 @@ class HomeworkRAGStore:
             raise ValueError("Duplicate doc_id values in batch")
 
         self._retry_write(
-            lambda: self.collection.add(documents=texts, metadatas=metadatas, ids=doc_ids),
+            lambda: self.store.add_documents(
+                texts=texts, 
+                metadatas=metadatas, 
+                ids=doc_ids, 
+                embeddings=self.embedding_function(texts)
+            ),
             f"add batch of {len(doc_ids)} documents",
         )
         return doc_ids
@@ -224,63 +207,41 @@ class HomeworkRAGStore:
         clean_query = str(query or "").strip()
         if not clean_query:
             raise ValueError("query must not be empty")
-        query_kwargs: Dict[str, Any] = {
-            "query_texts": [clean_query[:10_000]],
-            "n_results": _bounded_k(k),
-            "include": ["documents", "metadatas", "distances"],
-        }
-        where = self._build_where_clause(filters or {})
-        if where:
-            query_kwargs["where"] = where
-        raw = self.collection.query(**query_kwargs)
-        if not raw or not raw.get("ids") or not raw["ids"][0]:
+        where = filters or {}
+        query_embeddings = self.embedding_function([clean_query])
+        raw = self.store.search(
+            query_embedding=query_embeddings[0],
+            k=_bounded_k(k),
+            filters=where
+        )
+        if not raw:
             return []
+        
         results: List[Dict[str, Any]] = []
-        ids = raw["ids"][0]
-        docs = raw.get("documents", [[]])[0]
-        metas = raw.get("metadatas", [[]])[0]
-        distances = raw.get("distances", [[]])[0]
-        for index, doc_id in enumerate(ids):
-            distance = distances[index] if index < len(distances) else None
-            similarity = None if distance is None else max(-1.0, min(1.0, 1.0 - float(distance)))
+        for item in raw:
             results.append(
                 {
-                    "doc_id": doc_id,
-                    "content": docs[index] if index < len(docs) else "",
-                    "metadata": metas[index] if index < len(metas) else {},
+                    "doc_id": item["doc_id"],
+                    "content": item["content"],
+                    "metadata": item["metadata"],
                     # Keep score for backward compatibility, but identify it correctly.
-                    "score": distance,
-                    "distance": distance,
-                    "similarity": similarity,
+                    "score": item["distance"],
+                    "distance": item["distance"],
+                    "similarity": item["similarity"],
                 }
             )
         return results
 
     def search_by_metadata(self, filters: Dict[str, Any], k: int = 10) -> List[Dict[str, Any]]:
-        where = self._build_where_clause(filters)
-        if not where:
+        if not filters:
             raise ValueError("At least one metadata filter is required")
-        raw = self.collection.get(
-            where=where,
-            limit=_bounded_k(k),
-            include=["documents", "metadatas"],
-        )
-        if not raw or not raw.get("ids"):
-            return []
-        return [
-            {
-                "doc_id": raw["ids"][i],
-                "content": raw.get("documents", [""] * len(raw["ids"]))[i],
-                "metadata": raw.get("metadatas", [{}] * len(raw["ids"]))[i],
-            }
-            for i in range(len(raw["ids"]))
-        ]
+        return self.store.get_by_metadata(filters=filters, k=_bounded_k(k))
 
     def delete_homework(self, doc_id: str) -> bool:
         if not doc_id:
             return False
         try:
-            self._retry_write(lambda: self.collection.delete(ids=[doc_id]), f"delete {doc_id}")
+            self._retry_write(lambda: self.store.delete(ids=[doc_id]), f"delete {doc_id}")
             return True
         except Exception:
             return False
@@ -295,30 +256,25 @@ class HomeworkRAGStore:
         if not learner:
             return 0
         try:
-            result = self.collection.get(where={"student_id": learner}, include=[])
-            ids = list(result.get("ids") or [])
-            if ids:
-                self._retry_write(
-                    lambda: self.collection.delete(ids=ids),
-                    f"delete legacy learner homework {learner}",
-                )
-            return len(ids)
+            deleted_count = self._retry_write(
+                lambda: self.store.delete_by_metadata(filters={"student_id": learner}),
+                f"delete legacy learner homework {learner}",
+            )
+            return deleted_count
         except Exception:
             logger.exception("[RAG] Failed to erase legacy homework for learner %s", learner)
             return 0
 
     def get_stats(self) -> Dict[str, Any]:
-        total = int(self.collection.count())
+        total = int(self.store.count())
         subject_counts: Dict[str, int] = {}
         year_counts: Dict[Any, int] = {}
         offset = 0
         while offset < total:
-            raw = self.collection.get(
+            metas = self.store.get_stats_metadata(
                 limit=min(STATS_PAGE_SIZE, total - offset),
                 offset=offset,
-                include=["metadatas"],
             )
-            metas = raw.get("metadatas") or []
             if not metas:
                 break
             for meta in metas:
@@ -347,20 +303,11 @@ class HomeworkRAGStore:
         filters: Dict[str, Any] = {"student_id": student_id}
         if subject:
             filters["subject"] = subject
-        raw = self.collection.get(
-            where=self._build_where_clause(filters),
-            limit=max(1, min(int(limit), 500)),
-            include=["documents", "metadatas"],
+        
+        return self.store.get_by_metadata(
+            filters=filters,
+            k=max(1, min(int(limit), 500)),
         )
-        ids = raw.get("ids") or []
-        return [
-            {
-                "doc_id": ids[i],
-                "content": raw.get("documents", [""] * len(ids))[i],
-                "metadata": raw.get("metadatas", [{}] * len(ids))[i],
-            }
-            for i in range(len(ids))
-        ]
 
     def get_student_previous_topics(self, student_id: str, subject: str) -> List[str]:
         return [item["content"][:200] for item in self.get_student_homework_history(student_id, subject)]
@@ -390,10 +337,11 @@ class HomeworkRAGStore:
                         continue
                     filepath = os.path.join(directory, filename)
                     doc_id = f"chinese_y{year}_{uuid.uuid5(uuid.NAMESPACE_URL, filepath).hex}"
-                    existing = self.chinese_collection.get(ids=[doc_id], include=[])
-                    if existing and existing.get("ids"):
+                    existing = self.chinese_collection.get_by_ids(ids=[doc_id])
+                    if existing:
                         continue
-                    texts.append(f"Chinese Textbook - Year {year}\nVolume: {volume}\nFile: {filename}")
+                    content = f"Chinese Textbook - Year {year}\nVolume: {volume}\nFile: {filename}"
+                    texts.append(content)
                     metas.append(
                         self._sanitize_metadata(
                             {
@@ -409,7 +357,12 @@ class HomeworkRAGStore:
                     ids.append(doc_id)
         if ids:
             self._retry_write(
-                lambda: self.chinese_collection.add(documents=texts, metadatas=metas, ids=ids),
+                lambda: self.chinese_collection.add_documents(
+                    texts=texts, 
+                    metadatas=metas, 
+                    ids=ids, 
+                    embeddings=self.embedding_function(texts)
+                ),
                 f"ingest {len(ids)} Chinese textbook records",
             )
         return len(ids)
@@ -420,36 +373,32 @@ class HomeworkRAGStore:
         year_group: Optional[int] = None,
         k: int = 5,
     ) -> List[Dict[str, Any]]:
-        kwargs: Dict[str, Any] = {
-            "query_texts": [str(query or "").strip()[:10_000]],
-            "n_results": _bounded_k(k),
-            "include": ["documents", "metadatas", "distances"],
-        }
+        clean_query = str(query or "").strip()
+        if not clean_query:
+            return []
+        
+        filters = {}
         if year_group is not None:
-            kwargs["where"] = {"year_group": int(year_group)}
-        raw = self.chinese_collection.query(**kwargs)
-        ids = raw.get("ids", [[]])[0] if raw else []
-        return [
-            {
-                "doc_id": ids[i],
-                "content": raw["documents"][0][i],
-                "metadata": raw["metadatas"][0][i],
-                "distance": raw["distances"][0][i],
-            }
-            for i in range(len(ids))
-        ]
+            filters["year_group"] = int(year_group)
+        
+        query_embeddings = self.embedding_function([clean_query])
+        return self.chinese_collection.search(
+            query_embedding=query_embeddings[0],
+            k=_bounded_k(k),
+            filters=filters
+        )
 
     def search_homework_answers(self, doc_id: str) -> Optional[list]:
         if not doc_id:
             return None
         try:
-            result = self.collection.get(ids=[doc_id], include=["metadatas"])
+            result = self.store.get_by_ids(ids=[doc_id])
         except Exception:
             logger.exception("[RAG] Failed to read answers for %s", doc_id)
             return None
-        if not result or not result.get("ids"):
+        if not result:
             return None
-        metadata = (result.get("metadatas") or [{}])[0]
+        metadata = result[0].get("metadata") or {}
         value = metadata.get("correct_answers")
         if value in (None, ""):
             return None
