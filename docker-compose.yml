@@ -1,34 +1,42 @@
 services:
+  # 1. Changed this service name to 'postgres' to match your app configuration below
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg17
+    container_name: aitutor-postgres
     restart: unless-stopped
+
     environment:
       POSTGRES_DB: aitutor
-      POSTGRES_USER: aitutor
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aitutor -d aitutor"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
+      POSTGRES_USER: aitutor_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U aitutor_app -d aitutor"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   app:
     build: .
     restart: unless-stopped
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+psycopg://aitutor:${POSTGRES_PASSWORD:-change-me}@postgres:5432/aitutor
-      DEV_MODE: "${DEV_MODE:-false}"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["sh", "-c", "python scripts/init_database.py && uvicorn web_app:app --host 0.0.0.0 --port 5000 --workers ${WEB_CONCURRENCY:-2}"]
     ports:
-      - "5000:5000"
+      - "5000:5000" # Maps port 5000 of the container to port 5000 of your Mac
+    depends_on:
+      postgres:  # This now accurately references the database service name above
+        condition: service_healthy
 
-volumes:
-  postgres_data:
+    environment:
+      DATABASE_URL: postgresql+psycopg://aitutor_app:${POSTGRES_PASSWORD}@postgres:5432/aitutor
+
