@@ -1,42 +1,39 @@
 services:
-  # 1. Changed this service name to 'postgres' to match your app configuration below
   postgres:
     image: pgvector/pgvector:pg17
+    ports:
+      - "5432:5432"
     container_name: aitutor-postgres
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: aitutor
       POSTGRES_USER: aitutor_app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
-    ports:
-      - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U aitutor_app -d aitutor"
-        ]
+      test: ["CMD-SHELL", "pg_isready -U aitutor_app -d aitutor"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 45s
 
-  app:
-    build: .
-    restart: unless-stopped
-    ports:
-      - "5000:5000" # Maps port 5000 of the container to port 5000 of your Mac
-    depends_on:
-      postgres:  # This now accurately references the database service name above
-        condition: service_healthy
+#  app:
+#    build: .
+#    restart: unless-stopped
+#    ports:
+#      - "5000:5000"
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#    environment:
+#      # The app container connects through the Docker service name "postgres".
+#      DATABASE_URL: postgresql+psycopg://aitutor_app:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/aitutor
+#      PGVECTOR_DATABASE_URL: postgresql+psycopg://aitutor_app:${POSTGRES_PASSWORD_URLENCODED}@postgres:5432/aitutor
+#      EMBEDDING_PROVIDER: local
+#      LOCAL_EMBEDDING_MODEL: all-MiniLM-L6-v2
+#      EMBEDDING_DIMENSION: "384"
 
-    environment:
-      DATABASE_URL: postgresql+psycopg://aitutor_app:${POSTGRES_PASSWORD}@postgres:5432/aitutor
-
+volumes:
+  postgres_data:

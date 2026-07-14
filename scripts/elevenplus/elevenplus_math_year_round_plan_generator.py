@@ -24,10 +24,9 @@ from datetime import datetime
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-try:
-    from src.elevenplus_rag import get_elevenplus_rag_store
-except ImportError:
-    get_elevenplus_rag_store = None
+from src.elevenplus_rag import get_elevenplus_rag_store
+from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
+
 
 # Define the 52-Week Curriculum
 CURRICULUM = [
@@ -954,6 +953,9 @@ def main():
             print(f"RAG Integration skipped or failed: {e}")
     else:
         print("\nNote: RAG Store is not available in standalone execution. Local files generated successfully.")
+
+    get_rag_stats(store)
+
 
 if __name__ == "__main__":
     main()

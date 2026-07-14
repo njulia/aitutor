@@ -253,6 +253,25 @@
         return map;
     }
 
+
+    function chooseTextControl(question) {
+        const text = String((question && question.question) || '').toLowerCase();
+        const longAnswerHints = [
+            'explain', 'describe', 'write a paragraph', 'write a story', 'write a sentence',
+            'give reasons', 'show your working', 'how do you know', 'compare', 'summarise'
+        ];
+        const isLongAnswer = longAnswerHints.some(function (hint) { return text.indexOf(hint) !== -1; });
+        if (isLongAnswer) return {tag: 'textarea', inputMode: '', placeholder: 'Write your answer here…'};
+
+        const numericHints = /(?:calculate|work out|how many|how much|what is|total|difference|number|digit|\b[+×÷=−-]\b|\d\s*[+×÷−-]\s*\d)/i;
+        const isNumeric = numericHints.test(String((question && question.question) || ''));
+        return {
+            tag: 'input',
+            inputMode: isNumeric ? 'decimal' : 'text',
+            placeholder: isNumeric ? 'Type your answer' : 'Type your answer here'
+        };
+    }
+
     function renderQuestion(question, homeworkIndex, questionIndex, config, savedAnswers) {
         const number = Number(question.number) || questionIndex + 1;
         const saved = savedAnswers.get(String(number)) || '';
@@ -283,11 +302,20 @@
                 '<div class="multiple-choice-options">' + optionsHtml + '</div>' +
             '</fieldset>';
         } else {
+            const control = chooseTextControl(question);
+            const controlId = 'response-' + homeworkIndex + '-' + questionIndex;
+            const inputMode = control.inputMode ? ' inputmode="' + control.inputMode + '"' : '';
+            const answerControl = control.tag === 'textarea'
+                ? '<textarea class="question-response-input question-response-control question-response-long" id="' + controlId + '" rows="3" placeholder="' + escapeAttribute(control.placeholder) + '">' + escapeHtml(saved) + '</textarea>'
+                : '<input class="question-response-input question-response-control question-response-short" id="' + controlId + '" type="text"' + inputMode + ' autocomplete="off" spellcheck="false" placeholder="' + escapeAttribute(control.placeholder) + '" value="' + escapeAttribute(saved) + '">';
             controlHtml = '<section class="multiple-choice-question free-response-question question-response-item" data-question-number="' + number + '" data-response-type="text">' +
-                '<div class="free-response-heading">' + heading + '</div>' +
-                '<label class="free-response-label" for="response-' + homeworkIndex + '-' + questionIndex + '">Your answer</label>' +
-                '<textarea class="question-response-input question-response-control" id="response-' + homeworkIndex + '-' + questionIndex + '"' +
-                    ' rows="3" placeholder="Write your answer here...">' + escapeHtml(saved) + '</textarea>' +
+                '<div class="free-response-row">' +
+                    '<div class="free-response-heading">' + heading + '</div>' +
+                    '<div class="free-response-control-wrap">' +
+                        '<label class="free-response-label" for="' + controlId + '">Answer</label>' +
+                        answerControl +
+                    '</div>' +
+                '</div>' +
             '</section>';
         }
         return '<div class="question-response-group">' + contextHtml + controlHtml + '</div>';
