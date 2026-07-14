@@ -78,3 +78,42 @@ def test_review_with_rag_answer_does_not_call_llm(monkeypatch) -> None:
     assert result["from_rag_answers"] is True
     assert result["correct_count"] == 1
     llm.complete.assert_not_called()
+
+
+def test_generator_skips_more_than_first_fifty_seen_candidates(monkeypatch, tmp_path) -> None:
+    """Regression: a learner must reach row 51 instead of falling back to the LLM."""
+    import src.homework_generator as generator
+
+    assignment_store = HomeworkAssignmentStore(f"sqlite+pysqlite:///{tmp_path / 'many.db'}")
+    all_candidates = [
+        {"doc_id": f"doc_{index:03d}", "content": f"{index}. Question", "metadata": {}}
+        for index in range(1, 61)
+    ]
+    for item in all_candidates[:50]:
+        assignment_store.record(
+            "learner_many",
+            item["doc_id"],
+            subject="Maths",
+            year_group=2,
+            content_kind="primary",
+        )
+
+    def metadata_search(*, year_group, subject, k, exclude_ids=None, **_):
+        assert year_group == 2
+        assert subject == "Maths"
+        excluded = set(exclude_ids or [])
+        return [item for item in all_candidates if item["doc_id"] not in excluded][:k]
+
+    monkeypatch.setattr(generator, "get_assignment_store", lambda: assignment_store)
+    monkeypatch.setattr(generator, "search_homework_by_metadata", metadata_search)
+
+    llm = MagicMock()
+    llm.complete.side_effect = AssertionError("LLM must not run while row 51 is unseen")
+    result = generator.generate_homework_for_subject(
+        {"student_id": "learner_many", "year_group": 2, "age": 6},
+        "Maths",
+        llm,
+    )
+
+    assert result == ("51. Question", "doc_051", True)
+    llm.complete.assert_not_called()

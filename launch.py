@@ -12,6 +12,18 @@ import webbrowser
 import shutil
 
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# PyCharm may start the script with a different working directory. Load the
+# project .env before importing any application modules.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(PROJECT_ROOT, '.env'), override=False)
+except ImportError:
+    pass
+
+
 def generate_seo_pages():
     """Generate SEO landing pages first."""
     print("Generating SEO pages...")
@@ -21,9 +33,8 @@ def generate_seo_pages():
     except Exception as exc:
         print(f"Note: Could not regenerate landing pages: {exc}")
 
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.join(project_root, "templates", "elevenplus-practice.html")
-    dst = os.path.join(project_root, "static", "elevenplus-practice.html")
+    src = os.path.join(PROJECT_ROOT, "templates", "elevenplus-practice.html")
+    dst = os.path.join(PROJECT_ROOT, "static", "elevenplus-practice.html")
 
     if os.path.exists(src) and not os.path.exists(dst):
         shutil.copy(src, dst)
@@ -31,6 +42,8 @@ def generate_seo_pages():
 
 
 def main():
+    # Make all relative paths deterministic when launched from PyCharm.
+    os.chdir(PROJECT_ROOT)
     generate_seo_pages()
 
     print("\n" + "=" * 70)
@@ -54,7 +67,7 @@ def main():
     except Exception:
         pass
 
-    os.execvp(sys.executable, [sys.executable, "web_app.py"])
+    os.execv(sys.executable, [sys.executable, os.path.join(PROJECT_ROOT, "web_app.py")])
 
 
 if __name__ == "__main__":

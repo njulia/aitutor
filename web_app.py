@@ -459,22 +459,52 @@ def review_homework(
 
 
 def explain_deep(
-    homework_content: str, student_answers: str, subject: str,
-    profile=None, review_feedback: str = "",
+    homework_content: str,
+    student_answers: str,
+    subject: str,
+    profile=None,
+    review_feedback: str = "",
+    *,
+    homework_doc_id: Optional[str] = None,
+    is_eleven_plus: bool = False,
+    question_index: Optional[int] = None,
+    llm_client=None,
 ):
     return explain_deep_service(
-        homework_content, student_answers, subject, profile, review_feedback,
-        llm_client=llm,
+        homework_content,
+        student_answers,
+        subject,
+        profile,
+        review_feedback,
+        homework_doc_id=homework_doc_id,
+        is_eleven_plus=is_eleven_plus,
+        question_index=question_index,
+        llm_client=llm_client or llm,
     )
 
 
 def improve_practice(
-    homework_content: str, student_answers: str, subject: str,
-    profile=None, review_feedback: str = "",
+    homework_content: str,
+    student_answers: str,
+    subject: str,
+    profile=None,
+    review_feedback: str = "",
+    *,
+    homework_doc_id: Optional[str] = None,
+    is_eleven_plus: bool = False,
+    question_index: Optional[int] = None,
+    llm_client=None,
 ):
     return improve_practice_service(
-        homework_content, student_answers, subject, profile, review_feedback,
-        llm_client=llm,
+        homework_content,
+        student_answers,
+        subject,
+        profile,
+        review_feedback,
+        homework_doc_id=homework_doc_id,
+        is_eleven_plus=is_eleven_plus,
+        question_index=question_index,
+        llm_client=llm_client or llm,
     )
 
 def _static_page(*parts: str) -> FileResponse:
@@ -1083,6 +1113,8 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         response = JSONResponse(result)
         _set_anon_cookie(response, new_anon_id)
         return response
+    except HTTPException:
+        raise
     except Exception as exc:
         public_error(exc)
         return JSONResponse(status_code=500, content={"success": False, "error": "We could not explain that homework just now."})
@@ -1120,6 +1152,8 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         response = JSONResponse(result)
         _set_anon_cookie(response, new_anon_id)
         return response
+    except HTTPException:
+        raise
     except Exception as exc:
         public_error(exc)
         return JSONResponse(status_code=500, content={"success": False, "error": "We could not generate practice questions just now."})

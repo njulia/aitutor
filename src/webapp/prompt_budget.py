@@ -3,8 +3,23 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from typing import Any, Dict, Iterable
+
+
+
+def _bounded_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+REVIEW_HOMEWORK_MAX_CHARS = _bounded_env("REVIEW_HOMEWORK_MAX_CHARS", 8_000, 1_000, 20_000)
+REVIEW_ANSWERS_MAX_CHARS = _bounded_env("REVIEW_ANSWERS_MAX_CHARS", 4_000, 500, 12_000)
+REVIEW_FEEDBACK_MAX_CHARS = _bounded_env("REVIEW_FEEDBACK_MAX_CHARS", 2_000, 250, 6_000)
 
 _WHITESPACE = re.compile(r"[ \t]+")
 _BLANK_LINES = re.compile(r"\n{3,}")
@@ -57,10 +72,10 @@ def budget_review_inputs(
     review_feedback: str = "",
 ) -> Dict[str, Any]:
     return {
-        "homework_content": compact_text(homework_content, 12_000, keep_tail=1_500),
-        "student_answers": compact_text(student_answers, 8_000, keep_tail=1_000),
+        "homework_content": compact_text(homework_content, REVIEW_HOMEWORK_MAX_CHARS, keep_tail=1_000),
+        "student_answers": compact_text(student_answers, REVIEW_ANSWERS_MAX_CHARS, keep_tail=600),
         "profile": compact_profile(profile),
-        "review_feedback": compact_text(review_feedback, 3_000, keep_tail=800),
+        "review_feedback": compact_text(review_feedback, REVIEW_FEEDBACK_MAX_CHARS, keep_tail=400),
     }
 
 

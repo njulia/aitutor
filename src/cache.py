@@ -244,39 +244,3 @@ class _CacheEntry:
         self.value = value
         self.expires_at = expires_at
 
-
-# ---- 预定义的缓存实例 ----
-
-# 作业生成缓存：同学科同年级的作业直接复用（1 小时）
-homework_cache = TTLCache(max_size=500, ttl_seconds=3600)
-
-# 作业批改缓存：相同作业+答案的批改结果（30 分钟）
-review_cache = TTLCache(max_size=2000, ttl_seconds=1800)
-
-# 深度解释缓存（30 分钟）
-explain_cache = TTLCache(max_size=1000, ttl_seconds=1800)
-
-# 练习生成缓存（30 分钟）
-practice_cache = TTLCache(max_size=1000, ttl_seconds=1800)
-
-# 科目提取缓存：相同输入的提取结果（24 小时，近似确定性）
-subject_extraction_cache = TTLCache(max_size=200, ttl_seconds=86400)
-
-# 学生档案解析缓存（24 小时）
-profile_parse_cache = TTLCache(max_size=200, ttl_seconds=86400)
-
-
-def make_cache_key(*parts: str) -> str:
-    """生成缓存键，对长内容做哈希以保持键短小
-
-    Args:
-        *parts: 参与键生成的各部分字符串
-
-    Returns:
-        缓存键字符串
-    """
-    raw = "|".join(str(p) for p in parts)
-    # 短内容直接用作键，长内容做哈希
-    if len(raw) <= 200:
-        return raw
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()

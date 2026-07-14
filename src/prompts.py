@@ -15,59 +15,27 @@
 # 作业生成 Prompt - 对齐 DfE National Curriculum Programme of Study
 # ============================================================
 
-HOMEWORK_PROMPT = """You are an AI Homework Generator for UK Primary School Students.
-Create homework that follows the DfE National Curriculum Programme of Study for the specified subject and year group.
+HOMEWORK_PROMPT = """Create an original, answerable UK primary homework worksheet.
 
-Student Information:
-{student_profile}
-
+Year: {year_group} (age {age})
 Subject: {subject}
-Homework Time Available: {homework_time} minutes
+Time: about {homework_time} minutes
+Useful learner context: {student_profile}
 
-{previous_topics}
+Rules:
+- Follow England's National Curriculum for this year and subject.
+- Use short, closed questions with clear answers; no essays or personal-data questions.
+- Start easy, then become a little harder. Use child-friendly UK English.
+- For multiple choice, put each option on its own line as A), B), C).
+- Do not show answers inside the worksheet.
 
-## DfE Programme of Study Alignment
-
-Generate homework that covers the relevant Programme of Study objectives for Year {year_group} (age {age}):
-
-**Maths:**
-- KS1 (Year 1-2): Number (counting, place value, +-, x/div), Measurement, Geometry (shapes), Statistics
-- KS2 (Year 3-4): Number (larger numbers, written methods, fractions, decimals), Measurement, Geometry (angles, symmetry, coordinates), Statistics (bar charts, time graphs)
-- KS2 (Year 5-6): Number (large numbers, long multiplication/division, fractions/decimals/%, ratio), Algebra (simple formulae, missing values), Measurement, Geometry (area, volume, coordinate geometry), Statistics (mean, mode, pie charts)
-
-**English:**
-- KS1 (Year 1-2): Reading (word decoding, comprehension), Writing (sentence construction, basic punctuation, spelling), SPaG (capital letters, full stops, basic tense)
-- KS2 (Year 3-4): Reading (inference, main ideas, dictionary skills), Writing (paragraphs, fronted adverbials, expanded noun phrases), SPaG (comma for lists, apostrophes, relative clauses)
-- KS2 (Year 5-6): Reading (compare texts, evidence-based inference, vocabulary in context), Writing (cohesion, passive voice, dashes/brackets, formal features), SPaG (modal verbs, subjunctive, ellipsis, semi-colons)
-
-**Other subjects:** Follow the DfE Programme of Study for the relevant Key Stage.
-
-## Requirements
-
-1. Create {homework_time} minutes of engaging homework suitable for Year {year_group} (age {age})
-2. ALL tasks must have clear, markable answers - no open-ended questions
-3. Cover 2-3 different areas of the Programme of Study for this subject
-4. Keep individual questions SHORT and VARIED - primary students have short attention spans
-5. Use fun, relatable contexts (games, animals, food, sports, friends)
-6. AVOID repeating previously covered topics listed above
-7. Mix easy and challenging questions to build confidence then stretch
-
-## Format
-
-- Subject title
-- Numbered tasks, each clearly worded
-- Brief examples where helpful
-- When a task is multiple-choice, put every choice on its own line using exactly
-  `A) choice`, `B) choice`, `C) choice` (and so on). Do not put several choices
-  on one line and do not reveal the correct choice in the student worksheet.
-
-## Resources (link where relevant):
-- BBC Bitesize: https://www.bbc.co.uk/bitesize
-- Oak National Academy: https://www.thenational.academy
-- Times Tables Rock Stars: https://ttrockstars.com
-- Twinkl: https://www.twinkl.co.uk
-
-Return the homework in natural language text.
+Return ONLY valid JSON in this shape:
+{{
+  "homework": "numbered worksheet text",
+  "correct_answers": [
+    {{"question": "1. question text", "answer": "answer", "explanation": "one short child-friendly method"}}
+  ]
+}}
 """
 
 
@@ -616,38 +584,23 @@ Student:
 
 """
 # 11+ 作业生成 Prompt
-RAG_PROMPT_11PLUS = """
-You are an expert UK 11+ exam tutor.
-
-Create ONE complete homework set.
+RAG_PROMPT_11PLUS = """Create one original UK 11+ practice set.
 
 Subject: {subject}
-Homework number: {index}
-Student and weekly-plan context: {student_profile}
+Learner/plan context: {student_profile}
 
-Requirements:
-- UK 11+ difficulty (GL/CEM style but ORIGINAL questions only)
-- If the context contains plan_week, create exactly 3 multiple-choice questions
-  that match that week's learning_goals. Give five options (A-E) for each.
-- Otherwise create 10 questions of increasing difficulty plus one bonus challenge.
-- Keep the QUESTIONS section separate from the private answer material.
-- For every multiple-choice question, put each option on its own line using
-  exactly `A) choice` through `E) choice`.
-- Include full answers and clear step-by-step explanations only after a standalone
-  `ANSWERS` heading. The learner interface will hide that private section until marking.
-- Use short, child-friendly UK English.
+Rules:
+- Use GL/CEM-style difficulty but copy no published question.
+- If plan_week is present, make exactly 3 multiple-choice questions matching the learning goal.
+- Otherwise make 8 questions of increasing difficulty.
+- Each multiple-choice question must have five options, one per line: A) to E).
+- Use short, clear UK English and do not show answers in the worksheet.
 
-Subject rules:
-- Maths: arithmetic, fractions, percentages and reasoning
-- English: comprehension, grammar and vocabulary
-- Verbal Reasoning: logic, sequences and word patterns
-- Non-Verbal Reasoning: shapes, rotations and matrices
-
-Format clearly with headings:
-QUESTIONS
-ANSWERS
-EXPLANATIONS
-BONUS
-
-Make it exam-quality and structured for self-study.
+Return ONLY valid JSON:
+{{
+  "homework": "QUESTIONS\n1. ...",
+  "correct_answers": [
+    {{"question": "1. question text", "answer": "answer text", "correct_letter": "A", "explanation": "short worked explanation", "tip": "short 11+ tip"}}
+  ]
+}}
 """

@@ -11,8 +11,9 @@
 
 import json
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 from src.llm_client import LLMClient, format_prompt, build_messages
 from src.cache import homework_cache, subject_extraction_cache, make_cache_key
@@ -23,7 +24,7 @@ from src.models import (
 )
 from src.homework_rag import (
     store_homework, search_homework, search_homework_by_metadata,
-    get_student_previous_topics,
+    get_student_previous_topics, get_homework_rag_store,
 )
 from src.elevenplus_rag import (
     store_homework as elevenplus_store_homework,
@@ -39,7 +40,7 @@ from src.prompts import (
 )
 from src.webapp.homework_assignment_store import get_assignment_store
 from src.webapp.prompt_budget import compact_profile, compact_text
-from src.webapp.question_utils import parse_public_questions
+from src.webapp.question_utils import parse_public_questions, _split_homework_into_questions
 
 
 logger = logging.getLogger(__name__)
@@ -51,18 +52,125 @@ def _is_eleven_plus_subject(subject: str) -> bool:
 
 
 
+_RAG_STOP_WORDS = {
+    "and", "the", "for", "with", "from", "year", "age", "practice", "homework",
+    "learn", "learning", "help", "need", "needs", "student", "questions", "question",
+}
+
+
+def _search_terms(values: List[str]) -> set[str]:
+    text = " ".join(str(value or "") for value in values).casefold()
+    return {
+        token for token in re.findall(r"[a-z0-9%]+", text)
+        if len(token) > 2 and token not in _RAG_STOP_WORDS
+    }
+
+
+def _rank_rag_candidates(candidates: List[Dict[str, Any]], goals: List[str]) -> List[Dict[str, Any]]:
+    """Rank exact year/subject matches locally, without an embedding request."""
+    terms = _search_terms(goals)
+    if not terms:
+        return candidates
+
+    def score(item: Dict[str, Any]) -> tuple[int, int]:
+        metadata = item.get("metadata") or {}
+        haystack = " ".join(
+            [
+                str(metadata.get("topic") or ""),
+                str(metadata.get("learning_goal") or ""),
+                str(metadata.get("content_type") or ""),
+                str(item.get("content") or "")[:2_000],
+            ]
+        ).casefold()
+        matched = sum(1 for term in terms if term in haystack)
+        return matched, -len(haystack)
+
+    return sorted(candidates, key=score, reverse=True)
+
+
+def _normalise_answer_records(raw: Any) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    records: List[Dict[str, str]] = []
+    for index, item in enumerate(raw, start=1):
+        if isinstance(item, dict):
+            question = str(item.get("question") or item.get("question_text") or "").strip()
+            answer = str(item.get("answer") or item.get("correct_answer") or "").strip()
+            explanation = str(item.get("explanation") or "").strip()
+            correct_letter = str(item.get("correct_letter") or item.get("letter") or "").strip().upper()
+        else:
+            question = ""
+            answer = str(item or "").strip()
+            explanation = ""
+            correct_letter = ""
+        if not answer:
+            continue
+        record = {"question": question or f"Question {index}", "answer": answer}
+        if explanation:
+            record["explanation"] = explanation
+        if correct_letter:
+            record["correct_letter"] = correct_letter
+        records.append(record)
+    return records
+
+
+def _extract_generated_payload(raw_result: str, subject: str) -> Tuple[str, List[Dict[str, str]]]:
+    """Separate the public worksheet from its private answer key.
+
+    New prompts request JSON. The section parser keeps older/local models safe by
+    stripping an ANSWERS heading before anything is returned to the browser.
+    """
+    text = str(raw_result or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+        text = re.sub(r"\s*```$", "", text)
+    try:
+        payload = json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        payload = None
+
+    if isinstance(payload, dict):
+        homework = str(payload.get("homework") or payload.get("worksheet") or payload.get("content") or "").strip()
+        answers = _normalise_answer_records(
+            payload.get("correct_answers") or payload.get("answers") or payload.get("answer_key")
+        )
+        if homework:
+            return homework, answers
+
+    parts = re.split(r"(?im)^\s*#{0,6}\s*ANSWERS?\s*:?[ \t]*$", text, maxsplit=1)
+    if len(parts) == 1:
+        return text, []
+
+    homework = parts[0].strip()
+    private = parts[1]
+    answer_block = re.split(
+        r"(?im)^\s*#{0,6}\s*(?:EXPLANATIONS?|WORKED SOLUTIONS?|BONUS)\s*:?[ \t]*$",
+        private,
+        maxsplit=1,
+    )[0]
+    answer_map: Dict[int, str] = {}
+    for match in re.finditer(r"(?m)^\s*(\d+)[.)]\s*(.+?)\s*$", answer_block):
+        answer_map[int(match.group(1))] = match.group(2).strip()
+
+    questions = _split_homework_into_questions(homework, subject)
+    answers: List[Dict[str, str]] = []
+    for index, question in enumerate(questions, start=1):
+        answer = answer_map.get(index)
+        if answer:
+            answers.append({
+                "question": str(question.get("full_content") or question.get("content") or f"Question {index}"),
+                "answer": answer,
+            })
+    return homework, answers
+
+
 def generate_homework_for_subject(
     student_profile: Dict[str, Any],
     subject: str,
     llm: LLMClient,
     is_eleven_plus: bool = False,
 ) -> tuple:
-    """Return unseen RAG homework first; call the LLM only after an exact RAG miss.
-
-    Assignment history is stored separately from the shared RAG library. This
-    makes no-repeat behaviour reliable across workers without storing child
-    answers or personal profile text in Chroma.
-    """
+    """Return unseen exact RAG homework first; call the LLM only on a RAG miss."""
     if is_eleven_plus:
         year_group = 6
         age = 11
@@ -73,11 +181,9 @@ def generate_homework_for_subject(
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
     learner_key = str(student_profile.get("student_id") or "anonymous")[:100]
-    plan_week = 0
     try:
         requested_week = int(student_profile.get("plan_week") or 0)
-        if 1 <= requested_week <= 52:
-            plan_week = requested_week
+        plan_week = requested_week if 1 <= requested_week <= 52 else 0
     except (TypeError, ValueError):
         plan_week = 0
 
@@ -87,41 +193,19 @@ def generate_homework_for_subject(
         if is_eleven_plus and plan_week
         else ("elevenplus" if is_eleven_plus else "primary")
     )
-
     if is_eleven_plus:
         store_func = elevenplus_store_homework
-        semantic_search = elevenplus_search_homework
         metadata_search = elevenplus_search_homework_by_metadata
-        previous_topics_func = elevenplus_get_student_previous_topics
     else:
         store_func = store_homework
-        semantic_search = search_homework
         metadata_search = search_homework_by_metadata
-        previous_topics_func = get_student_previous_topics
-
-    cache_key = make_cache_key(
-        "homework",
-        str(year_group),
-        str(age),
-        subject,
-        learner_key,
-        str(plan_week),
-        "|".join(str(item) for item in student_profile.get("learning_goals", [])[:4]),
-        "|".join(str(item) for item in student_profile.get("weak_areas", [])[:4]),
-    )
-    assignment_store = get_assignment_store()
 
     learning_goals = [compact_text(item, 120) for item in student_profile.get("learning_goals", []) if item]
     weak_areas = [compact_text(item, 120) for item in student_profile.get("weak_areas", []) if item]
-    has_personalised_query = bool(learning_goals or weak_areas)
+    assignment_store = get_assignment_store()
 
     try:
-        # Exact metadata lookup is faster and avoids creating an embedding for
-        # the common year/subject request. Semantic search is reserved for a
-        # real learning-goal query.
         if is_eleven_plus and plan_week:
-            # The 52-week plan must never drift to another week. Use a hard
-            # metadata filter rather than a similarity query based on topic text.
             candidates = metadata_search(
                 year_group=year_group,
                 subject=subject,
@@ -129,55 +213,68 @@ def generate_homework_for_subject(
                 content_type="year_round",
                 k=20,
             )
-        elif has_personalised_query:
-            query = compact_text(" ".join(learning_goals + weak_areas + [subject_label]), 600)
-            candidates = semantic_search(
-                query=query, year_group=year_group, subject=subject, k=50
-            )
         else:
-            candidates = metadata_search(year_group=year_group, subject=subject, k=100)
-
-        if candidates:
-            candidate_by_id = {str(item.get("doc_id")): item for item in candidates if item.get("doc_id")}
-            claimed_id = assignment_store.claim_first_unseen(
+            # Exact metadata lookup is the fastest and most reliable match. It
+            # deliberately avoids loading the embedding model on the hot path.
+            # Exclude all IDs already assigned to this learner in SQL. The old
+            # implementation inspected only the newest 50 rows, so it could
+            # report a false miss even while hundreds of older unseen rows
+            # remained in the RAG library.
+            seen_ids = assignment_store.seen_doc_ids(
                 learner_key,
-                list(candidate_by_id),
                 subject=subject,
                 year_group=year_group,
                 content_kind=content_kind,
+                limit=20_000,
             )
-            if claimed_id:
-                selected = candidate_by_id[claimed_id]
-                content = str(selected.get("content") or "").strip()
-                if content:
-                    homework_cache.set(
-                        cache_key,
-                        {"content": content, "doc_id": claimed_id, "from_rag": True},
-                    )
-                    logger.info(
-                        "[RAG] Assigned unseen %s homework for Year %d, week=%s, doc_id=%s",
-                        subject, year_group, plan_week or "general", claimed_id,
-                    )
-                    return content, claimed_id, True
-            logger.info("[RAG] No unseen exact candidates remain for %s Year %d", subject, year_group)
+            candidates = metadata_search(
+                year_group=year_group,
+                subject=subject,
+                k=50,
+                exclude_ids=seen_ids,
+            )
+            candidates = _rank_rag_candidates(candidates, learning_goals + weak_areas)
+
+        candidate_by_id = {
+            str(item.get("doc_id")): item for item in candidates or [] if item.get("doc_id")
+        }
+        claimed_id = assignment_store.claim_first_unseen(
+            learner_key,
+            list(candidate_by_id),
+            subject=subject,
+            year_group=year_group,
+            content_kind=content_kind,
+        )
+        if claimed_id:
+            selected = candidate_by_id[claimed_id]
+            content = str(selected.get("content") or "").strip()
+            if content:
+                logger.info(
+                    "[RAG] Assigned %s homework for Year %d, week=%s, doc_id=%s",
+                    subject, year_group, plan_week or "general", claimed_id,
+                )
+                return content, claimed_id, True
+        if is_eleven_plus:
+            logger.info("[RAG] No unseen exact candidate for %s Year %d", subject, year_group)
+        else:
+            total_exact = get_homework_rag_store().store.count_by_metadata(
+                {"year_group": year_group, "subject": subject}
+            )
+            logger.info(
+                "[RAG] No unseen exact candidate for %s Year %d "
+                "(exact_in_database=%d, already_seen=%d, database=%s)",
+                subject,
+                year_group,
+                total_exact,
+                len(seen_ids),
+                get_homework_rag_store().store.database_target,
+            )
     except Exception:
         logger.exception("[RAG] Homework lookup failed for %s Year %d", subject, year_group)
 
-    # RAG miss: build a compact, privacy-minimised prompt. The learner ID and
-    # free-text description are intentionally excluded from the model input.
-    try:
-        previous_topics = previous_topics_func(learner_key, subject)
-    except Exception:
-        previous_topics = []
-
-    previous_context = ""
-    if previous_topics:
-        previews = [compact_text(topic, 180) for topic in previous_topics[-6:]]
-        previous_context = (
-            "Previously used material. Create different questions:\n- "
-            + "\n- ".join(previews)
-        )
-
+    # True RAG miss. Keep the model input small and exclude identifiers/free
+    # profile text. The one generation call also creates a private answer key,
+    # so future marking can remain deterministic and token-free.
     prompt_profile = compact_profile(student_profile)
     prompt_profile.pop("student_id", None)
     prompt_template = RAG_PROMPT_11PLUS if is_eleven_plus else HOMEWORK_PROMPT
@@ -188,12 +285,21 @@ def generate_homework_for_subject(
         homework_time=homework_time,
         year_group=year_group,
         age=age,
-        previous_topics=compact_text(previous_context, 1_500),
-        index=len(previous_topics) + 1,
+        previous_topics="",
+        index=1,
     )
-    result = str(llm.complete(build_messages(prompt_text))).strip()
-    if not result:
+    raw_result = str(
+        llm.complete(
+            build_messages(prompt_text),
+            temperature=0.25,
+            max_tokens=1800 if is_eleven_plus else 1200,
+        )
+    ).strip()
+    if not raw_result:
         raise RuntimeError("The homework generator returned an empty response")
+    result, correct_answers = _extract_generated_payload(raw_result, subject)
+    if not result:
+        raise RuntimeError("The homework generator returned no public questions")
 
     doc_id = None
     try:
@@ -204,7 +310,8 @@ def generate_homework_for_subject(
             "homework_minutes": homework_time,
             "key_stage": KEY_STAGES.get(year_group, "KS2"),
             "english_level": student_profile.get("english_level"),
-            "student_id": None,  # shared library content must not be owned by one learner
+            "student_id": None,
+            "correct_answers": correct_answers or None,
             "age": age,
         }
         if is_eleven_plus and plan_week:
@@ -222,7 +329,6 @@ def generate_homework_for_subject(
     except Exception:
         logger.exception("[RAG] Could not store generated %s homework", subject)
 
-    homework_cache.set(cache_key, {"content": result, "doc_id": doc_id, "from_rag": False})
     return result, doc_id, False
 
 def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
@@ -235,20 +341,41 @@ def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
     Returns:
         提取到的科目列表
     """
-    # 检查缓存
-    cache_key = make_cache_key("subject_extract", user_input)
+    source_text = " ".join(user_input) if isinstance(user_input, (list, tuple)) else str(user_input or "")
+    cache_key = make_cache_key("subject_extract", source_text)
     cached = subject_extraction_cache.get(cache_key)
     if cached is not None:
         logger.info("[Cache] 命中科目提取缓存")
         return cached
 
+    folded = source_text.casefold()
+    aliases = {
+        "Maths": ("maths", "math", "mathematics"),
+        "English": ("english", "reading", "writing", "spelling", "grammar"),
+        "Science": ("science",),
+        "Computing": ("computing", "computer", "coding"),
+        "History": ("history",),
+        "Geography": ("geography",),
+        "Art and Design": ("art", "drawing", "design"),
+        "Music": ("music",),
+        "Physical Education": ("physical education", "p.e.", " pe ", "sport"),
+        "Languages": ("language", "french", "spanish", "german"),
+    }
+    local_subjects = [
+        subject for subject in UK_PRIMARY_SUBJECTS
+        if any(alias in folded for alias in aliases.get(subject, (subject.casefold(),)))
+    ]
+    if local_subjects:
+        subject_extraction_cache.set(cache_key, local_subjects)
+        return local_subjects
+
     prompt_text = format_prompt(
         SUBJECT_EXTRACTION_PROMPT,
         available_subjects=", ".join(UK_PRIMARY_SUBJECTS),
-        user_input=user_input,
+        user_input=source_text,
     )
     messages = build_messages(prompt_text)
-    result = llm.complete_json(messages)
+    result = llm.complete_json(messages, temperature=0, max_tokens=128)
 
     if isinstance(result, list):
         subjects = [s for s in result if s in UK_PRIMARY_SUBJECTS]

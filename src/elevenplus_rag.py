@@ -1,20 +1,49 @@
-import os
-import logging
-import time
+from __future__ import annotations
+
 import json
+import logging
+import os
+import random
 import re
-from datetime import datetime
-from typing import Dict, List, Any, Optional
+import threading
+import time
+import uuid
+from datetime import UTC, datetime
+from typing import Any, Dict, Iterable, List, Optional
+
+# Standalone 11+ generator scripts import this module directly. Load the same
+# project .env file used by launch.py before importing PGVectorStore, because
+# pgvector's SQLAlchemy column type is selected when that module is imported.
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(PROJECT_DIR, ".env"), override=False)
+except ImportError:  # pragma: no cover - python-dotenv is an app dependency
+    pass
 
 from .pgvector_store import PGVectorStore
 
 logger = logging.getLogger(__name__)
 
 # Vector storage configuration
-RAG_MAX_RETRIES = 3
-RAG_RETRY_DELAY = 2  # Seconds
+RAG_MAX_RETRIES = max(1, min(int(os.getenv("RAG_MAX_RETRIES", "3")), 8))
+RAG_RETRY_DELAY = max(0.05, float(os.getenv("RAG_RETRY_DELAY", "0.4")))
+MAX_QUERY_RESULTS = max(1, min(int(os.getenv("RAG_MAX_QUERY_RESULTS", "50")), 500))
+MAX_DOCUMENT_CHARS = max(1_000, int(os.getenv("RAG_MAX_DOCUMENT_CHARS", "100000")))
+STATS_PAGE_SIZE = max(100, min(int(os.getenv("RAG_STATS_PAGE_SIZE", "1000")), 10_000))
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _env_true(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bounded_k(k: int) -> int:
+    try:
+        value = int(k)
+    except (TypeError, ValueError):
+        value = 5
+    return max(1, min(value, MAX_QUERY_RESULTS))
 
 _YEAR_ROUND_BLOCK_RE = re.compile(
     r"Homework Question\s+(?P<number>\d+)\s*:\s*\n"
@@ -219,32 +248,85 @@ def format_questions_only(questions: List[Dict[str, Any]]) -> str:
 
 # Convenience functions for direct use
 _elevenplus_rag_store = None
+_elevenplus_rag_lock = threading.Lock()
 
 
 class ElevenPlusRAGStore:
     def __init__(self, persist_directory: str = None):
-        try:
-            from src.homework_rag import _create_embedding_function
-            self.embedding_function = _create_embedding_function()
-        except ImportError:
-            self.embedding_function = None
-
+        self._write_lock = threading.RLock()
+        self._embedding_function = None
         self.store = PGVectorStore(collection_name="elevenplus_collection")
-        logger.info("[RAG] Using PGVectorStore for elevenplus_collection")
+        allow_sqlite = _env_true("TESTING") or _env_true("ELEVENPLUS_RAG_ALLOW_SQLITE")
+        if not self.store.is_postgres and not allow_sqlite:
+            raise RuntimeError(
+                "11+ RAG requires PostgreSQL/pgvector. Set PGVECTOR_DATABASE_URL "
+                "or DATABASE_URL to a postgresql+psycopg:// URL. SQLite is allowed "
+                "only for automated tests or when ELEVENPLUS_RAG_ALLOW_SQLITE=true."
+            )
+        logger.info(
+            "[RAG] Using PGVectorStore for elevenplus_collection at %s",
+            self.store.database_target,
+        )
 
-    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        sanitized = {}
+    @property
+    def embedding_function(self):
+        if self._embedding_function is None:
+            from src.homework_rag import _create_embedding_function
+            self._embedding_function = _create_embedding_function()
+        return self._embedding_function
+
+    @staticmethod
+    def _sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(metadata, dict):
+            return {}
+        sanitized: Dict[str, Any] = {}
         for k, v in metadata.items():
             if v is None:
                 continue
+            safe_key = str(k)[:128]
             if isinstance(v, (str, int, float, bool)):
-                sanitized[k] = v
-            elif isinstance(v, (list, dict)):
-                import json
-                sanitized[k] = json.dumps(v, ensure_ascii=False)
+                sanitized[safe_key] = v
+            elif isinstance(v, datetime):
+                if v.tzinfo is None:
+                    v = v.replace(tzinfo=UTC)
+                sanitized[safe_key] = v.astimezone(UTC).isoformat()
+            elif isinstance(v, (list, dict, tuple)):
+                sanitized[safe_key] = json.dumps(
+                    v, ensure_ascii=False, separators=(",", ":")
+                )
             else:
-                sanitized[k] = str(v)
+                sanitized[safe_key] = str(v)
         return sanitized
+
+    @staticmethod
+    def _validate_content(content: str) -> str:
+        text = str(content or "").strip()
+        if not text:
+            raise ValueError("homework_content must not be empty")
+        if len(text) > MAX_DOCUMENT_CHARS:
+            raise ValueError(f"homework_content exceeds {MAX_DOCUMENT_CHARS} characters")
+        return text
+
+    def _retry_write(self, operation, description: str):
+        for attempt in range(1, RAG_MAX_RETRIES + 1):
+            try:
+                with self._write_lock:
+                    return operation()
+            except Exception:
+                if attempt >= RAG_MAX_RETRIES:
+                    logger.exception("[RAG] %s failed after %s attempts", description, attempt)
+                    raise
+                delay = RAG_RETRY_DELAY * (2 ** (attempt - 1)) + random.uniform(
+                    0, RAG_RETRY_DELAY
+                )
+                logger.warning(
+                    "[RAG] %s failed (attempt %s); retrying in %.2fs",
+                    description,
+                    attempt,
+                    delay,
+                )
+                time.sleep(delay)
+        raise AssertionError("unreachable")
 
     def add_homework(
             self,
@@ -270,23 +352,25 @@ class ElevenPlusRAGStore:
         Returns:
             The document ID
         """
-        now = datetime.now()
-        # 用毫秒时间戳生成唯一 ID
-        doc_id = str(int(now.timestamp() * 1000))
+        content = self._validate_content(homework_content)
+        now = datetime.now(UTC)
+        doc_id = f"ep_{uuid.uuid4().hex}"
 
         # Ensure metadata has required fields and complies with RAG rules
         metadata_copy = metadata.copy()
         metadata_copy.setdefault("created_at", now.isoformat())
         sanitized_metadata = self._sanitize_metadata(metadata_copy)
 
-        embeddings = self.embedding_function([homework_content])
-        self.store.add_documents(
-            texts=[homework_content],
-            metadatas=[sanitized_metadata],
-            ids=[doc_id],
-            embeddings=embeddings
-        )
-        logger.info(f"[RAG] Added homework document: {doc_id}")
+        def add():
+            self.store.add_documents(
+                texts=[content],
+                metadatas=[sanitized_metadata],
+                ids=[doc_id],
+                embeddings=self.embedding_function([content]),
+            )
+
+        self._retry_write(add, f"add 11+ document {doc_id}")
+        logger.info("[RAG] Added 11+ homework document: %s", doc_id)
         return doc_id
 
     def add_batch_homework(
@@ -304,19 +388,24 @@ class ElevenPlusRAGStore:
         Returns:
             List of document IDs
         """
-        texts = []
-        metadatas = []
-        doc_ids = []
+        if not homework_list:
+            return []
+        if len(homework_list) > 500:
+            raise ValueError("A single 11+ RAG batch cannot exceed 500 documents")
+
+        texts: List[str] = []
+        metadatas: List[Dict[str, Any]] = []
+        doc_ids: List[str] = []
 
         for item in homework_list:
-            content = item["content"]
-            metadata = item["metadata"].copy()
+            content = self._validate_content(item.get("content", ""))
+            metadata = dict(item.get("metadata") or {})
             doc_id = item.get("doc_id")
 
-            now = datetime.now()
+            now = datetime.now(UTC)
             if not doc_id:
                 # 用毫秒时间戳生成唯一 ID
-                doc_id = str(int(now.timestamp() * 1000))
+                doc_id = f"ep_{uuid.uuid4().hex}"
 
             metadata.setdefault("created_at", now.isoformat())
             metadata.setdefault("study_year_month", now.strftime("%Y-%m"))
@@ -325,10 +414,20 @@ class ElevenPlusRAGStore:
             metadatas.append(self._sanitize_metadata(metadata))
             doc_ids.append(doc_id)
 
+        if len(set(doc_ids)) != len(doc_ids):
+            raise ValueError("Duplicate doc_id values in batch")
+
         # Upsert keeps ingestion idempotent and avoids deleting the collection first.
-        embeddings = self.embedding_function(texts)
-        self.store.add_documents(texts=texts, metadatas=metadatas, ids=doc_ids, embeddings=embeddings)
-        logger.info(f"[RAG] Upserted {len(doc_ids)} homework documents in batch")
+        self._retry_write(
+            lambda: self.store.add_documents(
+                texts=texts,
+                metadatas=metadatas,
+                ids=doc_ids,
+                embeddings=self.embedding_function(texts),
+            ),
+            f"upsert batch of {len(doc_ids)} 11+ documents",
+        )
+        logger.info("[RAG] Upserted %s 11+ homework documents in batch", len(doc_ids))
         return doc_ids
 
     def search(
@@ -348,10 +447,13 @@ class ElevenPlusRAGStore:
         Returns:
             包含 'doc_id', 'content', 'metadata', 'score' 的字典列表
         """
-        query_embeddings = self.embedding_function([query])
+        clean_query = str(query or "").strip()
+        if not clean_query:
+            raise ValueError("query must not be empty")
+        query_embeddings = self.embedding_function([clean_query])
         raw = self.store.search(
             query_embedding=query_embeddings[0],
-            k=k,
+            k=_bounded_k(k),
             filters=filters
         )
 
@@ -362,6 +464,8 @@ class ElevenPlusRAGStore:
                 "content": item["content"],
                 "metadata": item["metadata"],
                 "score": item["distance"],
+                "distance": item.get("distance"),
+                "similarity": item.get("similarity"),
             })
 
         return results
@@ -370,6 +474,9 @@ class ElevenPlusRAGStore:
             self,
             filters: Dict[str, Any],
             k: int = 10,
+            *,
+            offset: int = 0,
+            exclude_ids: Optional[Iterable[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Search homework documents by metadata only (no semantic search)
 
@@ -381,7 +488,14 @@ class ElevenPlusRAGStore:
         Returns:
             List of dicts with 'content' and 'metadata'
         """
-        results = self.store.get_by_metadata(filters=filters, k=k)
+        if not filters:
+            raise ValueError("At least one metadata filter is required")
+        results = self.store.get_by_metadata(
+            filters=filters,
+            k=_bounded_k(k),
+            offset=max(0, int(offset)),
+            exclude_ids=exclude_ids,
+        )
 
         if not results:
             return []
@@ -439,7 +553,7 @@ class ElevenPlusRAGStore:
         # but for now follow the pattern of homework_rag
         offset = 0
         while offset < total_docs:
-            metas = self.store.get_stats_metadata(limit=500, offset=offset)
+            metas = self.store.get_stats_metadata(limit=STATS_PAGE_SIZE, offset=offset)
             if not metas:
                 break
             for meta in metas:
@@ -571,11 +685,13 @@ class ElevenPlusRAGStore:
 _elevenplus_rag_store = None
 
 
-def get_elevenplus_rag_store():
-    """Get or create the singleton RAG store instance"""
+def get_elevenplus_rag_store() -> ElevenPlusRAGStore:
+    """Get or create the singleton RAG store instance."""
     global _elevenplus_rag_store
     if _elevenplus_rag_store is None:
-        _elevenplus_rag_store = ElevenPlusRAGStore()
+        with _elevenplus_rag_lock:
+            if _elevenplus_rag_store is None:
+                _elevenplus_rag_store = ElevenPlusRAGStore()
     return _elevenplus_rag_store
 
 
@@ -718,6 +834,9 @@ def search_homework_by_metadata(
     k: int = 50,
     week_num: Optional[int] = None,
     content_type: Optional[str] = None,
+    *,
+    offset: int = 0,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Return exact metadata candidates without creating a query embedding.
 
@@ -729,13 +848,25 @@ def search_homework_by_metadata(
     seen: set[str] = set()
     aliases = _subject_aliases(subject)
     prefer_exact_year_round = str(subject or "").strip().casefold().endswith("-1year")
+    remaining_offset = max(0, int(offset))
     for alias_index, alias in enumerate(aliases):
         filters: Dict[str, Any] = {"year_group": int(year_group), "subject": alias}
         if week_num is not None:
             filters["week_num"] = int(week_num)
         if content_type:
             filters["content_type"] = str(content_type)
-        alias_results = store.search_by_metadata(filters, k=k)
+        if remaining_offset or exclude_ids:
+            alias_results = store.search_by_metadata(
+                filters,
+                k=k,
+                offset=remaining_offset,
+                exclude_ids=exclude_ids,
+            )
+        else:
+            # Preserve compatibility with small test doubles and older custom
+            # store wrappers that implement only (filters, k).
+            alias_results = store.search_by_metadata(filters, k=k)
+        remaining_offset = 0
         for item in alias_results:
             doc_id = str(item.get("doc_id") or "")
             if doc_id and doc_id not in seen:
@@ -748,6 +879,30 @@ def search_homework_by_metadata(
         if prefer_exact_year_round and alias_index == 0 and alias_results:
             return merged
     return merged
+
+
+def count_homework_by_metadata(
+    year_group: int,
+    subject: str,
+    week_num: Optional[int] = None,
+    content_type: Optional[str] = None,
+) -> int:
+    """Count exact 11+ metadata matches across canonical and legacy aliases."""
+    store = get_elevenplus_rag_store().store
+    total = 0
+    for alias in _subject_aliases(subject):
+        filters: Dict[str, Any] = {"year_group": int(year_group), "subject": alias}
+        if week_num is not None:
+            filters["week_num"] = int(week_num)
+        if content_type:
+            filters["content_type"] = str(content_type)
+        total += store.count_by_metadata(filters)
+    return total
+
+
+def get_database_target() -> str:
+    """Return the password-free PostgreSQL target used by the 11+ RAG."""
+    return get_elevenplus_rag_store().store.database_target
 
 
 def get_homework_questions(doc_id: Optional[str], content: str = "") -> List[Dict[str, Any]]:

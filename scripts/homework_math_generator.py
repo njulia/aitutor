@@ -48,9 +48,21 @@ import sys
 import os
 import random
 import json
+import argparse
+from pathlib import Path
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# Load the same project .env used by web_app.py before importing the RAG
+# modules. This is essential because pgvector_store chooses its database and
+# SQL column type at import time.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(PROJECT_ROOT / ".env", override=False)
+except ImportError:
+    pass
 
 from src.homework_rag import get_homework_rag_store
 from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
@@ -1850,31 +1862,70 @@ def generate_year_homework(year_group: int, count: int = 500) -> list:
 
 
 def main():
-    """主函数：检查各年级Math作业，缺失则生成"""
-    print("检查各年级Math作业是否存在...\n")
+    """Check and generate Maths homework in the configured PGVector store."""
+    parser = argparse.ArgumentParser(
+        description="Generate UK primary Maths homework into PostgreSQL/pgvector."
+    )
+    parser.add_argument(
+        "--year",
+        type=int,
+        action="append",
+        choices=range(1, 7),
+        help="Generate only this year. Repeat the option for more than one year.",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Override the target count for each selected year.",
+    )
+    parser.add_argument(
+        "--allow-sqlite",
+        action="store_true",
+        help="Explicitly allow the SQLite development fallback.",
+    )
+    args = parser.parse_args()
 
+    print("Checking Maths homework in RAG...\n")
     store = get_homework_rag_store()
+    print(f"RAG target: {store.store.database_target}")
+
+    # Never silently generate a large production library into a relative
+    # test_vector.db because an IDE did not load .env.
+    if not store.store.is_postgres and not args.allow_sqlite:
+        raise RuntimeError(
+            "Maths ingestion is not connected to PostgreSQL/pgvector. "
+            "Set PGVECTOR_DATABASE_URL or DATABASE_URL in the project .env. "
+            "The SQLite fallback is disabled for this generator to prevent "
+            "writing homework into the wrong database."
+        )
+
+    requested_years = args.year or list(range(1, 7))
     years_to_generate = []
 
-    for year in range(1, 7):
-        expected = HOMEWORK_COUNT.get(year, 1000)
+    for year in requested_years:
+        expected = args.count if args.count is not None else HOMEWORK_COUNT.get(year, 1000)
+        if expected < 1:
+            raise ValueError("--count must be at least 1")
         existing = count_year_homework(store, year, "Maths")
 
         if existing >= expected:
             print(f"  Year {year}: complete ({existing}/{expected})")
         else:
             print(f"  Year {year}: incomplete ({existing}/{expected})")
-            years_to_generate.append(year)
+            years_to_generate.append((year, expected))
 
     if not years_to_generate:
-        print("\n所有年级Math作业已存在，无需生成。")
+        print("\nAll selected Maths homework already exists.")
         return
 
-    print(f"\n需要生成的年级: {', '.join(f'Year {y}' for y in years_to_generate)}")
+    print(
+        "\nNeed to generate: "
+        + ", ".join(f"Year {year}" for year, _ in years_to_generate)
+    )
 
-    for year in years_to_generate:
-        print(f"\n开始生成 Year {year} Math作业...")
-        count=HOMEWORK_COUNT.get(year, 1000)
+    for year, count in years_to_generate:
+        print(f"\nGenerating Year {year} Maths homework...")
         batch_data = generate_year_homework(year, count=count)
 
         if batch_data:
@@ -1884,7 +1935,7 @@ def main():
                 f"target total is {len(batch_data)}"
             )
 
-    get_rag_stats()
+    get_rag_stats(store)
 
 
 if __name__ == "__main__":

@@ -676,13 +676,7 @@ def main():
     print("==========================================================\n")
 
     store = get_elevenplus_rag_store()
-
-    stats = store.get_stats()
-    print("\nRAG 存储统计:")
-    print(f"  总文档数: {stats['total_documents']}")
-    print(f"  按主题分布: {stats['by_subject']}")
-    print(f"  按年级分布: {stats['by_year_group']}")
-
+    print(f"RAG target: {store.store.database_target}")
 
     exists = check_11plus_nvr_exists()
     status = "Present" if exists else "Missing"

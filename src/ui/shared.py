@@ -11,6 +11,7 @@ UI 共享工具模块
 import os
 import base64
 import logging
+import re
 from typing import Dict, Any, Optional
 from jinja2 import Template
 
@@ -86,13 +87,59 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
         return cached
 
     try:
+        # Most Smart Homework descriptions include a year/age and a named
+        # subject. Parse those locally first to avoid an unnecessary LLM call.
+        folded = str(description or "").casefold()
+        year_match = re.search(r"\byear\s*([1-6])\b", folded)
+        age_match = re.search(r"\b(?:age|aged|is)\s*(?:a\s*)?(\d{1,2})(?:[- ]year[- ]old|\s+years? old)?\b", folded)
+        year_num = int(year_match.group(1)) if year_match else None
+        age_num = int(age_match.group(1)) if age_match else None
+        if year_num is None and age_num is not None and 5 <= age_num <= 11:
+            year_num = max(1, min(6, age_num - 4))
+        if age_num is None and year_num is not None:
+            age_num = YEAR_GROUP_AGE.get(year_num, year_num + 4)
+
+        subject_aliases = {
+            "Maths": ("maths", "math", "mathematics", "numeracy"),
+            "English": ("english", "reading", "writing", "spelling", "grammar"),
+            "Science": ("science",),
+            "Computing": ("computing", "computer", "coding"),
+            "History": ("history",),
+            "Geography": ("geography",),
+            "Art and Design": ("art", "drawing", "design"),
+            "Music": ("music",),
+            "Physical Education": ("physical education", "p.e.", " sport"),
+            "Languages": ("language", "french", "spanish", "german"),
+        }
+        extracted_subjects = [
+            subject for subject in UK_PRIMARY_SUBJECTS
+            if any(alias in folded for alias in subject_aliases.get(subject, (subject.casefold(),)))
+        ]
+        if year_num is not None and extracted_subjects:
+            homework_info = get_homework_time_by_age(year_num)
+            profile = {
+                "student_id": "custom_student",
+                "year_group": year_num,
+                "age": age_num or YEAR_GROUP_AGE.get(year_num, 5),
+                "key_stage": KEY_STAGES.get(year_num, "KS1"),
+                "english_level": "Age appropriate",
+                "learning_goals": extracted_subjects[:4],
+                "weak_areas": [],
+                "learning_style": "Mixed",
+                "vocabulary_count": 50,
+                "recommended_homework_minutes": homework_info["daily_homework_minutes"],
+                "extracted_subjects": extracted_subjects,
+            }
+            profile_parse_cache.set(cache_key, profile)
+            return profile
+
         prompt_text = format_prompt(
             PROFILE_PARSE_PROMPT,
             description=description,
             available_subjects=", ".join(UK_PRIMARY_SUBJECTS),
         )
         messages = build_messages(prompt_text)
-        result = llm.complete_json(messages)
+        result = llm.complete_json(messages, temperature=0, max_tokens=450)
 
         year_num = result.get("year_group", 1)
         age_num = result.get("age", YEAR_GROUP_AGE.get(year_num, 5))

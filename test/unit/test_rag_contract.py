@@ -7,7 +7,6 @@ pytestmark = [pytest.mark.unit, pytest.mark.integration]
 
 @pytest.fixture
 def rag_module():
-    pytest.importorskip("chromadb")
     import src.homework_rag as rag
     return rag
 

@@ -4,14 +4,14 @@
 
 Compatibility goals:
 * preserve the existing public convenience functions;
-* keep existing Chroma collection and metadata names;
+* preserve existing collection and metadata names;
 * read old ``correct_answers`` values while writing a consistent JSON format.
 
 Reliability improvements:
 * collision-free UUID document IDs;
 * thread-safe lazy initialisation and serialised writes;
 * bounded query sizes and paginated statistics;
-* optional server-backed Chroma for multi-worker production;
+* PostgreSQL/pgvector storage for multi-worker production;
 * correct lazy creation of the Chinese collection;
 * clearer distance/similarity result fields.
 """
@@ -43,40 +43,46 @@ MAX_QUERY_RESULTS = max(1, min(int(os.getenv("RAG_MAX_QUERY_RESULTS", "50")), 50
 MAX_DOCUMENT_CHARS = max(1_000, int(os.getenv("RAG_MAX_DOCUMENT_CHARS", "100000")))
 STATS_PAGE_SIZE = max(100, min(int(os.getenv("RAG_STATS_PAGE_SIZE", "1000")), 10_000))
 
+_embedding_function = None
+_embedding_function_lock = threading.Lock()
+
 
 def _create_embedding_function():
-    if EMBEDDING_PROVIDER == "local":
-        # We need a function that takes text(s) and returns list of lists of floats
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
-        return lambda texts: model.encode(texts).tolist()
+    """Return one process-wide embedding function, initialised only when needed."""
+    global _embedding_function
+    if _embedding_function is not None:
+        return _embedding_function
+    with _embedding_function_lock:
+        if _embedding_function is not None:
+            return _embedding_function
+        if EMBEDDING_PROVIDER in {"local", "sentence_transformer"}:
+            from sentence_transformers import SentenceTransformer
 
-    if EMBEDDING_PROVIDER == "sentence_transformer":
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
-        return lambda texts: model.encode(texts).tolist()
+            model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
+            _embedding_function = lambda texts: model.encode(
+                texts, normalize_embeddings=True, show_progress_bar=False
+            ).tolist()
+        elif EMBEDDING_PROVIDER == "api":
+            if not DEFAULT_API_KEY:
+                raise ValueError("EMBEDDING_PROVIDER=api requires DEFAULT_API_KEY")
+            import requests
 
-    if EMBEDDING_PROVIDER == "api":
-        if not DEFAULT_API_KEY:
-            raise ValueError("EMBEDDING_PROVIDER=api requires DEFAULT_API_KEY")
-        import requests
-        
-        def api_embedding(texts: List[str]) -> List[List[float]]:
-            endpoint = DEFAULT_ENDPOINT or "https://api.openai.com/v1/embeddings"
-            model_name = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-            headers = {"Authorization": f"Bearer {DEFAULT_API_KEY}"}
-            resp = requests.post(
-                endpoint,
-                headers=headers,
-                json={"input": texts, "model": model_name}
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return [d["embedding"] for d in data["data"]]
-        
-        return api_embedding
+            def api_embedding(texts: List[str]) -> List[List[float]]:
+                endpoint = DEFAULT_ENDPOINT or "https://api.openai.com/v1/embeddings"
+                model_name = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+                response = requests.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {DEFAULT_API_KEY}"},
+                    json={"input": texts, "model": model_name},
+                    timeout=max(5, min(int(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "30")), 120)),
+                )
+                response.raise_for_status()
+                return [item["embedding"] for item in response.json()["data"]]
 
-    raise ValueError(f"Unknown EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
+            _embedding_function = api_embedding
+        else:
+            raise ValueError(f"Unknown EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
+        return _embedding_function
 
 
 def _new_doc_id(prefix: str = "hw") -> str:
@@ -97,9 +103,18 @@ class HomeworkRAGStore:
         self._chinese_lock = threading.Lock()
         self._chinese_collection = None
 
-        self.embedding_function = _create_embedding_function()
+        self._embedding_function = None
         self.store = PGVectorStore(collection_name="homework_collection")
-        logger.info("[RAG] Using PGVectorStore for homework_collection")
+        logger.info(
+            "[RAG] Using PGVectorStore for homework_collection at %s",
+            self.store.database_target,
+        )
+
+    @property
+    def embedding_function(self):
+        if self._embedding_function is None:
+            self._embedding_function = _create_embedding_function()
+        return self._embedding_function
 
     @property
     def chinese_collection(self):
@@ -232,10 +247,22 @@ class HomeworkRAGStore:
             )
         return results
 
-    def search_by_metadata(self, filters: Dict[str, Any], k: int = 10) -> List[Dict[str, Any]]:
+    def search_by_metadata(
+        self,
+        filters: Dict[str, Any],
+        k: int = 10,
+        *,
+        offset: int = 0,
+        exclude_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
         if not filters:
             raise ValueError("At least one metadata filter is required")
-        return self.store.get_by_metadata(filters=filters, k=_bounded_k(k))
+        return self.store.get_by_metadata(
+            filters=filters,
+            k=_bounded_k(k),
+            offset=max(0, int(offset)),
+            exclude_ids=exclude_ids,
+        )
 
     def delete_homework(self, doc_id: str) -> bool:
         if not doc_id:
@@ -487,11 +514,21 @@ def search_homework_by_metadata(
     year_group: int,
     subject: str,
     k: int = 50,
+    *,
+    offset: int = 0,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Return exact year/subject candidates without creating a query embedding."""
+    """Return exact year/subject candidates without creating a query embedding.
+
+    ``exclude_ids`` is used by homework assignment to skip documents already
+    shown to the learner. This prevents the old first-50 window from causing a
+    false RAG miss when hundreds of unseen documents remain in PostgreSQL.
+    """
     return get_homework_rag_store().search_by_metadata(
         {"year_group": int(year_group), "subject": str(subject)},
         k=k,
+        offset=offset,
+        exclude_ids=exclude_ids,
     )
 
 def get_student_homework_history(student_id: str, subject: Optional[str] = None) -> List[Dict[str, Any]]:

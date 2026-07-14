@@ -641,6 +641,8 @@ def main():
     print("==========================================================\n")
 
     store = get_elevenplus_rag_store()
+    print(f"RAG target: {store.store.database_target}")
+
     exists = check_11plus_vr_exists()
     status = "已有" if exists else "缺失"
     print(f"  11+ Verbal Reasoning: {status}")

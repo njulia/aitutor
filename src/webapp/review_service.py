@@ -306,8 +306,8 @@ def review_homework(
     max_score: Optional[int] = attempted if rows else None
 
     if rows:
-        # RAG supplied the authoritative answers, so deterministic marking is
-        # both faster and safer than sending the child's work to another model.
+        # RAG supplied authoritative answers. Keep marking deterministic and
+        # token-free; detailed AI teaching is available through Explain Deep.
         if correct_count == attempted:
             feedback_prefix = (
                 f"Brilliant work! You got {correct_count} out of {attempted} correct. "
@@ -321,63 +321,7 @@ def review_homework(
                 f"Look again at the {mistakes} {noun} marked with a cross. "
                 "Try the same method one careful step at a time."
             )
-
-        # Check if we need LLM to fill in missing explanations
-        has_missing_explanations = any(not row.get("explanation") for row in rows)
-
-        # For 11+ year round plan, use explain_deep to provide thorough explanations
-        # following DfE Programme of Study and EXPLAIN_DEEP_PROMPT requirements.
-        if is_eleven_plus:
-            deep_res = explain_deep(
-                homework_content=budget["homework_content"],
-                student_answers=budget["student_answers"],
-                subject=subject,
-                profile=profile,
-                review_feedback="",
-                homework_doc_id=homework_doc_id,
-                is_eleven_plus=True,
-                question_index=question_index,
-                llm_client=llm_client,
-            )
-            feedback_body = deep_res.get("explanation", "Could not generate deep explanation.")
-            feedback = _table(rows) + "\n\n" + feedback_body + "\n\n" + feedback_prefix
-        elif has_missing_explanations:
-            try:
-                # Build a prompt to get simple explanations for the questions
-                # Use a condensed version of REVIEW_HOMEWORK_PROMPT focus on explanations
-                correct_answers_json = json.dumps([
-                    {"question": r["question"], "correct_answer": r["correct_answer"]}
-                    for r in rows
-                ], indent=2)
-                
-                llm_prompt = format_prompt(
-                    REVIEW_HOMEWORK_PROMPT,
-                    student_profile=str(budget["profile"]),
-                    subject=compact_text(subject_display_name(subject), 80),
-                    day=datetime.now().strftime("%A, %d %B %Y"),
-                    homework_content=budget["homework_content"],
-                    student_answer=budget["student_answers"],
-                    correct_answers_section=f"\nAuthoritative Correct Answers:\n{correct_answers_json}",
-                )
-                # We append a specific instruction to focus on question feedback
-                llm_prompt += "\n\nImportant: Focus on providing the 'Detailed Feedback per Question' section clearly."
-
-                llm_feedback = str(llm_client.complete(build_messages(llm_prompt)))
-                # Extract the Detailed Feedback section if possible, otherwise use the whole thing
-                if "## Detailed Feedback per Question" in llm_feedback:
-                    # Try to just take that section to keep it clean
-                    parts = llm_feedback.split("## Detailed Feedback per Question")
-                    explanation_part = parts[1].split("##")[0].strip()
-                    feedback = _table(rows) + "\n\n## Review Details\n\n" + explanation_part + "\n\n" + feedback_prefix
-                else:
-                    feedback = _table(rows) + "\n\n" + llm_feedback + "\n\n" + feedback_prefix
-            except Exception:
-                logger.exception("Failed to get LLM explanations, falling back to basic table")
-                feedback = _table(rows) + _worked_explanations(rows) + feedback_prefix
-        else:
-            feedback = _table(rows) + _worked_explanations(rows) + feedback_prefix
-        
-        review = feedback
+        review = _table(rows) + _worked_explanations(rows) + feedback_prefix
     else:
         # Only fall back to the LLM when no authoritative RAG answer exists.
         if is_eleven_plus:
@@ -416,7 +360,7 @@ def review_homework(
                     "and never ask for personal information."
                 ),
             )
-            llm_text = str(llm_client.complete(build_messages(prompt)))
+            llm_text = str(llm_client.complete(build_messages(prompt), temperature=0.2, max_tokens=700))
             review = llm_text
             score, max_score = _extract_score(llm_text)
 
@@ -516,7 +460,7 @@ def explain_deep(
         age=budget["profile"].get("age", 7),
         correct_answers_section=correct_answers_section,
     )
-    result = str(llm_client.complete(build_messages(prompt), max_tokens=2048))
+    result = str(llm_client.complete(build_messages(prompt), temperature=0.2, max_tokens=1400))
     explain_cache.set(cache_key, result)
     return {"success": True, "explanation": result}
 
@@ -585,6 +529,6 @@ def improve_practice(
         age=budget["profile"].get("age", 7),
         correct_answers_section=correct_answers_section,
     )
-    result = str(llm_client.complete(build_messages(prompt), max_tokens=2048))
+    result = str(llm_client.complete(build_messages(prompt), temperature=0.25, max_tokens=1200))
     practice_cache.set(cache_key, result)
     return {"success": True, "practice": result}

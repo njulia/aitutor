@@ -342,11 +342,12 @@ def generate_homework_with_custom_profile(student_profile: Dict[str, Any], subje
     sections = []
     for subject in subjects:
         logger.info("[Homework] Generating homework for %s...", subject)
-        homework, doc_id = generate_homework_for_subject(student_profile, subject, llm)
+        homework, doc_id, from_rag = generate_homework_for_subject(student_profile, subject, llm)
         sections.append({
             'subject': subject,
             'homework': homework,
-            'doc_id': doc_id
+            'doc_id': doc_id,
+            'from_rag': from_rag
         })
         logger.debug("===============%s===================\n%s", subject, homework)
 

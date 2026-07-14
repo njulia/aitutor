@@ -107,7 +107,7 @@ async def run_blocking(
 ) -> T:
     """Run a synchronous callable in a worker thread with a timeout.
 
-    Directly calling SQLite, Chroma, OCR, Stripe or an SDK's synchronous LLM
+    Directly calling SQLite, PGVector, OCR, Stripe or an SDK's synchronous LLM
     method inside ``async def`` blocks every request sharing the event loop.
     This helper keeps those calls off the event loop and applies a bulkhead so
     a traffic spike cannot create an unbounded number of worker jobs.
