@@ -212,6 +212,7 @@ def main():
         try:
             print("\nRegistering Non-Verbal Reasoning Topic-Mastery sets with the RAG Store...")
             store = get_elevenplus_rag_store()
+            print(f"RAG target: {store.store.database_target}")
             
             batch_data = []
             for s in all_sets:

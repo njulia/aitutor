@@ -1440,6 +1440,7 @@ def main():
     print("检查各年级Computing作业是否存在...\n")
 
     store = get_homework_rag_store()
+    print(f"RAG target: {store.store.database_target}")
     years_to_generate = []
 
     for year in range(1, 7):

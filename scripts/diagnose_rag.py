@@ -45,6 +45,8 @@ def main() -> None:
 
     if args.collection == "elevenplus":
         rag = get_elevenplus_rag_store()
+        print(f"RAG target: {rag.store.database_target}")
+
         total = count_elevenplus_by_metadata(
             args.year,
             args.subject,
@@ -61,6 +63,7 @@ def main() -> None:
         content_kind = f"elevenplus_week_{args.week:02d}" if args.week else "elevenplus"
     else:
         rag = get_homework_rag_store()
+        print(f"RAG target: {rag.store.database_target}")
         filters = {"year_group": args.year, "subject": args.subject}
         total = rag.store.count_by_metadata(filters)
         samples = rag.search_by_metadata(filters, k=max(1, min(args.limit, 20)))

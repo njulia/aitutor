@@ -624,6 +624,7 @@ def check_11plus_english_exists() -> bool:
     """检查是否已有 11+ 英语练习"""
     try:
         store = get_elevenplus_rag_store()
+        print(f"RAG target: {store.store.database_target}")
         results = store.search(query="english", k=1, filters={"subject": "English"})
         return len(results) > 0
     except Exception:

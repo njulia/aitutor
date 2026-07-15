@@ -1057,7 +1057,8 @@ def main():
         try:
             print("\nRegistering 52-Week Year-Round sets with the RAG Store...")
             store = get_elevenplus_rag_store()
-            
+            print(f"RAG target: {store.store.database_target}")
+
             # Format into batch homework objects for RAG ingestion
             batch_data = []
             for term in full_plan_data:

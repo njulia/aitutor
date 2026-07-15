@@ -227,6 +227,7 @@ def main():
         try:
             print("\nRegistering Verbal Reasoning Topic-Mastery sets with the RAG Store...")
             store = get_elevenplus_rag_store()
+            print(f"RAG target: {store.store.database_target}")
             
             # Format into batch homework objects for get_elevenplus_rag_store()
             batch_data = []
