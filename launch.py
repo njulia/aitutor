@@ -55,7 +55,7 @@ def main():
     print("  KS1 Homework:    http://localhost:5000/ks1-homework")
     print("  KS2 Homework:    http://localhost:5000/ks2-homework")
     print("  11+ Practice:    http://localhost:5000/elevenplus-practice")
-    print("  Mark Homework:  http://localhost:5000/check-my-homework")
+    # print("  Mark Homework:  http://localhost:5000/check-my-homework")
     print("\nPress Ctrl+C to stop the server\n")
 
     try:
