@@ -1,97 +1,83 @@
-# Homework Magic AI Tutor
+# Langfuse tracing for Homework Magic
 
-A FastAPI AI tutor for UK primary-school learners and 11+ practice. This release adds PostgreSQL persistence, privacy-first learning memory, parent/guardian account controls and Stripe Checkout billing.
+## What was added
 
-## Main features
+- One Langfuse trace for each important FastAPI API request.
+- Descriptive trace names such as `homework-generation`, `homework-review`,
+  `deep-explanation`, and `targeted-practice`.
+- Nested `generation` observations around the custom `LLMClient` methods.
+- Nested `retriever` observations around Chroma homework storage and search.
+- Pseudonymous user/session identifiers, feature tags, HTTP status and app version.
+- The trace ID is returned in the `X-Langfuse-Trace-Id` response header.
+- Review feedback buttons create a `user-thumbs` BOOLEAN score on the trace.
+- Graceful flush during FastAPI shutdown.
 
-- Year 1–6 and 11+ homework generation and review
-- Tutor mode with one question at a time
-- RAG-first answer checking to reduce latency and token use
-- Parent/guardian accounts with multiple learner profiles
-- Structured learning memory, disabled by default
-- Progress, mastery and misconception tracking
-- PostgreSQL for durable production data
-- Random, revocable login sessions
-- Stripe hosted Checkout, customer portal and signed webhooks
-- Temporary, bounded uploads and privacy-safe AI telemetry
-- Admin dashboard protected by authenticated email allow-list
+## Privacy defaults
 
-## Quick start for development
+This is a child-facing education service, so raw homework, answers, prompts,
+model output, names, email addresses, tokens and uploaded content are not sent to
+Langfuse by default. Text is represented by character count and a short SHA-256
+fingerprint. Identifiers are salted and hashed.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
+Set `LANGFUSE_CAPTURE_CONTENT=true` only after completing a UK GDPR data
+protection review, updating the privacy notice, defining retention, and ensuring
+parent/guardian consent and lawful processing where required.
 
-For a zero-setup local run, set `DEV_MODE=true`; SQLite is then used only as a development fallback:
+## Install
 
 ```bash
-DEV_MODE=true python web_app.py
+pip install -r requirements-langfuse.txt
 ```
 
-Open `http://localhost:5000`.
+Copy the variables from `.env.langfuse.example` into your normal `.env`. Do not
+put real API keys in source control.
 
-## PostgreSQL production setup
+For the self-hosted Docker deployment, `LANGFUSE_BASE_URL` must be the URL that
+the Python application can reach. When the Python process runs on the host and
+Langfuse exposes port 3000, use `http://localhost:3000`. When both run in Docker,
+use the Langfuse service name and internal port instead.
 
-Production refuses to start without PostgreSQL.
+## Files
 
-```bash
-cp .env.example .env
-# Edit secrets, domain, Stripe price IDs and POSTGRES_PASSWORD.
-docker compose up --build
+Place these files in the application repository:
+
+- `src/observability.py`
+- patched `web_app.py` (or the patched `web_app(7).py` if that is your entrypoint)
+- patched `homework_rag.py` at `src/homework_rag.py`
+- patched `app.html` at `static/app.html`
+- `requirements-langfuse.txt`
+
+## Verify
+
+1. Start Langfuse and the tutor application.
+2. Open `/api/health`; `langfuse.enabled` should be `true`.
+3. Generate homework, review an answer, and open Langfuse **Traces**.
+4. Confirm the trace contains a request span and nested generation/retriever spans.
+5. Click a review thumbs button and confirm `user-thumbs` appears in the trace's Scores tab.
+
+## Useful environment switches
+
+```dotenv
+# Disable tracing without changing code
+LANGFUSE_TRACING_ENABLED=false
+
+# Development-only content capture; keep false in production unless approved
+LANGFUSE_CAPTURE_CONTENT=false
+
+# Optional text feedback comments; kept off by default
+LANGFUSE_CAPTURE_FEEDBACK_COMMENTS=false
 ```
 
-The production database URL is:
+## Which web app file to use
 
-```text
-postgresql+psycopg://USER:PASSWORD@HOST:5432/DATABASE
-```
+`web_app.py` is the patched version of the uploaded `web_app(7).py` and is the
+recommended replacement. The same file is also kept under `source-names/`.
+`alternatives/web_app_legacy.py` contains the matching patch for the other
+legacy application variant supplied with the project; do not install both.
 
-Common `postgres://` and `postgresql://` URLs are normalised automatically to psycopg 3.
+## Agent Skill copy
 
-## Learning memory
-
-Parents manage memory at `/memory` for each learner profile.
-
-Memory is off until a parent enables it. It stores only structured educational signals:
-
-- subject and topic;
-- outcome and question counts;
-- broad difficulty and misconception code;
-- mastery score and last practice time;
-- explanation and hint preferences.
-
-It does not store raw conversations, answers, uploaded images, school names, addresses or family details. Parents can export, disable or erase memory, including one topic at a time.
-
-## Stripe setup
-
-Create recurring Stripe prices and set their IDs in `.env`. Configure this webhook endpoint:
-
-```text
-https://YOUR_DOMAIN/api/billing/stripe/webhook
-```
-
-Required event types are listed in [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md). Access is granted only from webhook-updated PostgreSQL entitlements, never from a browser success redirect.
-
-## Child privacy defaults
-
-- Parent account is the identity and billing boundary.
-- Learner profiles use nicknames and pseudonymous IDs.
-- Raw learner content and raw AI payloads are off by default.
-- Anonymous IDs are random and are not derived from IP addresses.
-- Sensitive API responses are not browser-cached.
-- External learner-page script CDNs were removed.
-- Learner deletion and account deletion erase associated local data.
-
-See [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) for architecture, deployment, retention and erasure details.
-
-## Validation
-
-```bash
-python -m compileall -q web_app.py src scripts
-node --check static/js/app.js
-node --check static/js/chart-lite.js
-DEV_MODE=true pytest -q
-```
+The archive includes the mirrored Langfuse Agent Skill under
+`.agent-skills/skills/langfuse`. For a normal connected development machine,
+run `./install_langfuse_skill.sh` to use the official installer and receive
+future updates.

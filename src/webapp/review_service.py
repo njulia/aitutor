@@ -5,8 +5,10 @@ usually synchronous. FastAPI routes call them through ``run_blocking``.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -16,6 +18,50 @@ from .question_utils import _parse_student_answers_to_map, _split_homework_into_
 from src.models import subject_display_name
 
 logger = logging.getLogger(__name__)
+
+QUICK_REVIEW_MODEL = (
+    os.getenv("QUICK_REVIEW_MODEL")
+    or os.getenv("FLASH_MODEL")
+    or "qwen-flash"
+).strip()
+DETAIL_REVIEW_MODEL = (
+    os.getenv("DETAIL_REVIEW_MODEL")
+    or os.getenv("PLUS_MODEL")
+    or "qwen-plus"
+).strip()
+
+
+def _prompt_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove identifiers before learner context is sent to an LLM."""
+    return {key: value for key, value in profile.items() if key != "student_id"}
+
+
+def _supports_model_override(callable_obj: Any) -> bool:
+    try:
+        parameters = inspect.signature(callable_obj).parameters.values()
+    except (TypeError, ValueError):
+        return True
+    return any(
+        parameter.name == "model" or parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+
+
+def _complete_review(
+    llm_client: Any,
+    messages: List[Dict[str, str]],
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    operation: str,
+) -> str:
+    """Call the selected model while remaining compatible with simple test fakes."""
+    logger.info("[Review] operation=%s model=%s max_tokens=%s", operation, model, max_tokens)
+    kwargs = {"temperature": temperature, "max_tokens": max_tokens}
+    if _supports_model_override(llm_client.complete):
+        kwargs["model"] = model
+    return str(llm_client.complete(messages, **kwargs))
 
 
 def _clean_answer(value: Any) -> str:
@@ -217,6 +263,69 @@ def _table(rows: List[Dict[str, Any]]) -> str:
     return "\n\n## Check your answers\n\n" + header + "\n".join(body) + "\n\n"
 
 
+def _score_summary(rows: List[Dict[str, Any]]) -> str:
+    correct = sum(1 for row in rows if row.get("is_correct"))
+    return f"{correct}/{len(rows)} correct"
+
+
+def _correct_work_summary(rows: List[Dict[str, Any]]) -> str:
+    lines = []
+    for index, row in enumerate(rows, start=1):
+        if not row.get("is_correct"):
+            continue
+        lines.append(
+            f"- Q{index}: {compact_text(_clean_question_text(row.get('question', '')), 120)} "
+            f"| pupil answer: {compact_text(row.get('student_answer', ''), 60)}"
+        )
+    if not lines:
+        return "No answers were marked correct. Praise effort without inventing success."
+    return compact_text("\n".join(lines), 1_600)
+
+
+def _rag_review_items(rows: List[Dict[str, Any]], *, correct: bool, detailed: bool) -> str:
+    lines = []
+    for index, row in enumerate(rows, start=1):
+        if bool(row.get("is_correct")) is not correct:
+            continue
+        question_limit = 150 if detailed else 120
+        parts = [
+            f"Q{index}",
+            f"question: {compact_text(_clean_question_text(row.get('question', '')), question_limit)}",
+            f"pupil answer: {compact_text(row.get('student_answer', ''), 90)}",
+            f"correct answer: {compact_text(row.get('correct_answer', ''), 100)}",
+        ]
+        if row.get("correct_letter"):
+            parts.append(f"correct option: {row['correct_letter']}")
+        if detailed or not correct:
+            parts.append(
+                "answer-key method: "
+                + compact_text(
+                    row.get("explanation")
+                    or "Use the correct answer and explain the shortest age-appropriate method.",
+                    260 if detailed else 180,
+                )
+            )
+        if row.get("tip") and (detailed or not correct):
+            parts.append(f"tip: {compact_text(row.get('tip'), 120)}")
+        lines.append("- " + " | ".join(parts))
+    if not lines:
+        return "None."
+    return compact_text("\n".join(lines), 8_000 if detailed else 4_500)
+
+
+def _all_correct_quick_feedback(rows: List[Dict[str, Any]]) -> str:
+    count = len(rows)
+    noun = "question" if count == 1 else "questions"
+    return (
+        "## What You Did Well\n"
+        f"You answered all {count} {noun} correctly. Your careful checking paid off.\n\n"
+        "## What to Improve\n"
+        "Keep showing clear working so you can spot small slips in harder questions.\n\n"
+        "## Keep Going\n"
+        "Brilliant effort — you are ready for the next challenge!"
+    )
+
+
 def _worked_explanations(rows: List[Dict[str, Any]]) -> str:
     if not rows:
         return ""
@@ -263,20 +372,27 @@ def review_homework(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
+    """Run the quick-check path.
+
+    RAG answers are marked deterministically first, then only wrong-answer
+    context is sent to the Flash model. Without RAG, Flash checks all answers.
+    """
     from src.cache import review_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_HOMEWORK_PROMPT, REVIEW_TUTOR_QUESTION_PROMPT, ELEVEN_PLUS_PROMPT
+    from src.prompts import REVIEW_QUICK_WITH_RAG_PROMPT, REVIEW_QUICK_WITHOUT_RAG_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
     profile = dict(profile or {"year_group": 3, "age": 7})
     budget = budget_review_inputs(homework_content, student_answers, profile)
     cache_key = stable_cache_key(
-        "review_tutor" if is_tutor_mode else "review_homework",
+        "review_quick_v3",
+        QUICK_REVIEW_MODEL,
         subject,
         budget,
         homework_doc_id,
         question_index,
+        bool(is_eleven_plus),
     )
     cached = review_cache.get(cache_key)
     if cached:
@@ -284,7 +400,6 @@ def review_homework(
             return {**cached, "from_cache": True}
         return {"success": True, "review": str(cached), "from_cache": True}
 
-    raw_answers = None
     rows: List[Dict[str, Any]] = []
     if homework_doc_id:
         try:
@@ -304,65 +419,50 @@ def review_homework(
     attempted = len(rows)
     score: Optional[float] = float(correct_count) if rows else None
     max_score: Optional[int] = attempted if rows else None
+    model_used: Optional[str] = None
 
     if rows:
-        # RAG supplied authoritative answers. Keep marking deterministic and
-        # token-free; detailed AI teaching is available through Explain Deep.
-        if correct_count == attempted:
-            feedback_prefix = (
-                f"Brilliant work! You got {correct_count} out of {attempted} correct. "
-                "Check your working once more, then you are ready for the next challenge."
-            )
-        else:
-            mistakes = attempted - correct_count
-            noun = "answer" if mistakes == 1 else "answers"
-            feedback_prefix = (
-                f"Good effort. You got {correct_count} out of {attempted} correct. "
-                f"Look again at the {mistakes} {noun} marked with a cross. "
-                "Try the same method one careful step at a time."
-            )
-        review = _table(rows) + _worked_explanations(rows) + feedback_prefix
-    else:
-        # Only fall back to the LLM when no authoritative RAG answer exists.
-        if is_eleven_plus:
-            # For 11+ year round plan, use explain_deep to provide thorough explanations
-            # following DfE Programme of Study and EXPLAIN_DEEP_PROMPT requirements.
-            deep_res = explain_deep(
-                homework_content=budget["homework_content"],
-                student_answers=budget["student_answers"],
-                subject=subject,
-                profile=profile,
-                review_feedback="",
-                homework_doc_id=homework_doc_id,
-                is_eleven_plus=True,
-                question_index=question_index,
-                llm_client=llm_client,
-            )
-            review = deep_res.get("explanation", "Could not generate deep explanation.")
-        elif is_tutor_mode:
-            prompt_template = REVIEW_TUTOR_QUESTION_PROMPT
-        else:
-            prompt_template = REVIEW_HOMEWORK_PROMPT
-
-        if not is_eleven_plus:
+        wrong_rows = [row for row in rows if not row["is_correct"]]
+        if wrong_rows:
             prompt = format_prompt(
-                prompt_template,
-                student_profile=str(budget["profile"]),
+                REVIEW_QUICK_WITH_RAG_PROMPT,
+                student_profile=str(_prompt_profile(budget["profile"])),
                 subject=compact_text(subject_display_name(subject), 80),
-                day=datetime.now().strftime("%A, %d %B %Y"),
-                homework_content=budget["homework_content"],
-                student_answer=budget["student_answers"],
-                context="",
-                question=budget["student_answers"],
-                correct_answers_section="",
-                feedback_instruction=(
-                    "Use kind, simple UK English. Praise effort, explain one next step, "
-                    "and never ask for personal information."
-                ),
+                score_summary=_score_summary(rows),
+                correct_work_summary=_correct_work_summary(rows),
+                wrong_answer_items=_rag_review_items(rows, correct=False, detailed=False),
             )
-            llm_text = str(llm_client.complete(build_messages(prompt), temperature=0.2, max_tokens=700))
-            review = llm_text
-            score, max_score = _extract_score(llm_text)
+            feedback = _complete_review(
+                llm_client,
+                build_messages(prompt),
+                model=QUICK_REVIEW_MODEL,
+                temperature=0.15,
+                max_tokens=450,
+                operation="quick_review_rag_wrong_only",
+            )
+            model_used = QUICK_REVIEW_MODEL
+        else:
+            # No mistakes means there is no wrong-answer context to send.
+            feedback = _all_correct_quick_feedback(rows)
+        review = _table(rows) + f"**Score: {correct_count}/{attempted}**\n\n" + feedback
+    else:
+        prompt = format_prompt(
+            REVIEW_QUICK_WITHOUT_RAG_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            homework_content=budget["homework_content"],
+            student_answer=budget["student_answers"],
+        )
+        review = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=QUICK_REVIEW_MODEL,
+            temperature=0.15,
+            max_tokens=os.getenv("QUICK_REVIEW_MAX_TOKENS", "1000"),
+            operation="quick_review_no_rag_all_answers",
+        )
+        model_used = QUICK_REVIEW_MODEL
+        score, max_score = _extract_score(review)
 
     result = {
         "success": True,
@@ -372,6 +472,8 @@ def review_homework(
         "max_score": max_score,
         "correct_count": correct_count if rows else None,
         "attempted": attempted if rows else None,
+        "model_tier": "flash" if model_used else "local",
+        "model_used": model_used,
     }
     review_cache.set(cache_key, result)
 
@@ -394,7 +496,6 @@ def review_homework(
 
     return result
 
-
 def explain_deep(
     homework_content: str,
     student_answers: str,
@@ -407,25 +508,40 @@ def explain_deep(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
+    """Run the detailed-check path using the Plus model.
+
+    With RAG, correct items are compact and wrong items carry full answer-key
+    context. Without RAG, Plus receives all questions and answers.
+    """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import EXPLAIN_DEEP_PROMPT
+    from src.prompts import REVIEW_DETAIL_WITH_RAG_PROMPT, REVIEW_DETAIL_WITHOUT_RAG_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
     cache_key = stable_cache_key(
-        "explain",
+        "review_detail_v3",
+        DETAIL_REVIEW_MODEL,
         subject,
         budget,
         homework_doc_id,
         question_index,
+        bool(is_eleven_plus),
     )
     cached = explain_cache.get(cache_key)
     if cached:
-        return {"success": True, "explanation": cached, "from_cache": True}
+        if isinstance(cached, dict):
+            return {**cached, "from_cache": True}
+        return {
+            "success": True,
+            "explanation": str(cached),
+            "from_cache": True,
+            "model_tier": "plus",
+            "model_used": DETAIL_REVIEW_MODEL,
+        }
 
-    correct_answers_section = ""
+    rows: List[Dict[str, Any]] = []
     if homework_doc_id:
         try:
             raw_answers = _load_rag_answers(homework_doc_id, is_eleven_plus)
@@ -437,33 +553,63 @@ def explain_deep(
                 question_index=question_index,
             )
             rows = _mark_rows(pairs, budget["student_answers"], subject)
-            if rows:
-                correct_answers_section = "## Authoritative Correct Answers and Explanations\n"
-                for i, r in enumerate(rows, 1):
-                    correct_answers_section += (
-                        f"Question {i}: {r['question']}\n"
-                        f"Correct Answer: {r['correct_answer']}\n"
-                        f"Authoritative Explanation: {r.get('explanation') or 'N/A'}\n"
-                        f"Authoritative Tip: {r.get('tip') or 'N/A'}\n\n"
-                    )
         except Exception:
             logger.exception("RAG answer lookup failed in explain_deep for %s", homework_doc_id)
 
-    prompt = format_prompt(
-        EXPLAIN_DEEP_PROMPT,
-        homework_content=budget["homework_content"],
-        student_answer=budget["student_answers"],
-        subject=compact_text(subject_display_name(subject), 80),
-        student_profile=str(budget["profile"]),
-        review_feedback=budget["review_feedback"] or "No review feedback available",
-        year_group=budget["profile"].get("year_group", 3),
-        age=budget["profile"].get("age", 7),
-        correct_answers_section=correct_answers_section,
-    )
-    result = str(llm_client.complete(build_messages(prompt), temperature=0.2, max_tokens=1400))
-    explain_cache.set(cache_key, result)
-    return {"success": True, "explanation": result}
+    if rows:
+        correct_count = sum(1 for row in rows if row["is_correct"])
+        prompt = format_prompt(
+            REVIEW_DETAIL_WITH_RAG_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            score_summary=_score_summary(rows),
+            correct_answer_items=_rag_review_items(rows, correct=True, detailed=True),
+            wrong_answer_items=_rag_review_items(rows, correct=False, detailed=True),
+        )
+        ai_explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=os.getenv("DETAIL_REVIEW_MAX_TOKENS", 3000),
+            operation="detail_review_rag_all_answers",
+        )
+        explanation = (
+            _table(rows)
+            + f"**Score: {correct_count}/{len(rows)}**\n\n"
+            + ai_explanation
+        )
+        score: Optional[float] = float(correct_count)
+        max_score: Optional[int] = len(rows)
+    else:
+        prompt = format_prompt(
+            REVIEW_DETAIL_WITHOUT_RAG_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            homework_content=budget["homework_content"],
+            student_answer=budget["student_answers"],
+        )
+        explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=1_600,
+            operation="detail_review_no_rag_all_answers",
+        )
+        score, max_score = _extract_score(explanation)
 
+    result = {
+        "success": True,
+        "explanation": explanation,
+        "from_rag_answers": bool(rows),
+        "score": score,
+        "max_score": max_score,
+        "model_tier": "plus",
+        "model_used": DETAIL_REVIEW_MODEL,
+    }
+    explain_cache.set(cache_key, result)
+    return result
 
 def improve_practice(
     homework_content: str,

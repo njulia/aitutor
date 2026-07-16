@@ -18,9 +18,8 @@ pgvector>=0.3,<1
 requests>=2.32
 sentence-transformers>=3.0
 
-
-# Observability
-langfuse>=2.0
+# Langfuse Python SDK v4 (OpenTelemetry-based)
+langfuse>=4,<5
 
 # Files and images
 Pillow>=10

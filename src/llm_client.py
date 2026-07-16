@@ -133,6 +133,7 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float = None,
         max_tokens: int = None,
+        model: str = None,
     ) -> str:
         """发送聊天补全请求，返回文本响应
 
@@ -140,14 +141,16 @@ class LLMClient:
             messages: 消息列表
             temperature: 温度参数（可选）
             max_tokens: 最大 token 数（可选）
+            model: 可选的单次调用模型覆盖，用于 Flash/Plus 路由
 
         Returns:
             模型回复的文本内容
         """
+        selected_model = (model or self.model).strip()
         if self.is_ollama():
-            return self._ollama_complete(messages, temperature, max_tokens)
+            return self._ollama_complete(messages, temperature, max_tokens, model=selected_model)
         payload = {
-            "model": self.model,
+            "model": selected_model,
             "messages": messages,
             "temperature": temperature if temperature is not None else self.temperature,
             "max_tokens": max_tokens or self.max_tokens,
@@ -263,11 +266,13 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float = None,
         max_tokens: int = None,
+        model: str = None,
     ) -> str:
         """通过 Ollama 的 OpenAI 兼容接口发送聊天请求"""
         url = f"{self.api_base}/v1/chat/completions"
+        selected_model = (model or self.model).strip()
         payload = {
-            "model": self.model,
+            "model": selected_model,
             "messages": messages,
             "temperature": temperature if temperature is not None else self.temperature,
             "stream": False,
@@ -287,7 +292,7 @@ class LLMClient:
                 latency_ms = (time.time() - t_start) * 1000
                 logger.debug(
                     "[LLM:Ollama] model=%s latency=%.0fms",
-                    self.model, latency_ms,
+                    selected_model, latency_ms,
                 )
 
                 # AI 监控记录
@@ -296,7 +301,7 @@ class LLMClient:
                     try:
                         monitor(
                             provider="ollama",
-                            model=self.model,
+                            model=selected_model,
                             latency_ms=latency_ms,
                             status="success",
                             prompt_text=str(messages)[:2000] if messages else None,
@@ -394,6 +399,7 @@ class LLMClient:
             "Content-Type": "application/json",
         }
         url = f"{self.api_base}chat/completions"
+        selected_model = str(payload.get("model") or self.model)
 
         t_start = time.time()
 
@@ -409,7 +415,7 @@ class LLMClient:
                 if usage:
                     logger.debug(
                         "[LLM] model=%s tokens: prompt=%s completion=%s total=%s",
-                        self.model,
+                        selected_model,
                         usage.get("prompt_tokens", 0),
                         usage.get("completion_tokens", 0),
                         usage.get("total_tokens", 0),
@@ -424,7 +430,7 @@ class LLMClient:
                             name=self.observe_metadata.get("name", "llm_call"),
                             messages=payload.get("messages", []),
                             response=message.get("content", ""),
-                            model=self.model,
+                            model=selected_model,
                             usage=usage or None,
                             latency_ms=latency_ms,
                             metadata=self.observe_metadata,
@@ -438,7 +444,7 @@ class LLMClient:
                     try:
                         monitor(
                             provider=self.provider,
-                            model=self.model,
+                            model=selected_model,
                             latency_ms=latency_ms,
                             status="success",
                             prompt_tokens=usage.get("prompt_tokens") if usage else None,

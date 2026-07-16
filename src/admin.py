@@ -94,8 +94,8 @@ def get_ai_metrics() -> Dict[str, Any]:
 def _check_langfuse() -> bool:
     """检查 Langfuse 是否可用"""
     try:
-        from src.observability import _get_client
-        return _get_client() is not None
+        from src.observability import get_langfuse_client
+        return get_langfuse_client() is not None
     except Exception:
         return False
 

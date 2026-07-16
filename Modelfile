@@ -1,0 +1,5 @@
+FROM qwen3.5:0.8b
+SYSTEM "You are a helpful assistant. Provide direct, concise answers. Do not output your thinking process, do not write a 'Thinking...' section, and do not use chain-of-thought reasoning out loud."
+PARAMETER temperature 0.7
+PARAMETER num_ctx 4096
+

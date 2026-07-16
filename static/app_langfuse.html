@@ -1,0 +1,2382 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homework Magic - AI Tutor</title>
+    <meta name="description" content="AI-powered homework generator and reviewer for UK primary schools">
+    <meta name="keywords" content="homework, AI tutor, UK primary school, KS1, KS2, 11 plus">
+    <meta property="og:title" content="Homework Magic - AI Tutor">
+    <meta property="og:description" content="Generate and review homework with AI">
+    
+    <!-- Markdown to HTML parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-links a {
+            margin-left: 20px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            border: none;
+            background: white;
+            color: #666;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: #f0f0f0;
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        /* Main Content */
+        .content {
+            display: none;
+        }
+        
+        .content.active {
+            display: block;
+        }
+        
+        /* Card */
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        /* Form Styles */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .homework-grid {
+            display: grid;
+            grid-template-columns: 4fr 1fr;
+            gap: 20px;
+            align-items: start; /* Forces all grid items to align to the top */
+        }
+
+        .homework-grid .form-group:last-child {
+            min-width: 150px;
+        }
+
+        #homework-year {
+            width: 100%;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .subject-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        
+        .subject-item {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .subject-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .subject-item.selected {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Homework Output */
+        .homework-output {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+        
+        .answer-input {
+            min-height: 200px;
+            font-family: inherit;
+        }
+        
+        .review-output {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            line-height: 1.8;
+        }
+        
+        /* Markdown styles */
+        .question-column h1, .review-output h1 { font-size: 1.8em; margin: 0.8em 0 0.4em 0; color: #333; }
+        .question-column h2, .review-output h2 { font-size: 1.5em; margin: 0.8em 0 0.4em 0; color: #444; }
+        .question-column h3, .review-output h3 { font-size: 1.3em; margin: 0.7em 0 0.35em 0; color: #555; }
+        .question-column p, .review-output p { margin: 0.8em 0; line-height: 1.8; }
+        .question-column ul, .review-output ul, .question-column ol, .review-output ol { margin: 0.8em 0; padding-left: 2em; }
+        .question-column li, .review-output li { margin: 0.4em 0; line-height: 1.7; }
+        .question-column code, .review-output code { background: #f4f4f4; padding: 0.2em 0.5em; border-radius: 4px; font-family: monospace; }
+        .question-column pre, .review-output pre { background: #f4f4f4; padding: 1em; border-radius: 8px; overflow-x: auto; }
+        .question-column pre code, .review-output pre code { background: transparent; padding: 0; }
+        
+        /* Table styles */
+        .homework-output table, .review-output table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        .homework-output th, .review-output th, .homework-output td, .review-output td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .homework-output th, .review-output th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+        .homework-output tr:nth-child(even), .review-output tr:nth-child(even) {
+            background: #f8f9ff;
+        }
+        
+        /* Homework block layout */
+        .homework-block {
+            background: #ffffff;
+            border: 2px solid #f0f0f0;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .subject-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: -20px -20px 20px -20px;
+            font-size: 1.3em;
+        }
+        
+        .homework-content {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 25px;
+        }
+        
+        .question-column {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .answer-column {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .answer-column h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .answer-input-inline {
+            flex-grow: 1;
+            min-height: 200px;
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .answer-input-inline:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        /* Question formatting */
+        .question-number {
+            font-weight: bold;
+            margin-top: 1.2em !important;
+            margin-bottom: 0.6em !important;
+            padding-top: 0.4em;
+            border-top: 1px dashed #ddd;
+        }
+        
+        .question-number:first-of-type {
+            border-top: none;
+            margin-top: 0 !important;
+            padding-top: 0;
+        }
+        
+        .question-item {
+            padding: 0.5em 0;
+            border-bottom: 1px dashed #eee;
+        }
+        
+        .question-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Input method tabs */
+        .input-method-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-method-tab {
+            padding: 12px 24px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .input-method-tab:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .input-method-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .input-method-content {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Upload areas */
+        .upload-placeholder {
+            border: 2px dashed #ccc;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+
+        .upload-placeholder:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        /* Success Message */
+        .success-banner {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            padding: 30px;
+            margin-top: 40px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 900px) {
+            .homework-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .answer-input-inline {
+                min-height: 150px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Progress dashboard */
+        .progress-dashboard {
+            margin-top: 30px;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .chart-container {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .no-progress-message {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .no-progress-message h3 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        /* Mode selection styles */
+        .mode-selection {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mode-selection label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: normal;
+            margin-bottom: 0; /* Override default form-group margin */
+        }
+
+        .mode-selection input[type="radio"] {
+            width: auto;
+            margin-right: 8px;
+            transform: scale(1.2); /* Make radio buttons slightly larger */
+        }
+
+        /* Admin Tools specific styles */
+        .admin-tools-section {
+            background: #f8f9ff;
+            border: 1px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .admin-tools-section h3 {
+            color: #764ba2;
+            margin-bottom: 15px;
+        }
+        .admin-tools-section .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">✨ Homework Magic</div>
+            <nav class="nav-links">
+   <a href="/">Home</a>
+  <a href="/ks1-homework">KS1</a>
+  <a href="/ks2-homework">KS2</a>
+  <a href="/elevenplus-practice">11+</a>
+  <a href="/elevenplus/articles">11+ Articles</a>
+  <a href="/progress">Progress</a>
+  <a href="/check-my-homework">Mark Homework</a>
+    <a href="/login">Login</a> <!-- Added Login link -->
+  <a href="/register">Register</a> <!-- Added Register link -->
+                <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab" onclick="switchTab('eleven')">
+                🎯 11+ Practice
+            </button>
+            <button class="tab" onclick="switchTab('eleven-year-round')">
+                📝 11+ Year Round Plan
+            </button>
+            <button class="tab" onclick="switchTab('eleven-topic-mastery')">
+                📝 11+ Topic Mastery
+            </button>
+            <button class="tab active" onclick="switchTab('homework')">
+                ⚡ Generate Homework
+            </button>
+            <button class="tab" onclick="switchTab('review')">
+                ✅ Mark Homework
+            </button>
+            <button class="tab" id="admin-tools-tab" style="display:none;" onclick="switchTab('admin-tools')">
+                🛠️ Admin Tools
+            </button> <!-- New Admin Tools tab -->
+        </div>
+
+        <!-- Combined Homework Generator Tab -->
+        <div id="homework" class="content active">
+            <div class="card">
+                <p style="color: #666; margin-bottom: 30px;">
+                    Describe yourself to generate personalized homework
+                </p>
+
+                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
+                    <div class="form-group">
+                        <label>Describe the Student</label>
+                        <textarea id="homework-profile" rows="5"
+                            placeholder="e.g. Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics...">
+Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
+</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Mode Selection</label>
+                        <div class="mode-selection">
+                            <label>
+                                <input type="radio" name="homework-mode" value="homework" checked>
+                                Homework Mode (All questions at once)
+                            </label>
+                            <label>
+                                <input type="radio" name="homework-mode" value="tutor">
+                                Tutor Mode
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateSmartHomework()">
+                            Smart Homework
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ADDED LINE HERE WITH SPACING -->
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
+
+                <p style="color: #666; margin-bottom: 30px;">
+                    Select one subject and year group to generate homework
+                </p>
+                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
+                    <div class="form-group">
+                        <label>Subjects</label>
+                        <div class="subject-grid" id="homework-subjects"></div>
+                    </div>
+                    <div class="form-group" style="min-width: 150px;">
+                        <label>Year Group</label>
+                        <select id="homework-year" style="width: 100%;">
+                            <option value="1">Year 1</option>
+                            <option value="2">Year 2</option>
+                            <option value="3" selected>Year 3</option>
+                            <option value="4">Year 4</option>
+                            <option value="5">Year 5</option>
+                            <option value="6">Year 6</option>
+                        </select>
+<!--                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">-->
+                        <button class="btn btn-primary" onclick="generateHomework()">
+                            Generate Homework
+                        </button>
+                    </div>
+               </div>
+            </div>
+        </div>
+
+        <!-- 11+ Practice Tab -->
+        <div id="eleven" class="content">
+            <div class="card">
+                <p style="color: #666; margin-bottom: 30px;">
+                     Describe yourself to generate personalized 11+ practice
+                </p>
+                <div class="homework-grid">
+                    <div class="form-group">
+                        <label>Describe the Student</label>
+                        <textarea id="eleven-profile" rows="6">
+Ana is a 10 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
+</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Mode Selection</label>
+                        <div class="mode-selection">
+                            <label>
+                                <input type="radio" name="eleven-mode" value="homework" checked>
+                                Homework Mode (All questions at once)
+                            </label>
+                            <label>
+                                <input type="radio" name="eleven-mode" value="tutor">
+                                Tutor Mode (One question at a time)
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
+                        Smart 11+ Practice
+                        </button>
+                    </div>
+                </div>
+                <!-- ADDED LINE HERE WITH SPACING -->
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
+
+                <p style="color: #666; margin-bottom: 30px;">
+                    Pick one subject and get a fresh set of exam-style questions right now.
+                </p>
+                <div class="homework-grid">
+                    <div class="form-group">
+                        <label>Subjects</label>
+                        <div class="subject-grid" id="eleven-subjects"></div>
+                    </div>
+                    <div class="form-group" style="min-width: 150px;">
+                        <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
+                        Generate 11+ Practice
+                        </button>
+    <!--                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">-->
+    <!--                    Smart 11+ Practice!-->
+    <!--                </button>-->
+                    </div>
+               </div>
+            </div>
+        </div>
+
+        <!-- Review Tab -->
+        <div id="review" class="content">
+            <div class="card">
+                <p style="color: #666; margin-bottom: 30px;">
+                    Get AI-powered feedback on your child's work
+                </p>
+
+                <!-- Input Method Tabs -->
+                <div style="margin-bottom: 25px;">
+                    <div class="input-method-tabs">
+                        <button class="input-method-tab active" onclick="setInputMethod('text')">
+                            📝 Text Input
+                        </button>
+<!--                        <button class="input-method-tab" onclick="setInputMethod('photo')">-->
+<!--                            📸 Take Photo-->
+<!--                        </button>-->
+                        <button class="input-method-tab" onclick="setInputMethod('file')">
+                            📁 Upload File
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Text Input Method -->
+                <div id="input-text" class="input-method-content">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Homework Questions</label>
+                            <textarea id="review-homework" rows="6" class="answer-input"
+                                placeholder="Paste the homework questions here..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Student's Answers</label>
+                            <textarea id="review-answers" rows="6" class="answer-input"
+                                placeholder="Paste or type the student's answers here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Photo Input Method -->
+                <div id="input-photo" class="input-method-content" style="display: none;">
+                    <div class="form-group">
+                        <label>Take a Photo of Homework</label>
+                        <div class="photo-upload-area">
+                            <input type="file" id="photo-input" accept="image/*" capture="environment"
+                                style="display: none;" onchange="handlePhotoSelect(event)">
+                            <div class="upload-placeholder" onclick="document.getElementById('photo-input').click()">
+                                <div style="font-size: 40px; margin-bottom: 10px;">📸</div>
+                                <div style="font-weight: bold; margin-bottom: 5px;">Click to take a photo</div>
+                                <div style="color: #666; font-size: 0.9em;">Or tap to select from gallery</div>
+                            </div>
+                            <div id="photo-preview" style="display: none; margin-top: 15px;">
+                                <img id="photo-img" style="max-width: 100%; max-height: 300px; border-radius: 10px;">
+                                <div style="margin-top: 10px;">
+                                    <button class="btn btn-secondary" onclick="clearPhoto()">Clear Photo</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Homework Questions (optional if included in photo)</label>
+                        <textarea id="review-homework-photo" rows="4" class="answer-input"
+                            placeholder="If questions not in photo, paste them here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- File Input Method -->
+                <div id="input-file" class="input-method-content" style="display: none;">
+                    <div class="form-group">
+                        <label>Upload Homework File</label>
+                        <div class="file-upload-area">
+                            <input type="file" id="file-input" accept=".txt, .doc, .docx, .md, .csv, .json, .xml, .yaml, .yml, .rtf"
+                                style="display: none;" onchange="handleFileSelect(event)">
+                            <div class="upload-placeholder" onclick="document.getElementById('file-input').click()">
+                                <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
+                                <div style="font-weight: bold; margin-bottom: 5px;">Click to upload file</div>
+                                <div style="color: #666; font-size: 0.9em;">Supports: .txt, .doc, .docx, .md, .csv, .json, .xml, .yaml, .yml, .rtf</div>
+                            </div>
+                            <div id="file-info" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                                <div style="font-weight: bold;">Selected: <span id="file-name"></span></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="btn btn-secondary" onclick="clearFile()">Clear File</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Homework Questions (optional if included in file)</label>
+                        <textarea id="review-homework-file" rows="4" class="answer-input"
+                            placeholder="If questions not in file, paste them here..."></textarea>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 25px;">
+                    <label>Subject</label>
+                    <select id="review-subject"></select>
+                </div>
+
+                <button class="btn btn-primary" onclick="reviewHomework()">
+                    Get Feedback!
+                </button>
+            </div>
+        </div>
+
+        <!-- Admin Tools Tab (New) -->
+        <div id="admin-tools" class="content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Admin Tools (Dev Mode Only)</h2>
+                <p style="color: #666; margin-bottom: 30px;">
+                    Quickly create test users and manage settings.
+                </p>
+
+                <div class="admin-tools-section">
+                    <h3>Create Test User</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="test-user-name">Name</label>
+                            <input type="text" id="test-user-name" placeholder="e.g. Test Student">
+                        </div>
+                        <div class="form-group">
+                            <label for="test-user-email">Email</label>
+                            <input type="email" id="test-user-email" placeholder="e.g. test@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="test-user-year">Year Group</label>
+                            <select id="test-user-year">
+                                <option value="1">Year 1</option>
+                                <option value="2">Year 2</option>
+                                <option value="3" selected>Year 3</option>
+                                <option value="4">Year 4</option>
+                                <option value="5">Year 5</option>
+                                <option value="6">Year 6</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="createTestUser()">Create Test User</button>
+                    <div id="test-user-message" class="message"></div>
+                </div>
+
+                <div class="admin-tools-section" style="margin-top: 30px;">
+                    <h3>Manage Subscriptions</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="sub-email">User Email</label>
+                            <input type="email" id="sub-email" placeholder="e.g. user@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="sub-name">User Name</label>
+                            <input type="text" id="sub-name" placeholder="e.g. John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label for="sub-duration">Duration</label>
+                            <select id="sub-duration">
+                                <option value="5_days">5 Days</option>
+                                <option value="30_days">30 Days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="createTestSubscription()">Create Test Subscription</button>
+                    <div id="test-subscription-message" class="message"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>AI tutor is working on it... Please wait</p>
+        </div>
+
+        <!-- Results -->
+        <div id="results" style="display: none;">
+            <div class="card">
+                <h2 style="margin-bottom: 25px;">Your Homework</h2>
+                <div id="homework-results"></div>
+
+                <div id="homework-buttons" style="margin-top: 30px; text-align: center;">
+                    <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
+                        Quick Review
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearResults()">
+                        New Homework
+                    </button>
+                    <button class="btn btn-secondary" onclick="ExplainDeep()">
+                        Explain in Detail
+                    </button>
+                    <button class="btn btn-secondary" onclick="ImprovePractice()">
+                        Help me improve
+                    </button>
+                    <button class="btn btn-secondary" onclick="TrackProgress()">
+                        Track Progress
+                    </button>
+                </div>
+
+                <!-- Tutor Mode specific buttons -->
+                <div id="tutor-mode-buttons" style="margin-top: 30px; text-align: center; display: none;">
+                    <button class="btn btn-primary" onclick="reviewCurrentQuestion()">
+                        Review Question
+                    </button>
+                    <button class="btn btn-secondary" onclick="nextQuestion()">
+                        Next Question
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearResults()">
+                        Exit Tutor Mode
+                    </button>
+                </div>
+
+                <div id="review-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Made with 💜 Homework Magic © 2026</p>
+    </div>
+
+    <script>
+        let currentHomework = [];
+        let currentSubject = 'Maths';
+        let currentProfile = null;
+        let currentInputMethod = 'text';
+        let currentPhotoData = null;
+        let currentFileData = null;
+        let extractedContent = '';
+        // 练习模式状态
+        let isPracticeMode = false;
+        let currentPracticeContent = '';
+        let currentPracticeSubject = 'Maths';
+
+        // Homework mode and current question index
+        let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
+        let currentQuestionIndex = 0;
+        let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
+        let currentStudentId = localStorage.getItem('student_id'); // Only for logged-in users
+        let currentStudentEmail = localStorage.getItem('student_email'); // Only for logged-in users
+        let anonymousClientId = null; // IP-based ID for anonymous users
+        let currentTraceId = null; // Last AI trace, used for optional thumbs feedback
+
+        // Get effective student ID: logged-in user's email, or anonymous IP-based ID
+        async function getEffectiveStudentId() {
+            // If logged in, return the user's email
+            if (currentStudentId) {
+                return currentStudentId;
+            }
+            // If we already have an anonymous ID, return it
+            if (anonymousClientId) {
+                return anonymousClientId;
+            }
+            // Check localStorage for cached anonymous ID
+            const cached = localStorage.getItem('anonymous_client_id');
+            if (cached) {
+                anonymousClientId = cached;
+                return cached;
+            }
+            // Fetch IP-based ID from server
+            try {
+                const resp = await fetch('/api/client-id');
+                const data = await resp.json();
+                anonymousClientId = data.client_id;
+                localStorage.setItem('anonymous_client_id', anonymousClientId);
+                return anonymousClientId;
+            } catch (e) {
+                console.error('Failed to get client ID:', e);
+                // Fallback to a random ID
+                anonymousClientId = 'anon_' + Math.random().toString(36).substring(2, 14);
+                localStorage.setItem('anonymous_client_id', anonymousClientId);
+                return anonymousClientId;
+            }
+        }
+
+        // Synchronous version for places that can't await
+        function getEffectiveStudentIdSync() {
+            if (currentStudentId) return currentStudentId;
+            return localStorage.getItem('anonymous_client_id') || null;
+        }
+
+
+        // Capture the trace ID returned by the FastAPI Langfuse middleware.
+        // The secret Langfuse key always stays on the server.
+        const homeworkMagicFetch = window.fetch.bind(window);
+        window.fetch = async function(...args) {
+            const response = await homeworkMagicFetch(...args);
+            const target = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+            if (!target.includes('/api/feedback')) {
+                const traceId = response.headers.get('X-Langfuse-Trace-Id');
+                if (traceId) currentTraceId = traceId;
+            }
+            return response;
+        };
+
+        function traceFeedbackButtons() {
+            if (!currentTraceId) return '';
+            return `
+                <div class="trace-feedback" style="margin-top:16px; padding-top:12px; border-top:1px solid #d7e8d8;">
+                    <span style="font-weight:600; margin-right:8px;">Was this helpful?</span>
+                    <button class="btn btn-secondary" style="padding:7px 14px;" onclick="sendTraceFeedback(1, this)">👍 Yes</button>
+                    <button class="btn btn-secondary" style="padding:7px 14px;" onclick="sendTraceFeedback(0, this)">👎 Not really</button>
+                    <span class="trace-feedback-status" aria-live="polite" style="margin-left:8px;"></span>
+                </div>`;
+        }
+
+        async function sendTraceFeedback(value, button) {
+            const traceId = currentTraceId;
+            if (!traceId) return;
+            const container = button.closest('.trace-feedback');
+            const status = container?.querySelector('.trace-feedback-status');
+            container?.querySelectorAll('button').forEach(item => item.disabled = true);
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        trace_id: traceId,
+                        score: value,
+                        name: 'user-thumbs'
+                    })
+                });
+                const data = await response.json();
+                if (status) status.textContent = data.success ? 'Thank you!' : 'Feedback could not be saved.';
+            } catch (error) {
+                console.error('Feedback error:', error);
+                if (status) status.textContent = 'Feedback could not be saved.';
+                container?.querySelectorAll('button').forEach(item => item.disabled = false);
+            }
+        }
+
+        // Subscription status
+        let hasSubscription = null; // null = 未检查, true/false = 已检查
+
+        // 检查订阅状态
+        async function checkSubscription() {
+            if (hasSubscription !== null) return hasSubscription; // Already checked
+            
+            // If not logged in, the backend will handle anonymous session ID and return has_subscription: false
+            const url = `/api/check-subscription`;
+            try {
+                const resp = await fetch(url);
+                const data = await resp.json();
+                hasSubscription = data.has_subscription === true;
+                // The backend sets the anon_session_id cookie. Frontend doesn't need to store it in localStorage.
+                // currentStudentId is only for logged-in users.
+                return hasSubscription;
+            } catch(e) {
+                console.error('Failed to check subscription:', e);
+                hasSubscription = false;
+                return false;
+            }
+        }
+
+        // 检查是否需要订阅才能使用高级功能
+        async function requireSubscription(featureName) {
+            // Paid features always require a logged-in user with a real student_id
+            if (!currentStudentId) { // currentStudentId is only set for logged-in users
+                alert(`Please login or register to use ${featureName}.`);
+                window.location.href = '/login'; // Redirect to login/register
+                return false;
+            }
+            const subscribed = await checkSubscription(); // Check subscription for the logged-in user
+            if (!subscribed) {
+                alert(`${featureName} requires a subscription. Please subscribe to continue.`);
+                window.location.href = '/pricing';
+                return false;
+            }
+            return true;
+        }
+
+        // 状态保存（用于在功能切换时保留答案和批改结果）
+        let savedHomeworkState = null;
+        let savedButtonsHTML = null;
+
+        function saveCurrentState() {
+            // 只保存一次，避免后续操作覆盖原始状态
+            if (savedHomeworkState) return;
+            savedHomeworkState = {
+                answers: {},
+                reviewHTML: document.getElementById('review-result').innerHTML,
+            };
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                savedHomeworkState.answers[input.dataset.subject] = input.value;
+            });
+            // 保存按钮区域 HTML
+            const btnArea = document.getElementById('homework-buttons');
+            if (btnArea) savedButtonsHTML = btnArea.innerHTML;
+        }
+
+        function restoreSavedState() {
+            if (!savedHomeworkState) return false;
+            // 恢复答案
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                if (savedHomeworkState.answers[input.dataset.subject] !== undefined) {
+                    input.value = savedHomeworkState.answers[input.dataset.subject];
+                }
+            });
+            // 恢复批改结果
+            document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML || '';
+            return true;
+        }
+
+        function clearSavedState() {
+            savedHomeworkState = null;
+            savedButtonsHTML = null;
+        }
+
+        // Configure marked for better line breaks and open links in new tab
+        const renderer = new marked.Renderer();
+        renderer.link = function(href, title, text) {
+            let link = '<a href="' + href + '" target="_blank" rel="noopener noreferrer"';
+            if (title) {
+                link += ' title="' + title + '"';
+            }
+            link += '>' + text + '</a>';
+            return link;
+        };
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            renderer: renderer
+        });
+
+        // Initialize subjects and check dev mode
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSubjects();
+            checkDevMode(); // Check dev mode on load
+
+            // Update UI based on login status
+            if (currentStudentId) {
+                document.getElementById('logout-link').style.display = 'block';
+                document.querySelector('nav.nav-links a[href="/login"]').style.display = 'none';
+                document.querySelector('nav.nav-links a[href="/register"]').style.display = 'none';
+            }
+
+            // Check for tab parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam) {
+                setTimeout(() => switchTab(tabParam), 100);
+            }
+
+            // 从 sessionStorage 恢复状态（Track Progress 返回时）
+            try {
+                const savedStr = sessionStorage.getItem('homeworkState');
+                if (savedStr) {
+                    sessionStorage.removeItem('homeworkState');
+                    const state = JSON.parse(savedStr);
+                    if (state.homework && state.homework.length > 0) {
+                        setTimeout(() => {
+                            currentHomework = state.homework;
+                            currentProfile = state.profile;
+                            currentSubject = state.subject || 'Maths';
+                            currentHomeworkMode = state.mode || 'homework'; // Restore mode
+                            if (currentHomeworkMode === 'tutor') {
+                                currentQuestionIndex = state.questionIndex || 0;
+                                currentQuestionAnswers = state.questionAnswers || {};
+                                displayTutorQuestion(currentQuestionIndex);
+                            } else {
+                                displayHomework(state.homework);
+                            }
+
+                            // 恢复答案
+                            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                                if (state.answers && state.answers[input.dataset.subject] !== undefined) {
+                                    input.value = state.answers[input.dataset.subject];
+                                }
+                            });
+                            // 恢复批改结果
+                            if (state.reviewHTML) {
+                                document.getElementById('review-result').innerHTML = state.reviewHTML;
+                            }
+                        }, 300);
+                    }
+                }
+            } catch(e) {
+                console.error('Failed to restore state from sessionStorage:', e);
+                sessionStorage.removeItem('homeworkState');
+            }
+        });
+
+        // Logout functionality
+        document.getElementById('logout-link').addEventListener('click', function(event) {
+            event.preventDefault();
+            localStorage.removeItem('student_id');
+            localStorage.removeItem('student_email');
+            currentStudentId = null;
+            currentStudentEmail = null;
+            hasSubscription = null; // Reset subscription status
+            window.location.href = '/'; // Redirect to home or login page
+        });
+
+        // Input method handling
+        function setInputMethod(method) {
+            currentInputMethod = method;
+
+            // Update tab styles
+            document.querySelectorAll('.input-method-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Hide all content
+            document.querySelectorAll('.input-method-content').forEach(content => {
+                content.style.display = 'none';
+            });
+
+            // Show selected content
+            document.getElementById('input-' + method).style.display = 'block';
+        }
+
+        // Photo handling
+        function handlePhotoSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentPhotoData = e.target.result;
+
+                // Show preview
+                document.getElementById('photo-img').src = currentPhotoData;
+                document.getElementById('photo-preview').style.display = 'block';
+                document.querySelector('#input-photo .upload-placeholder').style.display = 'none';
+
+                // Process the photo
+                processPhoto(currentPhotoData);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearPhoto() {
+            currentPhotoData = null;
+            extractedContent = '';
+            document.getElementById('photo-preview').style.display = 'none';
+            document.querySelector('#input-photo .upload-placeholder').style.display = 'block';
+            document.getElementById('photo-input').value = '';
+        }
+
+        async function processPhoto(dataUrl) {
+            showLoading();
+
+            try {
+                const response = await fetch('/api/upload-photo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ photo: dataUrl })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    extractedContent = data.content;
+                    console.log('Extracted content:', extractedContent);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing photo');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // File handling
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            currentFileData = file;
+
+            // Show file info
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-info').style.display = 'block';
+            document.querySelector('#input-file .upload-placeholder').style.display = 'none';
+
+            // Process the file
+            processFile(file);
+        }
+
+        function clearFile() {
+            currentFileData = null;
+            extractedContent = '';
+            document.getElementById('file-info').style.display = 'none';
+            document.querySelector('#input-file .upload-placeholder').style.display = 'block';
+            document.getElementById('file-input').value = '';
+        }
+
+        async function processFile(file) {
+            showLoading();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    extractedContent = data.content;
+                    console.log('Extracted content:', extractedContent);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing file');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function loadSubjects() {
+            fetch('/api/subjects')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Subjects received:", data);
+                    renderSubjects('homework-subjects', data.primary);
+                    renderSubjects('eleven-subjects', data.eleven_plus);
+
+                    const reviewSelect = document.getElementById('review-subject');
+                    reviewSelect.innerHTML = ''; // Clear existing options
+                    const allSubjects = [...new Set([...data.primary, ...data.eleven_plus])].sort();
+                    allSubjects.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject;
+                        option.textContent = subject;
+                        reviewSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading subjects:', error));
+        }
+
+        function renderSubjects(containerId, subjects) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error(`Subject container with id '${containerId}' not found.`);
+                return;
+            }
+            const subjectList = Array.isArray(subjects) ? subjects : [];
+            if (subjectList.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; grid-column: 1 / -1;">No subjects available to display.</p>';
+                return;
+            }
+
+            container.innerHTML = subjectList.map(subject => {
+                // Default select 'Maths' in both homework and 11+ tabs.
+                const isSelected = (containerId === 'homework-subjects' || containerId === 'eleven-subjects')
+                                    && subject === 'Maths';
+                return `
+                    <div class="subject-item ${isSelected ? 'selected' : ''}"
+                         data-subject="${subject}"
+                         onclick="toggleSubject(this, '${containerId}')">
+                        ${subject}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleSubject(element, containerId) {
+            const container = document.getElementById(containerId);
+            // Deselect all other subjects in the same container
+            container.querySelectorAll('.subject-item.selected').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected'); // Select the clicked subject
+        }
+
+        function getSelectedSubjects(containerId) {
+            const container = document.getElementById(containerId);
+            const selected = container.querySelectorAll('.subject-item.selected');
+            return Array.from(selected).map(el => el.dataset.subject);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+
+            // Find the tab button - either from event or by onclick attribute
+            let tabButton = event && event.target ? event.target : null;
+            if (!tabButton) {
+                tabButton = document.querySelector(`.tab[onclick*="${tabId}"]`);
+            }
+            if (tabButton) {
+                tabButton.classList.add('active');
+            }
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showResults() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('review-result').innerHTML = '';
+        }
+
+        function clearResults() {
+            document.getElementById('results').style.display = 'none';
+            currentHomework = [];
+            isPracticeMode = false;
+            currentPracticeContent = '';
+            currentHomeworkMode = 'homework'; // Reset mode
+            currentQuestionIndex = 0;
+            currentQuestionAnswers = {};
+            document.getElementById('homework-buttons').style.display = 'block'; // Show homework buttons
+            document.getElementById('tutor-mode-buttons').style.display = 'none'; // Hide tutor buttons
+            clearSavedState();
+        }
+
+        function getSelectedMode(name) {
+            const radios = document.getElementsByName(name);
+            for (const radio of radios) {
+                if (radio.checked) {
+                    return radio.value;
+                }
+            }
+            return 'homework'; // Default to homework mode
+        }
+
+        // Generate Homework - uses selected subjects directly
+        async function generateHomework() {
+            const year = parseInt(document.getElementById('homework-year').value);
+            const subjects = getSelectedSubjects('homework-subjects');
+            const mode = getSelectedMode('homework-mode');
+            const profileText = document.getElementById('homework-profile').value.trim();
+
+            if (subjects.length === 0) {
+                alert('Please select one subject!');
+                return;
+            }
+
+            // Build profile
+            const profile = {
+                year_group: year,
+                age: 5 + (year - 1),
+                student_id: await getEffectiveStudentId()
+            };
+            if (profileText) {
+                profile.description = profileText;
+            }
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quick_select: true,
+                        year: year,
+                        subjects: subjects,
+                        student_id: profile.student_id,
+                        mode: mode,
+                        profile: profile
+                    })
+                });
+
+                if (response.status === 402) {
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) {
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Smart Homework - uses LLM to analyze description and determine subjects/profile
+        async function generateSmartHomework() {
+            const profileText = document.getElementById('homework-profile').value.trim();
+            const year = parseInt(document.getElementById('homework-year').value);
+            const mode = getSelectedMode('homework-mode');
+
+            if (!profileText) {
+                alert('Please describe the student first! The AI will analyze the description to generate personalized homework.');
+                return;
+            }
+
+            // Build profile with description for LLM analysis
+            const profile = {
+                description: profileText,
+                year_group: year,
+                age: 5 + (year - 1),
+                student_id: await getEffectiveStudentId()
+            };
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                // Send to API - the backend will use LLM to parse the profile and determine subjects
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: profile,
+                        subjects: [], // Empty - let LLM determine from description
+                        mode: mode,
+                        student_id: profile.student_id
+                    })
+                });
+
+                if (response.status === 402) {
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) {
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function generateQuickHomeworkEleven() {
+            const subjects = getSelectedSubjects('eleven-subjects');
+            const mode = getSelectedMode('eleven-mode');
+
+            if (subjects.length === 0) {
+                alert('Please select one subject!');
+                return;
+            }
+
+            // Set student_id in profile for subscription checks
+            const profile = { student_id: currentStudentId };
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quick_select: true,
+                        subjects: subjects,
+                        is_eleven_plus: true,
+                        mode: mode, // Pass the selected mode
+                        profile: profile // Pass profile with student_id
+                    })
+                });
+
+                if (response.status === 402) { // Payment Required - subscription required
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) { // Unauthorized - login required
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode; // Set the global mode
+                    currentQuestionIndex = 0; // Reset question index for new homework
+                    currentQuestionAnswers = {}; // Reset answers for new homework
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function generateCustomHomeworkEleven() {
+            // Check subscription first
+            if (!await requireSubscription('Smart 11+ Practice')) return;
+
+            const profileText = document.getElementById('eleven-profile').value;
+            const subjects = getSelectedSubjects('eleven-subjects');
+            const mode = getSelectedMode('eleven-mode');
+
+            // Set student_id in profile for subscription checks
+            const profile = { description: profileText, student_id: currentStudentId };
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: profile, // Pass profile with student_id
+                        subjects: subjects,
+                        is_eleven_plus: true,
+                        mode: mode // Pass the selected mode
+                    })
+                });
+
+                if (response.status === 402) { // Payment Required - subscription required
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) { // Unauthorized - login required
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode; // Set the global mode
+                    currentQuestionIndex = 0; // Reset question index for new homework
+                    currentQuestionAnswers = {}; // Reset answers for new homework
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function formatQuestions(html) {
+            // 在每个问题前后添加更好的间距和格式
+            // 查找编号的问题（如 1.、2.、(1)、(2) 等）
+            let formatted = html
+                // 给编号问题添加间距
+                .replace(/<p>(\d+\.)/g, '<p class="question-number">$1')
+                // 增强列表项
+                .replace(/<li>/g, '<li class="question-item">');
+
+            return formatted;
+        }
+
+        function displayHomework(homeworkList) {
+            const container = document.getElementById('homework-results');
+            container.innerHTML = homeworkList.map(hw => `
+                <div class="homework-block">
+                    <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(marked.parse(hw.content))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answer:</h4>
+                            <textarea class="answer-input-inline"
+                                      placeholder="Write your answer here..."
+                                      data-subject="${hw.subject}"></textarea>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            showResults();
+            document.getElementById('homework-buttons').style.display = 'block';
+            document.getElementById('tutor-mode-buttons').style.display = 'none';
+        }
+
+        function displayTutorQuestion(index) {
+            if (index >= currentHomework.length) {
+                alert('You have completed all questions!');
+                clearResults(); // Or show a completion message
+                return;
+            }
+
+            const hw = currentHomework[index];
+            const container = document.getElementById('homework-results');
+            container.innerHTML = `
+                <div class="homework-block">
+                    <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                    <div class="homework-content">
+                        <div class="question-column">
+                            ${formatQuestions(marked.parse(hw.content))}
+                        </div>
+                        <div class="answer-column">
+                            <h4>Your Answer:</h4>
+                            <textarea class="answer-input-inline"
+                                      id="tutor-answer-input"
+                                      placeholder="Write your answer here..."
+                                      data-subject="${hw.subject}"></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Restore saved answer for this question if exists
+            const savedAnswer = currentQuestionAnswers[index] || '';
+            document.getElementById('tutor-answer-input').value = savedAnswer;
+
+            showResults();
+            document.getElementById('homework-buttons').style.display = 'none';
+            document.getElementById('tutor-mode-buttons').style.display = 'block';
+            document.getElementById('review-result').innerHTML = ''; // Clear previous review
+        }
+
+        async function reviewCurrentQuestion() {
+            const answerInput = document.getElementById('tutor-answer-input');
+            const studentAnswer = answerInput ? answerInput.value.trim() : '';
+
+            if (!studentAnswer) {
+                alert('Please enter your answer for this question!');
+                return;
+            }
+
+            // Save the current answer
+            currentQuestionAnswers[currentQuestionIndex] = studentAnswer;
+
+            const hw = currentHomework[currentQuestionIndex];
+            const homeworkContent = hw.content;
+            const subject = hw.subject;
+
+            showLoading();
+
+            try {
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        homework: homeworkContent,
+                        answers: studentAnswer,
+                        subject: subject,
+                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        is_tutor_mode: true, // Indicate tutor mode review
+                        from_rag: hw.from_rag, // Pass from_rag status
+                        homework_doc_id: hw.doc_id // Pass doc_id for potential use in review
+                    })
+                });
+
+                if (response.status === 402) { // Payment Required - subscription required
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) { // Unauthorized - login required
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayReview(data.review);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during review');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function nextQuestion() {
+            // Save the current answer before moving to the next question
+            const answerInput = document.getElementById('tutor-answer-input');
+            if (answerInput) {
+                currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
+            }
+
+            currentQuestionIndex++;
+            displayTutorQuestion(currentQuestionIndex);
+        }
+
+
+        async function reviewGeneratedHomework() {
+            // Collect all answers
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            const combinedAnswers = allAnswers.join('\n\n');
+
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+            // Get doc_id from the first homework item (for RAG answer lookup)
+            const homeworkDocId = currentHomework[0]?.doc_id || null;
+
+            currentSubject = subject;
+            // Homework mode review is free, no subscription check needed here.
+            reviewHomeworkWithContent(homework, combinedAnswers, subject, homeworkDocId);
+        }
+
+        async function reviewHomework() {
+            // 检查登录和订阅状态
+            if (!currentStudentId) {
+                alert('Please login to use Mark Homework.');
+                window.location.href = '/login';
+                return;
+            }
+            if (!await requireSubscription('Mark Homework')) return;
+
+            // 根据当前输入方式收集数据
+            let homeworkText = '';
+            let answersText = '';
+
+            if (currentInputMethod === 'text') {
+                homeworkText = document.getElementById('review-homework').value.trim();
+                answersText = document.getElementById('review-answers').value.trim();
+            } else if (currentInputMethod === 'file') {
+                homeworkText = document.getElementById('review-homework-file').value.trim();
+                // 文件内容作为答案（如果有提取的内容则使用提取的内容）
+                answersText = extractedContent || '';
+            }
+
+            const subject = document.getElementById('review-subject').value;
+
+            if (!answersText) {
+                alert('Please provide the student\'s answers.');
+                return;
+            }
+
+            reviewHomeworkWithContent(homeworkText, answersText, subject);
+        }
+
+        async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
+            console.log("=== Starting Review ===");
+            console.log("Homework:", homework);
+            console.log("Answers:", answers);
+            console.log("Subject:", subject);
+            console.log("Doc ID:", homeworkDocId);
+
+            showLoading();
+
+            try {
+                const requestBody = {
+                    homework: homework,
+                    answers: answers,
+                    subject: subject,
+                    profile: { student_id: currentStudentId }
+                };
+                // Add doc_id if available (for RAG answer lookup)
+                if (homeworkDocId) {
+                    requestBody.homework_doc_id = homeworkDocId;
+                }
+
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.status === 402) {
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) {
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log("Calling displayReview with review:", data.review);
+                    displayReview(data.review);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during review');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayReview(review) {
+            const container = document.getElementById('review-result');
+            container.innerHTML = `
+                <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
+                <div class="review-output">
+                    ${marked.parse(review)}
+                    ${traceFeedbackButtons()}
+                </div>
+            `;
+
+            // Make sure results section is visible
+            document.getElementById('results').style.display = 'block';
+        }
+
+        async function ExplainDeep() {
+            // Check subscription first
+            if (!await requireSubscription('Explain in Detail')) return;
+
+            // Save current state (answers + review results), so it can be restored when returning
+            saveCurrentState();
+
+            // Collect all answers
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            const combinedAnswers = allAnswers.join('\n\n');
+
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+
+            // Get existing review feedback (if answers have been checked)
+            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewFeedback = reviewEl ? reviewEl.innerText : '';
+
+            showLoading();
+
+            try {
+                const response = await fetch('/api/explain-deep', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        homework: homework,
+                        answers: combinedAnswers,
+                        subject: subject,
+                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        review_feedback: reviewFeedback
+                    })
+                });
+
+                if (response.status === 402) { // Payment Required - subscription required
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) { // Unauthorized - login required
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayExplainDeep(data.explanation);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during deep explanation');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayExplainDeep(explanation) {
+            const container = document.getElementById('review-result');
+            const hasSavedReview = savedHomeworkState && savedHomeworkState.reviewHTML && savedHomeworkState.reviewHTML.trim();
+            container.innerHTML = `
+                ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
+                <h3 style="margin-top: 20px; margin-bottom: 20px;">Deep Explanation</h3>
+                <div class="review-output">${marked.parse(explanation)}</div>
+            `;
+
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function backToReview() {
+            if (savedHomeworkState && savedHomeworkState.reviewHTML) {
+                document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML;
+            }
+        }
+
+        async function ImprovePractice() {
+            // Check subscription first
+            if (!await requireSubscription('Help me improve')) return;
+
+            // Save current state (answers + review results), so it can be restored when returning
+            saveCurrentState();
+
+            // Collect all answers
+            const answerInputs = document.querySelectorAll('.answer-input-inline');
+            let allAnswers = [];
+
+            answerInputs.forEach(input => {
+                const subject = input.dataset.subject;
+                const answer = input.value.trim();
+                if (answer) {
+                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+                }
+            });
+
+            const combinedAnswers = allAnswers.join('\n\n');
+
+            if (!combinedAnswers.trim()) {
+                alert('Please enter your answers first!');
+                return;
+            }
+
+            const homework = currentHomework.map(h => h.content).join('\n\n');
+            const subject = currentHomework[0]?.subject || 'Maths';
+
+            // Get existing review feedback (if answers have been checked)
+            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewFeedback = reviewEl ? reviewEl.innerText : '';
+
+            showLoading();
+
+            try {
+                const response = await fetch('/api/improve-practice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        homework: homework,
+                        answers: combinedAnswers,
+                        subject: subject,
+                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        review_feedback: reviewFeedback
+                    })
+                });
+
+                if (response.status === 402) { // Payment Required - subscription required
+                    alert('Subscription required for this feature.');
+                    window.location.href = '/pricing';
+                    return;
+                }
+                if (response.status === 401) { // Unauthorized - login required
+                    alert('Please login or register to use this feature.');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayPracticeQuestions(data.practice, subject);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during practice generation');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayPracticeQuestions(practiceContent, subject) {
+            // 将练习内容显示在题目区域，学生可以在旁边输入答案
+            const container = document.getElementById('homework-results');
+
+            // 保存练习内容用于后续批改
+            currentPracticeContent = practiceContent;
+            currentPracticeSubject = subject;
+            isPracticeMode = true;
+
+            container.innerHTML = `
+                <div class="homework-block">
+                    <h3 class="subject-header" style="background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);">
+                        Practice - ${subject}
+                    </h3>
+                    <div class="homework-content">
+                        <div class="question-column" style="border-left-color: #f57c00;">
+                            ${marked.parse(practiceContent)}
+                        </div>
+                        <div class="answer-column">
+                            <h4 style="color: #f57c00;">Your Answers:</h4>
+                            <textarea class="answer-input-inline"
+                                      id="practice-answer-input"
+                                      style="border-color: #f57c00;"
+                                      placeholder="Work through the practice questions above and write your answers here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 更新按钮区域
+            const resultsCard = document.querySelector('#results .card');
+            const buttonArea = resultsCard.querySelector('div[style*="text-align: center"]');
+            if (buttonArea) {
+                buttonArea.innerHTML = `
+                    <button class="btn btn-primary" onclick="checkPracticeAnswers()" style="background: linear-gradient(135deg, #f57c00, #ff9800);">
+                        Check Answers
+                    </button>
+                    <button class="btn btn-secondary" onclick="exitPracticeMode()">
+                        Back to Homework
+                    </button>
+                `;
+            }
+
+            // 清空之前的批改结果
+            document.getElementById('review-result').innerHTML = '';
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function checkPracticeAnswers() {
+            const answerInput = document.getElementById('practice-answer-input');
+            const answers = answerInput ? answerInput.value.trim() : '';
+
+            if (!answers) {
+                alert('Please write your answers first!');
+                return;
+            }
+
+            showLoading();
+
+            fetch('/api/review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    homework: currentPracticeContent,
+                    answers: answers,
+                    subject: currentPracticeSubject,
+                    profile: { student_id: currentStudentId } // Pass student_id for potential future use
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const container = document.getElementById('review-result');
+                    container.innerHTML = `
+                        <h3 style="margin-top: 30px; margin-bottom: 20px;">Practice Feedback</h3>
+                        <div class="review-output" style="border-left-color: #f57c00;">${marked.parse(data.review)}</div>
+                    `;
+                    document.getElementById('results').style.display = 'block';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during practice answer check');
+            })
+            .finally(() => hideLoading());
+        }
+
+        function exitPracticeMode() {
+            isPracticeMode = false;
+            currentPracticeContent = '';
+            // 重新显示原始作业
+            displayHomework(currentHomework);
+            // 恢复之前保存的答案和批改结果
+            restoreSavedState();
+            // 恢复原始按钮区域
+            if (savedButtonsHTML) {
+                const btnArea = document.getElementById('homework-buttons');
+                if (btnArea) btnArea.innerHTML = savedButtonsHTML;
+            }
+            clearSavedState();
+        }
+
+        // ---- 学习进度追踪 ----
+
+        async function TrackProgress() {
+            // Check subscription first
+            if (!await requireSubscription('Track Progress')) return;
+
+            // Save current state to sessionStorage, so it can be restored when returning from pricing page
+            const state = {
+                homework: currentHomework,
+                profile: currentProfile,
+                subject: currentSubject,
+                answers: {},
+                reviewHTML: document.getElementById('review-result').innerHTML,
+                mode: currentHomeworkMode, // Save current mode
+                questionIndex: currentQuestionIndex, // Save current question index
+                questionAnswers: currentQuestionAnswers // Save tutor mode answers
+            };
+            document.querySelectorAll('.answer-input-inline').forEach(input => {
+                state.answers[input.dataset.subject] = input.value;
+            });
+            try {
+                sessionStorage.setItem('homeworkState', JSON.stringify(state));
+            } catch(e) {
+                console.error('Failed to save state to sessionStorage:', e);
+            }
+            window.location.href = '/progress'; // Redirect to progress page
+        }
+
+        // ---- Admin Tools Functions ----
+        let isDevMode = false; // Will be set by checkDevMode
+
+        async function checkDevMode() {
+            try {
+                const response = await fetch('/api/admin/dev-mode-status'); // New endpoint to check dev mode
+                const data = await response.json();
+                isDevMode = data.is_dev_mode;
+                if (isDevMode) {
+                    document.getElementById('admin-tools-tab').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Failed to check dev mode status:', error);
+                isDevMode = false; // Assume not dev mode if check fails
+            }
+        }
+
+        async function createTestUser() {
+            const name = document.getElementById('test-user-name').value;
+            const email = document.getElementById('test-user-email').value;
+            const year_group = parseInt(document.getElementById('test-user-year').value);
+
+            const testUserMessage = document.getElementById('test-user-message');
+            testUserMessage.className = 'message';
+            testUserMessage.textContent = 'Creating test user...';
+
+            if (!name || !email) {
+                testUserMessage.classList.add('error-message');
+                testUserMessage.textContent = 'Name and Email are required for test user.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, year_group, age: 5 + (year_group - 1) })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    testUserMessage.classList.add('success-message');
+                    testUserMessage.textContent = `Test user created: ${data.student.name} (ID: ${data.student.student_id})`;
+                } else {
+                    testUserMessage.classList.add('error-message');
+                    testUserMessage.textContent = 'Failed to create test user: ' + (data.detail || data.error || 'Unknown error');
+                }
+            } catch (error) {
+                testUserMessage.classList.add('error-message');
+                testUserMessage.textContent = 'An error occurred: ' + error.message;
+            }
+        }
+
+        async function createTestSubscription() {
+            const email = document.getElementById('sub-email').value;
+            const name = document.getElementById('sub-name').value;
+            const duration = document.getElementById('sub-duration').value;
+            const testSubscriptionMessage = document.getElementById('test-subscription-message');
+            testSubscriptionMessage.className = 'message';
+            testSubscriptionMessage.textContent = 'Creating test subscription...';
+
+            if (!email || !name) {
+                testSubscriptionMessage.classList.add('error-message');
+                testSubscriptionMessage.textContent = 'Email and Name are required for subscription.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/subscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name, duration })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    testSubscriptionMessage.classList.add('success-message');
+                    testSubscriptionMessage.textContent = `Subscription created for ${data.subscription.customer_email} (${data.subscription.product_name})`;
+                } else {
+                    testSubscriptionMessage.classList.add('error-message');
+                    testSubscriptionMessage.textContent = 'Failed to create test subscription: ' + (data.detail || data.error || 'Unknown error');
+                }
+            } catch (error) {
+                testSubscriptionMessage.classList.add('error-message');
+                testSubscriptionMessage.textContent = 'An error occurred: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

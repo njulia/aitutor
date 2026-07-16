@@ -26,6 +26,10 @@ from pydantic import BaseModel, Field
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+from src.observability import (
+    install_langfuse_middleware, instrument_llm_client,
+    langfuse_status, shutdown_langfuse,
+)
 
 from src.webapp.runtime import (
     configure_cors, install_hardening, owner_key, public_error, run_blocking,
@@ -128,6 +132,9 @@ def secure_filename(filename: str) -> str:
     filename = filename.replace(" ", "_").lstrip(".")
     return filename or "unnamed_file"
 
+def enable_langfuse():
+    return os.getenv("LANGFUSE_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+
 
 def initialize() -> None:
     """Initialize LLM and related components."""
@@ -137,7 +144,7 @@ def initialize() -> None:
 
     from src.llm_client import LLMClient
 
-    llm = LLMClient()
+    llm = instrument_llm_client(LLMClient()) if enable_langfuse() else LLMClient()
     initialized = True
     logger.info("Web application initialized")
 
@@ -148,7 +155,10 @@ async def lifespan(_app: FastAPI):
     validate_database_configuration()
     await run_blocking(tutor_session_store.initialise, limit_concurrency=False)
     initialize()
-    yield
+    try:
+        yield
+    finally:
+        shutdown_langfuse()
 
 
 def is_logged_in(req: Request) -> bool:
@@ -199,6 +209,7 @@ app = FastAPI(
 
 configure_cors(app)
 install_hardening(app, require_admin=_require_admin)
+install_langfuse_middleware(app, app_version="2.0.0")
 
 
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
@@ -582,7 +593,7 @@ class SessionUpdateRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     trace_id: Optional[str] = None
     score: float = Field(..., description="评分: 1.0 = thumbs up, 0.0 = thumbs down")
-    name: str = Field(default="user_feedback", description="评分类型")
+    name: str = Field(default="user-thumbs", description="评分类型")
     comment: Optional[str] = Field(default=None, description="可选文字反馈")
 
 
@@ -758,7 +769,11 @@ async def elevenplus_time_management():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "initialized": initialized}
+    return {
+        "status": "ok",
+        "initialized": initialized,
+        "langfuse": langfuse_status(),
+    }
 
 
 @app.get("/api/client-id")

@@ -218,6 +218,9 @@ For each answer that is wrong or incomplete:
 - Give the correct answer, or the best expected answer for an open-ended task.
 - Give one simple explanation or method, using no more than 2 short sentences.
 
+## Score
+- Write the score as **X/Y** using the number of questions you checked.
+
 ## Keep Going
 - End with one specific, encouraging sentence.
 
@@ -277,6 +280,9 @@ For open-ended work:
 - Explain what was effective.
 - Explain one or two clear improvements.
 - Do not pretend there is only one possible answer.
+
+## Score
+- Write the score as **X/Y** using the number of questions you checked.
 
 ## Keep Going
 - End with a positive, specific message about effort and the next learning step.
