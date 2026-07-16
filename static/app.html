@@ -257,6 +257,71 @@
             margin-top: 20px;
             line-height: 1.8;
         }
+
+        .submitted-work-section {
+            margin-top: 30px;
+            padding: 22px;
+            background: #f8f9ff;
+            border: 2px solid #e4e8ff;
+            border-radius: 16px;
+        }
+
+        .submitted-work-heading-row {
+            margin-bottom: 18px;
+        }
+
+        .submitted-work-heading-row h3 {
+            margin: 0 0 6px;
+            color: #333;
+        }
+
+        .submitted-work-heading-row p {
+            margin: 0;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .submitted-work-card {
+            min-width: 0;
+            padding: 18px;
+            background: #fff;
+            border: 1px solid #dfe4ff;
+            border-radius: 12px;
+        }
+
+        .submitted-work-content {
+            max-height: 460px;
+            overflow: auto;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            line-height: 1.65;
+        }
+
+        .uploaded-homework-preview {
+            display: none;
+            margin-top: 18px;
+        }
+
+        .uploaded-homework-preview textarea {
+            min-height: 220px;
+            resize: vertical;
+            background: #f8f9ff;
+            color: #333;
+        }
+
+        .submitted-work-content > :first-child { margin-top: 0; }
+        .submitted-work-content > :last-child { margin-bottom: 0; }
+
+        .teacher-feedback-heading {
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 720px) {
+            .submitted-work-section {
+                padding: 16px;
+            }
+        }
         
         /* Markdown styles */
         .question-column h1, .review-output h1 { font-size: 1.8em; margin: 0.8em 0 0.4em 0; color: #333; }
@@ -794,14 +859,17 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Homework Questions (optional if included in file)</label>
-                        <textarea id="review-homework-file" rows="4" class="answer-input"
-                            placeholder="If questions not in file, paste them here..."></textarea>
+                    <div id="uploaded-homework-preview" class="form-group uploaded-homework-preview">
+                        <label for="review-uploaded-homework">Uploaded Homework</label>
+                        <textarea id="review-uploaded-homework" rows="10" readonly
+                            aria-describedby="uploaded-homework-help"></textarea>
+                        <p id="uploaded-homework-help" style="color: #666; margin-top: 8px; line-height: 1.5;">
+                            This is the text that will be sent for marking.
+                        </p>
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-top: 25px;">
+                <div id="review-subject-group" class="form-group" style="margin-top: 25px;">
                     <label>Subject</label>
                     <select id="review-subject"></select>
                 </div>
@@ -924,7 +992,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <p>Made with 💜 Homework Magic © 2026</p>
     </div>
 
-    <script src="/static/js/app.js" defer></script>
+    <script src="/static/js/app.js?v=20260716-explain-upload-context" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

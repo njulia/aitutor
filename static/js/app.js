@@ -5,6 +5,8 @@ let currentHomework = [];
         let currentPhotoData = null;
         let currentFileData = null;
         let extractedContent = '';
+        let fileUploadPromise = null;
+        let activeReviewContext = null;
         // 练习模式状态
         let isPracticeMode = false;
         let currentPracticeContent = '';
@@ -108,7 +110,34 @@ let currentHomework = [];
 
         // 状态保存（用于在功能切换时保留答案和批改结果）
         let savedHomeworkState = null;
-        let savedButtonsHTML = null;
+
+        // Homework-mode actions are deliberately rebuilt from this fixed template.
+        // Practice mode may temporarily replace the action area, but it must never
+        // leave homework mode with a different or incomplete set of buttons.
+        const HOMEWORK_ACTION_BUTTONS_HTML = `
+            <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
+                Quick Review
+            </button>
+            <button class="btn btn-secondary" onclick="clearResults()">
+                New Homework
+            </button>
+            <button class="btn btn-secondary" onclick="ExplainDeep()">
+                Explain in Detail
+            </button>
+            <button class="btn btn-secondary" onclick="ImprovePractice()">
+                Help me improve
+            </button>
+            <button class="btn btn-secondary" onclick="TrackProgress()">
+                Track Progress
+            </button>
+        `;
+
+        function resetHomeworkActionButtons() {
+            const buttonArea = document.getElementById('homework-buttons');
+            if (!buttonArea) return;
+            buttonArea.innerHTML = HOMEWORK_ACTION_BUTTONS_HTML;
+            buttonArea.style.display = 'block';
+        }
 
         function saveStateToSessionStorage() {
             const state = {
@@ -193,9 +222,6 @@ let currentHomework = [];
             document.querySelectorAll('.answer-input-inline').forEach(input => {
                 savedHomeworkState.answers[input.dataset.subject] = input.value;
             });
-            // 保存按钮区域 HTML
-            const btnArea = document.getElementById('homework-buttons');
-            if (btnArea) savedButtonsHTML = btnArea.innerHTML;
         }
 
         function restoreSavedState() {
@@ -213,7 +239,6 @@ let currentHomework = [];
 
         function clearSavedState() {
             savedHomeworkState = null;
-            savedButtonsHTML = null;
         }
 
         // Configure marked for better line breaks and open links in new tab
@@ -337,6 +362,10 @@ let currentHomework = [];
 
             // Show selected content
             document.getElementById('input-' + method).style.display = 'block';
+
+            // The uploaded file is marked from its own content, so no subject choice is needed.
+            const subjectGroup = document.getElementById('review-subject-group');
+            if (subjectGroup) subjectGroup.style.display = method === 'file' ? 'none' : 'block';
         }
 
         // Photo handling
@@ -379,16 +408,18 @@ let currentHomework = [];
                     body: JSON.stringify({ photo: dataUrl })
                 });
 
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
 
-                if (data.success) {
-                    extractedContent = data.content;
-                } else {
-                    alert('Error: ' + data.error);
+                if (!response.ok || !data.success) {
+                    throw new Error(getApiErrorMessage(data, 'We could not read that photo.'));
+                }
+                extractedContent = String(data.content || '').trim();
+                if (!extractedContent) {
+                    throw new Error('The photo did not contain any readable text.');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while processing photo');
+                console.error('Photo processing failed:', error);
+                alert(error.message || 'We could not read that photo.');
             } finally {
                 hideLoading();
             }
@@ -406,16 +437,90 @@ let currentHomework = [];
             document.getElementById('file-info').style.display = 'block';
             document.querySelector('#input-file .upload-placeholder').style.display = 'none';
 
-            // Process the file
-            processFile(file);
+            // Process the file and keep the promise so Get Feedback can wait for it.
+            fileUploadPromise = processFile(file);
         }
 
         function clearFile() {
             currentFileData = null;
             extractedContent = '';
+            fileUploadPromise = null;
             document.getElementById('file-info').style.display = 'none';
             document.querySelector('#input-file .upload-placeholder').style.display = 'block';
             document.getElementById('file-input').value = '';
+            const preview = document.getElementById('uploaded-homework-preview');
+            const previewText = document.getElementById('review-uploaded-homework');
+            if (preview) preview.style.display = 'none';
+            if (previewText) previewText.value = '';
+        }
+
+        function getApiErrorMessage(data, fallbackMessage) {
+            if (!data) return fallbackMessage;
+
+            const detail = data.error ?? data.detail ?? data.message;
+            if (typeof detail === 'string' && detail.trim()) {
+                return detail.trim();
+            }
+            if (Array.isArray(detail)) {
+                const messages = detail
+                    .map(item => {
+                        if (typeof item === 'string') return item;
+                        if (item && typeof item === 'object') return item.msg || item.message || '';
+                        return '';
+                    })
+                    .filter(Boolean);
+                if (messages.length) return messages.join(' ');
+            }
+            if (detail && typeof detail === 'object') {
+                const message = detail.msg || detail.message;
+                if (message) return String(message);
+            }
+            return fallbackMessage;
+        }
+
+        function splitUploadedHomeworkText(rawText) {
+            const text = String(rawText || '').replace(/\r\n?/g, '\n').trim();
+            if (!text) return { homework: '', answers: '', combined: false };
+
+            const lines = text.split('\n');
+            const isQuestionHeading = line => /^\s*(homework\s+)?(questions?|worksheet|problems?|tasks?)\s*:?\s*$/i.test(line);
+            const isAnswerHeading = line => /^\s*((student|pupil)(?:'s)?\s+)?(answers?|responses?|solutions?)\s*:?\s*$/i.test(line);
+            const questionHeadingIndex = lines.findIndex(isQuestionHeading);
+            const answerHeadingIndex = lines.findIndex(isAnswerHeading);
+
+            if (answerHeadingIndex >= 0) {
+                const questionStart = questionHeadingIndex >= 0 && questionHeadingIndex < answerHeadingIndex
+                    ? questionHeadingIndex + 1
+                    : 0;
+                const homework = lines
+                    .slice(questionStart, answerHeadingIndex)
+                    .filter(line => !isQuestionHeading(line))
+                    .join('\n')
+                    .trim();
+                const answers = lines.slice(answerHeadingIndex + 1).join('\n').trim();
+                if (homework && answers) return { homework, answers, combined: false };
+            }
+
+            const questionLines = [];
+            const answerLines = [];
+            let inlineAnswerCount = 0;
+            lines.forEach(line => {
+                const match = line.match(/^\s*((?:Q(?:uestion)?\s*)?\d+[.)]?\s*)?(.*?)\s+(?:answer|ans)\s*[:=-]\s*(.+)\s*$/i);
+                if (!match) return;
+                inlineAnswerCount += 1;
+                const number = (match[1] || '').trim();
+                questionLines.push(`${number ? number + ' ' : ''}${match[2].trim()}`.trim());
+                answerLines.push(`${number ? number + ' ' : ''}${match[3].trim()}`.trim());
+            });
+            if (inlineAnswerCount > 0) {
+                return {
+                    homework: questionLines.join('\n'),
+                    answers: answerLines.join('\n'),
+                    combined: false
+                };
+            }
+
+            return { homework: '', answers: text, combined: true };
         }
 
         async function processFile(file) {
@@ -429,18 +534,28 @@ let currentHomework = [];
                     method: 'POST',
                     body: formData
                 });
+                const data = await response.json().catch(() => ({}));
 
-                const data = await response.json();
-
-                if (data.success) {
-                    extractedContent = data.content;
-                } else {
-                    alert('Error: ' + data.error);
+                if (!response.ok || !data.success) {
+                    throw new Error(getApiErrorMessage(data, 'We could not read that file.'));
                 }
+
+                extractedContent = String(data.content || '').trim();
+                if (!extractedContent) {
+                    throw new Error('The file did not contain any readable text.');
+                }
+                const preview = document.getElementById('uploaded-homework-preview');
+                const previewText = document.getElementById('review-uploaded-homework');
+                if (previewText) previewText.value = extractedContent;
+                if (preview) preview.style.display = 'block';
+                return true;
             } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while processing file');
+                console.error('File processing failed:', error);
+                extractedContent = '';
+                alert(error.message || 'We could not read that file.');
+                return false;
             } finally {
+                fileUploadPromise = null;
                 hideLoading();
             }
         }
@@ -528,6 +643,7 @@ let currentHomework = [];
             document.getElementById('loading').style.display = 'none';
             document.getElementById('results').style.display = 'block';
             document.getElementById('review-result').innerHTML = '';
+            activeReviewContext = null;
         }
 
         function clearResults() {
@@ -538,7 +654,8 @@ let currentHomework = [];
             currentHomeworkMode = 'homework'; // Reset mode
             currentQuestionIndex = 0;
             currentQuestionAnswers = {};
-            document.getElementById('homework-buttons').style.display = 'block'; // Show homework buttons
+            activeReviewContext = null;
+            resetHomeworkActionButtons();
             document.getElementById('tutor-mode-buttons').style.display = 'none'; // Hide tutor buttons
             clearSavedState();
         }
@@ -866,7 +983,7 @@ let currentHomework = [];
 
             if (renderer) renderer.bindAll(container);
             showResults();
-            document.getElementById('homework-buttons').style.display = 'block';
+            resetHomeworkActionButtons();
             document.getElementById('tutor-mode-buttons').style.display = 'none';
         }
 
@@ -969,7 +1086,14 @@ let currentHomework = [];
                 }
 
                 if (data.success) {
-                    displayReview(data.review);
+                    displayReview(data.review, {
+                        homework: homeworkContent,
+                        answers: studentAnswer,
+                        subject: subject || 'Maths',
+                        from_rag: Boolean(hw.from_rag),
+                        homework_doc_id: hw.doc_id || null,
+                        is_eleven_plus: Boolean(hw.is_eleven_plus)
+                    });
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -1066,7 +1190,14 @@ let currentHomework = [];
                     }
                     return `## ${homeworkItem.subject || `Homework ${index + 1}`}\n\n${data.review || ''}`;
                 }));
-                displayReview(results.join('\n\n---\n\n'));
+                displayReview(results.join('\n\n---\n\n'), {
+                    homework: reviewItems.map(item => item.homeworkItem.content || '').filter(Boolean).join('\n\n'),
+                    answers: reviewItems.map(item => `--- ${item.homeworkItem.subject || 'Homework'} ---\n${item.answer}`).join('\n\n'),
+                    subject: reviewItems[0].homeworkItem.subject || 'Maths',
+                    from_rag: reviewItems.every(item => Boolean(item.homeworkItem.from_rag)),
+                    homework_doc_id: reviewItems.length === 1 ? (reviewItems[0].homeworkItem.doc_id || null) : null,
+                    is_eleven_plus: reviewItems.some(item => Boolean(item.homeworkItem.is_eleven_plus))
+                });
             } catch (error) {
                 console.error('Review failed:', error);
                 if (error.status === 401) redirectToLogin();
@@ -1075,6 +1206,16 @@ let currentHomework = [];
             } finally {
                 hideLoading();
             }
+        }
+
+        function inferUploadedHomeworkSubject(text) {
+            const value = String(text || '').toLowerCase();
+            if (/\b(verbal reasoning|analogy|odd one out|letter code)\b/.test(value)) return 'Verbal Reasoning';
+            if (/\b(non[- ]?verbal reasoning|rotation|mirror image|shape sequence|spatial)\b/.test(value)) return 'Non-Verbal Reasoning';
+            if (/\b(science|experiment|habitat|electricity|forces?|materials?|plants?|animals?)\b/.test(value)) return 'Science';
+            if (/\b(grammar|punctuation|spelling|comprehension|vocabulary|sentence|noun|verb|adjective)\b/.test(value)) return 'English';
+            if (/[=+×÷*/<>]|\b(add|subtract|multiply|divide|fraction|decimal|percentage|number|calculate|maths?|geometry|measure)\b/.test(value)) return 'Maths';
+            return 'General Homework';
         }
 
         async function reviewHomework() {
@@ -1091,26 +1232,55 @@ let currentHomework = [];
             let homeworkText = '';
             let answersText = '';
 
+            let subject = 'General Homework';
+            let uploadedTextForDisplay = '';
+
             if (currentInputMethod === 'text') {
                 homeworkText = document.getElementById('review-homework').value.trim();
                 answersText = document.getElementById('review-answers').value.trim();
+                const subjectSelect = document.getElementById('review-subject');
+                subject = subjectSelect ? subjectSelect.value : 'General Homework';
             } else if (currentInputMethod === 'file') {
-                homeworkText = document.getElementById('review-homework-file').value.trim();
-                // 文件内容作为答案（如果有提取的内容则使用提取的内容）
-                answersText = extractedContent || '';
+                if (fileUploadPromise) {
+                    const uploadSucceeded = await fileUploadPromise;
+                    if (!uploadSucceeded) return;
+                }
+
+                const uploadedText = String(extractedContent || '').trim();
+                if (!uploadedText) {
+                    alert('Please upload a readable TXT, PDF or image file first.');
+                    return;
+                }
+
+                uploadedTextForDisplay = uploadedText;
+                subject = inferUploadedHomeworkSubject(uploadedText);
+                const splitContent = splitUploadedHomeworkText(uploadedText);
+                homeworkText = splitContent.homework;
+                answersText = splitContent.answers;
+
+                if (!homeworkText && splitContent.combined) {
+                    homeworkText = uploadedText;
+                    answersText = 'The pupil answers are written inside the uploaded homework. Identify each written answer and mark it against its question.';
+                }
             }
 
-            const subject = document.getElementById('review-subject').value;
-
+            if (!homeworkText) {
+                alert('Please include the homework questions in the file or paste them into the questions box.');
+                return;
+            }
             if (!answersText) {
-                alert('Please provide the student\'s answers.');
+                alert('Please include the pupil\'s answers in the uploaded file.');
                 return;
             }
 
-            reviewHomeworkWithContent(homeworkText, answersText, subject);
+            const submittedWork = currentInputMethod === 'file' ? {
+                content: uploadedTextForDisplay
+            } : null;
+
+            await reviewHomeworkWithContent(homeworkText, answersText, subject, null, submittedWork);
         }
 
-        async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null) {
+        async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null, submittedWork = null) {
 
             showLoading();
 
@@ -1146,34 +1316,88 @@ let currentHomework = [];
                     window.location.href = '/login';
                     return;
                 }
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
 
-                if (data.success) {
-                    displayReview(data.review);
-                } else {
-                    alert('Error: ' + data.error);
+                if (!response.ok || !data.success) {
+                    throw new Error(getApiErrorMessage(
+                        data,
+                        'We could not mark that homework just now. Please check the file and try again.'
+                    ));
                 }
+                const followUpAnswers = submittedWork && submittedWork.content &&
+                    answers.startsWith('The pupil answers are written inside')
+                    ? submittedWork.content
+                    : answers;
+
+                displayReview(
+                    data.review || 'The homework was checked, but no feedback was returned.',
+                    {
+                        homework: homework,
+                        answers: followUpAnswers,
+                        subject: subject || 'General Homework',
+                        from_rag: Boolean(homeworkDocId),
+                        homework_doc_id: homeworkDocId || null,
+                        is_eleven_plus: Boolean(requestBody.is_eleven_plus)
+                    }
+                );
             } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred during review');
+                console.error('Homework review failed:', error);
+                alert(error.message || 'We could not mark that homework just now.');
             } finally {
                 hideLoading();
             }
         }
 
-        function displayReview(review) {
+        function buildGeneratedReviewContext() {
+            if (!Array.isArray(currentHomework) || currentHomework.length === 0) return null;
+
+            const answeredItems = currentHomework.map((homeworkItem, index) => {
+                const block = document.querySelector(`.homework-block[data-homework-index="${index}"], .question-response-block[data-homework-index="${index}"]`);
+                const answer = readResponseBlockAnswer(block);
+                return { homeworkItem, index, answer };
+            }).filter(item => item.answer);
+
+            if (!answeredItems.length) return null;
+
+            return {
+                homework: answeredItems.map(item => item.homeworkItem.content || '').filter(Boolean).join('\n\n'),
+                answers: answeredItems.map(item => `--- ${item.homeworkItem.subject || 'Homework'} ---\n${item.answer}`).join('\n\n'),
+                subject: answeredItems[0].homeworkItem.subject || 'Maths',
+                from_rag: answeredItems.every(item => Boolean(item.homeworkItem.from_rag)),
+                homework_doc_id: answeredItems.length === 1 ? (answeredItems[0].homeworkItem.doc_id || null) : null,
+                is_eleven_plus: answeredItems.some(item => Boolean(item.homeworkItem.is_eleven_plus))
+            };
+        }
+
+        function getReviewActionContext() {
+            if (activeReviewContext && activeReviewContext.homework && activeReviewContext.answers) {
+                return activeReviewContext;
+            }
+            return buildGeneratedReviewContext();
+        }
+
+        function displayReview(review, reviewContext = null) {
+            activeReviewContext = reviewContext || buildGeneratedReviewContext();
+
             const container = document.getElementById('review-result');
             container.innerHTML = `
-                <h3 style="margin-top: 30px; margin-bottom: 20px;">Teacher Feedback</h3>
+                <h3 class="teacher-feedback-heading">Teacher Feedback</h3>
                 <div class="review-output">${renderSafeMarkdown(review)}</div>
             `;
 
-            // Make sure results section is visible
+            // Make sure results section is visible. The uploaded homework stays
+            // in the read-only box above the Get Feedback button.
             document.getElementById('results').style.display = 'block';
         }
 
         async function ExplainDeep() {
-            const isFree = currentHomework && currentHomework.length > 0 && currentHomework.every(h => h.from_rag);
+            const reviewContext = getReviewActionContext();
+            if (!reviewContext) {
+                alert('Please check the homework first, then choose Explain in Detail.');
+                return;
+            }
+
+            const isFree = Boolean(reviewContext.from_rag);
 
             // Check subscription first
             if (!await requireSubscription('Explain in Detail', isFree)) return;
@@ -1181,31 +1405,18 @@ let currentHomework = [];
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
 
-            // Collect all answers
-            const answerInputs = document.querySelectorAll('.answer-input-inline');
-            let allAnswers = [];
+            const homework = String(reviewContext.homework || '').trim();
+            const combinedAnswers = String(reviewContext.answers || '').trim();
+            const subject = reviewContext.subject || 'Maths';
 
-            answerInputs.forEach(input => {
-                const subject = input.dataset.subject;
-                const answer = input.value.trim();
-                if (answer) {
-                    allAnswers.push(`--- ${subject} ---\n${answer}`);
-                }
-            });
-
-            const combinedAnswers = allAnswers.join('\n\n');
-
-            if (!combinedAnswers.trim()) {
-                alert('Please enter your answers first!');
-                return;
-            }
-
-            const homework = currentHomework.map(h => h.content).join('\n\n');
-            if (!homework.trim()) {
+            if (!homework) {
                 alert('No homework content found to explain.');
                 return;
             }
-            const subject = currentHomework[0]?.subject || 'Maths';
+            if (!combinedAnswers) {
+                alert('No pupil answers were found in the reviewed homework.');
+                return;
+            }
 
             // Get existing review feedback (if answers have been checked)
             const reviewEl = document.querySelector('#review-result .review-output');
@@ -1214,9 +1425,6 @@ let currentHomework = [];
             showLoading();
 
             try {
-                const homeworkDocId = currentHomework[0]?.doc_id || null;
-                const isElevenPlus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
-
                 const response = await fetch('/api/explain-deep', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1227,8 +1435,8 @@ let currentHomework = [];
                         profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
                         from_rag: isFree,
-                        homework_doc_id: homeworkDocId,
-                        is_eleven_plus: isElevenPlus
+                        homework_doc_id: reviewContext.homework_doc_id || null,
+                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
                     })
                 });
 
@@ -1242,7 +1450,7 @@ let currentHomework = [];
                     redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-                
+
                 if (response.status === 504) {
                     alert('That took too long. Please try again or use a shorter question.');
                     return;
@@ -1281,7 +1489,13 @@ let currentHomework = [];
         }
 
         async function ImprovePractice() {
-            const isFree = currentHomework && currentHomework.length > 0 && currentHomework.every(h => h.from_rag);
+            const reviewContext = getReviewActionContext();
+            if (!reviewContext) {
+                alert('Please check the homework first, then choose Help me improve.');
+                return;
+            }
+
+            const isFree = Boolean(reviewContext.from_rag);
 
             // Check subscription first
             if (!await requireSubscription('Help me improve', isFree)) return;
@@ -1289,31 +1503,18 @@ let currentHomework = [];
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
 
-            // Collect all answers
-            const answerInputs = document.querySelectorAll('.answer-input-inline');
-            let allAnswers = [];
+            const homework = String(reviewContext.homework || '').trim();
+            const combinedAnswers = String(reviewContext.answers || '').trim();
+            const subject = reviewContext.subject || 'Maths';
 
-            answerInputs.forEach(input => {
-                const subject = input.dataset.subject;
-                const answer = input.value.trim();
-                if (answer) {
-                    allAnswers.push(`--- ${subject} ---\n${answer}`);
-                }
-            });
-
-            const combinedAnswers = allAnswers.join('\n\n');
-
-            if (!combinedAnswers.trim()) {
-                alert('Please enter your answers first!');
+            if (!homework) {
+                alert('No homework content found to practise.');
                 return;
             }
-
-            const homework = currentHomework.map(h => h.content).join('\n\n');
-            if (!homework.trim()) {
-                alert('No homework content found to practice.');
+            if (!combinedAnswers) {
+                alert('No pupil answers were found in the reviewed homework.');
                 return;
             }
-            const subject = currentHomework[0]?.subject || 'Maths';
 
             // Get existing review feedback (if answers have been checked)
             const reviewEl = document.querySelector('#review-result .review-output');
@@ -1322,9 +1523,6 @@ let currentHomework = [];
             showLoading();
 
             try {
-                const homeworkDocId = currentHomework[0]?.doc_id || null;
-                const isElevenPlus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
-
                 const response = await fetch('/api/improve-practice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1335,8 +1533,8 @@ let currentHomework = [];
                         profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
                         from_rag: isFree,
-                        homework_doc_id: homeworkDocId,
-                        is_eleven_plus: isElevenPlus
+                        homework_doc_id: reviewContext.homework_doc_id || null,
+                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
                     })
                 });
 
@@ -1350,7 +1548,7 @@ let currentHomework = [];
                     redirectToLogin(data.resume_session_id || null);
                     return;
                 }
-                
+
                 if (response.status === 504) {
                     alert('That took too long. Please try again or use a shorter question.');
                     return;
@@ -1411,8 +1609,7 @@ let currentHomework = [];
                 `;
             }
 
-            const resultsCard = document.querySelector('#results .card');
-            const buttonArea = resultsCard.querySelector('div[style*="text-align: center"]');
+            const buttonArea = document.getElementById('homework-buttons');
             if (buttonArea) {
                 buttonArea.innerHTML = `
                     <button class="btn btn-primary practice-check-button" onclick="checkPracticeAnswers()">
@@ -1487,11 +1684,9 @@ let currentHomework = [];
             displayHomework(currentHomework);
             // 恢复之前保存的答案和批改结果
             restoreSavedState();
-            // 恢复原始按钮区域
-            if (savedButtonsHTML) {
-                const btnArea = document.getElementById('homework-buttons');
-                if (btnArea) btnArea.innerHTML = savedButtonsHTML;
-            }
+            // Always restore the canonical homework-mode actions. Do not restore
+            // a saved HTML snapshot because it may already contain practice controls.
+            resetHomeworkActionButtons();
             clearSavedState();
         }
 
