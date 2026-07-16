@@ -10,10 +10,9 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .prompt_budget import budget_review_inputs, compact_text, select_relevant_items, stable_cache_key
+from .prompt_budget import budget_review_inputs, compact_text, stable_cache_key
 from .question_utils import _parse_student_answers_to_map, _split_homework_into_questions
 from src.models import subject_display_name
 
@@ -31,9 +30,50 @@ DETAIL_REVIEW_MODEL = (
 ).strip()
 
 
+def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    """Return a safe integer for provider parameters and learner metadata."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
+
+
+def _token_limit(env_name: str, default: int, maximum: int = 4_000) -> int:
+    return _bounded_int(
+        os.getenv(env_name),
+        default=default,
+        minimum=128,
+        maximum=maximum,
+    )
+
+
+def _normalise_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Keep only bounded, useful learner context for ages 5-12."""
+    source = dict(profile or {})
+    year_group = _bounded_int(source.get("year_group"), default=3, minimum=1, maximum=7)
+    age = _bounded_int(source.get("age"), default=year_group + 4, minimum=5, maximum=12)
+    cleaned: Dict[str, Any] = {
+        "year_group": year_group,
+        "age": age,
+    }
+    if source.get("plan_week") is not None:
+        cleaned["plan_week"] = _bounded_int(
+            source.get("plan_week"), default=1, minimum=1, maximum=52
+        )
+    if source.get("plan_phase"):
+        cleaned["plan_phase"] = compact_text(source.get("plan_phase"), 40)
+    if source.get("english_level"):
+        cleaned["english_level"] = compact_text(source.get("english_level"), 60)
+    goals = source.get("learning_goals")
+    if isinstance(goals, (list, tuple)):
+        cleaned["learning_goals"] = [compact_text(item, 100) for item in goals[:4]]
+    return cleaned
+
+
 def _prompt_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove identifiers before learner context is sent to an LLM."""
-    return {key: value for key, value in profile.items() if key != "student_id"}
+    """Return non-identifying, age-bounded context for an LLM prompt."""
+    return _normalise_profile(profile)
 
 
 def _supports_model_override(callable_obj: Any) -> bool:
@@ -47,6 +87,23 @@ def _supports_model_override(callable_obj: Any) -> bool:
     )
 
 
+def _resolved_model(llm_client: Any, requested_model: str) -> str:
+    provider = str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    selected_model = str(requested_model or "").strip()
+    if provider == "ollama":
+        env_name = (
+            "OLLAMA_DETAIL_REVIEW_MODEL"
+            if requested_model == DETAIL_REVIEW_MODEL
+            else "OLLAMA_QUICK_REVIEW_MODEL"
+        )
+        selected_model = (
+            os.getenv(env_name)
+            or getattr(llm_client, "model", None)
+            or selected_model
+        )
+    return str(selected_model or getattr(llm_client, "model", "default"))
+
+
 def _complete_review(
     llm_client: Any,
     messages: List[Dict[str, str]],
@@ -57,10 +114,22 @@ def _complete_review(
     operation: str,
 ) -> str:
     """Call the selected model while remaining compatible with simple test fakes."""
-    logger.info("[Review] operation=%s model=%s max_tokens=%s", operation, model, max_tokens)
-    kwargs = {"temperature": temperature, "max_tokens": max_tokens}
+    provider = str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    # API tier aliases such as qwen-flash/qwen-plus are usually not local
+    # Ollama model names. Keep the model already loaded by a local client.
+    selected_model = _resolved_model(llm_client, model)
+
+    safe_max_tokens = _bounded_int(max_tokens, default=1_000, minimum=128, maximum=4_000)
+    logger.info(
+        "[Review] operation=%s provider=%s model=%s max_tokens=%s",
+        operation,
+        provider or "unknown",
+        selected_model,
+        safe_max_tokens,
+    )
+    kwargs = {"temperature": float(temperature), "max_tokens": safe_max_tokens}
     if _supports_model_override(llm_client.complete):
-        kwargs["model"] = model
+        kwargs["model"] = selected_model
     return str(llm_client.complete(messages, **kwargs))
 
 
@@ -268,62 +337,89 @@ def _score_summary(rows: List[Dict[str, Any]]) -> str:
     return f"{correct}/{len(rows)} correct"
 
 
-def _correct_work_summary(rows: List[Dict[str, Any]]) -> str:
-    lines = []
-    for index, row in enumerate(rows, start=1):
-        if not row.get("is_correct"):
-            continue
-        lines.append(
-            f"- Q{index}: {compact_text(_clean_question_text(row.get('question', '')), 120)} "
-            f"| pupil answer: {compact_text(row.get('student_answer', ''), 60)}"
+def _rag_quick_feedback(rows: List[Dict[str, Any]]) -> str:
+    """Build instant, answer-key-grounded feedback without an LLM call."""
+    correct_rows = [row for row in rows if row.get("is_correct")]
+    wrong_rows = [row for row in rows if not row.get("is_correct")]
+
+    sections = ["## What You Did Well"]
+    if correct_rows:
+        count = len(correct_rows)
+        noun = "answer" if count == 1 else "answers"
+        sections.append(
+            f"You got {count} {noun} right. You used the question information carefully."
         )
-    if not lines:
-        return "No answers were marked correct. Praise effort without inventing success."
-    return compact_text("\n".join(lines), 1_600)
+    else:
+        sections.append(
+            "You had a good try. Checking the method one small step at a time will help."
+        )
 
-
-def _rag_review_items(rows: List[Dict[str, Any]], *, correct: bool, detailed: bool) -> str:
-    lines = []
-    for index, row in enumerate(rows, start=1):
-        if bool(row.get("is_correct")) is not correct:
-            continue
-        question_limit = 150 if detailed else 120
-        parts = [
-            f"Q{index}",
-            f"question: {compact_text(_clean_question_text(row.get('question', '')), question_limit)}",
-            f"pupil answer: {compact_text(row.get('student_answer', ''), 90)}",
-            f"correct answer: {compact_text(row.get('correct_answer', ''), 100)}",
-        ]
-        if row.get("correct_letter"):
-            parts.append(f"correct option: {row['correct_letter']}")
-        if detailed or not correct:
-            parts.append(
-                "answer-key method: "
-                + compact_text(
-                    row.get("explanation")
-                    or "Use the correct answer and explain the shortest age-appropriate method.",
-                    260 if detailed else 180,
-                )
+    sections.append("## What to Improve")
+    if not wrong_rows:
+        sections.append(
+            "Nothing needs correcting this time. Keep showing your working on harder questions."
+        )
+    else:
+        for index, row in enumerate(rows, start=1):
+            if row.get("is_correct"):
+                continue
+            answer_label = row.get("correct_answer") or ""
+            if row.get("correct_letter"):
+                answer_label = f"Option {row['correct_letter']} — {answer_label}"
+            explanation = row.get("explanation") or (
+                "Read the question again, use the correct method, and check each step."
             )
-        if row.get("tip") and (detailed or not correct):
-            parts.append(f"tip: {compact_text(row.get('tip'), 120)}")
-        lines.append("- " + " | ".join(parts))
-    if not lines:
-        return "None."
-    return compact_text("\n".join(lines), 8_000 if detailed else 4_500)
+            sections.append(
+                f"- **Question {index}:** The correct answer is **{answer_label}**. "
+                f"{compact_text(explanation, 220)}"
+            )
 
-
-def _all_correct_quick_feedback(rows: List[Dict[str, Any]]) -> str:
-    count = len(rows)
-    noun = "question" if count == 1 else "questions"
-    return (
-        "## What You Did Well\n"
-        f"You answered all {count} {noun} correctly. Your careful checking paid off.\n\n"
-        "## What to Improve\n"
-        "Keep showing clear working so you can spot small slips in harder questions.\n\n"
-        "## Keep Going\n"
-        "Brilliant effort — you are ready for the next challenge!"
+    sections.extend(
+        [
+            "## Keep Going",
+            "Well done for checking your work — one careful correction makes the next question easier.",
+        ]
     )
+    return "\n\n".join(sections)
+
+
+def _rag_detailed_feedback(rows: List[Dict[str, Any]]) -> str:
+    """Create a full child-friendly explanation from authoritative RAG data."""
+    correct_count = sum(1 for row in rows if row.get("is_correct"))
+    wrong_count = len(rows) - correct_count
+    sections = ["## What You Did Well"]
+    if correct_count:
+        sections.append(
+            f"You answered {correct_count} out of {len(rows)} correctly. "
+            "You showed that you can use the information in the question and check an answer."
+        )
+    else:
+        sections.append(
+            "You kept trying. That matters, because each corrected step helps your brain learn the method."
+        )
+
+    sections.append("## What to Improve")
+    if wrong_count:
+        wrong_numbers = [str(index) for index, row in enumerate(rows, start=1) if not row.get("is_correct")]
+        sections.append(
+            f"There {'is' if wrong_count == 1 else 'are'} {wrong_count} "
+            f"{'answer' if wrong_count == 1 else 'answers'} to revisit. "
+            f"Focus on Question{'s' if wrong_count != 1 else ''} {', '.join(wrong_numbers)}. "
+            "Work slowly, use the method below, and check the final answer against the question."
+        )
+    else:
+        sections.append(
+            "All answers are correct. Your next step is to keep your working clear and tidy."
+        )
+
+    sections.append(_worked_explanations(rows).strip())
+    sections.extend(
+        [
+            "## Keep Going",
+            "Excellent effort. Try to explain one method aloud in your own words — that helps it stick.",
+        ]
+    )
+    return "\n\n".join(section for section in sections if section)
 
 
 def _worked_explanations(rows: List[Dict[str, Any]]) -> str:
@@ -345,6 +441,10 @@ def _worked_explanations(rows: List[Dict[str, Any]]) -> str:
                 f"**How to get it:** {explanation}",
             ]
         )
+        if not row.get("is_correct"):
+            sections.append(
+                "**Why it may have gone wrong:** You may have chosen an answer before checking the final step."
+            )
         if row.get("tip"):
             sections.append(f"**Helpful 11+ tip:** {row['tip']}")
     return "\n\n".join(sections) + "\n\n"
@@ -379,14 +479,16 @@ def review_homework(
     """
     from src.cache import review_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_QUICK_WITH_RAG_PROMPT, REVIEW_QUICK_WITHOUT_RAG_PROMPT
+    from src.prompts import REVIEW_QUICK_WITHOUT_RAG_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
-    profile = dict(profile or {"year_group": 3, "age": 7})
+    raw_profile = dict(profile or {})
+    student_id = raw_profile.get("student_id", "anonymous")
+    profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile)
     cache_key = stable_cache_key(
-        "review_quick_v3",
+        "review_quick_v4",
         QUICK_REVIEW_MODEL,
         subject,
         budget,
@@ -422,29 +524,17 @@ def review_homework(
     model_used: Optional[str] = None
 
     if rows:
-        wrong_rows = [row for row in rows if not row["is_correct"]]
-        if wrong_rows:
-            prompt = format_prompt(
-                REVIEW_QUICK_WITH_RAG_PROMPT,
-                student_profile=str(_prompt_profile(budget["profile"])),
-                subject=compact_text(subject_display_name(subject), 80),
-                score_summary=_score_summary(rows),
-                correct_work_summary=_correct_work_summary(rows),
-                wrong_answer_items=_rag_review_items(rows, correct=False, detailed=False),
-            )
-            feedback = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=QUICK_REVIEW_MODEL,
-                temperature=0.15,
-                max_tokens=450,
-                operation="quick_review_rag_wrong_only",
-            )
-            model_used = QUICK_REVIEW_MODEL
-        else:
-            # No mistakes means there is no wrong-answer context to send.
-            feedback = _all_correct_quick_feedback(rows)
-        review = _table(rows) + f"**Score: {correct_count}/{attempted}**\n\n" + feedback
+        # RAG already contains the authoritative answers and short methods.
+        # Build the review locally: this is faster, cheaper and cannot fail due
+        # to a missing provider model alias.
+        feedback = _rag_quick_feedback(rows)
+        worked = _worked_explanations(rows) if is_eleven_plus else ""
+        review = (
+            _table(rows)
+            + f"**Score: {correct_count}/{attempted}**\n\n"
+            + feedback
+            + ("\n\n" + worked if worked else "")
+        )
     else:
         prompt = format_prompt(
             REVIEW_QUICK_WITHOUT_RAG_PROMPT,
@@ -458,10 +548,10 @@ def review_homework(
             build_messages(prompt),
             model=QUICK_REVIEW_MODEL,
             temperature=0.15,
-            max_tokens=os.getenv("QUICK_REVIEW_MAX_TOKENS", "1000"),
+            max_tokens=_token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600),
             operation="quick_review_no_rag_all_answers",
         )
-        model_used = QUICK_REVIEW_MODEL
+        model_used = _resolved_model(llm_client, QUICK_REVIEW_MODEL)
         score, max_score = _extract_score(review)
 
     result = {
@@ -477,12 +567,12 @@ def review_homework(
     }
     review_cache.set(cache_key, result)
 
-    if not is_tutor_mode:
+    if not is_tutor_mode and student_id not in {None, "", "anonymous"} and not str(student_id).startswith("anon_"):
         try:
             from src.progress_db import save_homework_session
 
             save_homework_session(
-                student_id=str(profile.get("student_id", "anonymous")),
+                student_id=str(student_id),
                 subject=subject,
                 year_group=int(profile.get("year_group", 3)),
                 homework_content=budget["homework_content"],
@@ -515,13 +605,15 @@ def explain_deep(
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_DETAIL_WITH_RAG_PROMPT, REVIEW_DETAIL_WITHOUT_RAG_PROMPT
+    from src.prompts import REVIEW_DETAIL_WITHOUT_RAG_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
+    raw_profile = dict(profile or {})
+    profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
     cache_key = stable_cache_key(
-        "review_detail_v3",
+        "review_detail_v4",
         DETAIL_REVIEW_MODEL,
         subject,
         budget,
@@ -558,22 +650,9 @@ def explain_deep(
 
     if rows:
         correct_count = sum(1 for row in rows if row["is_correct"])
-        prompt = format_prompt(
-            REVIEW_DETAIL_WITH_RAG_PROMPT,
-            student_profile=str(_prompt_profile(budget["profile"])),
-            subject=compact_text(subject_display_name(subject), 80),
-            score_summary=_score_summary(rows),
-            correct_answer_items=_rag_review_items(rows, correct=True, detailed=True),
-            wrong_answer_items=_rag_review_items(rows, correct=False, detailed=True),
-        )
-        ai_explanation = _complete_review(
-            llm_client,
-            build_messages(prompt),
-            model=DETAIL_REVIEW_MODEL,
-            temperature=0.2,
-            max_tokens=os.getenv("DETAIL_REVIEW_MAX_TOKENS", 3000),
-            operation="detail_review_rag_all_answers",
-        )
+        # Detailed RAG explanations can also be produced from the trusted
+        # stored methods. Avoid a second paid/remote call and return instantly.
+        ai_explanation = _rag_detailed_feedback(rows)
         explanation = (
             _table(rows)
             + f"**Score: {correct_count}/{len(rows)}**\n\n"
@@ -594,19 +673,20 @@ def explain_deep(
             build_messages(prompt),
             model=DETAIL_REVIEW_MODEL,
             temperature=0.2,
-            max_tokens=1_600,
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000),
             operation="detail_review_no_rag_all_answers",
         )
         score, max_score = _extract_score(explanation)
 
+    model_used = None if rows else _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
     result = {
         "success": True,
         "explanation": explanation,
         "from_rag_answers": bool(rows),
         "score": score,
         "max_score": max_score,
-        "model_tier": "plus",
-        "model_used": DETAIL_REVIEW_MODEL,
+        "model_tier": "local" if rows else "plus",
+        "model_used": model_used,
     }
     explain_cache.set(cache_key, result)
     return result
@@ -629,9 +709,10 @@ def improve_practice(
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
+    profile = _normalise_profile(dict(profile or {}))
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
     cache_key = stable_cache_key(
-        "practice",
+        "practice_v2",
         subject,
         budget,
         homework_doc_id,
@@ -669,12 +750,19 @@ def improve_practice(
         homework_content=budget["homework_content"],
         student_answer=budget["student_answers"],
         subject=compact_text(subject_display_name(subject), 80),
-        student_profile=str(budget["profile"]),
+        student_profile=str(_prompt_profile(budget["profile"])),
         review_feedback=budget["review_feedback"] or "No review feedback available",
         year_group=budget["profile"].get("year_group", 3),
         age=budget["profile"].get("age", 7),
         correct_answers_section=correct_answers_section,
     )
-    result = str(llm_client.complete(build_messages(prompt), temperature=0.25, max_tokens=1200))
+    result = _complete_review(
+        llm_client,
+        build_messages(prompt),
+        model=DETAIL_REVIEW_MODEL,
+        temperature=0.25,
+        max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 1_000, maximum=1_600),
+        operation="targeted_practice",
+    )
     practice_cache.set(cache_key, result)
     return {"success": True, "practice": result}

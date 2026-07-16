@@ -7,10 +7,10 @@ class ProfileRequest(BaseModel):
     profile: dict = Field(default_factory=dict)
     subjects: list = Field(default_factory=list, max_length=12)
     quick_select: bool = False
-    year: Optional[int] = None
-    student_id: Optional[str] = None
+    year: Optional[int] = Field(default=None, ge=1, le=7)
+    student_id: Optional[str] = Field(default=None, max_length=128)
     is_eleven_plus: bool = False
-    mode: Optional[str] = "homework"
+    mode: Optional[str] = Field(default="homework", pattern="^(homework|tutor)$")
 
 
 class ReviewRequest(BaseModel):
@@ -33,6 +33,9 @@ class ExplainDeepRequest(BaseModel):
     profile: Optional[dict] = None
     review_feedback: Optional[str] = Field(default=None, max_length=20_000)
     from_rag: Optional[bool] = False
+    homework_doc_id: Optional[str] = Field(default=None, max_length=256)
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
+    is_eleven_plus: bool = False
 
 
 class ImprovePracticeRequest(BaseModel):
@@ -42,6 +45,9 @@ class ImprovePracticeRequest(BaseModel):
     profile: Optional[dict] = None
     review_feedback: Optional[str] = Field(default=None, max_length=20_000)
     from_rag: Optional[bool] = False
+    homework_doc_id: Optional[str] = Field(default=None, max_length=256)
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
+    is_eleven_plus: bool = False
 
 
 class PhotoRequest(BaseModel):

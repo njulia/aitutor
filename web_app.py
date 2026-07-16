@@ -293,10 +293,13 @@ def resolve_profile(
 ) -> dict:
     """Build a student profile from quick-select or natural-language input."""
     if quick_select:
-        year = year or 3
+        try:
+            year = max(1, min(7, int(year or 3)))
+        except (TypeError, ValueError):
+            year = 3
         profile = {
             "year_group": year,
-            "age": 5 + (year - 1),
+            "age": max(5, min(12, year + 4)),
             "student_id": student_id or f"student_{year}",
         }
         return profile
@@ -318,10 +321,33 @@ def resolve_profile(
     if student_id:
         profile["student_id"] = student_id
 
+    try:
+        profile["year_group"] = max(1, min(7, int(profile.get("year_group", 3))))
+    except (TypeError, ValueError):
+        profile["year_group"] = 3
+    try:
+        profile["age"] = max(5, min(12, int(profile.get("age", profile["year_group"] + 4))))
+    except (TypeError, ValueError):
+        profile["age"] = min(12, profile["year_group"] + 4)
+
     if not profile.get("student_id"):
         profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
 
     return profile
+
+
+def _text_mentions_subject(text: str, subject: str) -> bool:
+    """Match whole subject labels so 'Art' does not match 'particular'."""
+    label = str(subject or "").strip()
+    if not label:
+        return False
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9]){re.escape(label)}(?![A-Za-z0-9])",
+            str(text or ""),
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
@@ -532,48 +558,48 @@ def _static_page(*parts: str) -> FileResponse:
 
 class ProfileRequest(BaseModel):
     profile: dict = Field(default_factory=dict)
-    subjects: list = Field(default_factory=list)
+    subjects: list = Field(default_factory=list, max_length=12)
     quick_select: bool = False
-    year: Optional[int] = None
-    student_id: Optional[str] = None
+    year: Optional[int] = Field(default=None, ge=1, le=7)
+    student_id: Optional[str] = Field(default=None, max_length=128)
     is_eleven_plus: bool = False
-    mode: Optional[str] = "homework"  # Added mode field
+    mode: Optional[str] = Field(default="homework", pattern="^(homework|tutor)$")
 
 
 class ReviewRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
     session_id: Optional[str] = None
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
-    homework_doc_id: Optional[str] = None  # RAG document id if available
-    question_index: Optional[int] = None
+    homework_doc_id: Optional[str] = Field(default=None, max_length=256)
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
     is_eleven_plus: bool = False
 
 
 class ExplainDeepRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
+    review_feedback: Optional[str] = Field(default=None, max_length=20_000)
     from_rag: bool = False
-    homework_doc_id: Optional[str] = None
-    question_index: Optional[int] = None
+    homework_doc_id: Optional[str] = Field(default=None, max_length=256)
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
     is_eleven_plus: bool = False
 
 
 class ImprovePracticeRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=50_000)
+    answers: str = Field(min_length=1, max_length=30_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
+    review_feedback: Optional[str] = Field(default=None, max_length=20_000)
     from_rag: bool = False
-    homework_doc_id: Optional[str] = None
-    question_index: Optional[int] = None
+    homework_doc_id: Optional[str] = Field(default=None, max_length=256)
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
     is_eleven_plus: bool = False
 
 
@@ -697,6 +723,12 @@ async def login_page():
 @app.get("/pricing")
 async def login_page():
     return _static_page("static", "pricing.html")
+
+
+@app.get("/memory")
+async def memory_page():
+    """Serve the parent-controlled learning-memory page."""
+    return _static_page("static", "memory.html")
 
 
 @app.get("/progress")
@@ -897,7 +929,7 @@ async def api_generate(req: Request, request: ProfileRequest):
             folded = description.casefold()
             subjects = [
                 item for item in allowed
-                if subject_display_name(item).casefold() in folded
+                if _text_mentions_subject(folded, subject_display_name(item))
             ][:4]
             year_match = re.search(r"\byear\s*([1-6])\b", folded)
             if year_match:
@@ -1173,17 +1205,15 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         public_error(exc)
         return JSONResponse(status_code=500, content={"success": False, "error": "We could not generate practice questions just now."})
 
-@app.get("/api/progress/{student_id}")
-async def api_get_progress(req: Request, student_id: str, subject: Optional[str] = None):
-    username = _resolve_username(req)
-    if not username:
-        raise HTTPException(status_code=401, detail="A parent or guardian needs to sign in.")
-    account = await run_blocking(ensure_account, username, limit_concurrency=False)
-    belongs = await run_blocking(
-        student_belongs_to_account, student_id, account["id"], limit_concurrency=False
-    )
-    if not belongs:
-        raise HTTPException(status_code=404, detail="Learner profile not found.")
+async def _progress_payload(
+    req: Request,
+    *,
+    username: str,
+    student: Dict[str, Any],
+    subject: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build progress data for a learner already authorised for this account."""
+    student_id = str(student["id"])
     if not await run_blocking(user_has_subscription, req, student_id, username, limit_concurrency=False):
         raise HTTPException(status_code=402, detail="Progress tracking needs an active subscription.")
 
@@ -1227,6 +1257,12 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
     )
     return {
         "success": True,
+        "student": {
+            "id": student_id,
+            "name": student.get("name") or "Learner",
+            "year_group": student.get("year_group"),
+            "age": student.get("age"),
+        },
         "summary": {
             "overall": {"total_sessions": int(raw.get("total_sessions", 0) or 0), "avg_accuracy": average},
             "by_subject": by_subject,
@@ -1238,6 +1274,53 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
         "accuracy_rate": accuracy,
         "feedback": feedback,
     }
+
+
+@app.get("/api/progress")
+async def api_get_current_progress(req: Request, subject: Optional[str] = None):
+    """Return progress for the signed-in account's default learner.
+
+    The browser never supplies a learner ID, which avoids accidental access to
+    another profile and keeps the progress page simple for children.
+    """
+    username = _resolve_username(req)
+    if not username:
+        raise HTTPException(status_code=401, detail="A parent or guardian needs to sign in.")
+    account = await run_blocking(ensure_account, username, limit_concurrency=False)
+    student = await run_blocking(
+        ensure_default_student, account["id"], limit_concurrency=False
+    )
+    return await _progress_payload(
+        req,
+        username=username,
+        student=student,
+        subject=subject,
+    )
+
+
+@app.get("/api/progress/{student_id}")
+async def api_get_progress(req: Request, student_id: str, subject: Optional[str] = None):
+    """Backward-compatible account-owned learner progress endpoint."""
+    username = _resolve_username(req)
+    if not username:
+        raise HTTPException(status_code=401, detail="A parent or guardian needs to sign in.")
+    account = await run_blocking(ensure_account, username, limit_concurrency=False)
+    belongs = await run_blocking(
+        student_belongs_to_account, student_id, account["id"], limit_concurrency=False
+    )
+    if not belongs:
+        raise HTTPException(status_code=404, detail="Learner profile not found.")
+    from src.webapp.account_store import get_student
+
+    student = await run_blocking(get_student, student_id, limit_concurrency=False)
+    if not student:
+        raise HTTPException(status_code=404, detail="Learner profile not found.")
+    return await _progress_payload(
+        req,
+        username=username,
+        student=student,
+        subject=subject,
+    )
 
 @app.get("/api/quick-profile/{year}")
 async def get_quick_profile(year: int):

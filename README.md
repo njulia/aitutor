@@ -81,3 +81,12 @@ The archive includes the mirrored Langfuse Agent Skill under
 `.agent-skills/skills/langfuse`. For a normal connected development machine,
 run `./install_langfuse_skill.sh` to use the official installer and receive
 future updates.
+
+## Review model routing
+
+Library/RAG homework is now marked and explained locally from its stored answer
+records, so quick checking and detailed explanations do not need an LLM call.
+For non-RAG work, API deployments use `QUICK_REVIEW_MODEL` and
+`DETAIL_REVIEW_MODEL`. Ollama deployments keep `OLLAMA_MODEL` by default, with
+optional `OLLAMA_QUICK_REVIEW_MODEL` and `OLLAMA_DETAIL_REVIEW_MODEL` overrides.
+See `REVIEW_FIX_NOTES.md` for the full change summary and validation results.

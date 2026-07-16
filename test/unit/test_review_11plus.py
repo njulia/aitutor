@@ -1,61 +1,83 @@
 from __future__ import annotations
-import pytest
+
 from unittest.mock import MagicMock, patch
-from src.webapp.review_service import review_homework
 
-def test_review_homework_11plus_uses_explain_deep():
-    # Mock LLM client
+from src.webapp import review_service
+
+
+def test_no_rag_11plus_review_uses_quick_prompt_with_age_bounded_profile() -> None:
     mock_llm = MagicMock()
-    mock_llm.complete.return_value = "Excellent work!"
+    mock_llm.provider = "api"
+    mock_llm.model = "default-model"
+    mock_llm.complete.return_value = "## Score\n**1/1**"
 
-    homework_content = "Solve the multi-step equation: (43 × 4) - 34 = ?"
-    student_answers = "D"
-    subject = "Maths"
-    
-    # In the updated implementation, 11plus review calls explain_deep.
-    # explain_deep uses EXPLAIN_DEEP_PROMPT which has different kwargs.
-    
-    with patch("src.llm_client.format_prompt") as mock_format:
-        mock_format.return_value = "Mocked Prompt"
-        
-        review_homework(
-            homework_content=homework_content,
-            student_answers=student_answers,
-            subject=subject,
+    with patch("src.llm_client.format_prompt", return_value="Mocked Prompt") as mock_format:
+        result = review_service.review_homework(
+            homework_content="Solve the multi-step equation: (43 × 4) - 34 = ?",
+            student_answers="138",
+            subject="Maths",
+            profile={"student_id": "private-id", "year_group": 99, "age": 99},
             is_eleven_plus=True,
-            llm_client=mock_llm
+            llm_client=mock_llm,
         )
-        
-        # Verify format_prompt was called (via explain_deep) with expected 11plus/deep context
-        args, kwargs = mock_format.call_args
-        assert "homework_content" in kwargs
-        assert kwargs["homework_content"] == homework_content
-        assert "student_answer" in kwargs
-        assert kwargs["student_answer"] == student_answers
-        assert "subject" in kwargs
-        assert "year_group" in kwargs
 
-def test_review_homework_non_11plus_behavior():
-    # Mock LLM client
+    _, kwargs = mock_format.call_args
+    assert kwargs["homework_content"].startswith("Solve the multi-step equation")
+    assert kwargs["student_answer"] == "138"
+    assert "private-id" not in kwargs["student_profile"]
+    assert "'year_group': 7" in kwargs["student_profile"]
+    assert "'age': 12" in kwargs["student_profile"]
+    assert result["success"] is True
+
+
+def test_no_rag_primary_review_uses_local_ollama_model_and_integer_tokens() -> None:
     mock_llm = MagicMock()
-    mock_llm.complete.return_value = "Good job!"
+    mock_llm.provider = "ollama"
+    mock_llm.model = "qwen2.5:7b"
+    mock_llm.complete.return_value = "## Score\n**1/1**"
 
-    homework_content = "What is 2 + 2?"
-    student_answers = "4"
-    subject = "Maths"
-    
-    with patch("src.llm_client.format_prompt") as mock_format:
-        mock_format.return_value = "Mocked Prompt"
-        
-        review_homework(
-            homework_content=homework_content,
-            student_answers=student_answers,
-            subject=subject,
+    with patch("src.llm_client.format_prompt", return_value="Mocked Prompt"):
+        review_service.review_homework(
+            homework_content="What is 2 + 2?",
+            student_answers="4",
+            subject="Maths",
             is_eleven_plus=False,
-            llm_client=mock_llm
+            llm_client=mock_llm,
         )
-        
-        args, kwargs = mock_format.call_args
-        assert "question" in kwargs
-        # In non-11plus mode, it should only be the student answer (budgeted)
-        assert kwargs["question"] == student_answers
+
+    call_kwargs = mock_llm.complete.call_args.kwargs
+    assert call_kwargs["model"] == "qwen2.5:7b"
+    assert isinstance(call_kwargs["max_tokens"], int)
+    assert call_kwargs["max_tokens"] <= 1600
+
+
+def test_rag_wrong_answer_is_reviewed_without_an_llm_call(monkeypatch) -> None:
+    monkeypatch.setattr(
+        review_service,
+        "_load_rag_answers",
+        lambda *_: [
+            {
+                "question": "1. What is 9 + 6?",
+                "answer": "15",
+                "explanation": "Make 10 by moving 1 from 6 to 9, then add the remaining 5.",
+            }
+        ],
+    )
+    mock_llm = MagicMock()
+    mock_llm.complete.side_effect = AssertionError("RAG marking should not call an LLM")
+
+    result = review_service.review_homework(
+        homework_content="1. What is 9 + 6?",
+        student_answers="14",
+        subject="Maths-1year",
+        profile={"year_group": 5, "age": 10},
+        homework_doc_id="week-1",
+        is_eleven_plus=True,
+        llm_client=mock_llm,
+    )
+
+    assert result["success"] is True
+    assert result["correct_count"] == 0
+    assert "The correct answer is **15**" in result["review"]
+    assert "How to work out each answer" in result["review"]
+    mock_llm.complete.assert_not_called()

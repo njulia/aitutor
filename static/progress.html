@@ -14,10 +14,12 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
+            overflow-x: hidden;
         }
         
         .container {
-            max-width: 1200px;
+            width: 100%;
+            max-width: 1280px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -37,6 +39,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
         }
         
         .logo {
@@ -48,7 +59,7 @@
         }
         
         .nav-links a {
-            margin-left: 20px;
+            margin-left: 0;
             text-decoration: none;
             color: #666;
             font-weight: 500;
@@ -65,38 +76,24 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             margin-bottom: 30px;
         }
-        
-        .student-selector {
-            display: flex;
-            gap: 15px;
-            align-items: flex-end;
-            flex-wrap: wrap;
+
+        .page-status {
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-radius: 12px;
+            background: #f4f6ff;
+            color: #4b5570;
+            line-height: 1.6;
         }
-        
-        .form-group {
-            flex: 1;
-            min-width: 200px;
+
+        .page-status.error {
+            background: #fff1f2;
+            color: #8b2635;
         }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #444;
-        }
-        
-        input, select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
+
+        .page-status a {
+            color: #4f5dc4;
+            font-weight: 700;
         }
         
         .btn {
@@ -216,7 +213,18 @@
             padding: 25px;
             margin-bottom: 25px;
             position: relative;
-            height: 350px;
+            width: 100%;
+            min-width: 0;
+            height: clamp(300px, 46vw, 430px);
+            overflow: hidden;
+        }
+
+        .chart-container canvas {
+            display: block;
+            width: 100% !important;
+            height: calc(100% - 44px) !important;
+            min-width: 0;
+            max-width: 100%;
         }
         
         .chart-title {
@@ -224,6 +232,171 @@
             font-weight: 600;
             color: #444;
             margin-bottom: 15px;
+        }
+
+        .section-help {
+            color: #667085;
+            line-height: 1.6;
+            margin: -8px 0 20px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+            gap: 12px;
+            margin: 18px 0 22px;
+        }
+
+        .detail-card {
+            background: #f7f8ff;
+            border: 1px solid #e8eaff;
+            border-radius: 14px;
+            padding: 15px;
+            min-width: 0;
+        }
+
+        .detail-value {
+            color: #5865c7;
+            font-size: 1.35em;
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .detail-label {
+            color: #667085;
+            font-size: 0.86em;
+            margin-top: 4px;
+            line-height: 1.35;
+        }
+
+        .legend-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            color: #667085;
+            font-size: 0.88em;
+            margin-top: 14px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .legend-swatch {
+            width: 13px;
+            height: 13px;
+            border-radius: 4px;
+            flex: 0 0 auto;
+        }
+
+        .legend-swatch.met { background: #20b981; }
+        .legend-swatch.started { background: #ffd28a; }
+        .legend-swatch.rest { background: #e7e9ef; }
+
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 12px;
+        }
+
+        .topic-name {
+            font-weight: 650;
+            color: #354052;
+        }
+
+        .topic-updated {
+            color: #8a94a6;
+            font-size: 0.8em;
+            margin-top: 3px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 0.78em;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .status-pill.strong { background: #e7f8ef; color: #147a4b; }
+        .status-pill.growing { background: #fff4d8; color: #8a5a00; }
+        .status-pill.practise { background: #fff0f2; color: #a33447; }
+
+        .session-item {
+            gap: 16px;
+        }
+
+        .session-main {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .session-number {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: #eef0ff;
+            color: #5865c7;
+            display: grid;
+            place-items: center;
+            font-weight: 750;
+            flex: 0 0 auto;
+        }
+
+        .session-score-block {
+            text-align: right;
+            flex: 0 0 auto;
+        }
+
+        .session-raw-score {
+            color: #8a94a6;
+            font-size: 0.8em;
+            margin-top: 2px;
+        }
+
+        .session-result-label {
+            display: inline-block;
+            margin-top: 5px;
+            font-size: 0.76em;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+        }
+
+        a.session-result-label {
+            text-decoration: none;
+            cursor: pointer;
+            border: 1px solid currentColor;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        a.session-result-label:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(163, 52, 71, 0.18);
+        }
+
+        a.session-result-label:focus-visible {
+            outline: 3px solid rgba(102, 126, 234, 0.35);
+            outline-offset: 2px;
+        }
+
+        .session-result-label.strong { background: #e7f8ef; color: #147a4b; }
+        .session-result-label.growing { background: #fff4d8; color: #8a5a00; }
+        .session-result-label.practise { background: #fff0f2; color: #a33447; }
+
+        .empty-inline {
+            color: #7d8799;
+            text-align: center;
+            padding: 22px 12px;
+            background: #f8f9ff;
+            border-radius: 12px;
         }
         
         .no-data {
@@ -358,8 +531,18 @@
         }
         
         .day-cell.goal-not-met {
-            background: #e0e0e0;
-            color: #999;
+            background: #ffd28a;
+            color: #6c4900;
+        }
+
+        .day-cell.no-activity {
+            background: #e7e9ef;
+            color: #98a0ae;
+        }
+
+        .day-cell.today {
+            outline: 3px solid rgba(102, 126, 234, 0.28);
+            outline-offset: 2px;
         }
         
         .day-cell .day-tooltip {
@@ -455,20 +638,62 @@
         }
         
         @media (max-width: 768px) {
-            .student-selector {
-                flex-direction: column;
+            .container {
+                padding: 12px;
             }
-            
-            .form-group {
-                width: 100%;
+
+            .card,
+            .chart-container {
+                padding: 18px;
+                border-radius: 16px;
             }
-            
+
+            .chart-container {
+                height: clamp(280px, 82vw, 370px);
+            }
+
             .progress-stats {
                 grid-template-columns: repeat(2, 1fr);
             }
             
             .accuracy-ring-container {
                 justify-content: center;
+            }
+
+            .topics-table {
+                min-width: 760px;
+            }
+
+            .session-item {
+                align-items: flex-start;
+            }
+
+            .session-main {
+                flex: 1 1 auto;
+            }
+
+            .nav-links {
+                gap: 10px 14px;
+                font-size: 0.92em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .progress-stats,
+            .detail-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .stat-card {
+                padding: 17px 10px;
+            }
+
+            .stat-value {
+                font-size: 1.75em;
+            }
+
+            .session-number {
+                display: none;
             }
         }
     </style>
@@ -496,16 +721,11 @@
     <div class="container">
         <div class="card">
             <h2 class="section-title">Track Your Progress</h2>
-            <p style="color: #666; margin-bottom: 25px;">
-                Enter your student ID to view your learning progress and performance over time.
+            <p id="progress-intro" style="color: #666;">
+                Loading progress for your signed-in learner profile.
             </p>
-            
-            <div class="student-selector">
-                <div class="form-group">
-                    <label for="student-id">Student ID</label>
-                    <input type="text" id="student-id" placeholder="e.g. student_3, emma_year3" value="">
-                </div>
-                <button class="btn btn-primary" onclick="loadProgress()">Load Progress</button>
+            <div id="page-status" class="page-status" role="status" aria-live="polite">
+                Getting the latest results…
             </div>
         </div>
 
@@ -520,6 +740,10 @@
                 <!-- 正确率详情 -->
                 <div class="card" id="accuracy-card">
                     <h3 class="section-title">Accuracy Rate</h3>
+                    <p class="section-help">
+                        This shows how often marked work was correct. Use the subject details to choose what to practise next.
+                    </p>
+                    <div class="detail-grid" id="accuracy-summary-grid"></div>
                     <div class="accuracy-ring-container">
                         <div class="accuracy-ring">
                             <canvas id="accuracyRingChart"></canvas>
@@ -535,8 +759,17 @@
                 <!-- 每日目标完成热力图 -->
                 <div class="card" id="daily-goal-card">
                     <h3 class="section-title">Daily Goal Completion</h3>
-                    <p id="daily-goal-summary" style="color: #666; margin-bottom: 15px;"></p>
+                    <p class="section-help">
+                        A short practice session each day helps learning stick. The calendar shows the most recent 30 days.
+                    </p>
+                    <div class="detail-grid" id="daily-goal-details"></div>
+                    <p id="daily-goal-summary" style="color: #666; margin-bottom: 15px; line-height: 1.6;"></p>
                     <div class="daily-goal-grid" id="daily-goal-grid"></div>
+                    <div class="legend-row" aria-label="Daily goal colour guide">
+                        <span class="legend-item"><span class="legend-swatch met"></span>Goal met</span>
+                        <span class="legend-item"><span class="legend-swatch started"></span>Practised, goal not met</span>
+                        <span class="legend-item"><span class="legend-swatch rest"></span>No session recorded</span>
+                    </div>
                 </div>
 
                 <!-- 分数趋势图 -->
@@ -554,12 +787,20 @@
                 <!-- 主题进度表 -->
                 <div class="card">
                     <h3 class="section-title">Topic Progress</h3>
+                    <p class="section-help">
+                        Topics needing more practice appear first. “Strong” means 80% or more, “Growing” means 50–79%, and “Practise next” means below 50%.
+                    </p>
+                    <div class="detail-grid" id="topic-summary-grid"></div>
                     <div id="topics-container"></div>
                 </div>
 
                 <!-- 最近会话列表 -->
                 <div class="card">
                     <h3 class="section-title">Recent Sessions</h3>
+                    <p class="section-help">
+                        The newest marked sessions are shown first, including the subject, date, score and a simple progress message.
+                    </p>
+                    <div class="detail-grid" id="session-summary-grid"></div>
                     <div class="sessions-list" id="sessions-container"></div>
                 </div>
             </div>
@@ -578,140 +819,81 @@
 
     <script>
         let charts = [];
+        let latestProgressData = null;
+        let resizeTimer = null;
 
-        // 从 URL 参数读取 student_id，或从 localStorage 读取
-        (function() {
-            const params = new URLSearchParams(window.location.search);
-            let studentId = params.get('student_id');
-            
-            if (!studentId) {
-                // Fallback to localStorage if not in URL
-                studentId = localStorage.getItem('student_id');
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProgress();
+            window.addEventListener('resize', scheduleChartResize, { passive: true });
+        });
 
-            if (studentId) {
-                document.getElementById('student-id').value = studentId;
-                loadProgress();
-            }
-        })();
-
-        async function loadProgress() {
-            const studentId = document.getElementById('student-id').value.trim();
-            
-            if (!studentId) {
-                alert('Please enter a student ID');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/progress/${encodeURIComponent(studentId)}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    displayProgress(data);
-                } else {
-                    alert('Error: ' + (data.error || 'Failed to load progress'));
-                }
-            } catch (err) {
-                console.error('Error:', err);
-                alert('Failed to load progress data');
-            }
+        function scheduleChartResize() {
+            window.clearTimeout(resizeTimer);
+            resizeTimer = window.setTimeout(() => {
+                if (!latestProgressData || document.getElementById('progress-content').classList.contains('hidden')) return;
+                renderCharts(latestProgressData);
+            }, 180);
         }
 
-        function displayProgress(data) {
-            const summary = data.summary;
-            const scoreHistory = data.score_history;
-            const topics = data.topics;
-            const overall = summary.overall;
-            const dailyGoal = data.daily_goal || {};
-            const streak = data.streak || {};
-            const accuracyRate = data.accuracy_rate || {};
-            const feedback = data.feedback || {};
-
-            // 销毁旧图表
-            charts.forEach(c => c.destroy());
+        function destroyCharts() {
+            charts.forEach(chart => {
+                try { chart.destroy(); } catch (error) { console.debug('Chart cleanup skipped:', error); }
+            });
             charts = [];
-
-            if (overall.total_sessions === 0) {
-                document.getElementById('progress-content').classList.add('hidden');
-                document.getElementById('no-data').classList.remove('hidden');
-                return;
-            }
-
-            document.getElementById('no-data').classList.add('hidden');
-            document.getElementById('progress-content').classList.remove('hidden');
-
-            // 渲染鼓励反馈横幅
-            renderFeedback(feedback);
-
-            // 渲染统计卡片
-            renderStats(overall, streak, dailyGoal, accuracyRate, summary.by_subject.length, topics.length);
-
-            // 渲染正确率详情
-            renderAccuracyRate(accuracyRate);
-
-            // 渲染每日目标热力图
-            renderDailyGoalGrid(dailyGoal);
-
-            // 渲染分数趋势图
-            renderScoreTrendChart(scoreHistory);
-
-            // 渲染科目正确率图
-            renderSubjectChart(summary.by_subject);
-
-            // 渲染主题进度表
-            renderTopicsTable(topics);
-
-            // 渲染最近会话列表
-            renderSessionsList(scoreHistory);
         }
 
-        function renderFeedback(feedback) {
-            const banner = document.getElementById('feedback-banner');
-            if (!feedback.headline) {
-                banner.classList.add('hidden');
-                return;
-            }
-            banner.classList.remove('hidden');
-            banner.innerHTML = `
-                <div class="feedback-headline">${feedback.headline}</div>
-                <div class="feedback-message">${feedback.message || ''}</div>
-                <div class="feedback-tip">${feedback.tip || ''}</div>
-            `;
+        function showPageStatus(message, isError = false) {
+            const statusBox = document.getElementById('page-status');
+            statusBox.classList.toggle('error', isError);
+            statusBox.innerHTML = message;
+            statusBox.classList.remove('hidden');
         }
 
-        function renderStats(overall, streak, dailyGoal, accuracyRate, subjectCount, topicCount) {
-            const statsContainer = document.getElementById('stats-container');
-            const overallAccuracy = accuracyRate.overall_accuracy !== null && accuracyRate.overall_accuracy !== undefined
-                ? accuracyRate.overall_accuracy
-                : overall.avg_accuracy;
+        function safeNumber(value, fallback = 0) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
 
-            statsContainer.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-value">${overall.total_sessions}</div>
-                    <div class="stat-label">Homework Completed</div>
-                </div>
-                <div class="stat-card green">
-                    <div class="stat-value">${overallAccuracy}%</div>
-                    <div class="stat-label">Overall Accuracy</div>
-                </div>
-                <div class="stat-card orange">
-                    <div class="stat-value">${streak.current_streak || 0}</div>
-                    <div class="stat-label">Day Streak</div>
-                </div>
-                <div class="stat-card blue">
-                    <div class="stat-value">${streak.best_streak || 0}</div>
-                    <div class="stat-label">Best Streak</div>
-                </div>
-                <div class="stat-card teal">
-                    <div class="stat-value">${dailyGoal.daily_goal_rate || 0}%</div>
-                    <div class="stat-label">Daily Goal Rate</div>
-                </div>
-                <div class="stat-card pink">
-                    <div class="stat-value">${topicCount}</div>
-                    <div class="stat-label">Topics Covered</div>
-                </div>
-            `;
+        function percent(value) {
+            return Math.max(0, Math.min(100, Math.round(safeNumber(value) * 10) / 10));
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function plural(value, singular, pluralWord = `${singular}s`) {
+            return `${value} ${value === 1 ? singular : pluralWord}`;
+        }
+
+        function localDateKey(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateTime(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return 'Date not recorded';
+            return date.toLocaleString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatShortDate(value) {
+            const date = value instanceof Date ? value : new Date(value);
+            if (Number.isNaN(date.getTime())) return 'Not recorded';
+            return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         }
 
         function displaySubjectName(subject) {
@@ -724,288 +906,583 @@
                 verbalreasoning: 'Verbal Reasoning',
                 nonverbalreasoning: 'Non-Verbal Reasoning'
             };
-            return labels[folded] || value;
+            return labels[folded] || value || 'General practice';
         }
 
         function subjectColourKey(subject) {
             return displaySubjectName(subject);
         }
 
-        function renderAccuracyRate(accuracyRate) {
-            const ringValue = document.getElementById('accuracy-ring-value');
-            const detailsContainer = document.getElementById('accuracy-details');
+        function normaliseSubjects(summary, accuracyRate) {
+            const source = Array.isArray(summary?.by_subject) && summary.by_subject.length
+                ? summary.by_subject
+                : (Array.isArray(accuracyRate?.by_subject) ? accuracyRate.by_subject : []);
+            return source.map(item => ({
+                subject: displaySubjectName(item.subject),
+                accuracy: percent(item.avg_accuracy ?? item.accuracy ?? item.avg_score),
+                sessions: Math.max(0, Math.round(safeNumber(item.total_sessions ?? item.count ?? item.graded_sessions)))
+            }));
+        }
 
-            const overall = accuracyRate.overall_accuracy;
-            if (overall === null || overall === undefined) {
-                ringValue.textContent = '--';
-                detailsContainer.innerHTML = '<p style="color: #888;">No question-level accuracy data yet. Complete more practice to unlock detailed accuracy tracking.</p>';
+        function overallAccuracy(data) {
+            const rate = data.accuracy_rate || {};
+            const summary = data.summary || {};
+            const overall = summary.overall || {};
+            const candidates = [rate.overall_accuracy, rate.accuracy_rate, overall.avg_accuracy];
+            for (const candidate of candidates) {
+                if (candidate !== null && candidate !== undefined && Number.isFinite(Number(candidate))) {
+                    return percent(candidate);
+                }
+            }
+            return null;
+        }
+
+        async function loadProgress() {
+            showPageStatus('Getting the latest results…');
+
+            try {
+                const response = await fetch('/api/progress', { credentials: 'same-origin' });
+                const data = await response.json().catch(() => ({}));
+
+                if (response.status === 401) {
+                    showPageStatus('A parent or guardian needs to <a href="/login">sign in</a> to see progress.', true);
+                    return;
+                }
+                if (response.status === 402) {
+                    showPageStatus('Progress tracking is part of a paid plan. <a href="/pricing">View plans</a>.', true);
+                    return;
+                }
+                if (!response.ok || !data.success) {
+                    throw new Error(data.detail || data.error || 'Progress could not be loaded.');
+                }
+
+                const learnerName = data.student && data.student.name ? data.student.name : 'your learner';
+                document.getElementById('progress-intro').textContent = `Showing progress for ${learnerName}.`;
+                document.getElementById('page-status').classList.add('hidden');
+                latestProgressData = data;
+                displayProgress(data);
+            } catch (error) {
+                console.error('Error:', error);
+                showPageStatus('We could not load progress just now. Please try again.', true);
+            }
+        }
+
+        function displayProgress(data) {
+            const summary = data.summary || { overall: {}, by_subject: [] };
+            const overall = summary.overall || {};
+            const scoreHistory = Array.isArray(data.score_history) ? data.score_history : [];
+            const topics = Array.isArray(data.topics) ? data.topics : [];
+            const dailyGoal = data.daily_goal || {};
+            const streak = data.streak || {};
+            const accuracyRate = data.accuracy_rate || {};
+            const totalSessions = Math.max(0, Math.round(safeNumber(overall.total_sessions)));
+
+            if (totalSessions === 0) {
+                destroyCharts();
+                document.getElementById('progress-content').classList.add('hidden');
+                document.getElementById('no-data').classList.remove('hidden');
                 return;
             }
 
-            ringValue.textContent = overall + '%';
+            document.getElementById('no-data').classList.add('hidden');
+            document.getElementById('progress-content').classList.remove('hidden');
 
-            // 绘制环形图
-            const ctx = document.getElementById('accuracyRingChart');
-            const chart = new Chart(ctx, {
+            renderFeedback(data.feedback);
+            renderStats(overall, streak, dailyGoal, accuracyRate, topics.length);
+            renderAccuracyDetails(data);
+            renderDailyGoalGrid(dailyGoal);
+            renderTopicsTable(topics);
+            renderSessionsList(scoreHistory);
+            renderCharts(data);
+        }
+
+        function renderCharts(data) {
+            destroyCharts();
+            renderAccuracyRing(overallAccuracy(data));
+            renderScoreTrendChart(Array.isArray(data.score_history) ? data.score_history : []);
+            renderSubjectChart(normaliseSubjects(data.summary || {}, data.accuracy_rate || {}));
+        }
+
+        function renderFeedback(feedback) {
+            const banner = document.getElementById('feedback-banner');
+            let headline = '';
+            let message = '';
+            let tip = '';
+
+            if (typeof feedback === 'string') {
+                headline = 'Keep going!';
+                message = feedback;
+                tip = 'Small, regular practice is more useful than one very long session.';
+            } else if (feedback && typeof feedback === 'object') {
+                headline = feedback.headline || '';
+                message = feedback.message || '';
+                tip = feedback.tip || '';
+            }
+
+            if (!headline && !message) {
+                banner.classList.add('hidden');
+                return;
+            }
+
+            banner.classList.remove('hidden');
+            banner.innerHTML = `
+                <div class="feedback-headline">${escapeHtml(headline || 'Good effort!')}</div>
+                <div class="feedback-message">${escapeHtml(message)}</div>
+                ${tip ? `<div class="feedback-tip">${escapeHtml(tip)}</div>` : ''}
+            `;
+        }
+
+        function renderStats(overall, streak, dailyGoal, accuracyRate, topicCount) {
+            const statsContainer = document.getElementById('stats-container');
+            const accuracy = accuracyRate.overall_accuracy ?? accuracyRate.accuracy_rate ?? overall.avg_accuracy ?? 0;
+            const longestStreak = streak.best_streak ?? streak.longest_streak ?? 0;
+            const goalRate = dailyGoal.daily_goal_rate ?? 0;
+
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${Math.round(safeNumber(overall.total_sessions))}</div>
+                    <div class="stat-label">Homework Completed</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-value">${percent(accuracy)}%</div>
+                    <div class="stat-label">Overall Accuracy</div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="stat-value">${Math.round(safeNumber(streak.current_streak))}</div>
+                    <div class="stat-label">Day Streak</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-value">${Math.round(safeNumber(longestStreak))}</div>
+                    <div class="stat-label">Best Streak</div>
+                </div>
+                <div class="stat-card teal">
+                    <div class="stat-value">${percent(goalRate)}%</div>
+                    <div class="stat-label">Goal Rate on Active Days</div>
+                </div>
+                <div class="stat-card pink">
+                    <div class="stat-value">${topicCount}</div>
+                    <div class="stat-label">Topics Tracked</div>
+                </div>
+            `;
+        }
+
+        function renderAccuracyDetails(data) {
+            const rate = data.accuracy_rate || {};
+            const summary = data.summary || {};
+            const overallSummary = summary.overall || {};
+            const subjects = normaliseSubjects(summary, rate);
+            const overall = overallAccuracy(data);
+            const totalSessions = Math.max(0, Math.round(safeNumber(overallSummary.total_sessions)));
+            const gradedSessions = Math.max(0, Math.round(safeNumber(rate.graded_sessions, totalSessions)));
+            const ungradedSessions = Math.max(0, totalSessions - gradedSessions);
+            const strongest = [...subjects].sort((a, b) => b.accuracy - a.accuracy)[0];
+
+            document.getElementById('accuracy-summary-grid').innerHTML = `
+                <div class="detail-card">
+                    <div class="detail-value">${overall === null ? '--' : `${overall}%`}</div>
+                    <div class="detail-label">Average accuracy across marked sessions</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${gradedSessions}</div>
+                    <div class="detail-label">Marked ${gradedSessions === 1 ? 'session' : 'sessions'} included</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${subjects.length}</div>
+                    <div class="detail-label">${subjects.length === 1 ? 'Subject' : 'Subjects'} with progress data</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${strongest ? escapeHtml(strongest.subject) : 'Keep practising'}</div>
+                    <div class="detail-label">${strongest ? `Strongest subject at ${strongest.accuracy}%` : 'Complete more marked work to find a strongest subject'}${ungradedSessions ? ` · ${plural(ungradedSessions, 'ungraded session')}` : ''}</div>
+                </div>
+            `;
+
+            const detailsContainer = document.getElementById('accuracy-details');
+            if (subjects.length === 0) {
+                detailsContainer.innerHTML = '<div class="empty-inline">No subject-level data yet. Complete more marked practice to see a breakdown.</div>';
+                return;
+            }
+
+            const subjectColors = {
+                Maths: '#667eea',
+                English: '#ee0979',
+                Science: '#11998e',
+                Spanish: '#ff6a00'
+            };
+            const defaultColors = ['#764ba2', '#00b4d8', '#f5576c', '#38ef7d'];
+
+            detailsContainer.innerHTML = subjects.map((subject, index) => {
+                const colour = subjectColors[subjectColourKey(subject.subject)] || defaultColors[index % defaultColors.length];
+                return `
+                    <div class="accuracy-detail-row">
+                        <span class="accuracy-subject-dot" style="background: ${colour}"></span>
+                        <span class="accuracy-detail-label">${escapeHtml(subject.subject)}</span>
+                        <span class="accuracy-detail-value">${subject.accuracy}%</span>
+                        <span style="color: #8a94a6; font-size: 0.85em;">${plural(subject.sessions, 'session')}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAccuracyRing(overall) {
+            const ringValue = document.getElementById('accuracy-ring-value');
+            ringValue.textContent = overall === null ? '--' : `${overall}%`;
+            const canvas = document.getElementById('accuracyRingChart');
+            if (overall === null) {
+                canvas.classList.add('hidden');
+                return;
+            }
+            canvas.classList.remove('hidden');
+            const chart = new Chart(canvas, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Correct', 'Incorrect'],
+                    labels: ['Correct', 'Room to grow'],
                     datasets: [{
                         data: [overall, 100 - overall],
                         backgroundColor: ['#667eea', '#e0e0e0'],
-                        borderWidth: 0,
+                        borderWidth: 0
                     }]
                 },
                 options: {
                     responsive: false,
                     cutout: '72%',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { enabled: false },
-                    },
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
                 }
             });
             charts.push(chart);
+        }
 
-            // 各科正确率明细
-            const bySubject = accuracyRate.by_subject || [];
-            const subjectColors = {
-                'Maths': '#667eea',
-                'English': '#ee0979',
-                'Science': '#11998e',
-                'Spanish': '#ff6a00',
-            };
-            const defaultColors = ['#764ba2', '#00b4d8', '#f5576c', '#38ef7d'];
-
-            if (bySubject.length === 0) {
-                detailsContainer.innerHTML = '<p style="color: #888;">No subject-level data yet.</p>';
-                return;
-            }
-
-            detailsContainer.innerHTML = bySubject.map((s, i) => {
-                const color = subjectColors[subjectColourKey(s.subject)] || defaultColors[i % defaultColors.length];
-                return `
-                    <div class="accuracy-detail-row">
-                        <span class="accuracy-subject-dot" style="background: ${color}"></span>
-                        <span class="accuracy-detail-label">${displaySubjectName(s.subject)}</span>
-                        <span class="accuracy-detail-value">${s.accuracy}%</span>
-                        <span style="color: #aaa; font-size: 0.85em;">(${s.questions_correct}/${s.questions_attempted})</span>
-                    </div>
-                `;
-            }).join('');
+        function normaliseDailyCounts(dailyGoal) {
+            const source = Array.isArray(dailyGoal.daily_breakdown)
+                ? dailyGoal.daily_breakdown
+                : (Array.isArray(dailyGoal.daily_counts) ? dailyGoal.daily_counts : []);
+            const counts = new Map();
+            source.forEach(item => {
+                const key = String(item.date || '').slice(0, 10);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(key)) counts.set(key, Math.max(0, Math.round(safeNumber(item.count))));
+            });
+            return counts;
         }
 
         function renderDailyGoalGrid(dailyGoal) {
             const grid = document.getElementById('daily-goal-grid');
             const summary = document.getElementById('daily-goal-summary');
-            const breakdown = dailyGoal.daily_breakdown || [];
+            const details = document.getElementById('daily-goal-details');
+            const target = Math.max(1, Math.round(safeNumber(dailyGoal.daily_goal, 1)));
+            const counts = normaliseDailyCounts(dailyGoal);
+            const days = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-            if (breakdown.length === 0) {
-                summary.textContent = 'No daily activity recorded yet.';
-                grid.innerHTML = '';
-                return;
+            for (let offset = 29; offset >= 0; offset -= 1) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - offset);
+                const key = localDateKey(date);
+                const count = counts.get(key) || 0;
+                days.push({ date, key, count, goalMet: count >= target });
             }
 
-            summary.textContent = `You met your daily goal on ${dailyGoal.goal_met_days} out of ${dailyGoal.total_active_days} active days (${dailyGoal.daily_goal_rate}%).`;
+            const activeDays = days.filter(day => day.count > 0).length;
+            const goalDays = days.filter(day => day.goalMet).length;
+            const activeGoalRate = activeDays ? Math.round(goalDays / activeDays * 1000) / 10 : 0;
+            const calendarRate = Math.round(goalDays / 30 * 1000) / 10;
+            const totalSessions = days.reduce((sum, day) => sum + day.count, 0);
+            const bestDay = [...days].sort((a, b) => b.count - a.count)[0];
 
-            grid.innerHTML = breakdown.map(d => {
-                const dateObj = new Date(d.date);
-                const dayNum = dateObj.getDate();
-                const monthStr = dateObj.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
-                const cls = d.goal_met ? 'goal-met' : 'goal-not-met';
-                const tooltipText = d.goal_met
-                    ? `${monthStr}: ${d.count} session(s) - Goal met!`
-                    : `${monthStr}: ${d.count} session(s)`;
+            details.innerHTML = `
+                <div class="detail-card">
+                    <div class="detail-value">${target}</div>
+                    <div class="detail-label">${target === 1 ? 'Session' : 'Sessions'} needed each day</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${goalDays}</div>
+                    <div class="detail-label">Goal days in the last 30 days</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${activeGoalRate}%</div>
+                    <div class="detail-label">Goal completion on days practised</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-value">${totalSessions}</div>
+                    <div class="detail-label">Total sessions during this 30-day view</div>
+                </div>
+            `;
+
+            if (activeDays === 0) {
+                summary.textContent = 'No practice sessions were recorded in the last 30 days. One short session is a great place to start.';
+            } else {
+                const bestDayText = bestDay && bestDay.count
+                    ? ` The busiest day was ${formatShortDate(bestDay.date)} with ${plural(bestDay.count, 'session')}.`
+                    : '';
+                summary.textContent = `The goal was met on ${goalDays} of ${activeDays} active days (${activeGoalRate}%). Across all 30 calendar days, completion was ${calendarRate}%.${bestDayText}`;
+            }
+
+            const todayKey = localDateKey(today);
+            grid.innerHTML = days.map(day => {
+                const className = day.goalMet ? 'goal-met' : (day.count > 0 ? 'goal-not-met' : 'no-activity');
+                const todayClass = day.key === todayKey ? ' today' : '';
+                const label = day.goalMet
+                    ? `${formatShortDate(day.date)}: ${plural(day.count, 'session')} — goal met`
+                    : day.count > 0
+                        ? `${formatShortDate(day.date)}: ${plural(day.count, 'session')} — goal not met`
+                        : `${formatShortDate(day.date)}: no session recorded`;
                 return `
-                    <div class="day-cell ${cls}">
-                        ${dayNum}
-                        <span class="day-tooltip">${tooltipText}</span>
+                    <div class="day-cell ${className}${todayClass}" aria-label="${escapeHtml(label)}">
+                        ${day.date.getDate()}
+                        <span class="day-tooltip">${escapeHtml(label)}</span>
                     </div>
                 `;
             }).join('');
         }
 
+        function showChartEmpty(canvasId, message) {
+            const canvas = document.getElementById(canvasId);
+            const parent = canvas.parentElement;
+            canvas.classList.add('hidden');
+            let empty = parent.querySelector('.chart-empty-message');
+            if (!empty) {
+                empty = document.createElement('div');
+                empty.className = 'chart-empty-message empty-inline';
+                parent.appendChild(empty);
+            }
+            empty.textContent = message;
+            empty.classList.remove('hidden');
+        }
+
+        function showChartCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            canvas.classList.remove('hidden');
+            const empty = canvas.parentElement.querySelector('.chart-empty-message');
+            if (empty) empty.classList.add('hidden');
+        }
+
         function renderScoreTrendChart(scoreHistory) {
-            const ctx = document.getElementById('scoreTrendChart');
-            if (!ctx || scoreHistory.length === 0) return;
-
-            const sorted = [...scoreHistory].sort((a, b) =>
-                new Date(a.created_at) - new Date(b.created_at)
-            );
-
-            const labels = sorted.map(s => {
-                const d = new Date(s.created_at);
-                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            const valid = scoreHistory.filter(item => safeNumber(item.max_score) > 0 && Number.isFinite(Number(item.score)));
+            if (valid.length === 0) {
+                showChartEmpty('scoreTrendChart', 'No marked scores are available for the trend chart yet.');
+                return;
+            }
+            showChartCanvas('scoreTrendChart');
+            const canvas = document.getElementById('scoreTrendChart');
+            const sorted = [...valid].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            const maxLabels = Math.max(4, Math.floor((canvas.clientWidth || window.innerWidth) / 82));
+            const labelStep = Math.max(1, Math.ceil(sorted.length / maxLabels));
+            const labels = sorted.map((item, index) => {
+                if (index % labelStep !== 0 && index !== sorted.length - 1) return '';
+                const date = new Date(item.created_at);
+                return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
             });
-            const scores = sorted.map(s => Math.round((s.score / s.max_score) * 100));
+            const scores = sorted.map(item => percent(safeNumber(item.score) / safeNumber(item.max_score, 10) * 100));
+            const subjectColors = { Maths: '#667eea', English: '#ee0979', Science: '#11998e', Spanish: '#ff6a00' };
+            const pointColours = sorted.map(item => subjectColors[subjectColourKey(item.subject)] || '#764ba2');
 
-            const subjectColors = {
-                'Maths': '#667eea',
-                'English': '#ee0979',
-                'Science': '#11998e',
-                'Spanish': '#ff6a00',
-            };
-            const bgColors = sorted.map(s => subjectColors[subjectColourKey(s.subject)] || '#764ba2');
-
-            const chart = new Chart(ctx, {
+            const chart = new Chart(canvas, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels,
                     datasets: [{
                         label: 'Score (%)',
                         data: scores,
                         borderColor: '#667eea',
                         backgroundColor: 'rgba(102, 126, 234, 0.1)',
                         borderWidth: 3,
-                        pointBackgroundColor: bgColors,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
+                        pointBackgroundColor: pointColours,
+                        pointRadius: 5,
                         fill: true,
-                        tension: 0.3,
+                        tension: 0.3
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) {
-                                    const item = sorted[ctx.dataIndex];
-                                    return `${displaySubjectName(item.subject)}: ${item.score}/${item.max_score} (${ctx.raw}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { callback: v => v + '%' }
-                        }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, max: 100, ticks: { callback: value => `${value}%` } } }
                 }
             });
             charts.push(chart);
         }
 
-        function renderSubjectChart(bySubject) {
-            const ctx = document.getElementById('subjectChart');
-            if (!ctx || bySubject.length === 0) return;
-
-            const labels = bySubject.map(s => displaySubjectName(s.subject));
-            const accuracies = bySubject.map(s => s.avg_accuracy);
-            const sessions = bySubject.map(s => s.total_sessions);
-
-            const colors = ['#667eea', '#ee0979', '#11998e', '#ff6a00', '#764ba2', '#00b4d8'];
-
-            const chart = new Chart(ctx, {
+        function renderSubjectChart(subjects) {
+            if (subjects.length === 0) {
+                showChartEmpty('subjectChart', 'No subject-level accuracy is available yet.');
+                return;
+            }
+            showChartCanvas('subjectChart');
+            const canvas = document.getElementById('subjectChart');
+            const colours = ['#667eea', '#ee0979', '#11998e', '#ff6a00', '#764ba2', '#00b4d8'];
+            const chart = new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: subjects.map(item => item.subject),
                     datasets: [{
                         label: 'Average Accuracy (%)',
-                        data: accuracies,
-                        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
-                        borderRadius: 8,
-                        barThickness: 60,
+                        data: subjects.map(item => item.accuracy),
+                        backgroundColor: subjects.map((_, index) => colours[index % colours.length]),
+                        borderRadius: 8
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                afterLabel: function(ctx) {
-                                    return `Sessions: ${sessions[ctx.dataIndex]}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { callback: v => v + '%' }
-                        }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, max: 100, ticks: { callback: value => `${value}%` } } }
                 }
             });
             charts.push(chart);
+        }
+
+        function topicStatus(accuracy) {
+            if (accuracy >= 80) return { label: 'Strong', className: 'strong' };
+            if (accuracy >= 50) return { label: 'Growing', className: 'growing' };
+            return { label: 'Practise next', className: 'practise' };
         }
 
         function renderTopicsTable(topics) {
             const container = document.getElementById('topics-container');
-            
+            const summary = document.getElementById('topic-summary-grid');
             if (topics.length === 0) {
-                container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No topic data available yet</p>';
+                summary.innerHTML = '';
+                container.innerHTML = '<div class="empty-inline">No topic data is available yet. Mark some practice to begin topic tracking.</div>';
                 return;
             }
 
-            container.innerHTML = `
-                <table class="topics-table">
-                    <thead>
-                        <tr>
-                            <th>Topic</th>
-                            <th>Subject</th>
-                            <th>Questions</th>
-                            <th>Correct</th>
-                            <th>Accuracy</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${topics.map(t => `
-                            <tr>
-                                <td>${t.topic}</td>
-                                <td>${t.subject || '-'}</td>
-                                <td>${t.questions_attempted}</td>
-                                <td>${t.questions_correct}</td>
-                                <td>
-                                    <span class="accuracy-bar">
-                                        <span class="accuracy-fill" style="width: ${t.accuracy}%"></span>
-                                    </span>
-                                    ${t.accuracy}%
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+            const normalised = topics.map(item => ({
+                topic: String(item.topic || 'General practice'),
+                subject: displaySubjectName(item.subject),
+                attempted: Math.max(0, Math.round(safeNumber(item.questions_attempted))),
+                correct: Math.max(0, Math.round(safeNumber(item.questions_correct))),
+                accuracy: percent(item.accuracy),
+                updatedAt: item.updated_at || ''
+            })).sort((a, b) => a.accuracy - b.accuracy || b.attempted - a.attempted);
+
+            const totalQuestions = normalised.reduce((sum, item) => sum + item.attempted, 0);
+            const strongCount = normalised.filter(item => item.accuracy >= 80).length;
+            const growingCount = normalised.filter(item => item.accuracy >= 50 && item.accuracy < 80).length;
+            const practiseCount = normalised.filter(item => item.accuracy < 50).length;
+
+            summary.innerHTML = `
+                <div class="detail-card"><div class="detail-value">${normalised.length}</div><div class="detail-label">Topics tracked</div></div>
+                <div class="detail-card"><div class="detail-value">${totalQuestions}</div><div class="detail-label">Questions attempted</div></div>
+                <div class="detail-card"><div class="detail-value">${strongCount}</div><div class="detail-label">Strong topics</div></div>
+                <div class="detail-card"><div class="detail-value">${practiseCount}</div><div class="detail-label">Topics to practise next${growingCount ? ` · ${growingCount} growing` : ''}</div></div>
             `;
+
+            container.innerHTML = `
+                <div class="table-scroll">
+                    <table class="topics-table">
+                        <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Subject</th>
+                                <th>Status</th>
+                                <th>Attempted</th>
+                                <th>Correct</th>
+                                <th>Accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${normalised.map(item => {
+                                const status = topicStatus(item.accuracy);
+                                return `
+                                    <tr>
+                                        <td>
+                                            <div class="topic-name">${escapeHtml(item.topic)}</div>
+                                            <div class="topic-updated">Last updated: ${escapeHtml(formatShortDate(item.updatedAt))}</div>
+                                        </td>
+                                        <td>${escapeHtml(item.subject)}</td>
+                                        <td><span class="status-pill ${status.className}">${status.label}</span></td>
+                                        <td>${item.attempted}</td>
+                                        <td>${item.correct}</td>
+                                        <td>
+                                            <span class="accuracy-bar"><span class="accuracy-fill" style="width: ${item.accuracy}%"></span></span>
+                                            ${item.accuracy}%
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function sessionResult(accuracy) {
+            if (accuracy >= 85) return { label: 'Excellent work', className: 'strong' };
+            if (accuracy >= 65) return { label: 'Good progress', className: 'growing' };
+            return { label: 'Practise this again', className: 'practise' };
+        }
+
+        function practiseAgainUrl(subject) {
+            const rawSubject = String(subject || '').trim();
+            const friendlySubject = displaySubjectName(rawSubject);
+
+            if (/-1year$/i.test(rawSubject)) {
+                return '/elevenplus-year-round-plan';
+            }
+
+            const elevenOnlySubjects = new Set(['Verbal Reasoning', 'Non-Verbal Reasoning']);
+            const tab = elevenOnlySubjects.has(friendlySubject) ? 'eleven' : 'homework';
+            const params = new URLSearchParams({
+                tab: tab,
+                subject: friendlySubject,
+                practise_again: '1'
+            });
+            return '/app?' + params.toString();
+        }
+
+        function sessionResultMarkup(result, subject) {
+            if (result.className !== 'practise') {
+                return `<span class="session-result-label ${result.className}">${escapeHtml(result.label)}</span>`;
+            }
+
+            const friendlySubject = displaySubjectName(subject);
+            const href = practiseAgainUrl(subject);
+            return `<a class="session-result-label practise" href="${escapeHtml(href)}" aria-label="Practise ${escapeHtml(friendlySubject)} again">${escapeHtml(result.label)}</a>`;
         }
 
         function renderSessionsList(scoreHistory) {
             const container = document.getElementById('sessions-container');
-            
-            if (scoreHistory.length === 0) {
-                container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No sessions recorded yet</p>';
+            const summary = document.getElementById('session-summary-grid');
+            const valid = scoreHistory
+                .filter(item => safeNumber(item.max_score) > 0 && Number.isFinite(Number(item.score)))
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (valid.length === 0) {
+                summary.innerHTML = '';
+                container.innerHTML = '<div class="empty-inline">No marked sessions are recorded yet.</div>';
                 return;
             }
 
-            const sorted = [...scoreHistory].sort((a, b) =>
-                new Date(b.created_at) - new Date(a.created_at)
-            );
+            const shown = valid.slice(0, 12);
+            const average = percent(valid.reduce((sum, item) => sum + safeNumber(item.score) / safeNumber(item.max_score, 10) * 100, 0) / valid.length);
+            const latest = shown[0];
+            const distinctSubjects = new Set(valid.map(item => displaySubjectName(item.subject))).size;
 
-            container.innerHTML = sorted.map(s => {
-                const date = new Date(s.created_at);
-                const dateStr = date.toLocaleDateString('en-GB', { 
-                    day: 'numeric', 
-                    month: 'short', 
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                const percentage = Math.round((s.score / s.max_score) * 100);
-                
+            summary.innerHTML = `
+                <div class="detail-card"><div class="detail-value">${shown.length}</div><div class="detail-label">Newest sessions shown</div></div>
+                <div class="detail-card"><div class="detail-value">${average}%</div><div class="detail-label">Average across all marked sessions</div></div>
+                <div class="detail-card"><div class="detail-value">${distinctSubjects}</div><div class="detail-label">${distinctSubjects === 1 ? 'Subject practised' : 'Subjects practised'}</div></div>
+                <div class="detail-card"><div class="detail-value">${escapeHtml(displaySubjectName(latest.subject))}</div><div class="detail-label">Most recent subject · ${escapeHtml(formatShortDate(latest.created_at))}</div></div>
+            `;
+
+            container.innerHTML = shown.map((item, index) => {
+                const maximum = safeNumber(item.max_score, 10);
+                const score = safeNumber(item.score);
+                const accuracy = percent(score / maximum * 100);
+                const result = sessionResult(accuracy);
                 return `
                     <div class="session-item">
-                        <div class="session-info">
-                            <div class="session-subject">${s.subject}</div>
-                            <div class="session-date">${dateStr}</div>
+                        <div class="session-main">
+                            <div class="session-number">${index + 1}</div>
+                            <div class="session-info">
+                                <div class="session-subject">${escapeHtml(displaySubjectName(item.subject))}</div>
+                                <div class="session-date">${escapeHtml(formatDateTime(item.created_at))}</div>
+                            </div>
                         </div>
-                        <div class="session-score">${percentage}%</div>
+                        <div class="session-score-block">
+                            <div class="session-score">${accuracy}%</div>
+                            <div class="session-raw-score">${score}/${maximum}</div>
+                            ${sessionResultMarkup(result, item.subject)}
+                        </div>
                     </div>
                 `;
             }).join('');

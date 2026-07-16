@@ -1135,8 +1135,7 @@
         button.textContent = 'Checking…';
 
         try {
-            for (let index = 0; index < activeHomework.length; index += 1) {
-                const item = activeHomework[index];
+            const checkedItems = await Promise.all(activeHomework.map(async function (item, index) {
                 const response = await fetch('/api/review', {
                     method: 'POST',
                     credentials: 'same-origin',
@@ -1157,12 +1156,17 @@
                         is_eleven_plus: true
                     })
                 });
-                const data = await response.json();
+                const data = await response.json().catch(function () { return {}; });
                 if (!response.ok || !data.success) throw new Error(data.error || 'The tutor could not check these answers.');
+                return { index: index, review: data.review || '' };
+            }));
+
+            checkedItems.forEach(function (result) {
+                const index = result.index;
                 const feedback = document.getElementById('feedback-' + index);
-                feedback.innerHTML = markdownToSafeHtml(data.review || '');
+                feedback.innerHTML = markdownToSafeHtml(result.review);
                 feedback.classList.remove('hidden');
-            }
+            });
             showStatus('Your answers are checked. Read the worked steps, then try one similar question without looking.');
         } catch (error) {
             console.error(error);

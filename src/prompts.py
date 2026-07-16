@@ -110,7 +110,7 @@ For each wrong answer:
 - Name the question briefly.
 - Say what needs fixing.
 - Give the correct answer.
-- Give one simple child-friendly explanation or method, using no more than 2 short sentences.
+- Give one simple child-friendly explanation or method, using no more than 3 short sentences.
 
 ## Keep Going
 - End with one specific, encouraging sentence.
@@ -365,16 +365,27 @@ Question:
 Student's Answer/Work:
 {student_answer}
 
+Write a detailed check with exactly these sections:
+
 Please review the student's answer for this SINGLE question and provide:
 1. A clear indication of whether the answer is correct or incorrect.
-2. A brief explanation of the correct answer if the student's answer is wrong or incomplete.
-3. Specific feedback on what the student did well in their attempt.
-4. Specific feedback on areas that need correction or improvement for this question.
+2. Show the expected answer where one exists.
+3. Explain the method or reasoning step by step in simple language.
+4. If wrong, explain the likely mistake without blaming the student.
 5. Encouragement and motivation relevant to this single question.
 
-Return the review in a clear, encouraging format appropriate for a primary school student. Focus only on the single question provided.
-"""
+For open-ended work:
+- Explain what was effective.
+- Explain one or two clear improvements.
+- Do not pretend there is only one possible answer.
 
+Rules:
+- Focus only on the single question provided.
+- Do not guess when the question lacks enough information.
+- Use UK English suitable for the student's year group.
+- Avoid unnecessary repetition of the full worksheet.
+- Do not add unrelated practice questions or external links.
+"""
 
 # ============================================================
 # 作业正确答案生成 Prompt

@@ -39,6 +39,23 @@ let currentHomework = [];
             return anonymousClientId;
         }
 
+        function getLearnerReviewProfile() {
+            const source = currentProfile && typeof currentProfile === 'object' ? currentProfile : {};
+            const rawYear = Number(source.year_group);
+            const yearGroup = Number.isFinite(rawYear) ? Math.min(7, Math.max(1, Math.round(rawYear))) : 3;
+            const rawAge = Number(source.age);
+            const age = Number.isFinite(rawAge) ? Math.min(12, Math.max(5, Math.round(rawAge))) : Math.min(12, yearGroup + 4);
+            const profile = { year_group: yearGroup, age: age };
+            if (Number.isFinite(Number(source.plan_week))) {
+                profile.plan_week = Math.min(52, Math.max(1, Math.round(Number(source.plan_week))));
+            }
+            if (typeof source.plan_phase === 'string') profile.plan_phase = source.plan_phase.slice(0, 40);
+            if (Array.isArray(source.learning_goals)) {
+                profile.learning_goals = source.learning_goals.slice(0, 4).map(item => String(item).slice(0, 100));
+            }
+            return profile;
+        }
+
 
         // Subscription status
         let hasSubscription = null; // null = 未检查, true/false = 已检查
@@ -929,7 +946,7 @@ let currentHomework = [];
                         homework: homeworkContent,
                         answers: studentAnswer,
                         subject: subject,
-                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        profile: getLearnerReviewProfile(),
                         is_tutor_mode: true, // Indicate tutor mode review
                         from_rag: hw.from_rag, // Pass from_rag status
                         homework_doc_id: hw.doc_id, // Source RAG document
@@ -975,35 +992,89 @@ let currentHomework = [];
         }
 
 
-        async function reviewGeneratedHomework() {
-            // Collect all answers
-            let allAnswers = [];
+        function readResponseBlockAnswer(block) {
+            if (!block) return '';
 
-            // Textarea answers
-            const answerInputs = document.querySelectorAll('.answer-input-inline');
-            answerInputs.forEach(input => {
-                const subject = input.dataset.subject;
-                const answer = input.value.trim();
-                if (answer) {
-                    allAnswers.push(`--- ${subject} ---\n${answer}`);
+            const renderer = window.HomeworkQuestionRenderer;
+            if (renderer && typeof renderer.getBlockAnswer === 'function' && block.classList.contains('question-response-block')) {
+                return String(renderer.getBlockAnswer(block) || '').trim();
+            }
+
+            const input = block.querySelector('.answer-input-inline, .answer-box, textarea');
+            return input ? String(input.value || '').trim() : '';
+        }
+
+        function findFirstUnansweredResponse(block) {
+            if (!block) return null;
+            const items = Array.from(block.querySelectorAll('.question-response-item'));
+            return items.find(item => {
+                if (item.dataset.responseType === 'single_choice') {
+                    return !item.querySelector('.multiple-choice-input:checked');
                 }
-            });
+                const input = item.querySelector('.question-response-input');
+                return !input || !input.value.trim();
+            }) || null;
+        }
 
-            const combinedAnswers = allAnswers.join('\n\n');
+        function focusUnansweredResponse(item) {
+            if (!item) return;
+            const control = item.querySelector('.multiple-choice-input, .question-response-input');
+            if (control && typeof control.focus === 'function') control.focus();
+            if (typeof item.scrollIntoView === 'function') {
+                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
 
-            if (!combinedAnswers.trim()) {
+        async function reviewGeneratedHomework() {
+            const reviewItems = currentHomework.map((homeworkItem, index) => {
+                const block = document.querySelector(`.homework-block[data-homework-index="${index}"], .question-response-block[data-homework-index="${index}"]`);
+                return { homeworkItem, index, answer: readResponseBlockAnswer(block) };
+            }).filter(item => item.answer);
+
+            if (!reviewItems.length) {
                 alert('Please enter your answers first!');
                 return;
             }
 
-            const homework = currentHomework.map(h => h.content).join('\n\n');
-            const subject = currentHomework[0]?.subject || 'Maths';
-            // Get doc_id from the first homework item (for RAG answer lookup)
-            const homeworkDocId = currentHomework[0]?.doc_id || null;
-
-            currentSubject = subject;
-            // Homework mode review is free, no subscription check needed here.
-            reviewHomeworkWithContent(homework, combinedAnswers, subject, homeworkDocId);
+            currentSubject = reviewItems[0].homeworkItem.subject || 'Maths';
+            showLoading();
+            try {
+                const results = await Promise.all(reviewItems.map(async ({ homeworkItem, index, answer }) => {
+                    const response = await fetch('/api/review', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            homework: homeworkItem.content,
+                            answers: answer,
+                            subject: homeworkItem.subject || 'Maths',
+                            profile: getLearnerReviewProfile(),
+                            from_rag: Boolean(homeworkItem.from_rag),
+                            homework_doc_id: homeworkItem.doc_id || null,
+                            is_eleven_plus: Boolean(homeworkItem.is_eleven_plus),
+                            question_index: Number.isInteger(homeworkItem.question_index)
+                                ? homeworkItem.question_index : null
+                        })
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (response.status === 401 || response.status === 402) {
+                        const accessError = new Error(data.error || 'A parent account is needed for this feature.');
+                        accessError.status = response.status;
+                        throw accessError;
+                    }
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.error || 'We could not check that answer just now.');
+                    }
+                    return `## ${homeworkItem.subject || `Homework ${index + 1}`}\n\n${data.review || ''}`;
+                }));
+                displayReview(results.join('\n\n---\n\n'));
+            } catch (error) {
+                console.error('Review failed:', error);
+                if (error.status === 401) redirectToLogin();
+                else if (error.status === 402) redirectToPricing();
+                else alert(error.message || 'We could not check those answers just now.');
+            } finally {
+                hideLoading();
+            }
         }
 
         async function reviewHomework() {
@@ -1048,7 +1119,7 @@ let currentHomework = [];
                     homework: homework,
                     answers: answers,
                     subject: subject,
-                    profile: { student_id: currentStudentId }
+                    profile: getLearnerReviewProfile()
                 };
                 // Add doc_id if available (for RAG answer lookup)
                 if (homeworkDocId) {
@@ -1153,7 +1224,7 @@ let currentHomework = [];
                         homework: homework,
                         answers: combinedAnswers,
                         subject: subject,
-                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
                         from_rag: isFree,
                         homework_doc_id: homeworkDocId,
@@ -1261,7 +1332,7 @@ let currentHomework = [];
                         homework: homework,
                         answers: combinedAnswers,
                         subject: subject,
-                        profile: { student_id: currentStudentId }, // Pass student_id for subscription check
+                        profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
                         from_rag: isFree,
                         homework_doc_id: homeworkDocId,
@@ -1358,11 +1429,22 @@ let currentHomework = [];
         }
 
         function checkPracticeAnswers() {
+            const practiceBlock = document.querySelector('#homework-results .practice-question-block, #homework-results .question-response-block');
+            const unanswered = findFirstUnansweredResponse(practiceBlock);
+            if (unanswered) {
+                alert('Please answer every question before checking.');
+                focusUnansweredResponse(unanswered);
+                return;
+            }
+
             const answerInput = document.getElementById('practice-answer-input');
-            const answers = answerInput ? answerInput.value.trim() : '';
+            const answers = practiceBlock
+                ? readResponseBlockAnswer(practiceBlock)
+                : (answerInput ? answerInput.value.trim() : '');
 
             if (!answers) {
                 alert('Please write your answers first!');
+                if (answerInput && typeof answerInput.focus === 'function') answerInput.focus();
                 return;
             }
 
@@ -1375,7 +1457,7 @@ let currentHomework = [];
                     homework: currentPracticeContent,
                     answers: answers,
                     subject: currentPracticeSubject,
-                    profile: { student_id: currentStudentId } // Pass student_id for potential future use
+                    profile: getLearnerReviewProfile()
                 })
             })
             .then(response => response.json())

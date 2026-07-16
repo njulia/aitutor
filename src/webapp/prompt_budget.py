@@ -40,7 +40,6 @@ def compact_text(value: Any, max_chars: int, *, keep_tail: int = 0) -> str:
 def compact_profile(profile: Dict[str, Any] | None) -> Dict[str, Any]:
     source = profile or {}
     allowed = (
-        "student_id",
         "year_group",
         "age",
         "key_stage",

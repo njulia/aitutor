@@ -1,22 +1,23 @@
 # Validation results
 
-Validated on 11 July 2026.
+Validated on 16 July 2026 after the review reliability, privacy and latency refactor.
 
 ```text
-DEV_MODE=true pytest -q
-21 passed
-
-python -m compileall -q web_app.py src scripts
+python -m py_compile web_app.py src/webapp/review_service.py src/webapp/models.py src/ui/shared.py src/webapp/prompt_budget.py
 passed
 
 node --check static/js/app.js
 passed
 
-node --check static/js/chart-lite.js
-passed
-
-DEV_MODE=true python -c "import web_app"
-95 routes loaded
+pytest -q
+70 passed, 6 skipped
 ```
 
-A fresh-database integration check also covered registration, parent account creation, default learner creation, memory enable/read, logout, complete account erasure and failed login after erasure.
+The six skipped tests are Playwright browser tests guarded by `RUN_E2E=1`. The current execution environment did not provide the pytest Playwright `page` fixture/browser installation, so they were not claimed as executed. Unit and API coverage includes:
+
+- 11+ year-round correct and wrong answer review without an LLM call;
+- detailed RAG explanation without an LLM call;
+- Ollama-safe model routing and integer token limits;
+- request-field propagation for document IDs and question indexes;
+- profile PII minimisation and whole-word subject extraction;
+- existing authentication, privacy, generation, RAG and persistence contracts.

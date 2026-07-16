@@ -25,6 +25,32 @@ from src.prompts import PROFILE_PARSE_PROMPT
 
 logger = logging.getLogger(__name__)
 
+_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
+_PHONE_RE = re.compile(r"(?<!\d)(?:\+?44\s?\d{4}|0\d{3,4})[\s-]?\d{3,4}[\s-]?\d{3,4}(?!\d)")
+_POSTCODE_RE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b", re.I)
+
+
+def _minimise_profile_description(description: str) -> str:
+    """Remove identifiers that are not needed to choose age or subjects."""
+    text = str(description or "")[:2_000]
+    text = _EMAIL_RE.sub("[email removed]", text)
+    text = _PHONE_RE.sub("[phone removed]", text)
+    text = _POSTCODE_RE.sub("[postcode removed]", text)
+    # Common input starts with a child's name: "Ana is a 7-year-old...".
+    text = re.sub(r"^\s*[A-Z][A-Za-z'’-]{1,30}\s+(?=is\b|aged\b|age\b)", "The pupil ", text)
+    # Location is not needed for curriculum level or subject selection.
+    text = re.sub(
+        r"\s+in\s+(?!Year\b)[A-Z][A-Za-z'’-]{1,40}(?=[,.]|\s|$)",
+        "",
+        text,
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _contains_alias(text: str, alias: str) -> bool:
+    escaped = re.escape(alias.strip())
+    return bool(escaped and re.search(rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])", text, re.I))
+
 
 def display_homeworks(sections) -> str:
     """将作业内容转换为带Tab切换的HTML页面，使用 homework.html 模板渲染 markdown
@@ -79,8 +105,10 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
     Returns:
         学生档案字典或 None
     """
-    # 检查缓存
-    cache_key = make_cache_key("profile_parse", description)
+    safe_description = _minimise_profile_description(description)
+    # Cache the minimised form so names, email addresses and locations are not
+    # retained in a reusable cache key.
+    cache_key = make_cache_key("profile_parse", safe_description)
     cached = profile_parse_cache.get(cache_key)
     if cached is not None:
         logger.info("[Cache] 命中学生档案解析缓存")
@@ -89,7 +117,7 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
     try:
         # Most Smart Homework descriptions include a year/age and a named
         # subject. Parse those locally first to avoid an unnecessary LLM call.
-        folded = str(description or "").casefold()
+        folded = safe_description.casefold()
         year_match = re.search(r"\byear\s*([1-6])\b", folded)
         age_match = re.search(r"\b(?:age|aged|is)\s*(?:a\s*)?(\d{1,2})(?:[- ]year[- ]old|\s+years? old)?\b", folded)
         year_num = int(year_match.group(1)) if year_match else None
@@ -113,7 +141,7 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
         }
         extracted_subjects = [
             subject for subject in UK_PRIMARY_SUBJECTS
-            if any(alias in folded for alias in subject_aliases.get(subject, (subject.casefold(),)))
+            if any(_contains_alias(folded, alias) for alias in subject_aliases.get(subject, (subject.casefold(),)))
         ]
         if year_num is not None and extracted_subjects:
             homework_info = get_homework_time_by_age(year_num)
@@ -135,14 +163,20 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
 
         prompt_text = format_prompt(
             PROFILE_PARSE_PROMPT,
-            description=description,
+            description=safe_description,
             available_subjects=", ".join(UK_PRIMARY_SUBJECTS),
         )
         messages = build_messages(prompt_text)
         result = llm.complete_json(messages, temperature=0, max_tokens=450)
 
-        year_num = result.get("year_group", 1)
-        age_num = result.get("age", YEAR_GROUP_AGE.get(year_num, 5))
+        try:
+            year_num = max(1, min(6, int(result.get("year_group", 1))))
+        except (TypeError, ValueError):
+            year_num = 1
+        try:
+            age_num = max(5, min(12, int(result.get("age", YEAR_GROUP_AGE.get(year_num, 5)))))
+        except (TypeError, ValueError):
+            age_num = YEAR_GROUP_AGE.get(year_num, 5)
         hw_info = get_homework_time_by_age(year_num)
 
         extracted_subjects = result.get("extracted_subjects", [])
@@ -153,7 +187,7 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
                      ', '.join(extracted_subjects) if extracted_subjects else 'None')
 
         profile = {
-            "student_id": f"custom_{result.get('name', 'student').strip()}",
+            "student_id": "custom_student",
             "year_group": year_num,
             "age": age_num,
             "key_stage": KEY_STAGES.get(year_num, "KS1"),
