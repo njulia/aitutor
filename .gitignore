@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *.pyo
 *.egg-info/
 dist/
@@ -10,6 +11,8 @@ build/
 *.pdf
 *.HEIC
 *.sqlit3
+.coverage
+.pytest_cache/
 
 # 虚拟环境
 venv/
@@ -36,7 +39,8 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
 # data archives
 data_archive/
-data-3-small/
 data/
+uploads/
