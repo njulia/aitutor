@@ -415,6 +415,106 @@
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
+
+
+        /* Question-only homework: one question followed by its own answer box */
+        .single-question-list {
+            display: grid;
+            gap: 18px;
+        }
+
+        .single-question-card {
+            padding: 20px;
+            background: #f8f9ff;
+            border: 1px solid #e1e6ff;
+            border-left: 4px solid #667eea;
+            border-radius: 14px;
+        }
+
+        .single-question-heading {
+            margin-bottom: 10px;
+            color: #667eea;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .single-question-text {
+            color: #2d3142;
+            line-height: 1.75;
+        }
+
+        .single-question-text > :first-child { margin-top: 0; }
+        .single-question-text > :last-child { margin-bottom: 0; }
+
+        .single-question-body {
+            min-width: 0;
+        }
+
+        .single-question-body-inline {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(120px, 220px);
+            align-items: center;
+            gap: 14px;
+        }
+
+        .single-question-body-inline .single-question-text {
+            min-width: 0;
+        }
+
+        .single-question-body-inline .question-answer-input {
+            width: 100%;
+            max-width: 220px;
+            margin: 0;
+            justify-self: end;
+        }
+
+        .single-question-body-stacked .question-answer-input {
+            margin-top: 14px;
+        }
+
+        .question-answer-input {
+            display: block;
+            flex-grow: 0;
+            min-height: 0;
+            resize: vertical;
+            background: #ffffff;
+        }
+
+        input.question-answer-input {
+            height: 48px;
+            resize: none;
+        }
+
+        .answer-size-short {
+            width: min(100%, 320px);
+        }
+
+        .answer-size-medium {
+            width: min(100%, 680px);
+            min-height: 92px;
+        }
+
+        .answer-size-long {
+            width: 100%;
+            min-height: 155px;
+        }
+
+        .tutor-question-only-block .single-question-card {
+            margin: 0;
+        }
+
+        @media (max-width: 760px) {
+            .single-question-body-inline {
+                grid-template-columns: 1fr;
+            }
+
+            .single-question-body-inline .question-answer-input {
+                width: min(100%, 320px);
+                max-width: 100%;
+                justify-self: start;
+                margin-top: 10px;
+            }
+        }
         
         /* Question formatting */
         .question-number {
@@ -519,8 +619,23 @@
                 grid-template-columns: 1fr;
             }
             
-            .answer-input-inline {
-                min-height: 150px;
+            .answer-input-inline:not(input) {
+                min-height: 120px;
+            }
+
+            .single-question-body-inline .single-question-text {
+                flex-basis: 300px;
+                min-width: 200px;
+            }
+
+            .answer-size-short,
+            .answer-size-medium,
+            .answer-size-long {
+                width: 100%;
+            }
+
+            .single-question-body-inline .answer-size-short {
+                width: min(100%, 240px);
             }
         }
         
@@ -639,7 +754,7 @@
   <a href="/ks2-homework">KS2</a>
   <a href="/elevenplus-practice">11+</a>
   <a href="/elevenplus/articles">11+ Articles</a>
-  <a href="/progress">Progress</a>
+  <a href="/progress" target="_blank" rel="noopener noreferrer">Progress</a>
 <!--  <a href="/check-my-homework">Mark Homework</a>-->
   <a href="/contact-me">Contact Me</a>
     <a href="/login">Login</a> <!-- Added Login link -->
@@ -994,7 +1109,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <p style="margin-top: 10px;"><a href="/contact-me" style="color: inherit; font-weight: 600;">Contact Me</a></p>
     </div>
 
-    <script src="/static/js/app.js?v=20260716-explain-upload-context" defer></script>
+    <script src="/static/js/app.js?v=20260717-progress-new-window" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

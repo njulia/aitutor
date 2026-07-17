@@ -719,11 +719,10 @@
     </div>
 
     <div class="container">
-        <div class="card">
-            <h2 class="section-title">Track Your Progress</h2>
-            <p id="progress-intro" style="color: #666;">
-                Loading progress for your signed-in learner profile.
-            </p>
+<!--        <div class="card">-->
+<!--            <p id="progress-intro" style="color: #666;">-->
+<!--                Loading progress for your signed-in learner profile.-->
+<!--            </p>-->
             <div id="page-status" class="page-status" role="status" aria-live="polite">
                 Getting the latest results…
             </div>
@@ -956,8 +955,8 @@
                     throw new Error(data.detail || data.error || 'Progress could not be loaded.');
                 }
 
-                const learnerName = data.student && data.student.name ? data.student.name : 'your learner';
-                document.getElementById('progress-intro').textContent = `Showing progress for ${learnerName}.`;
+<!--                const learnerName = data.student && data.student.name ? data.student.name : 'you';-->
+<!--                document.getElementById('progress-intro').textContent = `Showing progress for ${learnerName}.`;-->
                 document.getElementById('page-status').classList.add('hidden');
                 latestProgressData = data;
                 displayProgress(data);

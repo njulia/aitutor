@@ -518,6 +518,48 @@
             border-left: 4px solid var(--green);
             border-radius: 12px;
             background: var(--green-soft);
+            overflow-x: auto;
+        }
+        .feedback table {
+            width: 100%;
+            min-width: 680px;
+            margin: 16px 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            border: 1px solid #cfd9d3;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(36, 48, 71, 0.06);
+        }
+        .feedback th,
+        .feedback td {
+            padding: 12px 14px;
+            border-right: 1px solid #dfe7e2;
+            border-bottom: 1px solid #dfe7e2;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.45;
+        }
+        .feedback th:last-child,
+        .feedback td:last-child { border-right: 0; }
+        .feedback tbody tr:last-child td { border-bottom: 0; }
+        .feedback th {
+            background: #247c5c;
+            color: #fff;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .feedback tbody tr:nth-child(even) td { background: #f5faf7; }
+        .feedback td:first-child,
+        .feedback th:first-child {
+            width: 74px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .feedback td:nth-child(3),
+        .feedback td:nth-child(4) {
+            min-width: 125px;
         }
         .status-message {
             margin-top: 16px;
@@ -818,12 +860,63 @@
             .replace(/'/g, '&#39;');
     }
 
+    function normaliseReviewComparisonTable(value) {
+        const text = String(value == null ? '' : value).replace(/\r\n?/g, '\n');
+        const lines = text.split('\n');
+        const headerIndex = lines.findIndex(function (line) {
+            const folded = line.toLowerCase();
+            return /(?:result|status)/.test(folded) &&
+                /question/.test(folded) &&
+                /your\s+answer/.test(folded) &&
+                /correct\s+answer/.test(folded);
+        });
+        if (headerIndex < 0 || lines[headerIndex].trim().startsWith('|')) return text;
+
+        function splitColumns(line) {
+            if (line.indexOf('\t') >= 0) {
+                return line.split(/\t+/).map(function (cell) { return cell.trim(); }).filter(Boolean);
+            }
+            return line.trim().split(/\s{2,}/).map(function (cell) { return cell.trim(); }).filter(Boolean);
+        }
+
+        const header = splitColumns(lines[headerIndex]);
+        if (header.length !== 4) return text;
+
+        const rows = [];
+        let cursor = headerIndex + 1;
+        while (cursor < lines.length) {
+            const raw = lines[cursor];
+            if (!raw.trim()) break;
+            const cells = splitColumns(raw);
+            if (cells.length !== 4 || !/^[✅❌⚠️]/.test(cells[0])) break;
+            rows.push(cells);
+            cursor += 1;
+        }
+        if (!rows.length) return text;
+
+        function escapeCell(cell) {
+            return String(cell).replace(/\|/g, '\\|');
+        }
+        const table = [
+            '| ' + header.map(escapeCell).join(' | ') + ' |',
+            '|---|---|---|---|'
+        ].concat(rows.map(function (row) {
+            return '| ' + row.map(escapeCell).join(' | ') + ' |';
+        }));
+
+        return lines.slice(0, headerIndex)
+            .concat(table)
+            .concat(lines.slice(cursor))
+            .join('\n');
+    }
+
     function markdownToSafeHtml(value) {
+        const markdown = normaliseReviewComparisonTable(value);
         if (typeof window.renderSafeMarkdown === 'function') {
-            return window.renderSafeMarkdown(String(value == null ? '' : value));
+            return window.renderSafeMarkdown(markdown);
         }
         return '<pre style="white-space:pre-wrap;margin:0;">' +
-            escapeHtml(String(value == null ? '' : value)) +
+            escapeHtml(markdown) +
             '</pre>';
     }
 
@@ -1135,7 +1228,8 @@
         button.textContent = 'Checking…';
 
         try {
-            const checkedItems = await Promise.all(activeHomework.map(async function (item, index) {
+            for (let index = 0; index < activeHomework.length; index += 1) {
+                const item = activeHomework[index];
                 const response = await fetch('/api/review', {
                     method: 'POST',
                     credentials: 'same-origin',
@@ -1156,17 +1250,12 @@
                         is_eleven_plus: true
                     })
                 });
-                const data = await response.json().catch(function () { return {}; });
+                const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.error || 'The tutor could not check these answers.');
-                return { index: index, review: data.review || '' };
-            }));
-
-            checkedItems.forEach(function (result) {
-                const index = result.index;
                 const feedback = document.getElementById('feedback-' + index);
-                feedback.innerHTML = markdownToSafeHtml(result.review);
+                feedback.innerHTML = markdownToSafeHtml(data.review || '');
                 feedback.classList.remove('hidden');
-            });
+            }
             showStatus('Your answers are checked. Read the worked steps, then try one similar question without looking.');
         } catch (error) {
             console.error(error);

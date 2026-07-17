@@ -139,6 +139,30 @@ let currentHomework = [];
             buttonArea.style.display = 'block';
         }
 
+
+        function getAnswerStorageKey(input, index = 0) {
+            if (!input) return `answer-${index}`;
+            return input.dataset.answerKey || input.id ||
+                `${input.dataset.subject || 'answer'}-${input.dataset.homeworkIndex || '0'}-${input.dataset.questionIndex || index}`;
+        }
+
+        function captureVisibleAnswers(target = {}) {
+            document.querySelectorAll('.answer-input-inline').forEach((input, index) => {
+                target[getAnswerStorageKey(input, index)] = input.value;
+            });
+            return target;
+        }
+
+        function restoreVisibleAnswers(savedAnswers) {
+            if (!savedAnswers || typeof savedAnswers !== 'object') return;
+            document.querySelectorAll('.answer-input-inline').forEach((input, index) => {
+                const key = getAnswerStorageKey(input, index);
+                const legacyKey = input.dataset.subject;
+                if (savedAnswers[key] !== undefined) input.value = savedAnswers[key];
+                else if (legacyKey && savedAnswers[legacyKey] !== undefined) input.value = savedAnswers[legacyKey];
+            });
+        }
+
         function saveStateToSessionStorage() {
             const state = {
                 homework: currentHomework,
@@ -150,9 +174,7 @@ let currentHomework = [];
                 questionIndex: currentQuestionIndex,
                 questionAnswers: currentQuestionAnswers
             };
-            document.querySelectorAll('.answer-input-inline').forEach(input => {
-                state.answers[input.dataset.subject] = input.value;
-            });
+            captureVisibleAnswers(state.answers);
             try {
                 sessionStorage.setItem('homeworkState', JSON.stringify(state));
             } catch(e) {
@@ -219,19 +241,13 @@ let currentHomework = [];
                 answers: {},
                 reviewHTML: document.getElementById('review-result').innerHTML,
             };
-            document.querySelectorAll('.answer-input-inline').forEach(input => {
-                savedHomeworkState.answers[input.dataset.subject] = input.value;
-            });
+            captureVisibleAnswers(savedHomeworkState.answers);
         }
 
         function restoreSavedState() {
             if (!savedHomeworkState) return false;
             // 恢复答案
-            document.querySelectorAll('.answer-input-inline').forEach(input => {
-                if (savedHomeworkState.answers[input.dataset.subject] !== undefined) {
-                    input.value = savedHomeworkState.answers[input.dataset.subject];
-                }
-            });
+            restoreVisibleAnswers(savedHomeworkState.answers);
             // 恢复批改结果
             document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML || '';
             return true;
@@ -300,11 +316,7 @@ let currentHomework = [];
 
                             // 恢复答案
                             setTimeout(() => {
-                                document.querySelectorAll('.answer-input-inline').forEach(input => {
-                                    if (state.answers && state.answers[input.dataset.subject] !== undefined) {
-                                        input.value = state.answers[input.dataset.subject];
-                                    }
-                                });
+                                restoreVisibleAnswers(state.answers);
                                 if (window.HomeworkQuestionRenderer) {
                                     window.HomeworkQuestionRenderer.restoreFromProxies(document);
                                 }
@@ -946,21 +958,178 @@ let currentHomework = [];
             return formatted;
         }
 
+        function escapeHomeworkText(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normaliseQuestionText(value) {
+            return String(value || '')
+                .replace(/\r\n?/g, '\n')
+                .replace(/[ \t]+$/gm, '')
+                .trim();
+        }
+
+        function questionTextFromObject(item) {
+            if (typeof item === 'string') return normaliseQuestionText(item);
+            if (!item || typeof item !== 'object') return '';
+            return normaliseQuestionText(
+                item.question || item.prompt || item.text || item.content || item.task || ''
+            );
+        }
+
+        function splitQuestionOnlyHomework(homeworkItem) {
+            if (homeworkItem && Array.isArray(homeworkItem.questions)) {
+                const structured = homeworkItem.questions
+                    .map(questionTextFromObject)
+                    .filter(Boolean);
+                if (structured.length) return structured;
+            }
+
+            const content = normaliseQuestionText(homeworkItem && homeworkItem.content);
+            if (!content) return [];
+
+            const lines = content.split('\n');
+            const questions = [];
+            let current = [];
+            let foundNumberedQuestion = false;
+
+            const numberedStart = /^\s*(?:#{1,6}\s*)?(?:(?:question|q)\s*)?(?:\(?\d+\)?[.):\-]|\d+\s*\))\s+(.+)$/i;
+            const bulletStart = /^\s*[-*•]\s+(.+)$/;
+            const looksLikeHeading = line => /^\s*(?:#{1,6}\s*)?(?:homework|questions?|worksheet|tasks?|practice|activity|instructions?)\s*:?[\s#]*$/i.test(line);
+
+            const pushCurrent = () => {
+                const value = normaliseQuestionText(current.join('\n'));
+                if (value) questions.push(value);
+                current = [];
+            };
+
+            lines.forEach(line => {
+                const numbered = line.match(numberedStart);
+                if (numbered) {
+                    if (foundNumberedQuestion) pushCurrent();
+                    else current = []; // Drop headings or instructions before Question 1.
+                    foundNumberedQuestion = true;
+                    current.push(numbered[1].trim());
+                    return;
+                }
+
+                if (!foundNumberedQuestion && looksLikeHeading(line)) return;
+                current.push(line);
+            });
+            pushCurrent();
+
+            if (foundNumberedQuestion && questions.length) return questions;
+
+            // Some generators use bullets rather than numbers. Only treat bullets as
+            // separate questions when at least two are present, to avoid breaking a
+            // single question that contains a short list.
+            const bulletQuestions = lines
+                .map(line => {
+                    const match = line.match(bulletStart);
+                    return match ? normaliseQuestionText(match[1]) : '';
+                })
+                .filter(Boolean);
+            if (bulletQuestions.length >= 2) return bulletQuestions;
+
+            const paragraphQuestions = content
+                .split(/\n\s*\n+/)
+                .map(normaliseQuestionText)
+                .filter(value => value && !looksLikeHeading(value));
+            if (paragraphQuestions.length >= 2 && paragraphQuestions.every(value => /[?!.]$/.test(value))) {
+                return paragraphQuestions;
+            }
+
+            return [content];
+        }
+
+        function removeVisibleAnswerLabels(root) {
+            if (!root) return;
+            const labelPattern = /^\s*your\s+answers?\s*:?\s*$/i;
+            root.querySelectorAll('h1, h2, h3, h4, h5, h6, label, legend, p, div, span').forEach(element => {
+                const containsAnswerControl = element.querySelector('input, textarea, select, button');
+                if (!containsAnswerControl && labelPattern.test(element.textContent || '')) {
+                    element.remove();
+                }
+            });
+        }
+
+        function stripStandaloneAnswerLabels(text) {
+            return String(text || '')
+                .split('\n')
+                .filter(line => !/^\s*(?:#{1,6}\s*)?your\s+answers?\s*:?\s*$/i.test(line))
+                .join('\n')
+                .trim();
+        }
+
+        function getAnswerInputSpec(questionText) {
+            const text = normaliseQuestionText(questionText).toLowerCase();
+            const longAnswer = /\b(explain|describe|compare|discuss|justify|give reasons?|show your working|show all working|write (?:a|an|the|your)|paragraph|story|letter|report|method|how do you know|why do you think)\b/.test(text);
+            const mediumAnswer = /\b(list|name (?:two|three|four)|give (?:two|three|four)|what happens|how|why|sentence|working|steps?|solve|word problem)\b/.test(text);
+            const numericAnswer = /[=+×÷*/<>]|\b(calculate|total|difference|sum|product|fraction|decimal|percentage|perimeter|area|volume|time|money|number)\b/.test(text);
+
+            if (longAnswer) {
+                return { kind: 'textarea', rows: 6, sizeClass: 'answer-size-long', placeholder: 'Write your full answer here...' };
+            }
+            if (mediumAnswer) {
+                return { kind: 'textarea', rows: 3, sizeClass: 'answer-size-medium', placeholder: 'Write your answer here...' };
+            }
+            if (numericAnswer || text.length <= 100) {
+                return { kind: 'input', rows: 1, sizeClass: 'answer-size-short', placeholder: 'Type your answer...' };
+            }
+            return { kind: 'textarea', rows: 3, sizeClass: 'answer-size-medium', placeholder: 'Write your answer here...' };
+        }
+
+        function renderQuestionAnswerControl({ questionText, homeworkIndex, questionIndex, subject, id = null, savedAnswer = '', inputSpec = null }) {
+            const spec = inputSpec || getAnswerInputSpec(questionText);
+            const inputId = id || `homework-answer-${homeworkIndex}-${questionIndex}`;
+            const safeSubject = String(subject || 'Homework').replace(/"/g, '&quot;');
+            const answerKey = `homework-${homeworkIndex}-question-${questionIndex}`;
+            const common = `class="answer-input-inline question-answer-input ${spec.sizeClass}" id="${inputId}" ` +
+                `data-subject="${safeSubject}" data-homework-index="${homeworkIndex}" ` +
+                `data-question-index="${questionIndex}" data-answer-key="${answerKey}" ` +
+                `aria-label="Answer to question ${questionIndex + 1}" placeholder="${spec.placeholder}"`;
+
+            if (spec.kind === 'input') {
+                return `<input type="text" ${common} value="${escapeHomeworkText(String(savedAnswer || ''))}" autocomplete="off">`;
+            }
+            return `<textarea ${common} rows="${spec.rows}">${escapeHomeworkText(String(savedAnswer || ''))}</textarea>`;
+        }
+
         function renderStandardHomeworkBlock(hw, idx) {
+            const questions = splitQuestionOnlyHomework(hw).map(stripStandaloneAnswerLabels).filter(Boolean);
+            const subject = hw.subject || 'Homework';
+            const questionCards = questions.map((questionText, questionIndex) => {
+                const inputSpec = getAnswerInputSpec(questionText);
+                const bodyClass = inputSpec.kind === 'input'
+                    ? 'single-question-body single-question-body-inline'
+                    : 'single-question-body single-question-body-stacked';
+                return `
+                    <section class="single-question-card" data-question-index="${questionIndex}">
+                        <div class="single-question-heading">Question ${questionIndex + 1} of ${questions.length}</div>
+                        <div class="${bodyClass}">
+                            <div class="single-question-text">${formatQuestions(renderSafeMarkdown(questionText))}</div>
+                            ${renderQuestionAnswerControl({
+                                questionText: questionText,
+                                homeworkIndex: idx,
+                                questionIndex: questionIndex,
+                                subject: subject,
+                                inputSpec: inputSpec
+                            })}
+                        </div>
+                    </section>
+                `;
+            }).join('');
+
             return `
-                <div class="homework-block" data-homework-index="${idx}">
-                    <h3 class="subject-header">${hw.subject} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
-                    <div class="homework-content">
-                        <div class="question-column">
-                            ${formatQuestions(renderSafeMarkdown(hw.content))}
-                        </div>
-                        <div class="answer-column">
-                            <h4>Your Answer:</h4>
-                            <textarea class="answer-input-inline"
-                                      placeholder="Write your answer here..."
-                                      data-subject="${hw.subject}"
-                                      data-homework-index="${idx}"></textarea>
-                        </div>
+                <div class="homework-block standard-question-list" data-homework-index="${idx}">
+                    <h3 class="subject-header">${escapeHomeworkText(subject)} ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                    <div class="single-question-list">
+                        ${questionCards}
                     </div>
                 </div>
             `;
@@ -982,6 +1151,7 @@ let currentHomework = [];
             }).join('');
 
             if (renderer) renderer.bindAll(container);
+            removeVisibleAnswerLabels(container);
             showResults();
             resetHomeworkActionButtons();
             document.getElementById('tutor-mode-buttons').style.display = 'none';
@@ -1012,25 +1182,33 @@ let currentHomework = [];
                     currentQuestionAnswers[index] = value;
                 });
             } else {
+                const tutorQuestion = stripStandaloneAnswerLabels(splitQuestionOnlyHomework(hw)[0] || hw.content || '');
+                const inputSpec = getAnswerInputSpec(tutorQuestion);
+                const bodyClass = inputSpec.kind === 'input'
+                    ? 'single-question-body single-question-body-inline'
+                    : 'single-question-body single-question-body-stacked';
                 container.innerHTML = `
-                    <div class="homework-block">
-                        <h3 class="subject-header">${hw.subject} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
-                        <div class="homework-content">
-                            <div class="question-column">
-                                ${formatQuestions(renderSafeMarkdown(hw.content))}
+                    <div class="homework-block tutor-question-only-block">
+                        <h3 class="subject-header">${escapeHomeworkText(hw.subject || 'Homework')} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
+                        <section class="single-question-card">
+                            <div class="${bodyClass}">
+                                <div class="single-question-text">${formatQuestions(renderSafeMarkdown(tutorQuestion))}</div>
+                                ${renderQuestionAnswerControl({
+                                    questionText: tutorQuestion,
+                                    homeworkIndex: index,
+                                    questionIndex: 0,
+                                    subject: hw.subject || 'Homework',
+                                    id: 'tutor-answer-input',
+                                    savedAnswer: savedAnswer,
+                                    inputSpec: inputSpec
+                                })}
                             </div>
-                            <div class="answer-column">
-                                <h4>Your Answer:</h4>
-                                <textarea class="answer-input-inline"
-                                          id="tutor-answer-input"
-                                          placeholder="Write your answer here..."
-                                          data-subject="${hw.subject}">${savedAnswer}</textarea>
-                            </div>
-                        </div>
+                        </section>
                     </div>
                 `;
             }
 
+            removeVisibleAnswerLabels(container);
             showResults();
             document.getElementById('homework-buttons').style.display = 'none';
             document.getElementById('tutor-mode-buttons').style.display = 'block';
@@ -1124,8 +1302,31 @@ let currentHomework = [];
                 return String(renderer.getBlockAnswer(block) || '').trim();
             }
 
+            const questionInputs = Array.from(block.querySelectorAll('.question-answer-input'));
+            if (questionInputs.length) {
+                return questionInputs
+                    .map((input, index) => `${index + 1}. ${String(input.value || '').trim()}`)
+                    .join('\n')
+                    .trim();
+            }
+
             const input = block.querySelector('.answer-input-inline, .answer-box, textarea');
             return input ? String(input.value || '').trim() : '';
+        }
+
+        function findFirstUnansweredStandardQuestion(block) {
+            if (!block) return null;
+            return Array.from(block.querySelectorAll('.question-answer-input'))
+                .find(input => !String(input.value || '').trim()) || null;
+        }
+
+        function focusUnansweredStandardQuestion(input) {
+            if (!input) return;
+            if (typeof input.focus === 'function') input.focus();
+            const card = input.closest('.single-question-card');
+            if (card && typeof card.scrollIntoView === 'function') {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
 
         function findFirstUnansweredResponse(block) {
@@ -1150,10 +1351,31 @@ let currentHomework = [];
         }
 
         async function reviewGeneratedHomework() {
-            const reviewItems = currentHomework.map((homeworkItem, index) => {
+            const reviewItems = [];
+
+            for (let index = 0; index < currentHomework.length; index += 1) {
+                const homeworkItem = currentHomework[index];
                 const block = document.querySelector(`.homework-block[data-homework-index="${index}"], .question-response-block[data-homework-index="${index}"]`);
-                return { homeworkItem, index, answer: readResponseBlockAnswer(block) };
-            }).filter(item => item.answer);
+
+                const unansweredStandard = findFirstUnansweredStandardQuestion(block);
+                if (unansweredStandard) {
+                    alert('Please answer every question before using Quick Review.');
+                    focusUnansweredStandardQuestion(unansweredStandard);
+                    return;
+                }
+
+                const unansweredChoice = block && block.classList.contains('question-response-block')
+                    ? findFirstUnansweredResponse(block)
+                    : null;
+                if (unansweredChoice) {
+                    alert('Please answer every question before using Quick Review.');
+                    focusUnansweredResponse(unansweredChoice);
+                    return;
+                }
+
+                const answer = readResponseBlockAnswer(block);
+                if (answer) reviewItems.push({ homeworkItem, index, answer });
+            }
 
             if (!reviewItems.length) {
                 alert('Please enter your answers first!');
@@ -1693,13 +1915,23 @@ let currentHomework = [];
         // ---- 学习进度追踪 ----
 
         async function TrackProgress() {
-            // Check subscription first
-            if (!await requireSubscription('Track Progress')) return;
+            // Open the new tab immediately while this click is still a direct user action.
+            // This avoids browsers blocking it after the subscription check finishes.
+            const progressWindow = window.open('about:blank', '_blank');
+            if (!progressWindow) {
+                alert('Please allow pop-ups so Progress can open in a new tab.');
+                return;
+            }
+            progressWindow.opener = null;
 
-            // Save current state to sessionStorage, so it can be restored when returning from pricing page
+            // Check subscription before loading private progress information.
+            if (!await requireSubscription('Track Progress')) {
+                progressWindow.close();
+                return;
+            }
+
             saveStateToSessionStorage();
-            
-            window.location.href = '/progress';
+            progressWindow.location.replace('/progress');
         }
 
         // ---- Admin Tools Functions ----
