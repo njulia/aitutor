@@ -653,6 +653,11 @@ async def progress_page():
     return _static_page("static", "progress.html")
 
 
+@app.get("/memory")
+async def memory_page():
+    return _static_page("static", "memory.html")
+
+
 @app.get("/app")
 async def app_page():
     return _static_page("static", "app.html")
