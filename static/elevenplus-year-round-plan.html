@@ -1086,15 +1086,18 @@
                 })
             });
 
+            const data = await response.json().catch(function () { return {}; });
+
             if (response.status === 401) {
+                alert(data.error || 'A parent or guardian needs to sign in. 11+ year-round practice requires 11+ Premium.');
                 window.location.href = '/login';
                 return;
             }
             if (response.status === 402) {
+                alert(data.error || '11+ year-round practice requires 11+ Premium.');
                 window.location.href = '/pricing';
                 return;
             }
-            const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || 'Practice could not be generated.');
             activeHomework = Array.isArray(data.homework) ? data.homework : [];
             if (!activeHomework.length) throw new Error('No practice was returned for this week.');
@@ -1251,7 +1254,17 @@
                         is_eleven_plus: true
                     })
                 });
-                const data = await response.json();
+                const data = await response.json().catch(function () { return {}; });
+                if (response.status === 401) {
+                    alert(data.error || 'A parent or guardian needs to sign in. 11+ year-round review requires 11+ Premium.');
+                    window.location.href = '/login';
+                    return;
+                }
+                if (response.status === 402) {
+                    alert(data.error || '11+ year-round review requires 11+ Premium.');
+                    window.location.href = '/pricing';
+                    return;
+                }
                 if (!response.ok || !data.success) throw new Error(data.error || 'The tutor could not check these answers.');
                 const feedback = document.getElementById('feedback-' + index);
                 feedback.innerHTML = markdownToSafeHtml(data.review || '');

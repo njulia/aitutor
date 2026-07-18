@@ -50,6 +50,14 @@
   </section>
   <section class="plans">
     <article class="card featured">
+      <span class="plan-kicker">Try everything</span>
+      <h2>Five-day trial</h2>
+      <p class="price">£0.99 <small>/ 5 days</small></p>
+      <p>Explore both Homework Premium and 11+ Premium for five days.</p>
+      <ul><li>Years 1–6 homework support</li><li>11+ practice and year-round plan</li><li>Detailed explanations</li><li>No automatic renewal</li></ul>
+      <button onclick="startCheckout('trial_5day')">Start the five-day trial</button>
+    </article>
+    <article class="card">
       <span class="plan-kicker">Years 1–6</span>
       <h2>Homework Premium</h2>
       <p class="price">£4.99 <small>/ month</small></p>
@@ -94,7 +102,7 @@ async function call(url,body){
 }
 async function startCheckout(plan){try{status('Opening secure checkout…');const data=await call('/api/billing/checkout',{plan});location.assign(data.checkout_url);}catch(error){status(error.message,true);}}
 async function openPortal(){try{status('Opening your billing portal…');const data=await call('/api/billing/portal');location.assign(data.portal_url);}catch(error){status(error.message,true);}}
-const params=new URLSearchParams(location.search);if(params.get('checkout')==='success')status('Thank you. Your access will update as soon as Stripe confirms the subscription.');if(params.get('checkout')==='cancelled')status('Checkout was cancelled. No changes were made.',true);
+const params=new URLSearchParams(location.search);if(params.get('checkout')==='success')status('Thank you. Your access will update as soon as Stripe confirms the payment.');if(params.get('checkout')==='cancelled')status('Checkout was cancelled. No changes were made.',true);
 </script>
 </body>
 </html>

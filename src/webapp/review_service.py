@@ -21,13 +21,11 @@ logger = logging.getLogger(__name__)
 
 QUICK_REVIEW_MODEL = (
     os.getenv("QUICK_REVIEW_MODEL")
-    or os.getenv("FLASH_MODEL")
-    or "qwen-flash"
+    or "deepseek-v4-flash"
 ).strip()
 DETAIL_REVIEW_MODEL = (
     os.getenv("DETAIL_REVIEW_MODEL")
-    or os.getenv("PLUS_MODEL")
-    or "qwen-plus"
+    or "gemini-2.5-flash"
 ).strip()
 
 
@@ -473,10 +471,11 @@ def review_homework(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
-    """Run the quick-check path.
+    """Run quick worksheet checks or detailed tutor-question checks.
 
-    RAG answers are marked deterministically first, then only wrong-answer
-    context is sent to the Flash model. Without RAG, Flash checks all answers.
+    RAG answers are marked deterministically first. Without RAG, ordinary
+    worksheets use the quick model while tutor and year-round checks use the
+    detailed model.
     """
     from src.cache import review_cache
     from src.llm_client import build_messages, format_prompt
@@ -491,9 +490,11 @@ def review_homework(
     student_id = raw_profile.get("student_id", "anonymous")
     profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile)
+    use_detail_model = bool(is_tutor_mode or budget["profile"].get("plan_week"))
+    selected_model = DETAIL_REVIEW_MODEL if use_detail_model else QUICK_REVIEW_MODEL
     cache_key = stable_cache_key(
-        "review_quick_v4",
-        QUICK_REVIEW_MODEL,
+        "review_detail_question_v1" if use_detail_model else "review_quick_v4",
+        selected_model,
         subject,
         budget,
         homework_doc_id,
@@ -550,12 +551,20 @@ def review_homework(
         review = _complete_review(
             llm_client,
             build_messages(prompt),
-            model=QUICK_REVIEW_MODEL,
+            model=selected_model,
             temperature=0.15,
-            max_tokens=_token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600),
-            operation="quick_review_no_rag_all_answers",
+            max_tokens=(
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
+                if use_detail_model
+                else _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
+            ),
+            operation=(
+                "detail_review_question_no_rag"
+                if use_detail_model
+                else "quick_review_no_rag_all_answers"
+            ),
         )
-        model_used = _resolved_model(llm_client, QUICK_REVIEW_MODEL)
+        model_used = _resolved_model(llm_client, selected_model)
         score, max_score = _extract_score(review)
 
     result = {
@@ -602,10 +611,10 @@ def explain_deep(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
-    """Run the detailed-check path using the Plus model.
+    """Run the detailed-check path using the configured detail model.
 
     With RAG, correct items are compact and wrong items carry full answer-key
-    context. Without RAG, Plus receives all questions and answers.
+    context. Without RAG, the detail model receives all questions and answers.
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt

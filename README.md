@@ -135,6 +135,19 @@ The image runs as a non-root user and starts one worker by default because the l
 
 Start with Stripe test mode. Configure real Price IDs and a signed webhook secret. Access decisions use webhook-synchronised local subscription state; do not restore public/manual production subscription creation.
 
+Configure these Stripe Price IDs:
+
+```dotenv
+STRIPE_PRICE_TRIAL_5DAY=price_...          # one-time £0.99 price
+STRIPE_PRICE_HOMEWORK_MONTHLY=price_...    # recurring £4.99/month price
+STRIPE_PRICE_ELEVENPLUS_MONTHLY=price_...  # recurring £9.99/month price
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+The paid trial is a one-time, non-renewing five-day entitlement covering both
+premium areas. The application grants it only after a signed Stripe webhook
+confirms payment, and each parent account can use it once.
+
 ## Observability
 
 Langfuse is optional. Keep raw content capture disabled. Use pseudonymous identifiers and operational metadata only unless a completed DPIA, privacy notice and provider agreement explicitly support more.

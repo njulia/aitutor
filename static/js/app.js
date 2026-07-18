@@ -61,6 +61,20 @@ let currentHomework = [];
 
         // Subscription status
         let hasSubscription = null; // null = 未检查, true/false = 已检查
+        const HOMEWORK_PREMIUM_PLAN = 'homework_monthly';
+        const ELEVENPLUS_PREMIUM_PLAN = 'elevenplus_monthly';
+        const PREMIUM_PLAN_NAMES = {
+            [HOMEWORK_PREMIUM_PLAN]: 'Homework Premium',
+            [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
+        };
+
+        function premiumPlanForContext(context = null) {
+            const isElevenPlus = Boolean(
+                context && context.is_eleven_plus
+                || Array.isArray(currentHomework) && currentHomework.some(item => item && item.is_eleven_plus)
+            );
+            return isElevenPlus ? ELEVENPLUS_PREMIUM_PLAN : HOMEWORK_PREMIUM_PLAN;
+        }
 
         // 检查订阅状态
         async function checkSubscription(plan = null) {
@@ -98,10 +112,11 @@ let currentHomework = [];
                 redirectToLogin()
                 return false;
             }
-            const subscribed = await checkSubscription(plan); // Check subscription for the logged-in user
+            const requiredPlan = plan || HOMEWORK_PREMIUM_PLAN;
+            const subscribed = await checkSubscription(requiredPlan);
             if (!subscribed) {
-                const planName = plan === 'elevenplus_monthly' ? '11+ Premium' : 'Premium';
-                alert(`${featureName} requires a ${planName} subscription. Please subscribe to continue.`);
+                const planName = PREMIUM_PLAN_NAMES[requiredPlan] || 'Premium';
+                alert(`${featureName} requires ${planName}. Please subscribe to continue.`);
                 redirectToPricing();
                 return false;
             }
@@ -1230,6 +1245,10 @@ let currentHomework = [];
             const hw = currentHomework[currentQuestionIndex];
             const homeworkContent = hw.content;
             const subject = hw.subject;
+            const requiredPlan = hw.is_eleven_plus
+                ? ELEVENPLUS_PREMIUM_PLAN
+                : HOMEWORK_PREMIUM_PLAN;
+            if (!await requireSubscription('Review Question', false, requiredPlan)) return;
 
             showLoading();
 
@@ -1448,7 +1467,7 @@ let currentHomework = [];
                 window.location.href = '/login';
                 return;
             }
-            if (!await requireSubscription('Mark Homework')) return;
+            if (!await requireSubscription('Mark Homework', false, HOMEWORK_PREMIUM_PLAN)) return;
 
             // 根据当前输入方式收集数据
             let homeworkText = '';
@@ -1619,10 +1638,12 @@ let currentHomework = [];
                 return;
             }
 
-            const isFree = Boolean(reviewContext.from_rag);
+            const fromRag = Boolean(reviewContext.from_rag);
+            const isFree = false;
+            const requiredPlan = premiumPlanForContext(reviewContext);
 
             // Check subscription first
-            if (!await requireSubscription('Explain in Detail', isFree)) return;
+            if (!await requireSubscription('Explain in Detail', isFree, requiredPlan)) return;
 
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
@@ -1656,7 +1677,7 @@ let currentHomework = [];
                         subject: subject,
                         profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
-                        from_rag: isFree,
+                        from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
                         is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
                     })
@@ -1717,10 +1738,12 @@ let currentHomework = [];
                 return;
             }
 
-            const isFree = Boolean(reviewContext.from_rag);
+            const fromRag = Boolean(reviewContext.from_rag);
+            const isFree = false;
+            const requiredPlan = premiumPlanForContext(reviewContext);
 
             // Check subscription first
-            if (!await requireSubscription('Help me improve', isFree)) return;
+            if (!await requireSubscription('Help me improve', isFree, requiredPlan)) return;
 
             // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
@@ -1754,7 +1777,7 @@ let currentHomework = [];
                         subject: subject,
                         profile: getLearnerReviewProfile(),
                         review_feedback: reviewFeedback,
-                        from_rag: isFree,
+                        from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
                         is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
                     })
@@ -1925,7 +1948,7 @@ let currentHomework = [];
             progressWindow.opener = null;
 
             // Check subscription before loading private progress information.
-            if (!await requireSubscription('Track Progress')) {
+            if (!await requireSubscription('Track Progress', false, premiumPlanForContext())) {
                 progressWindow.close();
                 return;
             }

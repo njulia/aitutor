@@ -46,6 +46,8 @@ from src.webapp.question_utils import (
     public_homework_content,
 )
 from src.webapp.review_service import (
+    DETAIL_REVIEW_MODEL,
+    QUICK_REVIEW_MODEL,
     review_homework as service_review_homework,
     explain_deep as service_explain_deep,
     improve_practice as service_improve_practice,
@@ -86,6 +88,57 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 llm = None
 initialized = False
 tutor_session_store = TutorSessionStore()
+
+HOMEWORK_PREMIUM_PLAN = "homework_monthly"
+ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
+PREMIUM_PLAN_NAMES = {
+    HOMEWORK_PREMIUM_PLAN: "Homework Premium",
+    ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
+}
+
+
+def _is_eleven_plus_year_round(profile: Optional[dict] = None, subject: str = "") -> bool:
+    profile = profile or {}
+    try:
+        if 1 <= int(profile.get("plan_week") or 0) <= 52:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return str(subject or "").strip().lower().endswith("-1year")
+
+
+def _required_premium_plan(
+    *,
+    is_eleven_plus: bool = False,
+    profile: Optional[dict] = None,
+    subject: str = "",
+) -> str:
+    if is_eleven_plus or _is_eleven_plus_year_round(profile, subject):
+        return ELEVENPLUS_PREMIUM_PLAN
+    return HOMEWORK_PREMIUM_PLAN
+
+
+def _subscription_required_response(feature: str, plan: str, username: Optional[str]) -> JSONResponse:
+    plan_name = PREMIUM_PLAN_NAMES.get(plan, "Premium")
+    if username is None:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "error": f"A parent or guardian needs to sign in. {feature} requires {plan_name}.",
+                "required_plan": plan,
+                "required_plan_name": plan_name,
+            },
+        )
+    return JSONResponse(
+        status_code=402,
+        content={
+            "success": False,
+            "error": f"{feature} requires {plan_name}.",
+            "required_plan": plan,
+            "required_plan_name": plan_name,
+        },
+    )
 
 
 def secure_filename(filename: str) -> str:
@@ -203,7 +256,12 @@ def is_logged_in(req: Request) -> bool:
     return False
 
 
-def user_has_subscription(req: Optional[Request] = None, student_id: Optional[str] = None, username: Optional[str] = None) -> bool:
+def user_has_subscription(
+    req: Optional[Request] = None,
+    student_id: Optional[str] = None,
+    username: Optional[str] = None,
+    required_plan: Optional[str] = None,
+) -> bool:
     """Read access from the local account database synchronised by Stripe webhooks.
 
     No network call is made on the request path. This lowers latency and avoids
@@ -220,7 +278,8 @@ def user_has_subscription(req: Optional[Request] = None, student_id: Optional[st
             return True
         from src.webapp.account_store import account_has_active_subscription
 
-        if account_has_active_subscription(username):
+        required_plans = [required_plan] if required_plan else None
+        if account_has_active_subscription(username, required_plans=required_plans):
             return True
         # Backward-compatible local developer subscriptions only. Production
         # access must come from verified Stripe webhook state.
@@ -381,7 +440,19 @@ def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus
     if not profile.get("student_id"):
         profile["student_id"] = f"student_{profile.get('year_group', 3)}_default"
 
-    return generate_homework_parallel(profile, subjects, llm, is_eleven_plus=is_eleven_plus)
+    is_year_round = bool(is_eleven_plus) and (
+        _is_eleven_plus_year_round(profile)
+        or any(_is_eleven_plus_year_round(subject=subject) for subject in subjects or [])
+    )
+    selected_llm = llm
+    if is_year_round and hasattr(llm, "with_model"):
+        selected_llm = llm.with_model(DETAIL_REVIEW_MODEL)
+    return generate_homework_parallel(
+        profile,
+        subjects,
+        selected_llm,
+        is_eleven_plus=is_eleven_plus,
+    )
 
 
 # Use the maintained, token-budgeted review service.  These wrappers keep the
@@ -907,6 +978,26 @@ async def api_generate(req: Request, request: ProfileRequest):
         if not subjects:
             return JSONResponse(status_code=400, content={"success": False, "error": "Please choose a subject."})
 
+        is_year_round = bool(request.is_eleven_plus) and (
+            _is_eleven_plus_year_round(profile)
+            or any(_is_eleven_plus_year_round(subject=subject) for subject in subjects)
+        )
+        if is_year_round:
+            required_plan = ELEVENPLUS_PREMIUM_PLAN
+            has_sub = await run_blocking(
+                user_has_subscription,
+                req,
+                resolved_student_id,
+                logged_in_username,
+                required_plan,
+                timeout=12,
+                limit_concurrency=False,
+            )
+            if not has_sub:
+                return _subscription_required_response(
+                    "11+ year-round practice", required_plan, logged_in_username
+                )
+
         generated = await run_blocking(
             generate_homework_with_profile,
             profile,
@@ -931,11 +1022,15 @@ async def api_generate(req: Request, request: ProfileRequest):
                     question["content_type"] = hw_block.get("content_type")
                 individual_questions.extend(split_questions)
 
+            required_plan = _required_premium_plan(
+                is_eleven_plus=bool(request.is_eleven_plus), profile=profile
+            )
             has_sub = await run_blocking(
                 user_has_subscription,
                 req,
                 resolved_student_id,
                 logged_in_username,
+                required_plan,
                 timeout=12,
                 limit_concurrency=False,
             )
@@ -951,13 +1046,9 @@ async def api_generate(req: Request, request: ProfileRequest):
                     })
                     _set_anon_cookie(response, new_anon_session_id, req)
                     return response
-                status_code = 401 if logged_in_username is None else 402
-                message = (
-                    "A parent or guardian needs to sign in for this tutor feature."
-                    if status_code == 401
-                    else "This tutor feature needs an active subscription."
+                return _subscription_required_response(
+                    "Tutor mode", required_plan, logged_in_username
                 )
-                return JSONResponse(status_code=status_code, content={"success": False, "error": message})
 
             response = JSONResponse({
                 "success": True,
@@ -994,24 +1085,6 @@ async def api_review(req: Request, request_body: ReviewRequest):
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
 
-        if request_body.is_tutor_mode and not request_body.from_rag:
-            has_sub = await run_blocking(
-                user_has_subscription,
-                req,
-                resolved_student_id,
-                logged_in_username,
-                timeout=12,
-                limit_concurrency=False,
-            )
-            if not has_sub:
-                status_code = 401 if logged_in_username is None else 402
-                message = (
-                    "A parent or guardian needs to sign in for this tutor check."
-                    if status_code == 401
-                    else "This tutor check needs an active subscription."
-                )
-                return JSONResponse(status_code=status_code, content={"success": False, "error": message})
-
         if request_body.session_id:
             session_owner = owner_key(logged_in_username or resolved_student_id)
             session = await run_blocking(
@@ -1023,6 +1096,29 @@ async def api_review(req: Request, request_body: ReviewRequest):
             )
             if session:
                 profile = {**session.get("profile", {}), **profile}
+
+        uses_detail_model = bool(
+            request_body.is_tutor_mode
+            or _is_eleven_plus_year_round(profile, request_body.subject)
+        )
+        if uses_detail_model:
+            required_plan = _required_premium_plan(
+                is_eleven_plus=bool(request_body.is_eleven_plus),
+                profile=profile,
+                subject=request_body.subject,
+            )
+            has_sub = await run_blocking(
+                user_has_subscription,
+                req,
+                resolved_student_id,
+                logged_in_username,
+                required_plan,
+                timeout=12,
+                limit_concurrency=False,
+            )
+            if not has_sub:
+                feature = "Review Question" if request_body.is_tutor_mode else "11+ year-round review"
+                return _subscription_required_response(feature, required_plan, logged_in_username)
 
         result = await run_blocking(
             review_homework,
@@ -1055,28 +1151,26 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-        # Trusted library questions already have an answer key, so their detailed
-        # explanation can be produced locally without charging for another model call.
-        if not request_body.from_rag:
-            has_sub = await run_blocking(
-                user_has_subscription,
-                req,
-                resolved_student_id,
-                logged_in_username,
-                timeout=12,
-                limit_concurrency=False,
-            )
-            if not has_sub:
-                status_code = 401 if logged_in_username is None else 402
-                message = (
-                    "A parent or guardian needs to sign in for detailed explanations."
-                    if status_code == 401
-                    else "Detailed explanations need an active subscription."
-                )
-                return JSONResponse(status_code=status_code, content={"success": False, "error": message})
-
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
+        required_plan = _required_premium_plan(
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            profile=profile,
+            subject=request_body.subject,
+        )
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            required_plan,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "Explain in Detail", required_plan, logged_in_username
+            )
         result = await run_blocking(
             explain_deep,
             request_body.homework,
@@ -1107,25 +1201,26 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+        profile = dict(request_body.profile or {})
+        profile["student_id"] = resolved_student_id
+        required_plan = _required_premium_plan(
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            profile=profile,
+            subject=request_body.subject,
+        )
         has_sub = await run_blocking(
             user_has_subscription,
             req,
             resolved_student_id,
             logged_in_username,
+            required_plan,
             timeout=12,
             limit_concurrency=False,
         )
         if not has_sub:
-            status_code = 401 if logged_in_username is None else 402
-            message = (
-                "A parent or guardian needs to sign in for extra practice."
-                if status_code == 401
-                else "Extra practice needs an active subscription."
+            return _subscription_required_response(
+                "Help me improve", required_plan, logged_in_username
             )
-            return JSONResponse(status_code=status_code, content={"success": False, "error": message})
-
-        profile = dict(request_body.profile or {})
-        profile["student_id"] = resolved_student_id
         result = await run_blocking(
             improve_practice,
             request_body.homework,
@@ -1373,19 +1468,23 @@ async def create_subscription(req: Request, request: SubscriptionRequest):
 
 
 @app.get("/api/check-subscription")
-async def check_subscription_api(req: Request):
+async def check_subscription_api(req: Request, plan: Optional[str] = None):
     resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+    required_plan = plan if plan in PREMIUM_PLAN_NAMES else None
     has_sub = await run_blocking(
         user_has_subscription,
         req,
         resolved_student_id,
         logged_in_username,
+        required_plan,
         timeout=12,
         limit_concurrency=False,
     )
     response = JSONResponse({
         "has_subscription": bool(has_sub),
         "logged_in": logged_in_username is not None,
+        "required_plan": required_plan,
+        "required_plan_name": PREMIUM_PLAN_NAMES.get(required_plan) if required_plan else None,
     })
     _set_anon_cookie(response, new_anon_session_id, req)
     return response
@@ -1877,9 +1976,7 @@ def main():
 
     import uvicorn
 
-    # port = int(os.environ.get("PORT", 5000))
-    port = int(os.environ.get("PORT", "8080"))
-
+    port = int(os.environ.get("PORT", 5000))
     print(
         f"""
 Starting server...
@@ -1902,7 +1999,6 @@ Press Ctrl+C to stop
         "web_app:app", host="0.0.0.0", port=port, reload=_dev_mode,
         workers=1 if _dev_mode else int(os.getenv("WEB_CONCURRENCY", "1")),
         proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "false").lower() in ("1", "true", "yes"),
-        forwarded_allow_ips="*"
     )
 
 

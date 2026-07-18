@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import time
+from copy import copy
 from typing import Dict, List, Optional, Any
 
 import requests
@@ -57,7 +58,9 @@ def _get_obs():
 # OpenAI 兼容 API（生产环境）
 DEFAULT_API_KEY = os.getenv("DEFAULT_API_KEY")
 DEFAULT_API_BASE = (os.getenv("DEFAULT_ENDPOINT_OPENAI") or "https://api.openai.com/v1").rstrip("/") + "/"
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL") or "gpt-4.1-mini"
+QUICK_REVIEW_MODEL = os.getenv("QUICK_REVIEW_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
+DETAIL_REVIEW_MODEL = os.getenv("DETAIL_REVIEW_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL") or QUICK_REVIEW_MODEL
 VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL", "qwen-plus")
 
 # Ollama 本地模型（开发/测试）
@@ -127,6 +130,23 @@ class LLMClient:
     def is_ollama(self) -> bool:
         """是否使用 Ollama 后端"""
         return self.provider == "ollama"
+
+    def with_model(self, model: str) -> "LLMClient":
+        """Return a request-local client view pinned to one model."""
+        selected_model = str(model or "").strip()
+        if not selected_model:
+            raise ValueError("model must not be empty")
+        if self.is_ollama():
+            env_name = (
+                "OLLAMA_DETAIL_REVIEW_MODEL"
+                if selected_model == DETAIL_REVIEW_MODEL
+                else "OLLAMA_QUICK_REVIEW_MODEL"
+            )
+            selected_model = os.getenv(env_name) or self.model
+        client = copy(self)
+        client.model = selected_model
+        client.observe_metadata = dict(self.observe_metadata)
+        return client
 
     def complete(
         self,

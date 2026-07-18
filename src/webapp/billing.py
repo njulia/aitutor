@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .db import engine_options, normalise_database_url
 from .account_store import (
+    account_has_used_plan,
     ensure_account,
     get_account_by_stripe_customer_id,
     get_active_subscription,
@@ -25,6 +26,10 @@ from .account_store import (
     upsert_stripe_subscription,
 )
 from .runtime import run_blocking
+
+
+TRIAL_PLAN = "trial_5day"
+TRIAL_DURATION_DAYS = 5
 
 
 class CheckoutRequest(BaseModel):
@@ -45,6 +50,7 @@ def _stripe():
 
 def _plans() -> Dict[str, str]:
     candidates = {
+        TRIAL_PLAN: os.getenv("STRIPE_PRICE_TRIAL_5DAY", ""),
         "homework_monthly": os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", ""),
         "elevenplus_monthly": os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", ""),
         "family_monthly": os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", ""),
@@ -68,6 +74,9 @@ def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
         raise ValueError("Unknown or unavailable subscription plan")
     if get_active_subscription(account["id"]):
         raise ValueError("This account already has an active subscription")
+    is_trial = plan == TRIAL_PLAN
+    if is_trial and account_has_used_plan(account["id"], TRIAL_PLAN):
+        raise ValueError("The five-day trial has already been used on this account")
     stripe = _stripe()
     base = _base_url()
     customer_id = account.get("stripe_customer_id")
@@ -81,18 +90,30 @@ def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
         customer_id = customer.id
         set_stripe_customer(account["id"], customer_id)
     attempt = secrets.token_urlsafe(12)
-    session = stripe.checkout.Session.create(
-        mode="subscription",
+    checkout_args: Dict[str, Any] = dict(
+        mode="payment" if is_trial else "subscription",
         customer=customer_id,
         line_items=[{"price": plans[plan], "quantity": 1}],
         success_url=f"{base}/pricing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{base}/pricing?checkout=cancelled",
         client_reference_id=account["id"],
         metadata={"account_id": account["id"], "plan": plan},
-        subscription_data={"metadata": {"account_id": account["id"], "plan": plan}},
-        allow_promotion_codes=True,
-        idempotency_key=f"checkout-{account['id']}-{plan}-{attempt}",
+        allow_promotion_codes=not is_trial,
+        idempotency_key=(
+            f"checkout-{account['id']}-{plan}"
+            if is_trial
+            else f"checkout-{account['id']}-{plan}-{attempt}"
+        ),
     )
+    if is_trial:
+        checkout_args["payment_intent_data"] = {
+            "metadata": {"account_id": account["id"], "plan": plan}
+        }
+    else:
+        checkout_args["subscription_data"] = {
+            "metadata": {"account_id": account["id"], "plan": plan}
+        }
+    session = stripe.checkout.Session.create(**checkout_args)
     return {"checkout_url": session.url, "checkout_session_id": session.id}
 
 
@@ -144,6 +165,34 @@ def sync_subscription(subscription: Any, fallback_account_id: Optional[str] = No
         price_id=str(price_id) if price_id else None,
         current_period_end=_timestamp(_object_value(subscription, "current_period_end")),
         cancel_at_period_end=bool(_object_value(subscription, "cancel_at_period_end", False)),
+    )
+
+
+def sync_trial_checkout(session: Any) -> Dict[str, Any]:
+    """Grant the paid one-off trial for five days after a verified webhook."""
+    metadata = _object_value(session, "metadata", {}) or {}
+    account_id = metadata.get("account_id") or _object_value(session, "client_reference_id")
+    if not account_id:
+        raise ValueError("Trial checkout is not linked to an account")
+    if metadata.get("plan") != TRIAL_PLAN:
+        raise ValueError("Checkout is not a recognised trial")
+    if str(_object_value(session, "payment_status", "")).lower() != "paid":
+        raise ValueError("Trial checkout has not been paid")
+
+    session_id = str(_object_value(session, "id") or "")
+    if not session_id:
+        raise ValueError("Trial checkout has no session ID")
+    now = datetime.now(UTC)
+    customer_id = _object_value(session, "customer")
+    return upsert_stripe_subscription(
+        account_id=str(account_id),
+        plan=TRIAL_PLAN,
+        status="active",
+        stripe_customer_id=str(customer_id) if customer_id else None,
+        stripe_subscription_id=f"trial_{session_id}",
+        price_id=_plans().get(TRIAL_PLAN),
+        current_period_end=now + timedelta(days=TRIAL_DURATION_DAYS),
+        cancel_at_period_end=True,
     )
 
 
@@ -219,7 +268,15 @@ def process_webhook(payload: bytes, signature: str) -> str:
             "customer.subscription.resumed",
         }:
             sync_subscription(obj)
-        elif event_type == "checkout.session.completed":
+        elif event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
+            metadata = _object_value(obj, "metadata", {}) or {}
+            if metadata.get("plan") == TRIAL_PLAN:
+                # Card payments are normally paid at completion; delayed methods
+                # are granted only by async_payment_succeeded.
+                if str(_object_value(obj, "payment_status", "")).lower() == "paid":
+                    sync_trial_checkout(obj)
+                ledger().finish(event_id, "processed")
+                return "processed"
             subscription_id = _object_value(obj, "subscription")
             account_id = _object_value(obj, "client_reference_id")
             if subscription_id:

@@ -417,6 +417,22 @@ def get_active_subscription(account_id: str) -> Optional[Dict[str, Any]]:
     return _dict(row)
 
 
+def account_has_used_plan(account_id: str, plan: str) -> bool:
+    """Return whether an account has ever received the named entitlement."""
+    if not account_id or not plan:
+        return False
+    with _engine().begin() as conn:
+        row = conn.execute(
+            select(subscriptions.c.id).where(
+                and_(
+                    subscriptions.c.account_id == account_id,
+                    subscriptions.c.plan == str(plan),
+                )
+            ).limit(1)
+        ).first()
+    return row is not None
+
+
 def account_has_active_subscription(email: str, required_plans: Optional[List[str]] = None) -> bool:
     account = get_account_by_email(email)
     if not account:
@@ -425,9 +441,9 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
     if not sub:
         return False
     if required_plans:
-        # family_monthly is a super-set that includes everything
+        # Family and the five-day introductory pass include both premium areas.
         effective_required = set(required_plans)
-        if sub.get("plan") == "family_monthly":
+        if sub.get("plan") in {"family_monthly", "trial_5day"}:
             return True
         return sub.get("plan") in effective_required
     return True
