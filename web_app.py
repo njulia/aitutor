@@ -1877,7 +1877,9 @@ def main():
 
     import uvicorn
 
-    port = int(os.environ.get("PORT", 5000))
+    # port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", "8080"))
+
     print(
         f"""
 Starting server...
@@ -1900,6 +1902,7 @@ Press Ctrl+C to stop
         "web_app:app", host="0.0.0.0", port=port, reload=_dev_mode,
         workers=1 if _dev_mode else int(os.getenv("WEB_CONCURRENCY", "1")),
         proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "false").lower() in ("1", "true", "yes"),
+        forwarded_allow_ips="*"
     )
 
 
