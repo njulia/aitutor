@@ -793,8 +793,15 @@ const TIER_ORDER = ['not_started','developing','confident','mastered'];
 
 let mastery = { loaded:false, gated:null, statsByTopic:{}, activeSubjectFilter:'all', selectedTopicKey:null };
 
-function getStudentId(){
-  try{ return localStorage.getItem('student_id'); }catch(e){ return null; }
+async function getStudentId(){
+  try{
+    const response = await fetch('/api/account', {credentials:'same-origin'});
+    if(!response.ok) return null;
+    const data = await response.json();
+    const learners = Array.isArray(data.students) ? data.students : [];
+    const selected = learners.find(item => item.is_default) || learners[0];
+    return selected ? selected.id : null;
+  }catch(e){ return null; }
 }
 
 /* Normalises whatever get_topic_progress() returns into a lookup keyed by
@@ -826,7 +833,7 @@ function tierFor(stats){
 
 async function loadMastery(){
   if(mastery.loaded) return;
-  const studentId = getStudentId();
+  const studentId = await getStudentId();
   document.getElementById('mastery-loading').classList.add('active');
 
   if(!studentId){

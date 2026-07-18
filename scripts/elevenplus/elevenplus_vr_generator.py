@@ -26,14 +26,23 @@ exists in the RAG store, and if not, generate a batch of 300 sets and add it.
 import sys
 import os
 import json
-import random
 import string
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.elevenplus_rag import get_elevenplus_rag_store
+from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metadata
 from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats, clean_subject_homeworks
+from scripts.elevenplus.elevenplus_generator_utils import (
+    balanced_weighted_sequence,
+    begin_generation,
+    build_multiple_choice_question,
+    current_difficulty,
+    difficulty_for_batch_position,
+    normalise_difficulty,
+    seeded_random as random,
+    validate_answer_records,
+)
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -164,27 +173,12 @@ COMPOUND_BRIDGE_BANK = [
 # ---------------------------------------------------------------------------
 # MCQ helpers
 # ---------------------------------------------------------------------------
-def _build_question(num: int, text: str, correct, distractors, explanation: str, tip: str = "", difficulty: str = "standard"):
-    """Render one MCQ block and return its structured answer record."""
-    options = list(distractors) + [correct]
-    random.shuffle(options)
-    letters = ["A", "B", "C", "D", "E"]
-    correct_letter = letters[options.index(correct)]
-
-    lines = [f"{num}. {text}"]
-    for letter, opt in zip(letters, options):
-        lines.append(f"   {letter}) {opt}")
-    block = "\n".join(lines)
-
-    answer_record = {
-        "q": num,
-        "correct_letter": correct_letter,
-        "correct_value": str(correct),
-        "explanation": explanation,
-        "tip": tip,
-        "difficulty": difficulty,
-    }
-    return block, answer_record
+def _build_question(num, text, correct, distractors, explanation, tip="", difficulty="standard"):
+    """Render one validated five-option question and canonical answer record."""
+    effective_difficulty = current_difficulty() if normalise_difficulty(difficulty) == "standard" else difficulty
+    return build_multiple_choice_question(
+        num, text, correct, distractors, explanation, tip, effective_difficulty
+    )
 
 def _random_letter_distractors(correct: str, count: int = 4) -> list:
     """Random single-letter distractors, distinct from the correct letter."""
@@ -196,7 +190,6 @@ def _random_letter_distractors(correct: str, count: int = 4) -> list:
 # ---------------------------------------------------------------------------
 def _gen_letter_series(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         kind = random.choice(["simple_step", "alternating_step", "skip_pattern"])
         start = random.randint(0, 20)
@@ -238,7 +231,6 @@ def _gen_letter_series(index: int) -> tuple:
 
 def _gen_number_series(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         kind = random.choice(["arithmetic", "geometric", "alternating", "fibonacci_like"])
         if kind == "arithmetic":
@@ -300,7 +292,6 @@ def _gen_number_series(index: int) -> tuple:
 
 def _gen_word_analogies(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         relation = random.choice(list(ANALOGY_GROUPS.keys()))
         group = ANALOGY_GROUPS[relation]
@@ -342,7 +333,6 @@ def _gen_word_analogies(index: int) -> tuple:
 
 def _gen_synonyms(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     entries = random.sample(SYNONYM_ANTONYM_BANK, min(10, len(SYNONYM_ANTONYM_BANK)))
     while len(entries) < 10:
         entries.append(random.choice(SYNONYM_ANTONYM_BANK))
@@ -371,7 +361,6 @@ def _gen_synonyms(index: int) -> tuple:
 
 def _gen_antonyms(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     entries = random.sample(SYNONYM_ANTONYM_BANK, min(10, len(SYNONYM_ANTONYM_BANK)))
     while len(entries) < 10:
         entries.append(random.choice(SYNONYM_ANTONYM_BANK))
@@ -400,7 +389,6 @@ def _gen_antonyms(index: int) -> tuple:
 
 def _gen_compound_words(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     triples = random.sample(COMPOUND_BRIDGE_BANK, min(10, len(COMPOUND_BRIDGE_BANK)))
     while len(triples) < 10:
         triples.append(random.choice(COMPOUND_BRIDGE_BANK))
@@ -423,7 +411,6 @@ def _gen_compound_words(index: int) -> tuple:
 
 def _gen_hidden_words(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     pairs = random.sample(HIDDEN_WORD_BANK, min(10, len(HIDDEN_WORD_BANK)))
     while len(pairs) < 10:
         pairs.append(random.choice(HIDDEN_WORD_BANK))
@@ -450,7 +437,6 @@ def _gen_hidden_words(index: int) -> tuple:
 
 def _gen_letter_codes(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     sample_words = ["CAT", "DOG", "SUN", "BAT", "HAT", "PEN", "BOX", "CUP", "MAP", "TOP", "BIN", "JAM"]
     for i in range(1, 11):
         shift = random.choice([1, 2, 3, -1, -2])
@@ -494,7 +480,6 @@ def _gen_letter_codes(index: int) -> tuple:
 
 def _gen_odd_one_out(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         category, other_category = random.sample(list(ODD_ONE_OUT_CATEGORIES.keys()), 2)
         same_group_words = random.sample(ODD_ONE_OUT_CATEGORIES[category], 4)
@@ -513,7 +498,6 @@ def _gen_odd_one_out(index: int) -> tuple:
 
 def _gen_insert_letter(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     triples = random.sample(INSERT_LETTER_BANK, min(10, len(INSERT_LETTER_BANK)))
     while len(triples) < 10:
         triples.append(random.choice(INSERT_LETTER_BANK))
@@ -551,37 +535,36 @@ TOPIC_GENERATORS = {
     "Insert a Letter (Completes Both Words)": _gen_insert_letter,
 }
 
-def generate_11plus_vr_homework(topic: str, index: int) -> tuple:
-    """Generate one 11+ Verbal Reasoning worksheet (10 MCQ questions) for a topic.
+def generate_11plus_vr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original Verbal Reasoning worksheet with 10 locally markable MCQs.
 
-    Returns:
-        (content, answer_records) where content is the student-facing
-        worksheet text and answer_records is a list of structured dicts.
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
     """
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ Verbal Reasoning topic: {topic}")
+    difficulty_name = begin_generation("verbal_reasoning", topic, index, difficulty)
     body, answer_records = generator(index)
+    for record in answer_records:
+        record["difficulty"] = difficulty_name
+        record["topic"] = topic
+    validate_answer_records(answer_records)
     header = (
-        f"11+ Verbal Reasoning Practice (GL Assessment style) - {topic} (Set {index})\n"
-        f"Answer each question by choosing the correct option A-E.\n\n"
+        f"11+ Verbal Reasoning Practice (GL-style familiarisation) - {topic} (Set {index})\n"
+        f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
+        f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
 
-# ---------------------------------------------------------------------------
-# Batch generation / RAG store integration
-# ---------------------------------------------------------------------------
 def _weighted_topic_sequence(count: int) -> list:
-    """Build an ordered topic list of length `count`."""
-    topics, weights = zip(*ELEVEN_PLUS_VR_TOPICS)
-    return random.choices(topics, weights=weights, k=count)
+    """Build a deterministic near-exact topic distribution for the library."""
+    sequence = balanced_weighted_sequence(ELEVEN_PLUS_VR_TOPICS, count, seed="verbal_reasoning")
+    return sequence
 
 def check_11plus_vr_exists() -> bool:
-    """检查是否已有 11+ 言语推理练习"""
+    """Check exact metadata without paying for a query embedding."""
     try:
-        store = get_elevenplus_rag_store()
-        results = store.search(query="verbal reasoning", k=1, filters={"subject": "VerbalReasoning"})
-        return len(results) > 0
+        return count_homework_by_metadata(YEAR_GROUP, "VerbalReasoning") > 0
     except Exception:
         return False
 
@@ -609,7 +592,8 @@ def generate_11plus_vr_batch(count: int = 300) -> list:
     batch_data = []
 
     for i, topic in enumerate(topic_sequence, start=1):
-        content, answer_records = generate_11plus_vr_homework(topic, i)
+        difficulty = difficulty_for_batch_position(i, count)
+        content, answer_records = generate_11plus_vr_homework(topic, i, difficulty=difficulty)
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -619,7 +603,10 @@ def generate_11plus_vr_batch(count: int = 300) -> list:
             "topic": topic,
             "exam_style": EXAM_STYLE,
             "question_format": "multiple_choice_5_options",
-            "student_id": None,
+            "question_count": 10,
+            "difficulty": difficulty,
+            "answer_schema_version": 2,
+            "generator_version": "2026.07",
             "correct_answers": json.dumps(answer_records, ensure_ascii=False),
         }
         doc_id = f"elevenplus_vr_{i:03d}"

@@ -17,13 +17,22 @@ This allows high-fidelity visual reasoning puzzles without needing external imag
 import sys
 import os
 import json
-import random
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.elevenplus_rag import get_elevenplus_rag_store
+from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metadata
 from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
+from scripts.elevenplus.elevenplus_generator_utils import (
+    balanced_weighted_sequence,
+    begin_generation,
+    build_multiple_choice_question,
+    current_difficulty,
+    difficulty_for_batch_position,
+    normalise_difficulty,
+    seeded_random as random,
+    validate_answer_records,
+)
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -88,34 +97,15 @@ def _random_shape(exclude=None):
         if exclude is None or (st, c) != exclude:
             return st, c
 
-def _build_question(num: int, text: str, correct, distractors, explanation: str, tip: str = "", difficulty: str = "standard"):
-    """Render one MCQ block and return its structured answer record."""
-    options = list(distractors) + [correct]
-    random.shuffle(options)
-    letters = ["A", "B", "C", "D", "E"]
-    correct_letter = letters[options.index(correct)]
+def _build_question(num, text, correct, distractors, explanation, tip="", difficulty="standard"):
+    """Render one validated five-option question and canonical answer record."""
+    effective_difficulty = current_difficulty() if normalise_difficulty(difficulty) == "standard" else difficulty
+    return build_multiple_choice_question(
+        num, text, correct, distractors, explanation, tip, effective_difficulty
+    )
 
-    lines = [f"{num}. {text}"]
-    for letter, opt in zip(letters, options):
-        lines.append(f"   {letter}) {opt}")
-    block = "\n".join(lines)
-
-    answer_record = {
-        "q": num,
-        "correct_letter": correct_letter,
-        "correct_value": str(correct),
-        "explanation": explanation,
-        "tip": tip,
-        "difficulty": difficulty,
-    }
-    return block, answer_record
-
-# ---------------------------------------------------------------------------
-# Topic Generators
-# ---------------------------------------------------------------------------
 def _gen_shape_sequences(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         color_start = random.randint(0, 8)
         color_step = random.choice([1, 2, 3, -1, -2])
@@ -166,7 +156,6 @@ def _gen_shape_sequences(index: int) -> tuple:
 
 def _gen_rotation_sequences(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         start = random.randint(0, 7)
         step = random.choice([1, 2, -1, -2, 3, -3])
@@ -192,7 +181,6 @@ def _gen_rotation_sequences(index: int) -> tuple:
 
 def _gen_odd_one_out(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         shared_type = random.choice(SHAPE_TYPES)
         shared_colors = random.sample(COLORS, 4)
@@ -217,7 +205,6 @@ def _gen_odd_one_out(index: int) -> tuple:
 
 def _gen_shape_analogies(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         rule = random.choice(["color_shift", "type_swap"])
         if rule == "color_shift":
@@ -277,7 +264,6 @@ def _gen_shape_analogies(index: int) -> tuple:
 
 def _gen_matrix_completion(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         type_a, type_b = random.sample(SHAPE_TYPES, 2)
         color_a = random.choice(COLORS)
@@ -317,7 +303,6 @@ def _gen_matrix_completion(index: int) -> tuple:
 
 def _gen_shape_codes(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         example_pairs = random.sample([(t, c) for t in SHAPE_TYPES for c in COLORS], 2)
         target_pair = random.choice(
@@ -366,7 +351,6 @@ def _gen_shape_codes(index: int) -> tuple:
 
 def _gen_similarity_grouping(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     fixed_options = ["Group 1", "Group 2", "Neither group", "Both groups", "Cannot be determined"]
     for i in range(1, 11):
         rule = random.choice(["shape_type", "temperature"])
@@ -421,7 +405,6 @@ def _gen_similarity_grouping(index: int) -> tuple:
 
 def _gen_shape_counting(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         n_shapes = random.randint(9, 14)
         shapes = [_random_shape() for _ in range(n_shapes)]
@@ -464,7 +447,6 @@ def _gen_shape_counting(index: int) -> tuple:
 
 def _gen_reflection(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         arrow = random.choice(ARROWS)
         correct = VERTICAL_MIRROR[arrow]
@@ -487,7 +469,6 @@ def _gen_reflection(index: int) -> tuple:
 
 def _gen_layering(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     for i in range(1, 11):
         # We model layering: shape A on top of shape B
         shape_a_type = random.choice(SHAPE_TYPES)
@@ -526,7 +507,6 @@ def _gen_layering(index: int) -> tuple:
 
 def _gen_3d_nets(index: int) -> tuple:
     blocks, records = [], []
-    random.seed(index)
     faces = ["🔴", "🟩", "🔵", "🟡", "🟣", "⚫"]
     for i in range(1, 11):
         # 3D spatial query
@@ -568,37 +548,36 @@ TOPIC_GENERATORS = {
     "3D Spatial Nets & Isometric Reasoning": _gen_3d_nets,
 }
 
-def generate_11plus_nvr_homework(topic: str, index: int) -> tuple:
-    """Generate one 11+ Non-Verbal Reasoning worksheet (10 MCQ questions) for a topic.
+def generate_11plus_nvr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original Non-Verbal Reasoning worksheet with 10 locally markable MCQs.
 
-    Returns:
-        (content, answer_records) where content is the student-facing
-        worksheet text and answer_records is a list of structured dicts.
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
     """
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ Non-Verbal Reasoning topic: {topic}")
+    difficulty_name = begin_generation("non_verbal_reasoning", topic, index, difficulty)
     body, answer_records = generator(index)
+    for record in answer_records:
+        record["difficulty"] = difficulty_name
+        record["topic"] = topic
+    validate_answer_records(answer_records)
     header = (
-        f"11+ Non-Verbal Reasoning Practice (GL Assessment style) - {topic} (Set {index})\n"
-        f"Answer each question by choosing the correct option A-E.\n\n"
+        f"11+ Non-Verbal Reasoning Practice (GL-style familiarisation) - {topic} (Set {index})\n"
+        f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
+        f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
 
-# ---------------------------------------------------------------------------
-# Batch generation / RAG store integration
-# ---------------------------------------------------------------------------
 def _weighted_topic_sequence(count: int) -> list:
-    topics = list(TOPIC_GENERATORS.keys())
-    return random.choices(topics, k=count)
+    """Build a deterministic near-exact topic distribution for the library."""
+    sequence = balanced_weighted_sequence(ELEVEN_PLUS_NVR_TOPICS, count, seed="non_verbal_reasoning")
+    return sequence
 
 def check_11plus_nvr_exists() -> bool:
+    """Check exact metadata without paying for a query embedding."""
     try:
-        store = get_elevenplus_rag_store()
-        if store is None:
-            return False
-        results = store.search(query="non-verbal reasoning", k=1, filters={"subject": "NonVerbalReasoning"})
-        return len(results) > 0
+        return count_homework_by_metadata(YEAR_GROUP, "NonVerbalReasoning") > 0
     except Exception:
         return False
 
@@ -645,7 +624,8 @@ def generate_11plus_nvr_batch(count: int = 300) -> list:
     batch_data = []
 
     for i, topic in enumerate(topic_sequence, start=1):
-        content, answer_records = generate_11plus_nvr_homework(topic, i)
+        difficulty = difficulty_for_batch_position(i, count)
+        content, answer_records = generate_11plus_nvr_homework(topic, i, difficulty=difficulty)
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -655,7 +635,10 @@ def generate_11plus_nvr_batch(count: int = 300) -> list:
             "topic": topic,
             "exam_style": EXAM_STYLE,
             "question_format": "multiple_choice_5_options",
-            "student_id": None,
+            "question_count": 10,
+            "difficulty": difficulty,
+            "answer_schema_version": 2,
+            "generator_version": "2026.07",
             "correct_answers": json.dumps(answer_records, ensure_ascii=False),
         }
         doc_id = f"elevenplus_nvr_{i:03d}"

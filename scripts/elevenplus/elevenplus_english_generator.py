@@ -15,13 +15,22 @@ exists in the RAG store, and if not, generate a batch of 500 sets and add it.
 import sys
 import os
 import json
-import random
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.elevenplus_rag import get_elevenplus_rag_store
+from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metadata
 from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
+from scripts.elevenplus.elevenplus_generator_utils import (
+    balanced_weighted_sequence,
+    begin_generation,
+    build_multiple_choice_question,
+    current_difficulty,
+    difficulty_for_batch_position,
+    normalise_difficulty,
+    seeded_random as random,
+    validate_answer_records,
+)
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -227,27 +236,11 @@ COMPREHENSION_EMOTIONS = ["relieved", "curious", "tired but content", "cautious"
 # MCQ helpers
 # ---------------------------------------------------------------------------
 def _build_question(num, text, correct, distractors, explanation, tip="", difficulty="standard"):
-    """Render one MCQ block and return its structured answer record."""
-    options = list(distractors) + [correct]
-    random.shuffle(options)
-    letters = ["A", "B", "C", "D", "E"]
-    correct_letter = letters[options.index(correct)]
-
-    lines = [f"{num}. {text}"]
-    for letter, opt in zip(letters, options):
-        lines.append(f"   {letter}) {opt}")
-    block = "\n".join(lines)
-
-    answer_record = {
-        "q": num,
-        "correct_letter": correct_letter,
-        "correct_value": str(correct),
-        "explanation": explanation,
-        "tip": tip,
-        "difficulty": difficulty,
-    }
-    return block, answer_record
-
+    """Render one validated five-option question and canonical answer record."""
+    effective_difficulty = current_difficulty() if normalise_difficulty(difficulty) == "standard" else difficulty
+    return build_multiple_choice_question(
+        num, text, correct, distractors, explanation, tip, effective_difficulty
+    )
 
 def _misspell(word: str) -> str:
     """Produce a plausible wrong spelling of `word` using common error patterns."""
@@ -593,43 +586,38 @@ TOPIC_GENERATORS = {
 }
 
 
-def generate_11plus_english_homework(topic: str, index: int) -> tuple:
-    """Generate one 11+ English practice worksheet (10 MCQ questions) for a topic.
+def generate_11plus_english_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original English worksheet with 10 locally markable MCQs.
 
-    Returns:
-        (content, answer_records) where content is the student-facing
-        worksheet text and answer_records is a list of structured dicts.
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
     """
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ English topic: {topic}")
+    difficulty_name = begin_generation("english", topic, index, difficulty)
     body, answer_records = generator(index)
+    for record in answer_records:
+        record["difficulty"] = difficulty_name
+        record["topic"] = topic
+    validate_answer_records(answer_records)
     header = (
-        f"11+ English Practice (GL Assessment style) - {topic} (Set {index})\n"
-        f"Answer each question by choosing the correct option A-E.\n\n"
+        f"11+ English Practice (GL-style familiarisation) - {topic} (Set {index})\n"
+        f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
+        f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
 
-
-# ---------------------------------------------------------------------------
-# Batch generation / RAG store integration
-# ---------------------------------------------------------------------------
 def _weighted_topic_sequence(count: int) -> list:
-    """Build an ordered topic list respecting published weight ratios."""
-    topics, weights = zip(*ELEVEN_PLUS_ENGLISH_TOPICS)
-    return random.choices(topics, weights=weights, k=count)
-
+    """Build a deterministic near-exact topic distribution for the library."""
+    sequence = balanced_weighted_sequence(ELEVEN_PLUS_ENGLISH_TOPICS, count, seed="english")
+    return sequence
 
 def check_11plus_english_exists() -> bool:
-    """检查是否已有 11+ 英语练习"""
+    """Check exact metadata without paying for a query embedding."""
     try:
-        store = get_elevenplus_rag_store()
-        print(f"RAG target: {store.store.database_target}")
-        results = store.search(query="english", k=1, filters={"subject": "English"})
-        return len(results) > 0
+        return count_homework_by_metadata(YEAR_GROUP, "English") > 0
     except Exception:
         return False
-
 
 def clean_11plus_english() -> int:
     """清理所有已有的 11+ 英语练习"""
@@ -656,7 +644,8 @@ def generate_11plus_english_batch(count: int = 500) -> list:
     batch_data = []
 
     for i, topic in enumerate(topic_sequence, start=1):
-        content, answer_records = generate_11plus_english_homework(topic, i)
+        difficulty = difficulty_for_batch_position(i, count)
+        content, answer_records = generate_11plus_english_homework(topic, i, difficulty=difficulty)
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -666,7 +655,10 @@ def generate_11plus_english_batch(count: int = 500) -> list:
             "topic": topic,
             "exam_style": EXAM_STYLE,
             "question_format": "multiple_choice_5_options",
-            "student_id": None,
+            "question_count": 10,
+            "difficulty": difficulty,
+            "answer_schema_version": 2,
+            "generator_version": "2026.07",
             "correct_answers": json.dumps(answer_records, ensure_ascii=False),
         }
         doc_id = f"elevenplus_english_{i:03d}"

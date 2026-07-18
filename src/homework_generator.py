@@ -342,13 +342,14 @@ def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
         提取到的科目列表
     """
     source_text = " ".join(user_input) if isinstance(user_input, (list, tuple)) else str(user_input or "")
-    cache_key = make_cache_key("subject_extract", source_text)
+    safe_source_text = compact_text(source_text, 2_000)
+    cache_key = make_cache_key("subject_extract", safe_source_text)
     cached = subject_extraction_cache.get(cache_key)
     if cached is not None:
         logger.info("[Cache] 命中科目提取缓存")
         return cached
 
-    folded = source_text.casefold()
+    folded = safe_source_text.casefold()
     aliases = {
         "Maths": ("maths", "math", "mathematics"),
         "English": ("english", "reading", "writing", "spelling", "grammar"),
@@ -372,7 +373,7 @@ def extract_subjects_from_prompt(user_input: str, llm: LLMClient) -> List[str]:
     prompt_text = format_prompt(
         SUBJECT_EXTRACTION_PROMPT,
         available_subjects=", ".join(UK_PRIMARY_SUBJECTS),
-        user_input=source_text,
+        user_input=safe_source_text,
     )
     messages = build_messages(prompt_text)
     result = llm.complete_json(messages, temperature=0, max_tokens=128)

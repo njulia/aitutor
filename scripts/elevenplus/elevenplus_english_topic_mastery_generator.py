@@ -31,6 +31,13 @@ except ImportError:
     generate_11plus_english_homework = None
     get_elevenplus_rag_store = None
 
+from scripts.elevenplus.elevenplus_generator_utils import (
+    normalise_difficulty,
+    recommended_set_minutes,
+    strip_student_header,
+    validate_answer_records,
+)
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Define the 11 topics explicitly to ensure correct order and exact 55 sets
@@ -93,7 +100,7 @@ def generate_topic_mastery_plan() -> list:
             seed_index = topic_idx * 100 + set_num
             
             # Generate the 10 MCQ questions for this set
-            raw_content, answer_records = generate_11plus_english_homework(base_topic, seed_index)
+            raw_content, answer_records = generate_11plus_english_homework(base_topic, seed_index, difficulty=tier_info["difficulty"])
             
             # Modify and decorate the content to highlight the mastery level
             header = (
@@ -103,22 +110,11 @@ def generate_topic_mastery_plan() -> list:
                 f"Mastery Level {set_num}: {tier_info['name']} ({tier_info['difficulty']})\n"
                 f"========================================================================\n\n"
                 f"Instructions: Answer each of the 10 questions by choosing the correct option (A-E).\n"
-                f"Time Limit: 10 minutes. Aim for high accuracy and review worked solutions.\n\n"
+                f"Suggested Time: {recommended_set_minutes(tier_info['difficulty'])} minutes. "
+                f"Work accurately first, then improve speed.\n\n"
             )
-            
-            # Strip the old header if it exists
-            lines = raw_content.split("\n")
-            cleaned_lines = []
-            skip_header = True
-            for line in lines:
-                if skip_header and (line.startswith("11+ English Practice") or line.startswith("Answer each question")):
-                    continue
-                if skip_header and len(line.strip()) == 0:
-                    continue
-                skip_header = False
-                cleaned_lines.append(line)
-                
-            final_content = header + "\n".join(cleaned_lines)
+            validate_answer_records(answer_records)
+            final_content = header + strip_student_header(raw_content)
             
             # Build Metadata compatible with ChromaDB sanitization rules
             metadata = {
@@ -133,7 +129,10 @@ def generate_topic_mastery_plan() -> list:
                 "mastery_set_index": global_set_index,
                 "mastery_level": set_num,
                 "mastery_tier_name": tier_info["name"],
-                "mastery_difficulty": tier_info["difficulty"],
+                "mastery_difficulty": normalise_difficulty(tier_info["difficulty"]),
+                "question_count": 10,
+                "answer_schema_version": 2,
+                "generator_version": "2026.07",
                 "correct_answers": json.dumps(answer_records, ensure_ascii=False),
                 "created_at": datetime.now().isoformat()
             }
