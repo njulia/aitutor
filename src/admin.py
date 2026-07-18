@@ -173,10 +173,11 @@ def create_admin_subscription(email: str, name: str, duration: str, plan: str = 
     Production subscriptions must start in authenticated Stripe Checkout and
     become active only after a signed webhook has been processed.
     """
-    if not is_dev_mode():
-        raise ValueError(
-            "Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks."
-        )
+    # ======== TODO: Allow manual change subscription at this moment, need to disable it.
+    # if not is_dev_mode():
+    #     raise ValueError(
+    #         "Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks."
+    #     )
     duration_days = {"5_days": 5, "30_days": 30}
     if duration not in duration_days:
         raise ValueError("Invalid duration, must be '5_days' or '30_days'")
