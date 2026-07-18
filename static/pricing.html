@@ -23,27 +23,44 @@
     .privacy { border-left: 5px solid #3c8b60; }
     #status { font-weight: 650; text-align: center; min-height: 1.5rem; }
   </style>
+  <link rel="stylesheet" href="/static/css/theme.css">
 </head>
-<body>
+<body class="hm-page hm-pricing">
 <header>
-  <a href="/">Homework Magic</a><a href="/app">Tutor</a><a href="/memory">Memory</a><a href="/login">Parent sign in</a>
+  <div class="hm-nav-wrap">
+    <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+    <nav class="hm-main-nav" aria-label="Main navigation">
+      <a href="/app">Learning app</a>
+      <a href="/memory">Learning memory</a>
+      <a href="/login">Parent sign in</a>
+      <a class="hm-nav-cta" href="/register">Create account</a>
+    </nav>
+  </div>
 </header>
 <main>
   <section class="intro">
-    <h1>Choose a parent-managed plan</h1>
-    <p>Sign in as a parent or guardian, then continue to Stripe’s hosted checkout. Homework Magic never sends learner names, answers, school details or learning memory to Stripe.</p>
+    <p class="hm-kicker">Simple parent plans</p>
+    <h1>Choose the support your learner needs.</h1>
+    <p>Start with the part of Homework Magic your family will use most. A parent or guardian manages the account, checkout and subscription.</p>
+    <div class="billing-points" aria-label="Billing information">
+      <span>🔒 Stripe-hosted checkout</span>
+      <span>🛡️ No learning data sent to Stripe</span>
+      <span>⚙️ Manage or cancel in the billing portal</span>
+    </div>
   </section>
   <section class="plans">
-    <article class="card">
+    <article class="card featured">
+      <span class="plan-kicker">Years 1–6</span>
       <h2>Homework Premium</h2>
-      <p class="price">£4.99/month <span class="discount">(40% off)</span></p>
+      <p class="price">£4.99 <small>/ month</small></p>
       <p>For Year 1–6 homework help and progress.</p>
       <ul><li>Tutor mode</li><li>Detailed explanations</li><li>Targeted practice</li><li>Parent-controlled learning memory</li></ul>
       <button onclick="startCheckout('homework_monthly')">Continue to secure checkout</button>
     </article>
     <article class="card">
+      <span class="plan-kicker">11+ preparation</span>
       <h2>11+ Premium</h2>
-      <p class="price">£9.99/month <span class="discount">(40% off)</span></p>
+      <p class="price">£9.99 <small>/ month</small></p>
       <p>For ongoing 11+ preparation.</p>
       <ul><li>Maths and English practice</li><li>Verbal and non-verbal reasoning</li><li>Year round study plan</li><li>Progress and learning memory</li></ul>
       <button onclick="startCheckout('elevenplus_monthly')">Continue to secure checkout</button>
@@ -57,8 +74,9 @@
 <!--    </article>-->
   </section>
   <section class="card privacy">
-    <h2>Safe billing design</h2>
-    <p>Subscription access is activated only after Homework Magic receives a verified Stripe webhook. Card details stay with Stripe. You can manage or cancel an active subscription through the Stripe customer portal.</p>
+    <span class="plan-kicker">Parent controls</span>
+    <h2>Billing designed with families in mind</h2>
+    <p>Learner names, answers, school details and learning memory are not sent to Stripe. Card details stay on Stripe’s hosted pages. Access begins after the payment confirmation is securely verified.</p>
     <button class="secondary" onclick="openPortal()">Manage an existing subscription</button>
   </section>
   <p id="status" role="status" aria-live="polite"></p>

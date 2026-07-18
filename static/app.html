@@ -744,8 +744,10 @@
             color: #333;
         }
     </style>
+    <link rel="stylesheet" href="/static/css/theme.css">
 </head>
-<body>
+<body class="hm-app">
+    <a class="hm-skip-link" href="#homework">Skip to learning choices</a>
     <div class="header">
         <div class="header-content">
             <div class="logo">✨ Homework Magic</div>
@@ -757,7 +759,7 @@
   <a href="/elevenplus/articles">11+ Articles</a>
   <a href="/progress" target="_blank" rel="noopener noreferrer">Progress</a>
 <!--  <a href="/check-my-homework">Mark Homework</a>-->
-  <a href="/contact-me">Contact Me</a>
+  <a href="/messages">Contact us</a>
     <a href="/login">Login</a> <!-- Added Login link -->
   <a href="/register">Register</a> <!-- Added Register link -->
                 <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
@@ -766,22 +768,31 @@
     </div>
 
     <div class="container">
+        <section class="app-welcome" aria-labelledby="app-welcome-title">
+            <div class="app-welcome-icon" aria-hidden="true">🚀</div>
+            <div>
+                <h1 id="app-welcome-title">What would you like to practise today?</h1>
+                <p>Choose one small quest, have a go, and celebrate the effort.</p>
+            </div>
+            <div class="app-welcome-tip">Tip: one short session is enough</div>
+        </section>
+
         <!-- Tabs -->
         <div class="tabs">
             <button class="tab" onclick="switchTab('eleven', this)">
-                🎯 11+ Practice
+                🎯 11+ practice
             </button>
             <button class="tab" type="button" onclick="window.location.href='/elevenplus-year-round-plan'">
-                📝 11+ Year Round Plan
+                📝 11+ year-round plan
             </button>
 <!--            <button class="tab" onclick="switchTab('eleven-topic-mastery', this)">-->
 <!--                📝 11+ Topic Mastery-->
 <!--            </button>-->
             <button class="tab active" onclick="switchTab('homework', this)">
-                ⚡ Generate Homework
+                ⚡ Make homework
             </button>
             <button class="tab" onclick="switchTab('review', this)">
-                ✅ Mark Homework
+                ✅ Check my work
             </button>
             <button class="tab" id="admin-tools-tab" style="display:none;" onclick="switchTab('admin-tools', this)">
                 🛠️ Admin Tools
@@ -793,26 +804,26 @@
             <div class="card">
                 <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
-                        <label>Ask Me</label>
+                        <label for="homework-profile">Tell me about your learner</label>
                         <textarea id="homework-profile" rows="5"
                             placeholder="e.g. Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics...">
 Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
 </textarea>
                     </div>
                     <div class="form-group">
-                        <label>Mode Selection</label>
+                        <label>Choose how to practise</label>
                         <div class="mode-selection">
                             <label>
                                 <input type="radio" name="homework-mode" value="homework" checked>
-                                Homework Mode (All questions at once)
+                                Worksheet mode — all questions together
                             </label>
                             <label>
                                 <input type="radio" name="homework-mode" value="tutor">
-                                Tutor Mode
+                                Tutor mode — one question at a time
                             </label>
                         </div>
                         <button class="btn btn-primary" onclick="generateSmartHomework()">
-                            Smart Homework
+                            Make personalised homework
                         </button>
                     </div>
                 </div>
@@ -822,11 +833,11 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
 
                 <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
-                        <label>Select one subject and year group to generate homework.</label>
+                        <label>1. Pick one subject</label>
                         <div class="subject-grid" id="homework-subjects"></div>
                     </div>
                     <div class="form-group" style="min-width: 150px;">
-                        <label>Year Group</label>
+                        <label for="homework-year">2. Pick a year group</label>
                         <select id="homework-year" style="width: 100%;">
                             <option value="1">Year 1</option>
                             <option value="2">Year 2</option>
@@ -837,7 +848,7 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
                         </select>
 <!--                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">-->
                         <button class="btn btn-primary" onclick="generateHomework()">
-                            Generate Homework
+                            Let’s go!
                         </button>
                     </div>
                </div>
@@ -849,25 +860,25 @@ Ana is a 7-year-old student in Year 2 in London. She has a particular interest i
             <div class="card">
                 <div class="homework-grid">
                     <div class="form-group">
-                        <label>Ask Me</label>
+                        <label for="eleven-profile">Tell me about your 11+ goal</label>
                         <textarea id="eleven-profile" rows="6">
 Ana is a 10 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
 </textarea>
                     </div>
                     <div class="form-group">
-                        <label>Mode Selection</label>
+                        <label>Choose how to practise</label>
                         <div class="mode-selection">
                             <label>
                                 <input type="radio" name="eleven-mode" value="homework" checked>
-                                Homework Mode (All questions at once)
+                                Practice set — all questions together
                             </label>
                             <label>
                                 <input type="radio" name="eleven-mode" value="tutor">
-                                Tutor Mode (One question at a time)
+                                Tutor mode — one question at a time
                             </label>
                         </div>
                         <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
-                        Smart 11+ Practice
+                        Make personalised 11+ practice
                         </button>
                     </div>
                 </div>
@@ -876,12 +887,12 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
                 <div class="homework-grid">
                     <div class="form-group">
-                        <label>Pick one subject and get a fresh set of exam-style questions.</label>
+                        <label>Pick one subject for a quick practice set</label>
                         <div class="subject-grid" id="eleven-subjects"></div>
                     </div>
                     <div class="form-group" style="min-width: 150px;">
                         <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()">
-                        Generate 11+ Practice
+                        Start 11+ practice
                         </button>
     <!--                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">-->
     <!--                    Smart 11+ Practice!-->
@@ -895,20 +906,20 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <div id="review" class="content">
             <div class="card">
                 <p style="color: #666; margin-bottom: 30px;">
-                    Get AI-powered feedback on your child's work
+                    Add the questions and answers to get clear, encouraging feedback.
                 </p>
 
                 <!-- Input Method Tabs -->
                 <div style="margin-bottom: 25px;">
                     <div class="input-method-tabs">
                         <button class="input-method-tab active" onclick="setInputMethod('text', this)">
-                            📝 Text Input
+                            📝 Type or paste
                         </button>
 <!--                        <button class="input-method-tab" onclick="setInputMethod('photo', this)">-->
 <!--                            📸 Take Photo-->
 <!--                        </button>-->
                         <button class="input-method-tab" onclick="setInputMethod('file', this)">
-                            📁 Upload File
+                            📁 Upload a file
                         </button>
                     </div>
                 </div>
@@ -992,7 +1003,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
                 </div>
 
                 <button class="btn btn-primary" onclick="reviewHomework()">
-                    Get Feedback!
+                    Check my answers
                 </button>
             </div>
         </div>
@@ -1060,27 +1071,27 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <!-- Loading -->
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <p>AI tutor is working on it... Please wait</p>
+            <p>Making your learning quest…</p>
         </div>
 
         <!-- Results -->
         <div id="results" style="display: none;">
             <div class="card">
-                <h2 style="margin-bottom: 25px;">Your Homework</h2>
+                <h2 style="margin-bottom: 25px;">Your learning quest</h2>
                 <div id="homework-results"></div>
 
                 <div id="homework-buttons" style="margin-top: 30px; text-align: center;">
                     <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
-                        Quick Review
+                        Check my answers
                     </button>
                     <button class="btn btn-secondary" onclick="clearResults()">
-                        New Homework
+                        Pick a new quest
                     </button>
                     <button class="btn btn-secondary" onclick="ExplainDeep()">
-                        Explain in Detail
+                        Explain it step by step
                     </button>
                     <button class="btn btn-secondary" onclick="ImprovePractice()">
-                        Help me improve
+                        Give me extra practice
                     </button>
                     <button class="btn btn-secondary" onclick="TrackProgress()">
                         Track Progress
@@ -1107,7 +1118,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
 
     <div class="footer">
         <p>Made with 💜 Homework Magic © 2026</p>
-        <p style="margin-top: 10px;"><a href="/contact-me" style="color: inherit; font-weight: 600;">Contact Me</a></p>
+        <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
     </div>
 
     <script src="/static/js/app.js?v=20260717-progress-new-window" defer></script>

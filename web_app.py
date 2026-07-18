@@ -688,9 +688,9 @@ async def elevenplus_grammar_guide():
     return _static_page("static", "elevenplus", "uk_grammar_guide.html")
 
 
-@app.get("/elevenplus/uk-11plus-vocabulary-list")
+@app.get("/elevenplus/11plus-vocabulary-list")
 async def elevenplus_vocabulary_list():
-    return _static_page("static", "elevenplus", "uk_11plus_vocabulary_list.html")
+    return _static_page("static", "elevenplus", "11plus_vocabulary_list.html")
 
 
 @app.get("/elevenplus/11plus-acceptance-rates-gcse")
