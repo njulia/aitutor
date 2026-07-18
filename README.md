@@ -1,92 +1,140 @@
-# Langfuse tracing for Homework Magic
+# Homework Magic AI Tutor
 
-## What was added
+A FastAPI AI tutor for UK primary pupils in **Year 1–6 (ages 5–11)**. The application supports homework generation, tutor mode, answer review, 11+ practice, parent-owned learner profiles, progress tracking, subscriptions, password reset, support messages and an administrator dashboard.
 
-- One Langfuse trace for each important FastAPI API request.
-- Descriptive trace names such as `homework-generation`, `homework-review`,
-  `deep-explanation`, and `targeted-practice`.
-- Nested `generation` observations around the custom `LLMClient` methods.
-- Nested `retriever` observations around Chroma homework storage and search.
-- Pseudonymous user/session identifiers, feature tags, HTTP status and app version.
-- The trace ID is returned in the `X-Langfuse-Trace-Id` response header.
-- Review feedback buttons create a `user-thumbs` BOOLEAN score on the trace.
-- Graceful flush during FastAPI shutdown.
+The current refactor focuses on child privacy, safeguarding, correct account ownership, low-latency RAG, bounded AI usage and multi-instance production storage.
 
-## Privacy defaults
+## Read first
 
-This is a child-facing education service, so raw homework, answers, prompts,
-model output, names, email addresses, tokens and uploaded content are not sent to
-Langfuse by default. Text is represented by character count and a short SHA-256
-fingerprint. Identifiers are salted and hashed.
+- `doc/REFACTOR_REPORT_2026-07-18.md` — changes, tests and production actions
+- `doc/UK_CHILD_SAFETY_AND_DPIA_CHECKLIST.md` — launch governance checklist
+- `doc/README.md` — documentation index
+- `.env.example` — configuration without real secrets
 
-Set `LANGFUSE_CAPTURE_CONTENT=true` only after completing a UK GDPR data
-protection review, updating the privacy notice, defining retention, and ensuring
-parent/guardian consent and lawful processing where required.
+This code contains technical safeguards but does not by itself certify legal compliance. Complete a child-focused DPIA and professional privacy/safeguarding review before launch.
 
-## Install
+## Local setup
+
+Python 3.12 is recommended.
 
 ```bash
-pip install -r requirements-langfuse.txt
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+cp .env.example .env
 ```
 
-Copy the variables from `.env.langfuse.example` into your normal `.env`. Do not
-put real API keys in source control.
+For local development, edit `.env` to use a local PostgreSQL database and test AI/payment keys. Never commit `.env`, `env` or real credentials.
 
-For the self-hosted Docker deployment, `LANGFUSE_BASE_URL` must be the URL that
-the Python application can reach. When the Python process runs on the host and
-Langfuse exposes port 3000, use `http://localhost:3000`. When both run in Docker,
-use the Langfuse service name and internal port instead.
+Start the application:
 
-## Files
+```bash
+python web_app.py
+```
 
-Place these files in the application repository:
+Open:
 
-- `src/observability.py`
-- patched `web_app.py` (or the patched `web_app(7).py` if that is your entrypoint)
-- patched `homework_rag.py` at `src/homework_rag.py`
-- patched `app.html` at `static/app.html`
-- `requirements-langfuse.txt`
+- `http://localhost:5000/`
+- `http://localhost:5000/app`
+- `http://localhost:5000/api/health`
+- `http://localhost:5000/api/ready`
 
-## Verify
+## Database
 
-1. Start Langfuse and the tutor application.
-2. Open `/api/health`; `langfuse.enabled` should be `true`.
-3. Generate homework, review an answer, and open Langfuse **Traces**.
-4. Confirm the trace contains a request span and nested generation/retriever spans.
-5. Click a review thumbs button and confirm `user-thumbs` appears in the trace's Scores tab.
+Production requires PostgreSQL. RAG uses PostgreSQL with `pgvector`.
 
-## Useful environment switches
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+```
+
+All production stores should normally share `DATABASE_URL`. Optional per-store overrides exist for accounts, sessions, memory, billing, messages and password resets.
+
+Local SQLite support exists only for isolated automated tests and explicitly local compatibility paths. Do not use local SQLite or local Chroma files as production state on replaceable or multi-instance containers.
+
+## Tests
+
+All tests are under `test/`; all technical documents are under `doc/`.
+
+```bash
+python -m compileall -q web_app.py src scripts test
+pytest -q test/unit test/api test/integration
+```
+
+Run browser end-to-end tests against a local or staging server:
+
+```bash
+RUN_E2E=1 E2E_BASE_URL=http://127.0.0.1:5000 pytest -q test/e2e --browser chromium
+```
+
+See `doc/TESTING.md` and `doc/END_TO_END_TESTING.md` for the complete test guide.
+
+Verified result: **93 unit/API/integration tests passed and 16 Chromium E2E tests passed**. The active web-layer coverage gate is 55%, with 59.28% measured coverage.
+
+## Production essentials
+
+Set at minimum:
 
 ```dotenv
-# Disable tracing without changing code
-LANGFUSE_TRACING_ENABLED=false
-
-# Development-only content capture; keep false in production unless approved
-LANGFUSE_CAPTURE_CONTENT=false
-
-# Optional text feedback comments; kept off by default
-LANGFUSE_CAPTURE_FEEDBACK_COMMENTS=false
+DEV_MODE=false
+APP_BASE_URL=https://your-domain.example
+PUBLIC_BASE_URL=https://your-domain.example
+CORS_ORIGINS=https://your-domain.example
+COOKIE_SECURE=true
+DATABASE_URL=postgresql+psycopg://...
+PGVECTOR_DATABASE_URL=postgresql+psycopg://...
+DATA_CONTROLLER_NAME=...
+PRIVACY_CONTACT_EMAIL=...
+PRIVACY_POSTAL_ADDRESS=...
+ADMIN_EMAILS=...
+AUTH_SECRET=...
+SESSION_SECRET=...
+SESSION_OWNER_SECRET=...
+SALT=...
+STORE_RAW_LEARNER_CONTENT=false
+STORE_RAW_AI_CONTENT=false
+WEB_CONCURRENCY=1
 ```
 
-## Which web app file to use
+Use a secret manager rather than placing production secrets in a file.
 
-`web_app.py` is the patched version of the uploaded `web_app(7).py` and is the
-recommended replacement. The same file is also kept under `source-names/`.
-`alternatives/web_app_legacy.py` contains the matching patch for the other
-legacy application variant supplied with the project; do not install both.
+## Privacy and safeguarding defaults
 
-## Agent Skill copy
+- Parent/guardian-owned accounts for pupils aged 5–11
+- Minimal learner identifiers
+- Raw learner and AI content disabled by default
+- Bounded retention for learning records, support messages and memory
+- PII minimisation before AI calls
+- Safety handling for explicit first-person danger disclosures
+- Trusted-adult, 999 and Childline guidance for urgent child-safety messages
+- No behavioural advertising or purchase prompts in learning output
+- Child-friendly privacy and safety pages
 
-The archive includes the mirrored Langfuse Agent Skill under
-`.agent-skills/skills/langfuse`. For a normal connected development machine,
-run `./install_langfuse_skill.sh` to use the official installer and receive
-future updates.
+## Performance design
 
-## Review model routing
+- Exact metadata RAG lookup before semantic search
+- Local deterministic marking where answer keys exist
+- Prompt and output-token budgets
+- Bounded parallel subject generation
+- Timeouts and queue limits for blocking/AI work
+- Local database subscription checks updated by Stripe webhooks
+- Shared PostgreSQL storage for multi-instance stability
 
-Library/RAG homework is now marked and explained locally from its stored answer
-records, so quick checking and detailed explanations do not need an LLM call.
-For non-RAG work, API deployments use `QUICK_REVIEW_MODEL` and
-`DETAIL_REVIEW_MODEL`. Ollama deployments keep `OLLAMA_MODEL` by default, with
-optional `OLLAMA_QUICK_REVIEW_MODEL` and `OLLAMA_DETAIL_REVIEW_MODEL` overrides.
-See `REVIEW_FIX_NOTES.md` for the full change summary and validation results.
+## Docker
+
+```bash
+docker build -t homework-magic .
+docker run --rm -p 8080:8080 --env-file .env -e PORT=8080 homework-magic
+```
+
+The image runs as a non-root user and starts one worker by default because the local embedding model consumes memory per process.
+
+## Payments
+
+Start with Stripe test mode. Configure real Price IDs and a signed webhook secret. Access decisions use webhook-synchronised local subscription state; do not restore public/manual production subscription creation.
+
+## Observability
+
+Langfuse is optional. Keep raw content capture disabled. Use pseudonymous identifiers and operational metadata only unless a completed DPIA, privacy notice and provider agreement explicitly support more.

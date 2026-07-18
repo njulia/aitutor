@@ -25,8 +25,8 @@ def test_no_rag_11plus_review_uses_quick_prompt_with_age_bounded_profile() -> No
     assert kwargs["homework_content"].startswith("Solve the multi-step equation")
     assert kwargs["student_answer"] == "138"
     assert "private-id" not in kwargs["student_profile"]
-    assert "'year_group': 7" in kwargs["student_profile"]
-    assert "'age': 12" in kwargs["student_profile"]
+    assert "'year_group': 6" in kwargs["student_profile"]
+    assert "'age': 11" in kwargs["student_profile"]
     assert result["success"] is True
 
 

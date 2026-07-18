@@ -16,6 +16,8 @@ import hashlib
 import logging
 import os
 import secrets
+import time
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Iterable, Optional, TypeVar
 
@@ -85,6 +87,48 @@ class AppSettings:
             trust_proxy_headers=_env_bool("TRUST_PROXY_HEADERS", False),
             session_cookie_secure=not dev,
         )
+
+
+def production_configuration_issues() -> list[str]:
+    """Return unsafe/missing production settings without exposing secret values."""
+    if _env_bool("DEV_MODE", False) or _env_bool("TESTING", False):
+        return []
+    issues: list[str] = []
+    database_url = (os.getenv("DATABASE_URL") or "").strip().lower()
+    if not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
+        issues.append("DATABASE_URL must use managed PostgreSQL in production")
+    base_url = (os.getenv("APP_BASE_URL") or "").strip().lower()
+    if not base_url.startswith("https://"):
+        issues.append("APP_BASE_URL must be an HTTPS URL")
+    origins = _csv("CORS_ORIGINS")
+    if not origins or any(origin == "*" for origin in origins):
+        issues.append("CORS_ORIGINS must list exact HTTPS origins")
+    if not (os.getenv("ADMIN_EMAILS") or os.getenv("ADMIN_EMAIL")):
+        issues.append("ADMIN_EMAILS must be configured")
+    if not os.getenv("DATA_CONTROLLER_NAME", "").strip():
+        issues.append("DATA_CONTROLLER_NAME must identify the legal service operator")
+    if not os.getenv("PRIVACY_CONTACT_EMAIL", "").strip():
+        issues.append("PRIVACY_CONTACT_EMAIL must be configured")
+    if not os.getenv("PRIVACY_POSTAL_ADDRESS", "").strip():
+        issues.append("PRIVACY_POSTAL_ADDRESS must be configured")
+    if len(os.getenv("SESSION_OWNER_SECRET", "")) < 32:
+        issues.append("SESSION_OWNER_SECRET must contain at least 32 characters")
+    if (os.getenv("COOKIE_SECURE") or "").strip().lower() in {"0", "false", "no", "off"}:
+        issues.append("COOKIE_SECURE cannot be disabled in production")
+    if _env_bool("STORE_RAW_LEARNER_CONTENT", False):
+        issues.append("STORE_RAW_LEARNER_CONTENT should remain false for child privacy")
+    if _env_bool("STORE_RAW_AI_CONTENT", False):
+        issues.append("STORE_RAW_AI_CONTENT should remain false for child privacy")
+    return issues
+
+
+def validate_production_configuration() -> None:
+    issues = production_configuration_issues()
+    strict = _env_bool("ENFORCE_PRODUCTION_CONFIG", True)
+    if issues and strict:
+        raise RuntimeError("Unsafe production configuration: " + "; ".join(issues))
+    for issue in issues:
+        logger.warning("Production configuration: %s", issue)
 
 
 settings = AppSettings.from_env()
@@ -239,7 +283,9 @@ class AdminPathGuardMiddleware(BaseHTTPMiddleware):
                 if isinstance(result, Awaitable):
                     await result
             except HTTPException as exc:
-                return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+                # Do not reveal whether an administrator account exists or is
+                # logged in. Admin paths consistently fail closed with 403.
+                return JSONResponse(status_code=403, content={"detail": "Admin access denied"})
             except Exception:
                 logger.exception("Admin authorisation failed")
                 return JSONResponse(status_code=403, content={"detail": "Admin access denied"})
@@ -302,6 +348,55 @@ class ExpensiveRouteBulkheadMiddleware(BaseHTTPMiddleware):
             self.semaphore.release()
 
 
+class SensitiveRouteRateLimitMiddleware(BaseHTTPMiddleware):
+    """Small per-instance abuse guard for account and support endpoints.
+
+    Use Redis or a managed edge rate limiter when running several instances;
+    this local layer is defence in depth and protects a single worker.
+    """
+
+    LIMITS = {
+        "/api/login": (10, 10 * 60),
+        "/api/register": (5, 60 * 60),
+        "/api/password-reset/request": (5, 60 * 60),
+        "/api/messages": (12, 60 * 60),
+        "/api/billing/checkout": (10, 10 * 60),
+    }
+
+    def __init__(self, app: Any):
+        super().__init__(app)
+        self.events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+    def _client_key(self, request: Request) -> str:
+        if settings.trust_proxy_headers:
+            forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
+            if forwarded:
+                return hashlib.sha256(forwarded.encode("utf-8")).hexdigest()[:24]
+        host = request.client.host if request.client else "unknown"
+        return hashlib.sha256(host.encode("utf-8")).hexdigest()[:24]
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if _env_bool("TESTING", False):
+            return await call_next(request)
+        limit = self.LIMITS.get(request.url.path)
+        if request.method != "POST" or not limit:
+            return await call_next(request)
+        maximum, window = limit
+        now = time.monotonic()
+        bucket = self.events[(request.url.path, self._client_key(request))]
+        while bucket and bucket[0] <= now - window:
+            bucket.popleft()
+        if len(bucket) >= maximum:
+            retry_after = max(1, int(window - (now - bucket[0])))
+            return JSONResponse(
+                status_code=429,
+                headers={"Retry-After": str(retry_after)},
+                content={"success": False, "error": "Too many attempts. Please wait and try again."},
+            )
+        bucket.append(now)
+        return await call_next(request)
+
+
 def configure_cors(app: FastAPI) -> None:
     """Install credential-safe CORS; never combine cookies with a wildcard origin."""
     app.add_middleware(
@@ -321,4 +416,5 @@ def install_hardening(app: FastAPI, require_admin: Callable[[Request], Any]) -> 
     app.add_middleware(RequestSizeMiddleware)
     app.add_middleware(ExpensiveRouteBulkheadMiddleware)
     app.add_middleware(SameOriginWriteMiddleware)
+    app.add_middleware(SensitiveRouteRateLimitMiddleware)
     app.add_middleware(AdminPathGuardMiddleware, require_admin=require_admin)

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Privacy Notice | Homework Magic</title>
+    <meta name="description" content="How Homework Magic protects parent and child information.">
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #25314d;
+            --muted: #5d6880;
+            --purple: #6556d9;
+            --purple-dark: #4d3fc0;
+            --panel: #ffffff;
+            --soft: #f5f4ff;
+            --line: #dedbea;
+            --success: #176b52;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+            color: var(--ink);
+            background: #f7f8fc;
+            line-height: 1.65;
+        }
+        a { color: var(--purple-dark); }
+        a:hover { text-decoration-thickness: 2px; }
+        .site-header {
+            background: var(--panel);
+            border-bottom: 1px solid var(--line);
+        }
+        .header-inner {
+            width: min(1080px, calc(100% - 32px));
+            margin: 0 auto;
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+        .brand {
+            color: var(--purple-dark);
+            font-size: 1.25rem;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        nav { display: flex; gap: 18px; flex-wrap: wrap; }
+        nav a { color: var(--ink); font-weight: 650; text-decoration: none; }
+        main {
+            width: min(900px, calc(100% - 32px));
+            margin: 40px auto 64px;
+        }
+        .hero {
+            padding: clamp(28px, 5vw, 52px);
+            border-radius: 24px;
+            color: white;
+            background: linear-gradient(135deg, #6556d9, #844cc8);
+            box-shadow: 0 18px 45px rgba(78, 63, 192, .18);
+        }
+        .hero h1 { margin: 0 0 12px; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.1; }
+        .hero p { margin: 0; max-width: 680px; font-size: 1.08rem; }
+        .child-summary,
+        .section {
+            margin-top: 24px;
+            padding: clamp(22px, 4vw, 34px);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+        }
+        .child-summary {
+            background: var(--soft);
+            border-left: 5px solid var(--purple);
+        }
+        h2 { margin: 0 0 14px; font-size: 1.45rem; }
+        h3 { margin: 24px 0 8px; font-size: 1.08rem; }
+        p, ul { margin-top: 0; }
+        ul { padding-left: 1.35rem; }
+        li + li { margin-top: 7px; }
+        .plain-list { list-style: none; padding: 0; }
+        .plain-list li {
+            margin: 9px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+        .plain-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--success);
+            font-weight: 900;
+        }
+        .updated { color: var(--muted); font-size: .95rem; }
+        .contact-box {
+            margin-top: 18px;
+            padding: 18px;
+            background: var(--soft);
+            border-radius: 12px;
+        }
+        .button {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 11px 18px;
+            border-radius: 999px;
+            color: #fff;
+            background: var(--purple-dark);
+            text-decoration: none;
+            font-weight: 750;
+        }
+        footer {
+            padding: 28px 16px;
+            text-align: center;
+            color: var(--muted);
+            border-top: 1px solid var(--line);
+            background: var(--panel);
+        }
+        @media (max-width: 680px) {
+            .header-inner { align-items: flex-start; flex-direction: column; padding: 16px 0; }
+            nav { gap: 12px; }
+            main { margin-top: 24px; }
+        }
+    </style>
+</head>
+<body>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/">✨ Homework Magic</a>
+        <nav aria-label="Main navigation">
+            <a href="/app">Homework</a>
+            <a href="/messages">Contact us</a>
+            <a href="/safety">Safety</a>
+            <a href="/privacy" aria-current="page">Privacy</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <section class="hero">
+        <h1>Privacy notice</h1>
+        <p>Homework Magic is designed for families. We aim to collect only the information needed to provide homework help, keep accounts secure and support parents or guardians.</p>
+    </section>
+
+    <section class="child-summary" aria-labelledby="child-summary-heading">
+        <h2 id="child-summary-heading">A simple explanation for children</h2>
+        <ul class="plain-list">
+            <li>Ask a parent or guardian before creating an account or sharing information.</li>
+            <li>Use a nickname rather than your full name.</li>
+            <li>Do not share your school, home address, phone number, exact birthday or passwords.</li>
+            <li>Your parent or guardian can ask to see or delete information connected to your account.</li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>Who is responsible for the information?</h2>
+        <p><strong>{{DATA_CONTROLLER_NAME}}</strong> is the data controller for Homework Magic.</p>
+        <p>Privacy email: <strong>{{PRIVACY_CONTACT_EMAIL}}</strong><br>
+        Postal contact: <strong>{{PRIVACY_POSTAL_ADDRESS}}</strong></p>
+    </section>
+
+    <section class="section">
+        <h2>Information we may use</h2>
+        <p>The information depends on which features a family uses. It may include:</p>
+        <ul>
+            <li>a parent or guardian email address and account security information;</li>
+            <li>a learner nickname, year group and selected learning preferences;</li>
+            <li>homework questions, answers, feedback, scores and progress records;</li>
+            <li>support messages sent through the Contact us page;</li>
+            <li>subscription status and Stripe customer or subscription identifiers; and</li>
+            <li>limited technical logs needed for security, reliability and fault-finding.</li>
+        </ul>
+        <p>Payment-card details are entered on Stripe's hosted payment pages. Homework Magic does not need to store complete card details.</p>
+    </section>
+
+    <section class="section">
+        <h2>Why we use information</h2>
+        <ul>
+            <li>To create and secure parent or guardian accounts.</li>
+            <li>To provide homework, marking, explanations and progress features.</li>
+            <li>To remember the selected learner and appropriate year group.</li>
+            <li>To manage subscriptions and check access to paid features.</li>
+            <li>To answer support, billing and privacy questions.</li>
+            <li>To prevent misuse and keep the service working safely.</li>
+        </ul>
+        <p>We do not use a child's homework or progress information to show targeted advertising.</p>
+    </section>
+
+    <section class="section">
+        <h2>Who may process information</h2>
+        <p>We may use carefully selected service providers to run the website, store data, provide AI features, send service emails, monitor faults and process payments. Providers should receive only the information needed for their task.</p>
+        <p>Child profiles, homework, answers and progress should not be placed in Stripe payment metadata.</p>
+    </section>
+
+    <section class="section">
+        <h2>Keeping and protecting information</h2>
+        <p>We use access controls, encrypted connections, restricted administrator access and other technical safeguards intended to protect account and learning information. Parents and guardians should use a strong, unique password and should not share login details.</p>
+        <p>By default, the service stores scores and progress facts rather than the full text of a child's homework, answers or AI feedback. Raw learner or AI content should remain disabled unless a documented need and a suitable privacy assessment justify it.</p>
+        <h3>Default retention periods</h3>
+        <ul>
+            <li>learning and progress records: up to 365 days;</li>
+            <li>optional learning memory: controlled by a parent or guardian, normally 365 days and no more than 730 days;</li>
+            <li>support messages: normally 180 days; and</li>
+            <li>password-reset links: short-lived and single-use, with expired records removed.</li>
+        </ul>
+        <p>Some account, security, billing or accounting records may be kept for a different period where this is necessary for fraud prevention, disputes or a legal obligation.</p>
+    </section>
+
+    <section class="section">
+        <h2>AI-assisted homework help</h2>
+        <p>AI may help generate or explain learning activities. It can make mistakes, so important decisions about a child should not be made only by AI. Parents, guardians and teachers should check important educational or safeguarding matters.</p>
+        <p>Clear identifiers are removed from model prompts where possible. Homework text is treated as untrusted data so that instructions hidden inside an uploaded document do not override the tutor's safety rules.</p>
+    </section>
+
+    <section class="section">
+        <h2>Parent and guardian choices</h2>
+        <p>A parent or guardian may contact us to ask about:</p>
+        <ul>
+            <li>accessing or correcting account and learner information;</li>
+            <li>deleting a learner profile or closing an account;</li>
+            <li>objecting to or restricting certain uses of information;</li>
+            <li>receiving a copy of relevant information; or</li>
+            <li>making a privacy complaint.</li>
+        </ul>
+        <p>Some billing records may need to be retained where required for accounting, fraud prevention or other legal obligations. An active subscription may need to be cancelled before an account can be fully closed.</p>
+        <p>If a privacy concern is not resolved, a parent or guardian may complain to the UK Information Commissioner's Office (ICO) at <a href="https://ico.org.uk/make-a-complaint/" rel="noopener noreferrer">ico.org.uk</a>.</p>
+    </section>
+
+    <section class="section">
+        <h2>Contact us</h2>
+        <p>Use the secure message page for privacy questions or requests. Please do not include unnecessary information about a child.</p>
+        <div class="contact-box">
+            <strong>Choose “Privacy or data request” when sending the message.</strong><br>
+            <a class="button" href="/messages">Open Contact us</a>
+        </div>
+        <p class="updated">Last updated: 18 July 2026.</p>
+    </section>
+</main>
+
+<footer>Homework Magic © 2026</footer>
+</body>
+</html>

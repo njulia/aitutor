@@ -176,3 +176,100 @@ class PasswordResetStore:
             conn.execute("DELETE FROM password_reset_requests WHERE requested_at < ?", (request_cutoff,))
             conn.execute("COMMIT")
         return int(removed or 0)
+
+# Use the shared SQL database on hosted deployments; preserve explicit SQLite
+# paths for local development and the migration-focused unit tests above.
+_SQLitePasswordResetStore = PasswordResetStore
+
+
+class _SQLPasswordResetStore:
+    def __init__(self, database_url: str) -> None:
+        from sqlalchemy import Column, DateTime, MetaData, String, Table, and_, create_engine, delete, func, insert, select, update
+        from .db import engine_options, normalise_database_url
+
+        self._sa = {"and_": and_, "delete": delete, "func": func, "insert": insert, "select": select, "update": update}
+        self.database_url = normalise_database_url(database_url)
+        self.engine = create_engine(self.database_url, **engine_options(self.database_url))
+        metadata = MetaData()
+        self.tokens = Table(
+            "password_reset_tokens", metadata,
+            Column("id", String(80), primary_key=True),
+            Column("account_email", String(320), nullable=False, index=True),
+            Column("token_hash", String(64), nullable=False, unique=True),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("expires_at", DateTime(timezone=True), nullable=False, index=True),
+            Column("used_at", DateTime(timezone=True)),
+        )
+        self.requests = Table(
+            "password_reset_requests", metadata,
+            Column("id", String(80), primary_key=True),
+            Column("email_hash", String(64), nullable=False, index=True),
+            Column("client_hash", String(128), nullable=False, index=True),
+            Column("requested_at", DateTime(timezone=True), nullable=False, index=True),
+        )
+        self.token_minutes = max(5, min(int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES") or "30"), 120))
+        self.max_email_per_hour = max(1, min(int(os.getenv("PASSWORD_RESET_MAX_EMAIL_PER_HOUR") or "3"), 20))
+        self.max_client_per_hour = max(1, min(int(os.getenv("PASSWORD_RESET_MAX_CLIENT_PER_HOUR") or "10"), 100))
+        metadata.create_all(self.engine)
+
+    def record_request_if_allowed(self, email: str, client_hash: str) -> bool:
+        now = _now()
+        cutoff = now - timedelta(hours=1)
+        email_hash = _hash(email.strip().lower())
+        select, func = self._sa["select"], self._sa["func"]
+        with self.engine.begin() as conn:
+            conn.execute(self._sa["delete"](self.requests).where(self.requests.c.requested_at < now - timedelta(days=1)))
+            email_count = conn.execute(select(func.count()).where(self._sa["and_"](self.requests.c.email_hash == email_hash, self.requests.c.requested_at >= cutoff))).scalar_one()
+            client_count = conn.execute(select(func.count()).where(self._sa["and_"](self.requests.c.client_hash == client_hash, self.requests.c.requested_at >= cutoff))).scalar_one()
+            if email_count >= self.max_email_per_hour or client_count >= self.max_client_per_hour:
+                return False
+            conn.execute(self._sa["insert"](self.requests).values(id=f"prr_{uuid.uuid4().hex}", email_hash=email_hash, client_hash=client_hash, requested_at=now))
+        return True
+
+    def create_token(self, account_email: str) -> tuple[str, datetime]:
+        now = _now()
+        expires_at = now + timedelta(minutes=self.token_minutes)
+        token = secrets.token_urlsafe(48)
+        email = account_email.strip().lower()
+        with self.engine.begin() as conn:
+            conn.execute(self._sa["update"](self.tokens).where(self._sa["and_"](self.tokens.c.account_email == email, self.tokens.c.used_at.is_(None))).values(used_at=now))
+            conn.execute(self._sa["insert"](self.tokens).values(id=f"prt_{uuid.uuid4().hex}", account_email=email, token_hash=_hash(token), created_at=now, expires_at=expires_at, used_at=None))
+        return token, expires_at
+
+    def is_valid(self, token: str) -> bool:
+        if not token or len(token) > 512:
+            return False
+        with self.engine.begin() as conn:
+            row = conn.execute(self._sa["select"](self.tokens.c.id).where(self._sa["and_"](self.tokens.c.token_hash == _hash(token), self.tokens.c.used_at.is_(None), self.tokens.c.expires_at > _now()))).first()
+        return bool(row)
+
+    def consume(self, token: str) -> Optional[str]:
+        if not token or len(token) > 512:
+            return None
+        now = _now()
+        with self.engine.begin() as conn:
+            row = conn.execute(self._sa["select"](self.tokens.c.id, self.tokens.c.account_email).where(self._sa["and_"](self.tokens.c.token_hash == _hash(token), self.tokens.c.used_at.is_(None), self.tokens.c.expires_at > now))).first()
+            if not row:
+                return None
+            result = conn.execute(self._sa["update"](self.tokens).where(self._sa["and_"](self.tokens.c.id == row.id, self.tokens.c.used_at.is_(None))).values(used_at=now))
+        return str(row.account_email) if result.rowcount == 1 else None
+
+    def purge_expired(self) -> int:
+        now = _now()
+        with self.engine.begin() as conn:
+            removed = conn.execute(self._sa["delete"](self.tokens).where((self.tokens.c.expires_at < now - timedelta(days=1)) | self.tokens.c.used_at.is_not(None))).rowcount
+            conn.execute(self._sa["delete"](self.requests).where(self.requests.c.requested_at < now - timedelta(days=1)))
+        return int(removed or 0)
+
+
+class PasswordResetStore:
+    """Shared database store in production, explicit SQLite store in tests."""
+    def __init__(self, project_root: str, db_path: Optional[str] = None) -> None:
+        database_url = os.getenv("PASSWORD_RESET_DATABASE_URL") or os.getenv("DATABASE_URL")
+        if not db_path and database_url and not database_url.strip().lower().startswith("sqlite"):
+            self._impl = _SQLPasswordResetStore(database_url)
+        else:
+            self._impl = _SQLitePasswordResetStore(project_root, db_path=db_path)
+
+    def __getattr__(self, name: str):
+        return getattr(self._impl, name)

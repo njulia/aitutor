@@ -1,44 +1,42 @@
 from __future__ import annotations
 
-import os
 import re
+from urllib.parse import urlparse
 
 import pytest
 from playwright.sync_api import Page, expect
 
 pytestmark = pytest.mark.e2e
-BASE_URL = os.getenv("E2E_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
 
 
-@pytest.fixture(autouse=True)
-def require_e2e_enabled():
-    if os.getenv("RUN_E2E", "0").lower() not in {"1", "true", "yes"}:
-        pytest.skip("Set RUN_E2E=1 and start the website to run browser tests")
-
-
-def test_homepage_and_app_load(page: Page) -> None:
-    page.goto(BASE_URL, wait_until="domcontentloaded")
+def test_homepage_and_app_load(page: Page, e2e_base_url: str) -> None:
+    page.goto(e2e_base_url, wait_until="domcontentloaded")
     expect(page).to_have_title(re.compile("Homework"))
     expect(page.get_by_text("Homework Magic").first).to_be_visible()
 
-    page.goto(f"{BASE_URL}/app", wait_until="domcontentloaded")
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
     expect(page.locator("body")).to_contain_text("Generate Homework")
 
 
-def test_no_public_script_cdn_on_learner_pages(page: Page) -> None:
-    requested_hosts: set[str] = set()
+def test_no_public_script_cdn_on_learner_pages(page: Page, e2e_base_url: str) -> None:
+    requested_urls: list[str] = []
+    page.on("request", lambda request: requested_urls.append(request.url))
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+    page.wait_for_function("typeof displayHomework === 'function'")
 
-    def record_request(request):
-        if request.resource_type == "script":
-            requested_hosts.add(request.url.split("/", 3)[2])
+    script_hosts = {
+        urlparse(url).netloc
+        for url in requested_urls
+        if urlparse(url).path.endswith(".js")
+    }
+    assert script_hosts <= {urlparse(e2e_base_url).netloc}
 
-    page.on("request", record_request)
-    page.goto(f"{BASE_URL}/app", wait_until="networkidle")
-    assert requested_hosts <= {BASE_URL.split("//", 1)[1]}
 
-
-def test_shared_renderer_handles_primary_and_elevenplus_choice_questions(page: Page) -> None:
-    page.goto(f"{BASE_URL}/app", wait_until="networkidle")
+def test_shared_renderer_handles_primary_and_elevenplus_choice_questions(
+    page: Page, e2e_base_url: str
+) -> None:
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+    page.wait_for_function("typeof displayHomework === 'function'")
     page.evaluate(
         """
         displayHomework([{
@@ -57,11 +55,11 @@ def test_shared_renderer_handles_primary_and_elevenplus_choice_questions(page: P
         """
     )
 
-    expect(page.locator('.multiple-choice-input')).to_have_count(2)
-    expect(page.locator('.question-response-input')).to_have_count(1)
-    page.locator('.multiple-choice-input').nth(1).check()
-    page.locator('.question-response-input').fill('10')
-    expect(page.locator('.question-answer-proxy')).to_have_value('1. 4\n2. 10')
+    expect(page.locator(".multiple-choice-input")).to_have_count(2)
+    expect(page.locator(".question-response-input")).to_have_count(1)
+    page.locator(".multiple-choice-option").nth(1).click()
+    page.locator(".question-response-input").fill("10")
+    expect(page.locator(".question-answer-proxy")).to_have_value("1. 4\n2. 10")
 
     page.evaluate(
         """
@@ -77,5 +75,5 @@ def test_shared_renderer_handles_primary_and_elevenplus_choice_questions(page: P
         }]);
         """
     )
-    expect(page.locator('.multiple-choice-input')).to_have_count(2)
-    expect(page.locator('.answer-column textarea:not([hidden])')).to_have_count(0)
+    expect(page.locator(".multiple-choice-input")).to_have_count(2)
+    expect(page.locator(".answer-column textarea:not([hidden])")).to_have_count(0)

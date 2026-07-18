@@ -144,8 +144,8 @@ def _validate_student(name: str, year_group: int, age: int) -> tuple[str, int, i
         raise ValueError("Please use a nickname, not contact or school information")
     if not 1 <= int(year_group) <= 6:
         raise ValueError("Year group must be between 1 and 6")
-    if not 5 <= int(age) <= 12:
-        raise ValueError("Age must be between 5 and 12")
+    if not 5 <= int(age) <= 11:
+        raise ValueError("Age must be between 5 and 11")
     return nickname, int(year_group), int(age)
 
 

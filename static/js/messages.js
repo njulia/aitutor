@@ -223,7 +223,7 @@ async function submitMessage(event) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const savedEmail = localStorage.getItem('student_email') || '';
+    const savedEmail = '';
     if (savedEmail && savedEmail.includes('@')) document.getElementById('contact-email').value = savedEmail;
     document.getElementById('contact-form').addEventListener('submit', submitMessage);
     document.getElementById('refresh-messages').addEventListener('click', () => loadMessages());

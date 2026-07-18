@@ -5,12 +5,12 @@ from pydantic import BaseModel, Field
 class StudentCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     year_group: int = Field(ge=1, le=6)
-    age: int = Field(ge=5, le=12)
+    age: int = Field(ge=5, le=11)
 
 class StudentUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=80)
     year_group: Optional[int] = Field(default=None, ge=1, le=6)
-    age: Optional[int] = Field(default=None, ge=5, le=12)
+    age: Optional[int] = Field(default=None, ge=5, le=11)
     is_active: Optional[bool] = None
 
 class AccountSubscriptionRequest(BaseModel):

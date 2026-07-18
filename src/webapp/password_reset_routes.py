@@ -29,8 +29,8 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str = Field(min_length=20, max_length=512)
-    password: str = Field(min_length=8, max_length=128)
-    confirm_password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=10, max_length=128)
+    confirm_password: str = Field(min_length=10, max_length=128)
 
 
 def _page(project_root: str, filename: str) -> FileResponse:
@@ -68,7 +68,7 @@ def _base_url(request: Request) -> str:
 
 def _valid_password(password: str) -> bool:
     # Long passwords are supported; no special-character puzzle is imposed.
-    return 8 <= len(password) <= 128 and not password.isspace()
+    return 10 <= len(password) <= 128 and not password.isspace()
 
 
 def create_password_reset_router(*, project_root: str, dev_mode: bool = False) -> APIRouter:
@@ -128,7 +128,7 @@ def create_password_reset_router(*, project_root: str, dev_mode: bool = False) -
         if body.password != body.confirm_password:
             raise HTTPException(status_code=400, detail="The passwords do not match.")
         if not _valid_password(body.password):
-            raise HTTPException(status_code=400, detail="Use a password with at least 8 characters.")
+            raise HTTPException(status_code=400, detail="Use a password with at least 10 characters.")
 
         email = await asyncio.to_thread(store.consume, body.token)
         if not email:

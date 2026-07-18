@@ -13,6 +13,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .prompt_budget import budget_review_inputs, compact_text, stable_cache_key
+from .child_safety import safety_result
 from .question_utils import _parse_student_answers_to_map, _split_homework_into_questions
 from src.models import subject_display_name
 
@@ -49,10 +50,10 @@ def _token_limit(env_name: str, default: int, maximum: int = 4_000) -> int:
 
 
 def _normalise_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keep only bounded, useful learner context for ages 5-12."""
+    """Keep only bounded, useful learner context for ages 5-11."""
     source = dict(profile or {})
-    year_group = _bounded_int(source.get("year_group"), default=3, minimum=1, maximum=7)
-    age = _bounded_int(source.get("age"), default=year_group + 4, minimum=5, maximum=12)
+    year_group = _bounded_int(source.get("year_group"), default=3, minimum=1, maximum=6)
+    age = _bounded_int(source.get("age"), default=year_group + 4, minimum=5, maximum=11)
     cleaned: Dict[str, Any] = {
         "year_group": year_group,
         "age": age,
@@ -483,6 +484,9 @@ def review_homework(
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
+    intervention = safety_result("review", student_answers)
+    if intervention is not None:
+        return intervention
     raw_profile = dict(profile or {})
     student_id = raw_profile.get("student_id", "anonymous")
     profile = _normalise_profile(raw_profile)
@@ -609,6 +613,9 @@ def explain_deep(
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
+    intervention = safety_result("explanation", student_answers)
+    if intervention is not None:
+        return intervention
     raw_profile = dict(profile or {})
     profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
@@ -709,6 +716,9 @@ def improve_practice(
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
+    intervention = safety_result("practice", student_answers)
+    if intervention is not None:
+        return intervention
     profile = _normalise_profile(dict(profile or {}))
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
     cache_key = stable_cache_key(
@@ -754,7 +764,7 @@ def improve_practice(
         review_feedback=budget["review_feedback"] or "No review feedback available",
         year_group=budget["profile"].get("year_group", 3),
         age=budget["profile"].get("age", 7),
-        correct_answers_section=correct_answers_section,
+        correct_answers_section=compact_text(correct_answers_section, 4_000),
     )
     result = _complete_review(
         llm_client,

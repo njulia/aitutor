@@ -401,6 +401,20 @@ def verify_user_credentials(username: str, password: str) -> bool:
     return bool(user and hmac.compare_digest(_hash_password(password, user["salt"]), user["password_hash"]))
 
 
+def set_user_password(username: str, new_password: str) -> bool:
+    """Update a password using the same PBKDF2 scheme on SQLite or PostgreSQL."""
+    if not 10 <= len(str(new_password or "")) <= 128 or str(new_password).isspace():
+        raise ValueError("Use a password with at least 10 characters")
+    salt = os.urandom(16).hex()
+    with _engine.begin() as conn:
+        result = conn.execute(
+            update(auth_users)
+            .where(auth_users.c.username == username.strip().lower())
+            .values(password_hash=_hash_password(new_password, salt), salt=salt)
+        )
+    return bool(result.rowcount)
+
+
 def ensure_user_columns():
     return None
 
@@ -472,3 +486,32 @@ def delete_user_account(username: str) -> bool:
         conn.execute(delete(legacy_subscriptions).where(legacy_subscriptions.c.customer_email == clean))
         result = conn.execute(delete(auth_users).where(auth_users.c.username == clean))
     return bool(result.rowcount)
+
+
+def database_health_check() -> bool:
+    """Return True when the relational store accepts a simple query."""
+    try:
+        with _engine.connect() as conn:
+            conn.execute(select(func.count()).select_from(auth_users)).scalar_one()
+        return True
+    except Exception:
+        return False
+
+
+def purge_old_learning_records(retention_days: Optional[int] = None) -> int:
+    """Delete expired learning-session rows according to the configured policy.
+
+    Raw learner content is already off by default. This cleanup also limits the
+    lifetime of scores and timestamps used for progress views.
+    """
+    if retention_days is None:
+        try:
+            retention_days = int(os.getenv("LEARNING_RECORD_RETENTION_DAYS", "365"))
+        except ValueError:
+            retention_days = 365
+    retention_days = max(30, min(int(retention_days), 2555))
+    cutoff = _now() - timedelta(days=retention_days)
+    with _engine.begin() as conn:
+        result = conn.execute(delete(homework_sessions).where(homework_sessions.c.created_at < cutoff))
+        conn.execute(delete(practice_sessions).where(practice_sessions.c.created_at < cutoff))
+    return int(result.rowcount or 0)

@@ -206,6 +206,11 @@ def _parse_question_block(number: int, body: str) -> Dict[str, Any] | None:
     return result
 
 
+def public_homework_content(homework_content: str) -> str:
+    """Return learner-facing worksheet text with private answer sections removed."""
+    return _strip_private_answer_sections(homework_content)
+
+
 def parse_public_questions(homework_content: str) -> List[Dict[str, Any]]:
     """Return an answer-free, mixed question model for the browser.
 

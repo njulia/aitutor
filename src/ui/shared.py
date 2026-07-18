@@ -174,7 +174,7 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
         except (TypeError, ValueError):
             year_num = 1
         try:
-            age_num = max(5, min(12, int(result.get("age", YEAR_GROUP_AGE.get(year_num, 5)))))
+            age_num = max(5, min(11, int(result.get("age", YEAR_GROUP_AGE.get(year_num, 5)))))
         except (TypeError, ValueError):
             age_num = YEAR_GROUP_AGE.get(year_num, 5)
         hw_info = get_homework_time_by_age(year_num)

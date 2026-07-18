@@ -117,13 +117,12 @@ def build_account_router(resolve_username, require_admin, session_store):
     @router.post("/admin/account-subscriptions")
     async def admin_add_subscription(request: Request, body: AccountSubscriptionRequest):
         require_admin(request)
-        # ======== TODO: Allow manual change subscription at this moment, need to disable it.
-        # import os
-        # if os.getenv("DEV_MODE", "").lower() not in {"1", "true", "yes"}:
-        #     raise HTTPException(
-        #         status_code=410,
-        #         detail="Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks.",
-        #     )
+        import os
+        if os.getenv("DEV_MODE", "").lower() not in {"1", "true", "yes"}:
+            raise HTTPException(
+                status_code=410,
+                detail="Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks.",
+            )
         account = await asyncio.to_thread(ensure_account, body.email)
         sub = await asyncio.to_thread(
             create_subscription,

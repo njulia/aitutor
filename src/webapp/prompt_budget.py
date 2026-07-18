@@ -24,9 +24,40 @@ REVIEW_FEEDBACK_MAX_CHARS = _bounded_env("REVIEW_FEEDBACK_MAX_CHARS", 2_000, 250
 _WHITESPACE = re.compile(r"[ \t]+")
 _BLANK_LINES = re.compile(r"\n{3,}")
 
+_EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
+_POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b", re.I)
+_URL = re.compile(r"\b(?:https?://|www\.)\S+", re.I)
+_LABELLED_PHONE = re.compile(
+    r"(?i)(\b(?:my\s+)?(?:phone|mobile|telephone|contact)\s*(?:number)?\s*(?:is|:)?\s*)"
+    r"(?:\+?44\s?\d{4}|0\d{3,4})[\s-]?\d{3,4}[\s-]?\d{3,4}"
+)
+_NAME_DISCLOSURE = re.compile(
+    r"(?i)\b(my\s+(?:full\s+)?name\s+is|i\s+am\s+called)\s+[A-Z][A-Za-z'’.-]+"
+    r"(?:\s+[A-Z][A-Za-z'’.-]+){0,3}"
+)
+_SCHOOL_DISCLOSURE = re.compile(
+    r"(?i)\b(i\s+(?:go\s+to|attend)|my\s+school\s+is)\s+[^\n,.!?]{2,80}"
+)
+
+
+def minimise_personal_data(value: Any) -> str:
+    """Remove clear identifiers that are not needed for tutoring.
+
+    Phone-like digit strings are removed only when labelled as contact details,
+    so ordinary arithmetic answers and large numbers remain intact.
+    """
+    text = str(value or "")
+    text = _EMAIL.sub("[email removed]", text)
+    text = _POSTCODE.sub("[postcode removed]", text)
+    text = _URL.sub("[link removed]", text)
+    text = _LABELLED_PHONE.sub(r"\1[phone removed]", text)
+    text = _NAME_DISCLOSURE.sub(r"\1 [name removed]", text)
+    text = _SCHOOL_DISCLOSURE.sub(r"\1 [school removed]", text)
+    return text
+
 
 def compact_text(value: Any, max_chars: int, *, keep_tail: int = 0) -> str:
-    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = minimise_personal_data(value).replace("\r\n", "\n").replace("\r", "\n")
     text = "\n".join(_WHITESPACE.sub(" ", line).strip() for line in text.split("\n"))
     text = _BLANK_LINES.sub("\n\n", text).strip()
     if len(text) <= max_chars:

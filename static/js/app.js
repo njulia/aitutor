@@ -44,9 +44,9 @@ let currentHomework = [];
         function getLearnerReviewProfile() {
             const source = currentProfile && typeof currentProfile === 'object' ? currentProfile : {};
             const rawYear = Number(source.year_group);
-            const yearGroup = Number.isFinite(rawYear) ? Math.min(7, Math.max(1, Math.round(rawYear))) : 3;
+            const yearGroup = Number.isFinite(rawYear) ? Math.min(6, Math.max(1, Math.round(rawYear))) : 3;
             const rawAge = Number(source.age);
-            const age = Number.isFinite(rawAge) ? Math.min(12, Math.max(5, Math.round(rawAge))) : Math.min(12, yearGroup + 4);
+            const age = Number.isFinite(rawAge) ? Math.min(11, Math.max(5, Math.round(rawAge))) : Math.min(11, yearGroup + 4);
             const profile = { year_group: yearGroup, age: age };
             if (Number.isFinite(Number(source.plan_week))) {
                 profile.plan_week = Math.min(52, Math.max(1, Math.round(Number(source.plan_week))));
