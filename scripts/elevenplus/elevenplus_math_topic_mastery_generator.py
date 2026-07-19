@@ -106,7 +106,10 @@ def generate_topic_mastery_plan() -> list:
             # Build Metadata compatible with ChromaDB sanitization rules
             metadata = {
                 "year_group": 6,
-                "subject": "Maths",
+                # A dedicated subject key and content type keep mastery sets
+                # out of ordinary 11+ and 52-week RAG searches.
+                "subject": "Maths-topic-mastery",
+                "content_type": "topic_mastery",
                 "homework_minutes": "10",
                 "key_stage": "11+",
                 "topic": topic,

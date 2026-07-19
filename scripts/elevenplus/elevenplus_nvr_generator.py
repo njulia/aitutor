@@ -630,6 +630,7 @@ def generate_11plus_nvr_batch(count: int = 300) -> list:
         metadata = {
             "year_group": YEAR_GROUP,
             "subject": "NonVerbalReasoning",
+            "content_type": "practice",
             "homework_minutes": HOMEWORK_MINUTES,
             "key_stage": KEY_STAGE,
             "topic": topic,

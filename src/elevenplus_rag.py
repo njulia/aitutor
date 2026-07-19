@@ -834,6 +834,7 @@ def search_homework_by_metadata(
     k: int = 50,
     week_num: Optional[int] = None,
     content_type: Optional[str] = None,
+    mastery_set_index: Optional[int] = None,
     *,
     offset: int = 0,
     exclude_ids: Optional[Iterable[str]] = None,
@@ -855,6 +856,8 @@ def search_homework_by_metadata(
             filters["week_num"] = int(week_num)
         if content_type:
             filters["content_type"] = str(content_type)
+        if mastery_set_index is not None:
+            filters["mastery_set_index"] = int(mastery_set_index)
         if remaining_offset or exclude_ids:
             alias_results = store.search_by_metadata(
                 filters,
@@ -886,6 +889,7 @@ def count_homework_by_metadata(
     subject: str,
     week_num: Optional[int] = None,
     content_type: Optional[str] = None,
+    mastery_set_index: Optional[int] = None,
 ) -> int:
     """Count exact 11+ metadata matches across canonical and legacy aliases."""
     store = get_elevenplus_rag_store().store
@@ -896,6 +900,8 @@ def count_homework_by_metadata(
             filters["week_num"] = int(week_num)
         if content_type:
             filters["content_type"] = str(content_type)
+        if mastery_set_index is not None:
+            filters["mastery_set_index"] = int(mastery_set_index)
         total += store.count_by_metadata(filters)
     return total
 

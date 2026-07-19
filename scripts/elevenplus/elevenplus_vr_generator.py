@@ -598,6 +598,7 @@ def generate_11plus_vr_batch(count: int = 300) -> list:
         metadata = {
             "year_group": YEAR_GROUP,
             "subject": "VerbalReasoning",
+            "content_type": "practice",
             "homework_minutes": HOMEWORK_MINUTES,
             "key_stage": KEY_STAGE,
             "topic": topic,

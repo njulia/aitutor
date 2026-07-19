@@ -263,6 +263,18 @@ def generate_homework_for_subject(
                 k=50,
                 exclude_ids=seen_ids,
             )
+            if is_eleven_plus:
+                # Legacy mastery documents used ordinary subject names and did
+                # not always have content_type.  Exclude both the new scope and
+                # its identifying metadata so those old rows cannot leak into
+                # the general 11+ practice page before they are regenerated.
+                candidates = [
+                    item for item in candidates
+                    if str((item.get("metadata") or {}).get("content_type") or "")
+                    not in {"topic_mastery", "year_round"}
+                    and (item.get("metadata") or {}).get("mastery_set_index") is None
+                    and (item.get("metadata") or {}).get("week_num") is None
+                ]
             candidates = _rank_rag_candidates(candidates, learning_goals + weak_areas)
 
         candidate_by_id = {

@@ -119,7 +119,8 @@ def generate_topic_mastery_plan() -> list:
             # Build Metadata compatible with ChromaDB sanitization rules
             metadata = {
                 "year_group": 6,
-                "subject": "English",
+                "subject": "English-topic-mastery",
+                "content_type": "topic_mastery",
                 "homework_minutes": "10",
                 "key_stage": "11+",
                 "topic": topic,

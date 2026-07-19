@@ -650,6 +650,7 @@ def generate_11plus_english_batch(count: int = 500) -> list:
         metadata = {
             "year_group": YEAR_GROUP,
             "subject": "English",
+            "content_type": "practice",
             "homework_minutes": HOMEWORK_MINUTES,
             "key_stage": KEY_STAGE,
             "topic": topic,

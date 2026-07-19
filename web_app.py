@@ -56,6 +56,7 @@ from src.webapp.upload_utils import decode_base64_image_to_temp
 from src.webapp.child_safety import detect_safeguarding_concern
 from src.models import (
     ELEVEN_PLUS_SUBJECTS,
+    ELEVEN_PLUS_TOPIC_MASTERY_SUBJECTS,
     ELEVEN_PLUS_YEAR_ROUND_SUBJECTS,
     canonical_primary_subject,
     extract_primary_subjects,
@@ -568,6 +569,12 @@ class ProfileRequest(BaseModel):
     mode: Optional[str] = "homework"  # Added mode field
 
 
+class TopicMasteryPracticeRequest(BaseModel):
+    subject: str
+    topic_index: int = Field(..., ge=1, le=11)
+    mastery_level: int = Field(..., ge=1, le=5)
+
+
 class ReviewRequest(BaseModel):
     homework: str
     answers: str
@@ -690,6 +697,11 @@ async def eleven_plus():
 @app.get("/elevenplus-year-round-plan")
 async def eleven_plus_year_round_plan():
     return _static_page("static", "elevenplus-year-round-plan.html")
+
+
+@app.get("/elevenplus-topic-mastery")
+async def eleven_plus_topic_mastery():
+    return _static_page("static", "elevenplus-topic-mastery.html")
 
 
 @app.get("/check-my-homework")
@@ -860,6 +872,7 @@ async def get_subjects():
             "VerbalReasoning-1year",
             "NonVerbalReasoning-1year",
         ],
+        "eleven_plus_topic_mastery": list(ELEVEN_PLUS_TOPIC_MASTERY_SUBJECTS),
     }
 
 
@@ -954,6 +967,96 @@ def _set_anon_cookie(response: JSONResponse, anon_id: Optional[str], request: Re
             max_age=365 * 24 * 60 * 60,
             path="/",
         )
+
+
+@app.get("/api/elevenplus/topic-mastery/catalog")
+async def get_topic_mastery_catalog():
+    """Return the small static catalogue without loading RAG or an LLM."""
+    from src.elevenplus_topic_mastery import topic_mastery_catalogue
+
+    return topic_mastery_catalogue()
+
+
+@app.post("/api/elevenplus/topic-mastery/practice")
+async def get_topic_mastery_practice(req: Request, request: TopicMasteryPracticeRequest):
+    """Fetch one exact pre-generated mastery set; never fall back to an LLM."""
+    from src.elevenplus_rag import (
+        format_questions_only,
+        get_homework_questions,
+        search_homework_by_metadata,
+    )
+    from src.elevenplus_topic_mastery import (
+        TOPIC_MASTERY_TOPICS,
+        MASTERY_LEVELS,
+        mastery_set_index,
+        normalise_topic_mastery_subject,
+    )
+    from src.models import subject_display_name
+
+    subject_key = normalise_topic_mastery_subject(request.subject)
+    if not subject_key:
+        raise HTTPException(status_code=400, detail="Choose one of the available 11+ topic-mastery subjects.")
+
+    set_index = mastery_set_index(request.topic_index, request.mastery_level)
+    matches = await run_blocking(
+        search_homework_by_metadata,
+        6,
+        subject_key,
+        k=1,
+        content_type="topic_mastery",
+        mastery_set_index=set_index,
+        timeout=12,
+        limit_concurrency=False,
+    )
+    if not matches:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": "This mastery set is not in the practice library yet. Please ask an administrator to run its topic-mastery generator.",
+            },
+        )
+
+    selected = matches[0]
+    content = public_homework_content(str(selected.get("content") or ""))
+    questions = await run_blocking(
+        get_homework_questions,
+        selected.get("doc_id"),
+        content,
+        timeout=8,
+        limit_concurrency=False,
+    )
+    if not questions:
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "error": "This practice set could not be displayed safely."},
+        )
+
+    topic = TOPIC_MASTERY_TOPICS[subject_key][request.topic_index - 1]
+    level = MASTERY_LEVELS[request.mastery_level - 1]
+    response = JSONResponse(
+        {
+            "success": True,
+            "homework": [{
+                "subject": subject_key,
+                "subject_label": subject_display_name(subject_key),
+                "content": format_questions_only(questions),
+                "questions": questions,
+                "doc_id": selected.get("doc_id"),
+                "from_rag": True,
+                "is_eleven_plus": True,
+                "content_type": "topic_mastery",
+                "topic": topic,
+                "topic_index": request.topic_index,
+                "mastery_level": request.mastery_level,
+                "mastery_level_name": level["name"],
+                "mastery_set_index": set_index,
+            }],
+        }
+    )
+    _resolved_id, _username, new_anon_session_id = _get_user_or_anonymous_id(req)
+    _set_anon_cookie(response, new_anon_session_id, req)
+    return response
 
 
 @app.post("/api/generate")
@@ -1313,7 +1416,10 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
             question_index=request_body.question_index,
             timeout=120,
         )
-        response = JSONResponse(content=result)
+        response = JSONResponse(
+            status_code=502 if result.get("llm_no_response") else 200,
+            content=result,
+        )
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
     except HTTPException:
@@ -1322,7 +1428,14 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         logger.exception("Practice generation failed")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": "We could not make extra practice just now. Please try again."},
+            content={
+                "success": False,
+                "error": (
+                    "The AI tutor could not generate extra practice content just now. "
+                    "Please try again in a moment."
+                ),
+                "llm_no_response": True,
+            },
         )
 
 

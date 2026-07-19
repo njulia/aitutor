@@ -153,6 +153,17 @@ ELEVEN_PLUS_YEAR_ROUND_SUBJECTS = [
     "NonVerbalReasoning-1year",
 ]
 
+# Topic-mastery sets use their own RAG namespace.  Keeping these keys distinct
+# from ordinary 11+ practice and the 52-week plan prevents an exact metadata
+# lookup for one page from returning content created for another page.
+TOPIC_MASTERY_SUBJECT_SUFFIX = "-topic-mastery"
+ELEVEN_PLUS_TOPIC_MASTERY_SUBJECTS = [
+    "Maths-topic-mastery",
+    "English-topic-mastery",
+    "VerbalReasoning-topic-mastery",
+    "NonVerbalReasoning-topic-mastery",
+]
+
 _SUBJECT_DISPLAY_NAMES = {
     "maths": "Maths",
     "mathematics": "Maths",
@@ -166,6 +177,8 @@ def _fold_subject_name(subject: str) -> str:
     value = str(subject or "").strip()
     if value.casefold().endswith(YEAR_ROUND_SUBJECT_SUFFIX):
         value = value[:-len(YEAR_ROUND_SUBJECT_SUFFIX)]
+    if value.casefold().endswith(TOPIC_MASTERY_SUBJECT_SUFFIX):
+        value = value[:-len(TOPIC_MASTERY_SUBJECT_SUFFIX)]
     return "".join(char for char in value.casefold() if char.isalnum())
 
 
@@ -190,6 +203,27 @@ def canonical_year_round_subject(subject: str) -> str:
 
 def is_year_round_subject(subject: str) -> bool:
     return canonical_year_round_subject(subject) in ELEVEN_PLUS_YEAR_ROUND_SUBJECTS and str(subject or "").strip().casefold().endswith(YEAR_ROUND_SUBJECT_SUFFIX)
+
+
+def canonical_topic_mastery_subject(subject: str) -> str:
+    """Convert a friendly 11+ subject name to its topic-mastery RAG key."""
+    folded = _fold_subject_name(subject)
+    mapping = {
+        "maths": "Maths-topic-mastery",
+        "mathematics": "Maths-topic-mastery",
+        "english": "English-topic-mastery",
+        "verbalreasoning": "VerbalReasoning-topic-mastery",
+        "nonverbalreasoning": "NonVerbalReasoning-topic-mastery",
+    }
+    return mapping.get(folded, str(subject or "").strip())
+
+
+def is_topic_mastery_subject(subject: str) -> bool:
+    value = str(subject or "").strip()
+    return (
+        value.casefold().endswith(TOPIC_MASTERY_SUBJECT_SUFFIX)
+        and canonical_topic_mastery_subject(value) in ELEVEN_PLUS_TOPIC_MASTERY_SUBJECTS
+    )
 
 
 def is_eleven_plus_subject(subject: str) -> bool:

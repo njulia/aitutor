@@ -1381,7 +1381,9 @@ let currentHomework = [];
                         subject: subject || 'Maths',
                         from_rag: Boolean(hw.from_rag),
                         homework_doc_id: hw.doc_id || null,
-                        is_eleven_plus: Boolean(hw.is_eleven_plus)
+                        is_eleven_plus: Boolean(hw.is_eleven_plus),
+                        question_index: Number.isInteger(hw.question_index)
+                            ? hw.question_index : currentQuestionIndex
                     });
                 } else {
                     alert('Error: ' + data.error);
@@ -1857,6 +1859,9 @@ let currentHomework = [];
             const reviewEl = document.querySelector('#review-result .review-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
+            const oldMessage = document.getElementById('practice-generation-message');
+            if (oldMessage) oldMessage.remove();
+
             showLoading();
 
             try {
@@ -1871,7 +1876,9 @@ let currentHomework = [];
                         review_feedback: reviewFeedback,
                         from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
-                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
+                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus),
+                        question_index: Number.isInteger(reviewContext.question_index)
+                            ? reviewContext.question_index : null
                     })
                 });
 
@@ -1891,18 +1898,43 @@ let currentHomework = [];
                     return;
                 }
 
-                if (response.ok && data.success) {
-                    displayPracticeQuestions(data.practice, subject);
+                const practiceContent = String(data.practice || '').trim();
+                if (response.ok && data.success && practiceContent) {
+                    displayPracticeQuestions(practiceContent, subject);
                 } else {
-                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'Unknown error';
-                    alert('Error: ' + errorMsg);
+                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) ||
+                        'The AI tutor did not return any usable practice questions, so no new content was created. Please try again in a moment.';
+                    showPracticeGenerationMessage(errorMsg);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred during practice generation');
+                showPracticeGenerationMessage(
+                    'The AI tutor could not generate extra practice content just now. Please try again in a moment.'
+                );
             } finally {
                 hideLoading();
             }
+        }
+
+        function showPracticeGenerationMessage(message) {
+            const container = document.getElementById('review-result');
+            if (!container) {
+                alert(message);
+                return;
+            }
+            let panel = document.getElementById('practice-generation-message');
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'practice-generation-message';
+                panel.className = 'review-output practice-generation-message';
+                panel.setAttribute('role', 'alert');
+                panel.style.marginTop = '18px';
+                panel.style.borderLeftColor = '#b86b12';
+                container.appendChild(panel);
+            }
+            panel.textContent = String(message || 'The AI tutor could not generate practice questions.');
+            document.getElementById('results').style.display = 'block';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         function displayPracticeQuestions(practiceContent, subject) {

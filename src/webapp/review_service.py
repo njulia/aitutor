@@ -14,7 +14,13 @@ from typing import Any, Dict, List, Optional
 
 from .prompt_budget import budget_review_inputs, compact_text, stable_cache_key
 from .child_safety import safety_result
-from .question_utils import _parse_student_answers_to_map, _split_homework_into_questions
+from .question_utils import (
+    _parse_student_answers_to_map,
+    _split_homework_into_questions,
+    normalise_homework_content,
+    parse_public_questions,
+    public_homework_content,
+)
 from src.models import subject_display_name
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,21 @@ DETAIL_REVIEW_MODEL = (
     os.getenv("DETAIL_REVIEW_MODEL")
     or "gemini-2.5-flash"
 ).strip()
+
+PRACTICE_GENERATION_UNAVAILABLE_MESSAGE = (
+    "The AI tutor did not return any usable practice questions, so no new content "
+    "was created. Please try again in a moment."
+)
+
+_PRACTICE_SECTION_RE = re.compile(
+    r"(?im)^\s*#{1,6}\s*(?:\d+\s*[.)-]?\s*)?"
+    r"(?:(?:similar|targeted|extra|adaptive)\s+)?practice questions?\s*:?[\s*]*$"
+)
+_NUMBERED_PRACTICE_QUESTION_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?"
+    r"(?:(?:practice|challenge)\s+)?(?:question|q)?\s*\d+\s*"
+    r"(?:[).:\-]|\*\*)\s*\S"
+)
 
 
 def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
@@ -136,7 +157,25 @@ def _complete_review(
     kwargs = {"temperature": float(temperature), "max_tokens": safe_max_tokens}
     if _supports_model_override(llm_client.complete):
         kwargs["model"] = selected_model
-    return str(llm_client.complete(messages, **kwargs))
+    raw_result = llm_client.complete(messages, **kwargs)
+    if raw_result is None:
+        return ""
+    return str(raw_result).strip()
+
+
+def _usable_generated_practice(raw_result: Any) -> tuple[str, List[Dict[str, Any]]]:
+    """Return learner-safe practice only when the model produced questions."""
+    practice = public_homework_content(normalise_homework_content(raw_result)).strip()
+    if not practice or practice.casefold() in {"none", "null", "undefined", "{}", "[]"}:
+        return "", []
+
+    section_match = _PRACTICE_SECTION_RE.search(practice)
+    question_area = practice[section_match.end():] if section_match else practice
+    if not _NUMBERED_PRACTICE_QUESTION_RE.search(question_area):
+        return "", []
+
+    questions = parse_public_questions(practice)
+    return (practice, questions) if questions else ("", [])
 
 
 def _clean_answer(value: Any) -> str:
@@ -484,13 +523,13 @@ def review_homework(
             llm_client,
             build_messages(prompt),
             model=selected_model,
-            temperature=0.15 if use_quick_model else 0.2,
+            temperature=0.2 if use_detail_model else 0.15,
             max_tokens=(
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
+                if use_detail_model else
                 _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
-                if use_quick_model
-                else _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
             ),
-            operation="quick_review_with_rag" if use_quick_model else "detail_review_with_rag",
+            operation= "detail_review_with_rag" if use_detail_model else "quick_review_with_rag",
         )
         review = _table(rows) + f"**Score: {correct_count}/{attempted}**\n\n" + feedback
         model_used = _resolved_model(llm_client, selected_model)
@@ -509,8 +548,8 @@ def review_homework(
             temperature=0.15,
             max_tokens=(
                 _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
-                if use_detail_model
-                else _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
+                if use_detail_model else
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
             ),
             operation=(
                 "detail_review_no_rag"
@@ -700,7 +739,14 @@ def improve_practice(
     )
     cached = practice_cache.get(cache_key)
     if cached:
-        return {"success": True, "practice": cached, "from_cache": True}
+        cached_practice, cached_questions = _usable_generated_practice(cached)
+        if cached_practice:
+            return {
+                "success": True,
+                "practice": cached_practice,
+                "questions": cached_questions,
+                "from_cache": True,
+            }
 
     correct_answers_section = ""
     if homework_doc_id:
@@ -736,7 +782,7 @@ def improve_practice(
         age=budget["profile"].get("age", 7),
         correct_answers_section=compact_text(correct_answers_section, 4_000),
     )
-    result = _complete_review(
+    raw_result = _complete_review(
         llm_client,
         build_messages(prompt),
         model=DETAIL_REVIEW_MODEL,
@@ -744,5 +790,13 @@ def improve_practice(
         max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 1_000, maximum=1_600),
         operation="targeted_practice",
     )
-    practice_cache.set(cache_key, result)
-    return {"success": True, "practice": result}
+    practice, questions = _usable_generated_practice(raw_result)
+    if not practice:
+        logger.warning("[Review] targeted_practice returned no usable numbered questions")
+        return {
+            "success": False,
+            "error": PRACTICE_GENERATION_UNAVAILABLE_MESSAGE,
+            "llm_no_response": True,
+        }
+    practice_cache.set(cache_key, practice)
+    return {"success": True, "practice": practice, "questions": questions}
