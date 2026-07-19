@@ -525,9 +525,9 @@ def review_homework(
             model=selected_model,
             temperature=0.2 if use_detail_model else 0.15,
             max_tokens=(
-                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=5000)
                 if use_detail_model else
-                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=3000)
             ),
             operation= "detail_review_with_rag" if use_detail_model else "quick_review_with_rag",
         )
@@ -547,9 +547,9 @@ def review_homework(
             model=selected_model,
             temperature=0.15,
             max_tokens=(
-                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=5000)
                 if use_detail_model else
-                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=3000)
             ),
             operation=(
                 "detail_review_no_rag"

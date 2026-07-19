@@ -73,27 +73,35 @@ def test_weekly_generation_uses_hard_week_filter_before_semantic_search(monkeypa
 
     llm = MagicMock()
     llm.complete.side_effect = AssertionError("LLM must not run when the correct weekly RAG item exists")
+    profile = {
+        "student_id": "learner_weekly",
+        "year_group": 5,
+        "age": 10,
+        "plan_week": 14,
+        "learning_goals": ["Decimals and percentages"],
+    }
     result = generator.generate_homework_for_subject(
-        {
-            "student_id": "learner_weekly",
-            "year_group": 5,
-            "age": 10,
-            "plan_week": 14,
-            "learning_goals": ["Decimals and percentages"],
-        },
+        profile,
+        "Maths-1year",
+        llm,
+        is_eleven_plus=True,
+    )
+    repeated = generator.generate_homework_for_subject(
+        profile,
         "Maths-1year",
         llm,
         is_eleven_plus=True,
     )
 
     assert result == ("QUESTIONS\n1. Pick one.\nA) One\nB) Two", "week_14", True)
+    assert repeated == result
     assert calls == [{
         "year_group": 6,
         "subject": "Maths-1year",
         "week_num": 14,
         "content_type": "year_round",
         "k": 20,
-    }]
+    }] * 2
     llm.complete.assert_not_called()
 
 

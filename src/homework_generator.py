@@ -243,6 +243,44 @@ def generate_homework_for_subject(
                 content_type="year_round",
                 k=20,
             )
+            # A selected calendar week is addressable content, not a rotating
+            # unseen worksheet. Learners must be able to reopen Week 1 (and any
+            # other week) after it has already been assigned. Record the first
+            # view for history, but never make a prior assignment hide the
+            # exact week from RAG.
+            for selected in candidates or []:
+                selected_id = str(selected.get("doc_id") or "").strip()
+                content = str(selected.get("content") or "").strip()
+                if not selected_id or not content:
+                    continue
+                try:
+                    assignment_store.record(
+                        learner_key,
+                        selected_id,
+                        subject=subject,
+                        year_group=year_group,
+                        content_kind=content_kind,
+                    )
+                except Exception:
+                    logger.warning(
+                        "[RAG] Could not record weekly assignment for %s",
+                        selected_id,
+                        exc_info=True,
+                    )
+                logger.info(
+                    "[RAG] Loaded exact %s Week %d for Year %d, doc_id=%s",
+                    subject,
+                    plan_week,
+                    year_group,
+                    selected_id,
+                )
+                return content, selected_id, True
+            logger.info(
+                "[RAG] No exact year-round candidate for %s Year %d, week=%d",
+                subject,
+                year_group,
+                plan_week,
+            )
         else:
             # Exact metadata lookup is the fastest and most reliable match. It
             # deliberately avoids loading the embedding model on the hot path.
@@ -277,40 +315,41 @@ def generate_homework_for_subject(
                 ]
             candidates = _rank_rag_candidates(candidates, learning_goals + weak_areas)
 
-        candidate_by_id = {
-            str(item.get("doc_id")): item for item in candidates or [] if item.get("doc_id")
-        }
-        claimed_id = assignment_store.claim_first_unseen(
-            learner_key,
-            list(candidate_by_id),
-            subject=subject,
-            year_group=year_group,
-            content_kind=content_kind,
-        )
-        if claimed_id:
-            selected = candidate_by_id[claimed_id]
-            content = str(selected.get("content") or "").strip()
-            if content:
-                logger.info(
-                    "[RAG] Assigned %s homework for Year %d, week=%s, doc_id=%s",
-                    subject, year_group, plan_week or "general", claimed_id,
+        if not (is_eleven_plus and plan_week):
+            candidate_by_id = {
+                str(item.get("doc_id")): item for item in candidates or [] if item.get("doc_id")
+            }
+            claimed_id = assignment_store.claim_first_unseen(
+                learner_key,
+                list(candidate_by_id),
+                subject=subject,
+                year_group=year_group,
+                content_kind=content_kind,
+            )
+            if claimed_id:
+                selected = candidate_by_id[claimed_id]
+                content = str(selected.get("content") or "").strip()
+                if content:
+                    logger.info(
+                        "[RAG] Assigned %s homework for Year %d, doc_id=%s",
+                        subject, year_group, claimed_id,
+                    )
+                    return content, claimed_id, True
+            if is_eleven_plus:
+                logger.info("[RAG] No unseen exact candidate for %s Year %d", subject, year_group)
+            else:
+                total_exact = get_homework_rag_store().store.count_by_metadata(
+                    {"year_group": year_group, "subject": subject}
                 )
-                return content, claimed_id, True
-        if is_eleven_plus:
-            logger.info("[RAG] No unseen exact candidate for %s Year %d", subject, year_group)
-        else:
-            total_exact = get_homework_rag_store().store.count_by_metadata(
-                {"year_group": year_group, "subject": subject}
-            )
-            logger.info(
-                "[RAG] No unseen exact candidate for %s Year %d "
-                "(exact_in_database=%d, already_seen=%d, database=%s)",
-                subject,
-                year_group,
-                total_exact,
-                len(seen_ids),
-                get_homework_rag_store().store.database_target,
-            )
+                logger.info(
+                    "[RAG] No unseen exact candidate for %s Year %d "
+                    "(exact_in_database=%d, already_seen=%d, database=%s)",
+                    subject,
+                    year_group,
+                    total_exact,
+                    len(seen_ids),
+                    get_homework_rag_store().store.database_target,
+                )
     except Exception:
         logger.exception("[RAG] Homework lookup failed for %s Year %d", subject, year_group)
 

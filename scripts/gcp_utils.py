@@ -11,13 +11,16 @@ import os
 import sys
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
-load_dotenv()
+# load_dotenv()
+DATABASE_URL = "postgresql+psycopg://homework_app:w6Mpslt9EQhZyD5q1L9RkIlG361P@127.0.0.1:5433/homework_magic"
 
 
 def init_database_dev() -> int:
-    url = (os.getenv("DATABASE_URL") or "").strip()
+    url = (os.getenv("DATABASE_URL") or get_database_url()).strip()
     if not (url.startswith("postgresql://") or url.startswith("postgresql+psycopg://")):
         print("DATABASE_URL must point to PostgreSQL", file=sys.stderr)
         return 2
@@ -39,20 +42,13 @@ def init_database_dev() -> int:
 
 
 def get_database_url_dev():
-    url = os.getenv("DATABASE_URL")
-
+    url = (os.getenv("DATABASE_URL") or get_database_url()).strip()
     print("DATABASE_URL set:", bool(url))
     print("DATABASE_URL:", url)
 
     if url:
         print("Driver:", url.split(":", 1)[0])
     return url
-
-
-def get_database_password():
-    res = quote_plus(os.environ["DB_PASSWORD"])
-    print(f"GCP DB_PASSWORD: {res}")
-    return res
 
 
 def get_database_url() -> str:
@@ -70,10 +66,38 @@ def get_database_url() -> str:
     return url
 
 
+def get_database_password():
+    res = quote_plus(os.environ["DB_PASSWORD"])
+    print(f"GCP DB_PASSWORD: {res}")
+    return res
+
+
+
+
+def create_engine():
+    url = (os.getenv("DATABASE_URL") or get_database_url()).strip()
+    engine = create_engine(
+        url,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "3")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "2")),
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+    )
+
+    session_local = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+    )
+    return session_local
+
+
 def main():
     get_database_url_dev()
     get_database_url()
     get_database_password()
+    create_engine()
 
 
 if __name__ == "main":
