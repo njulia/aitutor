@@ -463,6 +463,7 @@ def review_homework(
     subject: str,
     profile=None,
     *,
+    quick_review: bool = False,
     is_tutor_mode: bool = False,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
@@ -473,6 +474,7 @@ def review_homework(
         student_answers,
         subject,
         profile,
+        quick_review=quick_review,
         is_tutor_mode=is_tutor_mode,
         homework_doc_id=homework_doc_id,
         is_eleven_plus=is_eleven_plus,
@@ -561,6 +563,7 @@ class ReviewRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     session_id: Optional[str] = None
+    quick_review: bool = False
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
@@ -1097,10 +1100,13 @@ async def api_review(req: Request, request_body: ReviewRequest):
             if session:
                 profile = {**session.get("profile", {}), **profile}
 
-        uses_detail_model = bool(
-            request_body.is_tutor_mode
-            or _is_eleven_plus_year_round(profile, request_body.subject)
+        is_year_round_review = _is_eleven_plus_year_round(profile, request_body.subject)
+        uses_quick_model = bool(
+            request_body.quick_review
+            and not request_body.is_tutor_mode
+            and not is_year_round_review
         )
+        uses_detail_model = not uses_quick_model
         if uses_detail_model:
             required_plan = _required_premium_plan(
                 is_eleven_plus=bool(request_body.is_eleven_plus),
@@ -1117,7 +1123,12 @@ async def api_review(req: Request, request_body: ReviewRequest):
                 limit_concurrency=False,
             )
             if not has_sub:
-                feature = "Review Question" if request_body.is_tutor_mode else "11+ year-round review"
+                if request_body.is_tutor_mode:
+                    feature = "Review Question"
+                elif is_year_round_review:
+                    feature = "11+ year-round review"
+                else:
+                    feature = "Detailed review"
                 return _subscription_required_response(feature, required_plan, logged_in_username)
 
         result = await run_blocking(
@@ -1126,6 +1137,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
             request_body.answers,
             request_body.subject,
             profile,
+            quick_review=bool(request_body.quick_review),
             is_tutor_mode=bool(request_body.is_tutor_mode),
             homework_doc_id=request_body.homework_doc_id,
             is_eleven_plus=bool(request_body.is_eleven_plus),

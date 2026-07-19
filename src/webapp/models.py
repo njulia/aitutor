@@ -19,6 +19,7 @@ class ReviewRequest(BaseModel):
     subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
     session_id: Optional[str] = None
+    quick_review: bool = False
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None

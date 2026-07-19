@@ -535,12 +535,25 @@ body.hm-app {
 body.hm-pricing { background: #fffdf8; }
 .hm-pricing header { padding: 0; border-bottom: 1px solid var(--hm-line); background: #fff; }
 .hm-pricing .hm-nav-wrap { min-height: 72px; }
-.hm-pricing main { max-width: 1100px; margin: 0 auto; padding: 58px 20px 80px; }
+.hm-pricing main { max-width: 1600px; margin: 0 auto; padding: 58px 20px 80px; }
 .hm-pricing .intro { max-width: 780px; margin: 0 auto 42px; text-align: center; }
 .hm-pricing .intro .hm-kicker { margin-inline: auto; }
 .hm-pricing .intro h1 { margin: 0; font-size: clamp(2.35rem, 5vw, 4.2rem); line-height: 1.03; letter-spacing: -.045em; }
 .hm-pricing .intro p { margin: 18px auto 0; color: var(--hm-muted); font-size: 1.08rem; }
-.hm-pricing .plans { gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hm-pricing .plans {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  justify-content: safe center;
+  align-items: stretch;
+  gap: 22px;
+  overflow-x: auto;
+}
+.hm-pricing .plans > .card {
+  flex: 1 1 320px;
+  min-width: min(280px, calc(100vw - 56px));
+  max-width: 360px;
+}
 .hm-pricing .card { position: relative; padding: 30px; border: 2px solid var(--hm-line); border-radius: 26px; box-shadow: 0 7px 0 #e5e1f4; }
 .hm-pricing .card.featured { border-color: var(--hm-purple); box-shadow: 0 8px 0 #cac3f5; }
 .hm-pricing .plan-kicker { width: fit-content; display: block; margin-bottom: 15px; padding: 6px 10px; border-radius: 999px; color: var(--hm-purple-dark); background: var(--hm-purple-soft); font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .045em; }
@@ -683,7 +696,6 @@ body.hm-eleven { background: #f8f7ff; }
   .hm-app .tab { flex: 0 0 auto; }
   .hm-app .homework-grid,
   .hm-app .form-grid { grid-template-columns: 1fr !important; }
-  .hm-pricing .plans { grid-template-columns: 1fr; }
   .hm-pricing main { padding-top: 42px; }
 }
 

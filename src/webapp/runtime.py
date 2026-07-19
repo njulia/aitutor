@@ -119,6 +119,31 @@ def production_configuration_issues() -> list[str]:
         issues.append("STORE_RAW_LEARNER_CONTENT should remain false for child privacy")
     if _env_bool("STORE_RAW_AI_CONTENT", False):
         issues.append("STORE_RAW_AI_CONTENT should remain false for child privacy")
+
+    provider_aliases = {
+        "vertex": "vertex_ai",
+        "vertexai": "vertex_ai",
+        "google_vertex_ai": "vertex_ai",
+        "openai_compatible": "api",
+    }
+    quick_provider = (os.getenv("QUICK_REVIEW_PROVIDER") or "deepseek").strip().lower().replace("-", "_")
+    detail_provider = (os.getenv("DETAIL_REVIEW_PROVIDER") or "vertex_ai").strip().lower().replace("-", "_")
+    quick_provider = provider_aliases.get(quick_provider, quick_provider)
+    detail_provider = provider_aliases.get(detail_provider, detail_provider)
+    supported_providers = {"ollama", "api", "deepseek", "vertex_ai"}
+    if quick_provider not in supported_providers:
+        issues.append("QUICK_REVIEW_PROVIDER is not supported")
+    if detail_provider not in supported_providers:
+        issues.append("DETAIL_REVIEW_PROVIDER is not supported")
+    if "deepseek" in {quick_provider, detail_provider} and not (
+        os.getenv("DEEPSEEK_API_KEY") or os.getenv("DEFAULT_API_KEY")
+    ):
+        issues.append("DEEPSEEK_API_KEY must be configured when using DeepSeek")
+    if "vertex_ai" in {quick_provider, detail_provider}:
+        if not os.getenv("GOOGLE_CLOUD_PROJECT", "").strip():
+            issues.append("GOOGLE_CLOUD_PROJECT must be configured when using Vertex AI")
+        if not os.getenv("GOOGLE_CLOUD_LOCATION", "").strip():
+            issues.append("GOOGLE_CLOUD_LOCATION must be configured when using Vertex AI")
     return issues
 
 

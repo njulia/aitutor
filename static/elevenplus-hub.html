@@ -452,7 +452,7 @@ async function requestReview(homework, answers, subject){
   const res = await fetch('/api/review', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ homework, answers, subject })
+    body: JSON.stringify({ homework, answers, subject, is_eleven_plus: true })
   });
   return res.json();
 }

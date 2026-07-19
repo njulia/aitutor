@@ -4,13 +4,13 @@
 """
 轻量级 LLM 客户端
 
-支持两种后端：
+支持三种后端：
 1. Ollama 本地模型（开发/测试，零 API 费用）
-2. OpenAI 兼容 API（QWEN 等，生产环境使用）
+2. OpenAI 兼容 API（DeepSeek 等）
+3. Google Vertex AI（Gemini，使用 Application Default Credentials）
 
-通过环境变量 LLM_PROVIDER 切换：
-  - "ollama"：使用 Ollama 本地模型
-  - "api"（默认）：使用 OpenAI 兼容 API
+Quick/detail calls can use different providers through
+QUICK_REVIEW_PROVIDER and DETAIL_REVIEW_PROVIDER.
 """
 
 import json
@@ -58,10 +58,16 @@ def _get_obs():
 # OpenAI 兼容 API（生产环境）
 DEFAULT_API_KEY = os.getenv("DEFAULT_API_KEY")
 DEFAULT_API_BASE = (os.getenv("DEFAULT_ENDPOINT_OPENAI") or "https://api.openai.com/v1").rstrip("/") + "/"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") or DEFAULT_API_KEY
+DEEPSEEK_BASE_URL = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/") + "/"
+QUICK_REVIEW_PROVIDER = (os.getenv("QUICK_REVIEW_PROVIDER") or "deepseek").strip().lower()
+DETAIL_REVIEW_PROVIDER = (os.getenv("DETAIL_REVIEW_PROVIDER") or "vertex_ai").strip().lower()
 QUICK_REVIEW_MODEL = os.getenv("QUICK_REVIEW_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
 DETAIL_REVIEW_MODEL = os.getenv("DETAIL_REVIEW_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL") or QUICK_REVIEW_MODEL
 VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL", "qwen-plus")
+GOOGLE_CLOUD_PROJECT = (os.getenv("GOOGLE_CLOUD_PROJECT") or "").strip()
+GOOGLE_CLOUD_LOCATION = (os.getenv("GOOGLE_CLOUD_LOCATION") or "global").strip()
 
 # Ollama 本地模型（开发/测试）
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -74,69 +80,98 @@ RETRY_DELAY = max(0.1, float(os.getenv("LLM_RETRY_DELAY", "0.5")))
 MAX_TIMEOUT = max(5, min(int(os.getenv("LLM_TIMEOUT_SECONDS", "90")), 300))
 
 
-def get_llm_provider() -> str:
-    """获取当前 LLM 后端类型
+def _normalise_provider(provider: str) -> str:
+    value = str(provider or "").strip().lower().replace("-", "_")
+    aliases = {
+        "vertex": "vertex_ai",
+        "vertexai": "vertex_ai",
+        "google_vertex_ai": "vertex_ai",
+        "openai_compatible": "api",
+    }
+    value = aliases.get(value, value)
+    if value not in {"ollama", "api", "deepseek", "vertex_ai"}:
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+    return value
 
-    Returns:
-        "ollama" 或 "api"
-    """
-    return os.getenv("LLM_PROVIDER", "ollama").lower()
+
+def get_llm_provider() -> str:
+    """Return the base provider; production defaults to the quick route."""
+    return _normalise_provider(os.getenv("LLM_PROVIDER") or QUICK_REVIEW_PROVIDER)
 
 
 class LLMClient:
-    """轻量级 LLM 客户端，支持 Ollama 和 OpenAI 兼容 API"""
+    """Lightweight client supporting Ollama, DeepSeek and Vertex AI."""
 
     def __init__(
         self,
         model: str = None,
         api_key: str = None,
         api_base: str = None,
+        provider: str = None,
         temperature: float = 0.8,
         max_tokens: int = 1024,
     ):
-        self.provider = get_llm_provider()
+        self.provider = _normalise_provider(provider or get_llm_provider())
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self._vertex_client = None
 
         # Langfuse 追踪上下文（由 web_app 等调用方设置）
         self.observe_metadata: Dict[str, Any] = {}
 
+        self.model = model or (OLLAMA_MODEL if self.provider == "ollama" else DEFAULT_MODEL)
+        self._configure_provider(self.provider, api_key=api_key, api_base=api_base)
+
+    def _configure_provider(
+        self,
+        provider: str,
+        *,
+        api_key: Optional[str] = None,
+        api_base: Optional[str] = None,
+    ) -> None:
+        self.provider = _normalise_provider(provider)
         if self.provider == "ollama":
-            # Ollama 本地模型
-            self.model = model or OLLAMA_MODEL
             self.api_base = OLLAMA_BASE_URL.rstrip("/")
             self.api_key = None
-            logger.info(
-                "[LLM] 使用 Ollama 本地模型: %s @ %s",
-                self.model, self.api_base,
-            )
+        elif self.provider == "vertex_ai":
+            self.api_base = None
+            self.api_key = None
+            self.vertex_project = (os.getenv("GOOGLE_CLOUD_PROJECT") or GOOGLE_CLOUD_PROJECT).strip()
+            self.vertex_location = (os.getenv("GOOGLE_CLOUD_LOCATION") or GOOGLE_CLOUD_LOCATION).strip()
+            if not self.vertex_project:
+                raise ValueError("GOOGLE_CLOUD_PROJECT is required for the Vertex AI provider")
         else:
-            # OpenAI 兼容 API
-            self.model = model or DEFAULT_MODEL
-            self.api_key = api_key or DEFAULT_API_KEY
-            # Ensure api_base ends with a slash
-            self.api_base = (api_base or DEFAULT_API_BASE).rstrip("/") + "/"
-
+            default_key = DEEPSEEK_API_KEY if self.provider == "deepseek" else DEFAULT_API_KEY
+            default_base = DEEPSEEK_BASE_URL if self.provider == "deepseek" else DEFAULT_API_BASE
+            self.api_key = api_key or default_key
+            self.api_base = (api_base or default_base).rstrip("/") + "/"
             if not self.api_key:
-                raise ValueError(
-                    "DEFAULT_API_KEY is not configured. Set it for the API provider, "
-                    "or use LLM_PROVIDER=ollama for a local model."
-                )
-            logger.info(
-                "[LLM] 使用 API 后端: model=%s base=%s",
-                self.model, self.api_base,
-            )
+                key_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "DEFAULT_API_KEY"
+                raise ValueError(f"{key_name} is required for the {self.provider} provider")
+        logger.info("[LLM] provider=%s model=%s", self.provider, self.model)
 
     def is_ollama(self) -> bool:
         """是否使用 Ollama 后端"""
         return self.provider == "ollama"
+
+    def provider_for_model(self, model: str) -> str:
+        """Resolve a model tier to its configured provider."""
+        if self.provider == "ollama":
+            return "ollama"
+        selected_model = str(model or "").strip()
+        if selected_model == DETAIL_REVIEW_MODEL:
+            return _normalise_provider(os.getenv("DETAIL_REVIEW_PROVIDER") or DETAIL_REVIEW_PROVIDER)
+        if selected_model == QUICK_REVIEW_MODEL:
+            return _normalise_provider(os.getenv("QUICK_REVIEW_PROVIDER") or QUICK_REVIEW_PROVIDER)
+        return self.provider
 
     def with_model(self, model: str) -> "LLMClient":
         """Return a request-local client view pinned to one model."""
         selected_model = str(model or "").strip()
         if not selected_model:
             raise ValueError("model must not be empty")
-        if self.is_ollama():
+        route_provider = self.provider_for_model(selected_model)
+        if route_provider == "ollama":
             env_name = (
                 "OLLAMA_DETAIL_REVIEW_MODEL"
                 if selected_model == DETAIL_REVIEW_MODEL
@@ -146,6 +181,7 @@ class LLMClient:
         client = copy(self)
         client.model = selected_model
         client.observe_metadata = dict(self.observe_metadata)
+        client._configure_provider(route_provider)
         return client
 
     def complete(
@@ -167,8 +203,17 @@ class LLMClient:
             模型回复的文本内容
         """
         selected_model = (model or self.model).strip()
+        route_provider = self.provider_for_model(selected_model)
+        if route_provider != self.provider:
+            return self.with_model(selected_model).complete(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
         if self.is_ollama():
             return self._ollama_complete(messages, temperature, max_tokens, model=selected_model)
+        if self.provider == "vertex_ai":
+            return self._vertex_complete(messages, temperature, max_tokens, model=selected_model)
         payload = {
             "model": selected_model,
             "messages": messages,
@@ -404,8 +449,151 @@ class LLMClient:
             return {"content": self._ollama_complete(messages, temperature, max_tokens)}
 
     # ================================================================
+    # Google Vertex AI / Gemini
+    # ================================================================
+
+    def _get_vertex_client(self):
+        if self._vertex_client is not None:
+            return self._vertex_client
+        try:
+            from google import genai
+            from google.genai.types import HttpOptions
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-genai is required for DETAIL_REVIEW_PROVIDER=vertex_ai"
+            ) from exc
+        self._vertex_client = genai.Client(
+            vertexai=True,
+            project=self.vertex_project,
+            location=self.vertex_location,
+            http_options=HttpOptions(api_version="v1"),
+        )
+        return self._vertex_client
+
+    @staticmethod
+    def _vertex_contents(messages: List[Dict[str, str]]) -> tuple[list, Optional[str]]:
+        contents = []
+        system_parts = []
+        for message in messages or []:
+            role = str(message.get("role") or "user").strip().lower()
+            text = message.get("content")
+            if isinstance(text, list):
+                text = "\n".join(str(part.get("text") or "") for part in text if isinstance(part, dict))
+            text = str(text or "")
+            if role == "system":
+                system_parts.append(text)
+                continue
+            contents.append({
+                "role": "model" if role == "assistant" else "user",
+                "parts": [{"text": text}],
+            })
+        return contents, "\n\n".join(part for part in system_parts if part) or None
+
+    def _vertex_complete(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = None,
+        max_tokens: int = None,
+        model: str = None,
+    ) -> str:
+        try:
+            from google.genai.types import GenerateContentConfig
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-genai is required for DETAIL_REVIEW_PROVIDER=vertex_ai"
+            ) from exc
+
+        selected_model = str(model or self.model).strip()
+        contents, system_instruction = self._vertex_contents(messages)
+        config = GenerateContentConfig(
+            temperature=temperature if temperature is not None else self.temperature,
+            max_output_tokens=max_tokens or self.max_tokens,
+            system_instruction=system_instruction,
+        )
+        started = time.time()
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = self._get_vertex_client().models.generate_content(
+                    model=selected_model,
+                    contents=contents,
+                    config=config,
+                )
+                content = str(getattr(response, "text", "") or "")
+                usage_metadata = getattr(response, "usage_metadata", None)
+                usage = {
+                    "prompt_tokens": getattr(usage_metadata, "prompt_token_count", None),
+                    "completion_tokens": getattr(usage_metadata, "candidates_token_count", None),
+                    "total_tokens": getattr(usage_metadata, "total_token_count", None),
+                }
+                self._record_success(
+                    messages=messages,
+                    response=content,
+                    model=selected_model,
+                    usage={key: value for key, value in usage.items() if value is not None},
+                    latency_ms=(time.time() - started) * 1000,
+                )
+                return content
+            except Exception as exc:
+                if attempt < MAX_RETRIES:
+                    logger.warning(
+                        "[LLM:VertexAI] request failed (attempt %d): %s; retrying in %.1fs",
+                        attempt,
+                        exc,
+                        RETRY_DELAY,
+                    )
+                    time.sleep(RETRY_DELAY)
+                else:
+                    logger.error("[LLM:VertexAI] request failed: %s", exc)
+                    raise
+
+    # ================================================================
     # OpenAI 兼容 API 调用
     # ================================================================
+
+    def _record_success(
+        self,
+        *,
+        messages: List[Dict[str, str]],
+        response: str,
+        model: str,
+        usage: Optional[Dict[str, Any]],
+        latency_ms: float,
+    ) -> None:
+        usage = usage or {}
+        obs = _get_obs()
+        if obs:
+            try:
+                obs(
+                    name=self.observe_metadata.get("name", "llm_call"),
+                    messages=messages,
+                    response=response,
+                    model=model,
+                    usage=usage or None,
+                    latency_ms=latency_ms,
+                    metadata={**self.observe_metadata, "provider": self.provider},
+                )
+            except Exception:
+                pass
+
+        monitor = _get_ai_monitor()
+        if monitor:
+            try:
+                monitor(
+                    provider=self.provider,
+                    model=model,
+                    latency_ms=latency_ms,
+                    status="success",
+                    prompt_tokens=usage.get("prompt_tokens"),
+                    completion_tokens=usage.get("completion_tokens"),
+                    total_tokens=usage.get("total_tokens"),
+                    prompt_text=str(messages)[:2000],
+                    response_text=(response or "")[:2000],
+                    operation=self.observe_metadata.get("operation"),
+                    student_id=self.observe_metadata.get("student_id"),
+                    subject=self.observe_metadata.get("subject"),
+                )
+            except Exception:
+                pass
 
     def _request(self, payload: Dict) -> str:
         """发送请求并返回文本内容（带重试）"""
@@ -441,43 +629,14 @@ class LLMClient:
                         usage.get("total_tokens", 0),
                     )
 
-                # Langfuse 追踪（不可用时自动跳过）
                 latency_ms = (time.time() - t_start) * 1000
-                obs = _get_obs()
-                if obs:
-                    try:
-                        obs(
-                            name=self.observe_metadata.get("name", "llm_call"),
-                            messages=payload.get("messages", []),
-                            response=message.get("content", ""),
-                            model=selected_model,
-                            usage=usage or None,
-                            latency_ms=latency_ms,
-                            metadata=self.observe_metadata,
-                        )
-                    except Exception:
-                        pass  # 追踪失败不影响业务
-
-                # AI 监控记录
-                monitor = _get_ai_monitor()
-                if monitor:
-                    try:
-                        monitor(
-                            provider=self.provider,
-                            model=selected_model,
-                            latency_ms=latency_ms,
-                            status="success",
-                            prompt_tokens=usage.get("prompt_tokens") if usage else None,
-                            completion_tokens=usage.get("completion_tokens") if usage else None,
-                            total_tokens=usage.get("total_tokens") if usage else None,
-                            prompt_text=str(payload.get("messages", []))[:2000],
-                            response_text=(message.get("content") or "")[:2000],
-                            operation=self.observe_metadata.get("operation"),
-                            student_id=self.observe_metadata.get("student_id"),
-                            subject=self.observe_metadata.get("subject"),
-                        )
-                    except Exception:
-                        pass
+                self._record_success(
+                    messages=payload.get("messages", []),
+                    response=message.get("content", ""),
+                    model=selected_model,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                )
 
                 return message
 

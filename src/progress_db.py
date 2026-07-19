@@ -9,6 +9,8 @@ explicitly enabled by the operator.
 """
 from __future__ import annotations
 
+import os
+from urllib.parse import quote_plus
 import binascii
 import hashlib
 import hmac
@@ -515,3 +517,16 @@ def purge_old_learning_records(retention_days: Optional[int] = None) -> int:
         result = conn.execute(delete(homework_sessions).where(homework_sessions.c.created_at < cutoff))
         conn.execute(delete(practice_sessions).where(practice_sessions.c.created_at < cutoff))
     return int(result.rowcount or 0)
+
+
+def get_database_url() -> str:
+    db_user = os.environ["DB_USER"]
+    db_password = quote_plus(os.environ["DB_PASSWORD"])
+    db_name = os.environ["DB_NAME"]
+    connection_name = os.environ["INSTANCE_CONNECTION_NAME"]
+
+    return (
+        f"postgresql+psycopg://{db_user}:{db_password}"
+        f"@/{db_name}"
+        f"?host=/cloudsql/{connection_name}"
+    )

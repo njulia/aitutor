@@ -86,8 +86,15 @@ def _supports_model_override(callable_obj: Any) -> bool:
     )
 
 
+def _resolved_provider(llm_client: Any, requested_model: str) -> str:
+    resolver = getattr(llm_client, "provider_for_model", None)
+    if callable(resolver):
+        return str(resolver(requested_model) or "").strip().casefold()
+    return str(getattr(llm_client, "provider", "") or "").strip().casefold()
+
+
 def _resolved_model(llm_client: Any, requested_model: str) -> str:
-    provider = str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    provider = _resolved_provider(llm_client, requested_model)
     selected_model = str(requested_model or "").strip()
     if provider == "ollama":
         env_name = (
@@ -113,7 +120,7 @@ def _complete_review(
     operation: str,
 ) -> str:
     """Call the selected model while remaining compatible with simple test fakes."""
-    provider = str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    provider = _resolved_provider(llm_client, model)
     # API tier aliases such as qwen-flash/qwen-plus are usually not local
     # Ollama model names. Keep the model already loaded by a local client.
     selected_model = _resolved_model(llm_client, model)
@@ -336,117 +343,46 @@ def _score_summary(rows: List[Dict[str, Any]]) -> str:
     return f"{correct}/{len(rows)} correct"
 
 
-def _rag_quick_feedback(rows: List[Dict[str, Any]]) -> str:
-    """Build instant, answer-key-grounded feedback without an LLM call."""
-    correct_rows = [row for row in rows if row.get("is_correct")]
-    wrong_rows = [row for row in rows if not row.get("is_correct")]
-
-    sections = ["## What You Did Well"]
-    if correct_rows:
-        count = len(correct_rows)
-        noun = "answer" if count == 1 else "answers"
-        sections.append(
-            f"You got {count} {noun} right. You used the question information carefully."
-        )
-    else:
-        sections.append(
-            "You had a good try. Checking the method one small step at a time will help."
-        )
-
-    sections.append("## What to Improve")
-    if not wrong_rows:
-        sections.append(
-            "Nothing needs correcting this time. Keep showing your working on harder questions."
-        )
-    else:
-        for index, row in enumerate(rows, start=1):
-            if row.get("is_correct"):
-                continue
-            answer_label = row.get("correct_answer") or ""
-            if row.get("correct_letter"):
-                answer_label = f"Option {row['correct_letter']} — {answer_label}"
-            explanation = row.get("explanation") or (
-                "Read the question again, use the correct method, and check each step."
-            )
-            sections.append(
-                f"- **Question {index}:** The correct answer is **{answer_label}**. "
-                f"{compact_text(explanation, 220)}"
-            )
-
-    sections.extend(
-        [
-            "## Keep Going",
-            "Well done for checking your work — one careful correction makes the next question easier.",
-        ]
-    )
-    return "\n\n".join(sections)
-
-
-def _rag_detailed_feedback(rows: List[Dict[str, Any]]) -> str:
-    """Create a full child-friendly explanation from authoritative RAG data."""
-    correct_count = sum(1 for row in rows if row.get("is_correct"))
-    wrong_count = len(rows) - correct_count
-    sections = ["## What You Did Well"]
-    if correct_count:
-        sections.append(
-            f"You answered {correct_count} out of {len(rows)} correctly. "
-            "You showed that you can use the information in the question and check an answer."
-        )
-    else:
-        sections.append(
-            "You kept trying. That matters, because each corrected step helps your brain learn the method."
-        )
-
-    sections.append("## What to Improve")
-    if wrong_count:
-        wrong_numbers = [str(index) for index, row in enumerate(rows, start=1) if not row.get("is_correct")]
-        sections.append(
-            f"There {'is' if wrong_count == 1 else 'are'} {wrong_count} "
-            f"{'answer' if wrong_count == 1 else 'answers'} to revisit. "
-            f"Focus on Question{'s' if wrong_count != 1 else ''} {', '.join(wrong_numbers)}. "
-            "Work slowly, use the method below, and check the final answer against the question."
-        )
-    else:
-        sections.append(
-            "All answers are correct. Your next step is to keep your working clear and tidy."
-        )
-
-    sections.append(_worked_explanations(rows).strip())
-    sections.extend(
-        [
-            "## Keep Going",
-            "Excellent effort. Try to explain one method aloud in your own words — that helps it stick.",
-        ]
-    )
-    return "\n\n".join(section for section in sections if section)
-
-
-def _worked_explanations(rows: List[Dict[str, Any]]) -> str:
-    if not rows:
-        return ""
-    sections = ["## How to work out each answer"]
+def _rag_prompt_context(rows: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Build bounded answer-key context for quick and detailed LLM reviews."""
+    correct_summary: List[str] = []
+    correct_items: List[str] = []
+    wrong_items: List[str] = []
     for index, row in enumerate(rows, start=1):
-        status = "Correct" if row.get("is_correct") else "Try this one again"
-        answer_label = row.get("correct_answer") or ""
-        if row.get("correct_letter"):
-            answer_label = f"Option {row['correct_letter']} — {answer_label}"
-        explanation = row.get("explanation") or (
-            "Compare the question with the correct answer, then repeat the method slowly and check each step."
+        question = compact_text(_clean_question_text(row.get("question", "")), 260)
+        pupil_answer = compact_text(row.get("student_answer", ""), 140)
+        correct_answer = compact_text(row.get("correct_answer", ""), 140)
+        explanation = compact_text(row.get("explanation", ""), 420) or "No stored method supplied."
+        tip = compact_text(row.get("tip", ""), 180)
+        correct_letter = compact_text(row.get("correct_letter", ""), 12)
+        answer_label = (
+            f"Option {correct_letter} — {correct_answer}"
+            if correct_letter else correct_answer
         )
-        sections.extend(
-            [
-                f"### Question {index}: {status}",
-                f"**Correct answer:** {answer_label}",
-                f"**How to get it:** {explanation}",
-            ]
-        )
-        if not row.get("is_correct"):
-            sections.append(
-                "**Why it may have gone wrong:** You may have chosen an answer before checking the final step."
+        if row.get("is_correct"):
+            correct_summary.append(f"- Question {index}: correct — {question}")
+            correct_items.append(
+                f"Question {index}: {question}\n"
+                f"Pupil answer: {pupil_answer}\n"
+                f"Correct answer: {answer_label}\n"
+                f"Stored method: {explanation}"
             )
-        if row.get("tip"):
-            sections.append(f"**Helpful 11+ tip:** {row['tip']}")
-    return "\n\n".join(sections) + "\n\n"
+        else:
+            item = (
+                f"Question {index}: {question}\n"
+                f"Pupil answer: {pupil_answer}\n"
+                f"Correct answer: {answer_label}\n"
+                f"Stored method: {explanation}"
+            )
+            if tip:
+                item += f"\nStored tip: {tip}"
+            wrong_items.append(item)
+    return {
+        "score_summary": _score_summary(rows),
+        "correct_work_summary": "\n".join(correct_summary) or "No correct answers this time.",
+        "correct_answer_items": "\n\n".join(correct_items) or "No correct answers this time.",
+        "wrong_answer_items": "\n\n".join(wrong_items) or "No incorrect answers.",
+    }
 
 
 def _extract_score(text: str) -> tuple[Optional[float], Optional[int]]:
@@ -465,21 +401,22 @@ def review_homework(
     subject: str,
     profile: Optional[dict] = None,
     *,
+    quick_review: bool = False,
     is_tutor_mode: bool = False,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
-    """Run quick worksheet checks or detailed tutor-question checks.
-
-    RAG answers are marked deterministically first. Without RAG, ordinary
-    worksheets use the quick model while tutor and year-round checks use the
-    detailed model.
-    """
+    """Review with an LLM, using trusted RAG answers as marking context when present."""
     from src.cache import review_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_QUICK_WITHOUT_RAG_PROMPT
+    from src.prompts import (
+        REVIEW_DETAIL_WITH_RAG_PROMPT,
+        REVIEW_DETAIL_WITHOUT_RAG_PROMPT,
+        REVIEW_QUICK_WITH_RAG_PROMPT,
+        REVIEW_QUICK_WITHOUT_RAG_PROMPT,
+    )
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
@@ -490,10 +427,17 @@ def review_homework(
     student_id = raw_profile.get("student_id", "anonymous")
     profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile)
-    use_detail_model = bool(is_tutor_mode or budget["profile"].get("plan_week"))
+    # Only the explicit Quick Review action may use the quick model. Tutor and
+    # year-round paths remain detailed even if a client sends a conflicting flag.
+    use_quick_model = bool(
+        quick_review
+        and not is_tutor_mode
+        and not budget["profile"].get("plan_week")
+    )
+    use_detail_model = not use_quick_model
     selected_model = DETAIL_REVIEW_MODEL if use_detail_model else QUICK_REVIEW_MODEL
     cache_key = stable_cache_key(
-        "review_detail_question_v1" if use_detail_model else "review_quick_v4",
+        "review_detail_v5" if use_detail_model else "review_quick_v5",
         selected_model,
         subject,
         budget,
@@ -529,20 +473,30 @@ def review_homework(
     model_used: Optional[str] = None
 
     if rows:
-        # RAG already contains the authoritative answers and short methods.
-        # Build the review locally: this is faster, cheaper and cannot fail due
-        # to a missing provider model alias.
-        feedback = _rag_quick_feedback(rows)
-        worked = _worked_explanations(rows) if is_eleven_plus else ""
-        review = (
-            _table(rows)
-            + f"**Score: {correct_count}/{attempted}**\n\n"
-            + feedback
-            + ("\n\n" + worked if worked else "")
+        rag_context = _rag_prompt_context(rows)
+        prompt = format_prompt(
+            REVIEW_DETAIL_WITH_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITH_RAG_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            **rag_context,
         )
+        feedback = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=selected_model,
+            temperature=0.15 if use_quick_model else 0.2,
+            max_tokens=(
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
+                if use_quick_model
+                else _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000)
+            ),
+            operation="quick_review_with_rag" if use_quick_model else "detail_review_with_rag",
+        )
+        review = _table(rows) + f"**Score: {correct_count}/{attempted}**\n\n" + feedback
+        model_used = _resolved_model(llm_client, selected_model)
     else:
         prompt = format_prompt(
-            REVIEW_QUICK_WITHOUT_RAG_PROMPT,
+            REVIEW_DETAIL_WITHOUT_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITHOUT_RAG_PROMPT,
             student_profile=str(_prompt_profile(budget["profile"])),
             subject=compact_text(subject_display_name(subject), 80),
             homework_content=budget["homework_content"],
@@ -559,7 +513,7 @@ def review_homework(
                 else _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=1_600)
             ),
             operation=(
-                "detail_review_question_no_rag"
+                "detail_review_no_rag"
                 if use_detail_model
                 else "quick_review_no_rag_all_answers"
             ),
@@ -575,7 +529,7 @@ def review_homework(
         "max_score": max_score,
         "correct_count": correct_count if rows else None,
         "attempted": attempted if rows else None,
-        "model_tier": "flash" if model_used else "local",
+        "model_tier": "plus" if use_detail_model else "flash",
         "model_used": model_used,
     }
     review_cache.set(cache_key, result)
@@ -618,7 +572,7 @@ def explain_deep(
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_DETAIL_WITHOUT_RAG_PROMPT
+    from src.prompts import REVIEW_DETAIL_WITH_RAG_PROMPT, REVIEW_DETAIL_WITHOUT_RAG_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
@@ -629,7 +583,7 @@ def explain_deep(
     profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
     cache_key = stable_cache_key(
-        "review_detail_v4",
+        "review_detail_v5",
         DETAIL_REVIEW_MODEL,
         subject,
         budget,
@@ -657,7 +611,7 @@ def explain_deep(
                 raw_answers,
                 budget["homework_content"],
                 subject,
-                is_tutor_mode=False,
+                is_tutor_mode=question_index is not None,
                 question_index=question_index,
             )
             rows = _mark_rows(pairs, budget["student_answers"], subject)
@@ -666,16 +620,23 @@ def explain_deep(
 
     if rows:
         correct_count = sum(1 for row in rows if row["is_correct"])
-        # Detailed RAG explanations can also be produced from the trusted
-        # stored methods. Avoid a second paid/remote call and return instantly.
-        ai_explanation = _rag_detailed_feedback(rows)
-        explanation = (
-            _table(rows)
-            + f"**Score: {correct_count}/{len(rows)}**\n\n"
-            + ai_explanation
+        prompt = format_prompt(
+            REVIEW_DETAIL_WITH_RAG_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            **_rag_prompt_context(rows),
         )
-        score: Optional[float] = float(correct_count)
-        max_score: Optional[int] = len(rows)
+        ai_explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000),
+            operation="detail_explanation_with_rag",
+        )
+        explanation = _table(rows) + f"**Score: {correct_count}/{len(rows)}**\n\n" + ai_explanation
+        score = float(correct_count)
+        max_score = len(rows)
     else:
         prompt = format_prompt(
             REVIEW_DETAIL_WITHOUT_RAG_PROMPT,
@@ -694,14 +655,14 @@ def explain_deep(
         )
         score, max_score = _extract_score(explanation)
 
-    model_used = None if rows else _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
+    model_used = _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
     result = {
         "success": True,
         "explanation": explanation,
         "from_rag_answers": bool(rows),
         "score": score,
         "max_score": max_score,
-        "model_tier": "local" if rows else "plus",
+        "model_tier": "plus",
         "model_used": model_used,
     }
     explain_cache.set(cache_key, result)
@@ -749,7 +710,7 @@ def improve_practice(
                 raw_answers,
                 budget["homework_content"],
                 subject,
-                is_tutor_mode=False,
+                is_tutor_mode=question_index is not None,
                 question_index=question_index,
             )
             rows = _mark_rows(pairs, budget["student_answers"], subject)
