@@ -29,5 +29,11 @@ pypdf>=5.0
 # Cloud
 google-genai>=1.0.0
 cloud-sql-python-connector[pg8000]
+gunicorn
+alembic
+openai
+google-cloud-storage
+
+
 
 

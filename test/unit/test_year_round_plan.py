@@ -155,7 +155,7 @@ def test_subject_alias_can_fall_back_to_old_vr_key(monkeypatch) -> None:
     ]
 
 
-def test_rag_marking_returns_worked_explanation_without_llm(monkeypatch) -> None:
+def test_rag_marking_uses_detail_llm_with_answer_key_context(monkeypatch) -> None:
     from src.webapp import review_service
 
     monkeypatch.setattr(
@@ -172,7 +172,9 @@ def test_rag_marking_returns_worked_explanation_without_llm(monkeypatch) -> None
         ],
     )
     llm = MagicMock()
-    llm.complete.side_effect = AssertionError("RAG marking must not call the LLM")
+    llm.provider = "api"
+    llm.model = "default-model"
+    llm.complete.return_value = "## Explanation for Every Answer\nAdd the hundreds carefully."
 
     result = review_service.review_homework(
         "QUESTIONS\n1. Which is 1,000 + 500?\nA) 1,400\nB) 1,500",
@@ -186,7 +188,8 @@ def test_rag_marking_returns_worked_explanation_without_llm(monkeypatch) -> None
     )
 
     assert result["correct_count"] == 1
-    assert "How to work out each answer" in result["review"]
-    assert "Add five hundreds" in result["review"]
-    assert "Line up the place values" in result["review"]
-    llm.complete.assert_not_called()
+    assert "Add the hundreds carefully" in result["review"]
+    assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
+    prompt_messages = llm.complete.call_args.args[0]
+    assert "Add five hundreds" in prompt_messages[0]["content"]
+    assert "1,500" in prompt_messages[0]["content"]

@@ -76,7 +76,7 @@ import math
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metadata
-from scripts.homework_generator_utils import count_year_homework, add_homework_in_batches, get_rag_stats
+from scripts.homework_generator.homework_generator_utils import add_homework_in_batches, get_rag_stats
 from scripts.elevenplus.elevenplus_generator_utils import (
     balanced_weighted_sequence,
     begin_generation,

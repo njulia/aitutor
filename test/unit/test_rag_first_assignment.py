@@ -52,7 +52,7 @@ def test_generator_uses_unseen_rag_before_llm(monkeypatch, tmp_path) -> None:
     llm.complete.assert_not_called()
 
 
-def test_review_with_rag_answer_does_not_call_llm(monkeypatch) -> None:
+def test_review_with_rag_answer_calls_detail_llm(monkeypatch) -> None:
     from src.webapp import review_service
 
     monkeypatch.setattr(
@@ -61,7 +61,9 @@ def test_review_with_rag_answer_does_not_call_llm(monkeypatch) -> None:
         lambda *_: [{"question": "1. What is 2 + 2?", "answer": "4"}],
     )
     llm = MagicMock()
-    llm.complete.side_effect = AssertionError("LLM must not mark an authoritative RAG answer")
+    llm.provider = "api"
+    llm.model = "default-model"
+    llm.complete.return_value = "## What You Did Well\nYou used addition accurately."
 
     result = review_service.review_homework(
         "1. What is 2 + 2?",
@@ -77,7 +79,8 @@ def test_review_with_rag_answer_does_not_call_llm(monkeypatch) -> None:
     assert result["success"] is True
     assert result["from_rag_answers"] is True
     assert result["correct_count"] == 1
-    llm.complete.assert_not_called()
+    assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
+    assert "addition accurately" in result["review"]
 
 
 def test_generator_skips_more_than_first_fifty_seen_candidates(monkeypatch, tmp_path) -> None:

@@ -1,9 +1,44 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
 pytestmark = pytest.mark.e2e
+
+
+def test_last_primary_year_and_subject_are_restored(
+    page: Page,
+    e2e_base_url: str,
+    mock_common_app_endpoints,
+) -> None:
+    page.add_init_script(
+        """
+        if (!localStorage.getItem('homeworkMagic.learningChoices.v1')) {
+          localStorage.setItem(
+            'homeworkMagic.learningChoices.v1',
+            JSON.stringify({homeworkYear: 5, homeworkSubject: 'English'})
+          );
+        }
+        """
+    )
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+
+    expect(page.locator("#homework-subjects .subject-item").first).to_be_visible()
+    expect(page.locator("#homework-year")).to_have_value("5")
+    expect(page.locator('#homework-subjects .subject-item[data-subject="English"]')).to_have_class(
+        re.compile(r"\bselected\b")
+    )
+
+    page.locator("#homework-year").select_option("4")
+    page.locator('#homework-subjects .subject-item[data-subject="Science"]').click()
+    page.reload(wait_until="domcontentloaded")
+
+    expect(page.locator("#homework-year")).to_have_value("4")
+    expect(page.locator('#homework-subjects .subject-item[data-subject="Science"]')).to_have_class(
+        re.compile(r"\bselected\b")
+    )
 
 
 def test_primary_homework_generate_answer_and_review_journey(
@@ -83,6 +118,7 @@ def test_primary_homework_generate_answer_and_review_journey(
     assert payload["profile"] == {"year_group": 2, "age": 6}
     assert payload["from_rag"] is True
     assert payload["homework_doc_id"] == "maths_y2_e2e"
+    assert payload["quick_review"] is True
     serialised = str(payload).lower()
     assert "parent-e2e@example.com" not in serialised
     assert "student_id" not in payload["profile"]

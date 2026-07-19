@@ -65,7 +65,9 @@ def test_detailed_rag_explanation_is_local_and_child_friendly(monkeypatch) -> No
         ],
     )
     llm = MagicMock()
-    llm.complete.side_effect = AssertionError("Detailed RAG explanation should be local")
+    llm.provider = "api"
+    llm.model = "default-model"
+    llm.complete.return_value = "## What to Improve\nConnect one half with 0.5, then check the option."
 
     result = review_service.explain_deep(
         "1. Which is one half?\nA) 0.2\nB) 0.5",
@@ -78,8 +80,9 @@ def test_detailed_rag_explanation_is_local_and_child_friendly(monkeypatch) -> No
     )
 
     assert result["success"] is True
-    assert result["model_tier"] == "local"
-    assert "Why it may have gone wrong" in result["explanation"]
-    assert "One half means one of two equal parts" in result["explanation"]
-    assert "Helpful 11+ tip" in result["explanation"]
-    llm.complete.assert_not_called()
+    assert result["model_tier"] == "plus"
+    assert "Connect one half with 0.5" in result["explanation"]
+    assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
+    prompt_messages = llm.complete.call_args.args[0]
+    assert "One half means one of two equal parts" in prompt_messages[0]["content"]
+    assert "Link one half, 50%, and 0.5" in prompt_messages[0]["content"]

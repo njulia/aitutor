@@ -27,11 +27,38 @@ def test_model_defaults() -> None:
     assert review_service.DETAIL_REVIEW_MODEL == "gemini-2.5-flash"
 
 
-def test_ordinary_review_uses_quick_model() -> None:
+def test_explicit_quick_review_uses_quick_model() -> None:
+    llm = RecordingLLM()
+    review_service.review_homework(
+        unique_question(), "2", "Maths", {"year_group": 3},
+        quick_review=True, llm_client=llm,
+    )
+    assert llm.models == [review_service.QUICK_REVIEW_MODEL]
+
+
+def test_other_review_uses_detail_model() -> None:
     llm = RecordingLLM()
     review_service.review_homework(
         unique_question(), "2", "Maths", {"year_group": 3}, llm_client=llm
     )
+    assert llm.models == [review_service.DETAIL_REVIEW_MODEL]
+
+
+def test_rag_quick_review_still_calls_quick_model(monkeypatch) -> None:
+    monkeypatch.setattr(
+        review_service,
+        "_load_rag_answers",
+        lambda *_: [{"question": "What is 1 + 1?", "answer": "2"}],
+    )
+    llm = RecordingLLM()
+    result = review_service.review_homework(
+        unique_question(), "2", "Maths", {"year_group": 3},
+        quick_review=True,
+        homework_doc_id=f"rag-{uuid.uuid4().hex}",
+        llm_client=llm,
+    )
+
+    assert result["from_rag_answers"] is True
     assert llm.models == [review_service.QUICK_REVIEW_MODEL]
 
 

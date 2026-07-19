@@ -29,7 +29,7 @@ except ImportError:
     pass
 
 from src.homework_rag import get_homework_rag_store
-from scripts.homework_generator_utils import (
+from scripts.homework_generator.homework_generator_utils import (
     add_homework_in_batches,
     build_batch_item,
     count_year_homework,

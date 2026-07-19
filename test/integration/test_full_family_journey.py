@@ -72,6 +72,7 @@ def test_parent_account_learning_and_logout_journey(client, app_module, unique_e
             "answers": "1. 9",
             "subject": "Maths",
             "profile": {"year_group": 4, "age": 8},
+            "quick_review": True,
             "from_rag": False,
         },
     )

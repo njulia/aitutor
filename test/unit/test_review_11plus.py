@@ -18,6 +18,7 @@ def test_no_rag_11plus_review_uses_quick_prompt_with_age_bounded_profile() -> No
             subject="Maths",
             profile={"student_id": "private-id", "year_group": 99, "age": 99},
             is_eleven_plus=True,
+            quick_review=True,
             llm_client=mock_llm,
         )
 
@@ -42,6 +43,7 @@ def test_no_rag_primary_review_uses_local_ollama_model_and_integer_tokens() -> N
             student_answers="4",
             subject="Maths",
             is_eleven_plus=False,
+            quick_review=True,
             llm_client=mock_llm,
         )
 
@@ -51,7 +53,7 @@ def test_no_rag_primary_review_uses_local_ollama_model_and_integer_tokens() -> N
     assert call_kwargs["max_tokens"] <= 1600
 
 
-def test_rag_wrong_answer_is_reviewed_without_an_llm_call(monkeypatch) -> None:
+def test_rag_wrong_answer_is_reviewed_by_detail_llm(monkeypatch) -> None:
     monkeypatch.setattr(
         review_service,
         "_load_rag_answers",
@@ -64,7 +66,9 @@ def test_rag_wrong_answer_is_reviewed_without_an_llm_call(monkeypatch) -> None:
         ],
     )
     mock_llm = MagicMock()
-    mock_llm.complete.side_effect = AssertionError("RAG marking should not call an LLM")
+    mock_llm.provider = "api"
+    mock_llm.model = "default-model"
+    mock_llm.complete.return_value = "## What to Improve\nUse the make-ten method, then check the total."
 
     result = review_service.review_homework(
         homework_content="1. What is 9 + 6?",
@@ -78,6 +82,7 @@ def test_rag_wrong_answer_is_reviewed_without_an_llm_call(monkeypatch) -> None:
 
     assert result["success"] is True
     assert result["correct_count"] == 0
-    assert "The correct answer is **15**" in result["review"]
-    assert "How to work out each answer" in result["review"]
-    mock_llm.complete.assert_not_called()
+    assert "15" in result["review"]
+    assert "make-ten method" in result["review"]
+    assert result["model_used"] == review_service.DETAIL_REVIEW_MODEL
+    assert mock_llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
