@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11+ Topic Mastery | Homework Magic</title>
+    <meta name="description" content="Build 11+ confidence topic by topic with 55 progressive Maths, English, Verbal Reasoning and Non-Verbal Reasoning practice sets.">
+    <link rel="canonical" href="/elevenplus-topic-mastery">
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/multiple-choice.css">
+    <script src="/static/js/marked-lite.js" defer></script>
+    <script src="/static/js/safe_markdown.js" defer></script>
+    <script src="/static/js/multiple-choice.js" defer></script>
+    <script src="/static/js/auth-nav.js" defer></script>
+    <style>
+        :root {
+            --ink: #25304a; --muted: #667085; --paper: #f7f7fc; --card: #fff;
+            --line: #dfe3ef; --purple: #6659d6; --purple-dark: #4e43af;
+            --purple-soft: #efedff; --green: #21845d; --green-soft: #e8f7ef;
+            --amber: #a9610d; --amber-soft: #fff1d9; --shadow: 0 14px 36px rgba(43,47,86,.09);
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+        button, select { font: inherit; }
+        button { touch-action: manipulation; }
+        .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 100; background: #fff; padding: 9px 13px; border-radius: 9px; }
+        .skip-link:focus { left: 8px; }
+        .site-header { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); }
+        .header-inner { max-width: 1120px; margin: auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .brand { color: var(--purple-dark); font-weight: 850; font-size: 1.17rem; text-decoration: none; }
+        .site-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+        .site-nav a { color: var(--muted); text-decoration: none; font-weight: 680; padding: 8px 11px; border-radius: 999px; }
+        .site-nav a:hover, .site-nav a:focus-visible, .site-nav a[aria-current="page"] { color: var(--purple-dark); background: var(--purple-soft); outline: none; }
+        main { max-width: 1120px; margin: auto; padding: 32px 20px 72px; }
+        .hero { padding: 34px; border-radius: 26px; color: #fff; background: linear-gradient(135deg,#645bd4,#8d55b7); box-shadow: var(--shadow); }
+        .eyebrow { font-weight: 780; letter-spacing: .02em; }
+        h1 { margin: 8px 0 9px; font-size: clamp(2rem,5vw,3.15rem); line-height: 1.05; }
+        .hero p { max-width: 720px; margin: 0; font-size: 1.08rem; color: rgba(255,255,255,.92); }
+        .steps { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 21px; }
+        .steps span { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 7px 11px; font-weight: 700; }
+        .card { margin-top: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); }
+        .section-title { margin: 0; font-size: 1.34rem; }
+        .section-help { margin: 5px 0 17px; color: var(--muted); }
+        .subject-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+        .subject-button { min-height: 64px; border: 2px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); padding: 11px; font-weight: 780; cursor: pointer; }
+        .subject-button:hover, .subject-button:focus-visible { border-color: var(--purple); outline: none; }
+        .subject-button[aria-pressed="true"] { color: var(--purple-dark); border-color: var(--purple); background: var(--purple-soft); }
+        .selector-grid { margin-top: 18px; display: grid; grid-template-columns: 1.5fr 1fr auto; align-items: end; gap: 12px; }
+        label span { display: block; margin-bottom: 6px; font-weight: 760; }
+        select { width: 100%; min-height: 48px; padding: 9px 12px; border: 1px solid #bdc4d4; border-radius: 12px; background: #fff; color: var(--ink); }
+        select:focus-visible { outline: 3px solid rgba(102,89,214,.2); border-color: var(--purple); }
+        .btn { min-height: 48px; padding: 10px 18px; border-radius: 12px; border: 0; font-weight: 800; cursor: pointer; }
+        .btn-primary { background: var(--purple); color: #fff; box-shadow: 0 7px 17px rgba(102,89,214,.22); }
+        .btn-primary:hover { background: var(--purple-dark); }
+        .btn-secondary { background: var(--purple-soft); color: var(--purple-dark); }
+        .btn:disabled { opacity: .58; cursor: wait; }
+        .set-summary { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--green-soft); color: #176747; font-weight: 700; }
+        .status { margin-top: 16px; padding: 12px 14px; border: 1px solid #e4bd80; border-radius: 12px; background: var(--amber-soft); color: #744307; }
+        .hidden { display: none !important; }
+        .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 700; }
+        .spinner { width: 22px; height: 22px; border: 3px solid var(--line); border-top-color: var(--purple); border-radius: 50%; animation: spin .75s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .practice-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+        .practice-heading h2 { margin: 0; font-size: 1.42rem; }
+        .practice-heading p { color: var(--muted); margin: 4px 0 0; }
+        .set-badge { flex: 0 0 auto; background: var(--purple-soft); color: var(--purple-dark); padding: 7px 10px; border-radius: 999px; font-weight: 800; }
+        .question-response-block > h3 { display: none; }
+        .practice-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+        .feedback { margin-top: 18px; padding: 18px; border-radius: 15px; background: var(--green-soft); border: 1px solid #b9e4cd; }
+        .feedback > :first-child { margin-top: 0; }
+        .feedback > :last-child { margin-bottom: 0; }
+        @media (max-width: 790px) { .subject-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .selector-grid { grid-template-columns: 1fr 1fr; } .selector-grid .btn { grid-column: 1/-1; } }
+        @media (max-width: 560px) { .header-inner { align-items: flex-start; flex-direction: column; } .site-nav { justify-content: flex-start; } main { padding: 20px 13px 55px; } .hero,.card { padding: 20px; } .subject-grid,.selector-grid { grid-template-columns: 1fr; } .practice-heading { flex-direction: column; } }
+        @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation-duration: .001ms !important; } }
+    </style>
+</head>
+<body class="hm-eleven">
+<a class="skip-link" href="#main-content">Skip to topic mastery</a>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/">✨ Homework Magic</a>
+        <nav class="site-nav" aria-label="Main navigation">
+            <a href="/elevenplus-practice">11+ Practice</a>
+            <a href="/elevenplus-topic-mastery" aria-current="page">Topic Mastery</a>
+            <a href="/elevenplus-year-round-plan">Year-Round Plan</a>
+            <a href="/progress">Progress</a>
+            <a href="/login" id="home-login-link">Parent Login</a>
+            <a href="#" id="home-logout-link" hidden>Logout</a>
+        </nav>
+    </div>
+</header>
+
+<main id="main-content">
+    <section class="hero" aria-labelledby="page-title">
+        <div class="eyebrow">🏆 Focus on one skill at a time</div>
+        <h1 id="page-title">11+ Topic Mastery</h1>
+        <p>Choose a subject, topic and level. Each step opens one exact pre-generated practice set from the topic-mastery library.</p>
+        <div class="steps" aria-label="Plan summary"><span>4 subjects</span><span>11 topics each</span><span>5 levels</span><span>55 sets per subject</span></div>
+    </section>
+
+    <section class="card" aria-labelledby="choose-title">
+        <h2 class="section-title" id="choose-title">Choose your next challenge</h2>
+        <p class="section-help">Start with Level 1, or choose a higher level for a bigger challenge.</p>
+        <div class="subject-grid" id="subject-grid" aria-label="Choose a subject"></div>
+        <div class="selector-grid">
+            <label><span>Topic</span><select id="topic-select" aria-label="Topic"></select></label>
+            <label><span>Mastery level</span><select id="level-select" aria-label="Mastery level"></select></label>
+            <button class="btn btn-primary" id="open-set-button" type="button">Open practice set</button>
+        </div>
+        <div class="set-summary" id="set-summary"></div>
+        <div class="status hidden" id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card hidden" id="practice-card" aria-labelledby="practice-title">
+        <div class="practice-heading">
+            <div><h2 id="practice-title">Practice set</h2><p id="practice-subtitle"></p></div>
+            <span class="set-badge" id="set-badge"></span>
+        </div>
+        <div class="loading hidden" id="loading"><span class="spinner" aria-hidden="true"></span><span>Opening your set…</span></div>
+        <div id="question-container"></div>
+        <div class="practice-actions hidden" id="practice-actions">
+            <button class="btn btn-primary" id="check-button" type="button">Check my answers</button>
+            <button class="btn btn-secondary" id="change-button" type="button">Choose another set</button>
+        </div>
+        <div class="feedback hidden" id="feedback" aria-live="polite"></div>
+    </section>
+</main>
+
+<script>
+(function () {
+    'use strict';
+    const STORAGE_KEY = 'homeworkMagic.elevenplusTopicMastery.v1';
+    const state = { catalogue: null, subjectKey: '', topicIndex: 1, masteryLevel: 1, homework: null };
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+    function showStatus(message) {
+        const el = document.getElementById('status');
+        el.textContent = message;
+        el.classList.toggle('hidden', !message);
+    }
+    function saveState() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ subjectKey: state.subjectKey, topicIndex: state.topicIndex, masteryLevel: state.masteryLevel })); } catch (_error) {}
+    }
+    function restoreState() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            if (saved.subjectKey) state.subjectKey = String(saved.subjectKey);
+            if (Number(saved.topicIndex)) state.topicIndex = Math.min(11, Math.max(1, Number(saved.topicIndex)));
+            if (Number(saved.masteryLevel)) state.masteryLevel = Math.min(5, Math.max(1, Number(saved.masteryLevel)));
+        } catch (_error) {}
+    }
+    function currentSubject() {
+        return state.catalogue.subjects.find(function (item) { return item.key === state.subjectKey; }) || state.catalogue.subjects[0];
+    }
+    function renderControls() {
+        const subjects = state.catalogue.subjects;
+        if (!subjects.some(function (item) { return item.key === state.subjectKey; })) state.subjectKey = subjects[0].key;
+        document.getElementById('subject-grid').innerHTML = subjects.map(function (item) {
+            return '<button class="subject-button" type="button" data-subject="' + escapeHtml(item.key) + '" aria-pressed="' + (item.key === state.subjectKey) + '">' + escapeHtml(item.label) + '</button>';
+        }).join('');
+        document.querySelectorAll('.subject-button').forEach(function (button) {
+            button.addEventListener('click', function () { state.subjectKey = button.dataset.subject; state.topicIndex = 1; renderControls(); saveState(); });
+        });
+        const subject = currentSubject();
+        document.getElementById('topic-select').innerHTML = subject.topics.map(function (topic, index) {
+            return '<option value="' + (index + 1) + '"' + (index + 1 === state.topicIndex ? ' selected' : '') + '>' + (index + 1) + '. ' + escapeHtml(topic) + '</option>';
+        }).join('');
+        document.getElementById('level-select').innerHTML = state.catalogue.levels.map(function (level) {
+            return '<option value="' + level.level + '"' + (level.level === state.masteryLevel ? ' selected' : '') + '>Level ' + level.level + ' — ' + escapeHtml(level.name) + '</option>';
+        }).join('');
+        updateSummary();
+    }
+    function updateSummary() {
+        const subject = currentSubject();
+        const level = state.catalogue.levels[state.masteryLevel - 1];
+        const setIndex = (state.topicIndex - 1) * 5 + state.masteryLevel;
+        document.getElementById('set-summary').textContent = subject.label + ' · ' + subject.topics[state.topicIndex - 1] + ' · Level ' + state.masteryLevel + ' (' + level.name + ') · Set ' + setIndex + ' of 55';
+    }
+    function setLoading(isLoading) {
+        document.getElementById('loading').classList.toggle('hidden', !isLoading);
+        document.getElementById('open-set-button').disabled = isLoading;
+    }
+    async function openPracticeSet() {
+        showStatus('');
+        saveState();
+        const card = document.getElementById('practice-card');
+        card.classList.remove('hidden');
+        document.getElementById('question-container').innerHTML = '';
+        document.getElementById('practice-actions').classList.add('hidden');
+        document.getElementById('feedback').classList.add('hidden');
+        setLoading(true);
+        card.scrollIntoView({behavior: 'smooth', block: 'start'});
+        try {
+            const response = await fetch('/api/elevenplus/topic-mastery/practice', {
+                method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({subject: state.subjectKey, topic_index: state.topicIndex, mastery_level: state.masteryLevel})
+            });
+            const data = await response.json().catch(function () { return {}; });
+            if (!response.ok || !data.success) throw new Error(data.error || data.detail || 'This set could not be opened.');
+            state.homework = data.homework[0];
+            document.getElementById('practice-title').textContent = state.homework.subject_label + ': ' + state.homework.topic;
+            document.getElementById('practice-subtitle').textContent = 'Level ' + state.homework.mastery_level + ' — ' + state.homework.mastery_level_name;
+            document.getElementById('set-badge').textContent = 'Set ' + state.homework.mastery_set_index + ' of 55';
+            const renderer = window.HomeworkQuestionRenderer;
+            if (!renderer) throw new Error('The question controls did not load. Please refresh the page.');
+            const container = document.getElementById('question-container');
+            container.innerHTML = renderer.renderResponseBlock(state.homework, 0, {headerText: state.homework.subject_label, showLibraryBadge: false});
+            renderer.bindAll(container);
+            document.getElementById('practice-actions').classList.remove('hidden');
+        } catch (error) {
+            showStatus(error.message || 'Something went wrong. Please try again.');
+        } finally { setLoading(false); }
+    }
+    async function checkAnswers() {
+        if (!state.homework) return;
+        const block = document.querySelector('#question-container .question-response-block');
+        const answers = window.HomeworkQuestionRenderer.getBlockAnswer(block);
+        const answerCount = answers ? answers.split('\n').filter(Boolean).length : 0;
+        const questionCount = Array.isArray(state.homework.questions) ? state.homework.questions.length : 0;
+        if (!answers || answerCount < questionCount) { showStatus('Please choose one answer for every question before checking.'); return; }
+        showStatus('');
+        const button = document.getElementById('check-button');
+        button.disabled = true; button.textContent = 'Checking…';
+        try {
+            const response = await fetch('/api/review', {
+                method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    homework: state.homework.content, answers: answers, subject: state.homework.subject,
+                    profile: {year_group: 6, age: 11, topic_mastery: true, topic: state.homework.topic, mastery_level: state.homework.mastery_level},
+                    quick_review: true, from_rag: true, homework_doc_id: state.homework.doc_id, is_eleven_plus: true
+                })
+            });
+            const data = await response.json().catch(function () { return {}; });
+            if (response.status === 401) { window.location.href = '/login'; return; }
+            if (response.status === 402) { window.location.href = '/pricing'; return; }
+            if (!response.ok || !data.success) throw new Error(data.error || 'Your answers could not be checked.');
+            const feedback = document.getElementById('feedback');
+            feedback.innerHTML = typeof window.renderSafeMarkdown === 'function' ? window.renderSafeMarkdown(data.review || '') : escapeHtml(data.review || 'Answers checked.');
+            feedback.classList.remove('hidden');
+            feedback.scrollIntoView({behavior:'smooth', block:'nearest'});
+        } catch (error) { showStatus(error.message || 'Something went wrong while checking.'); }
+        finally { button.disabled = false; button.textContent = 'Check my answers'; }
+    }
+    async function initialise() {
+        restoreState();
+        try {
+            const response = await fetch('/api/elevenplus/topic-mastery/catalog', {credentials:'same-origin'});
+            if (!response.ok) throw new Error('The topic list could not be loaded.');
+            state.catalogue = await response.json();
+            renderControls();
+        } catch (error) { showStatus(error.message || 'Please refresh the page.'); document.getElementById('open-set-button').disabled = true; }
+    }
+    document.getElementById('topic-select').addEventListener('change', function (event) { state.topicIndex = Number(event.target.value); updateSummary(); saveState(); });
+    document.getElementById('level-select').addEventListener('change', function (event) { state.masteryLevel = Number(event.target.value); updateSummary(); saveState(); });
+    document.getElementById('open-set-button').addEventListener('click', openPracticeSet);
+    document.getElementById('check-button').addEventListener('click', checkAnswers);
+    document.getElementById('change-button').addEventListener('click', function () { document.getElementById('choose-title').scrollIntoView({behavior:'smooth'}); });
+    initialise();
+}());
+</script>
+</body>
+</html>

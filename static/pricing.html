@@ -20,6 +20,7 @@
     ul { padding-left: 1.3rem; line-height: 1.7; }
     button { font: inherit; border: 0; border-radius: 999px; padding: .8rem 1.2rem; cursor: pointer; background: #4257b2; color: #fff; }
     button.secondary { background: #e7eaf4; color: #25304a; }
+    button:disabled { cursor: not-allowed; opacity: .55; box-shadow: none; transform: none; }
     .privacy { border-left: 5px solid #3c8b60; }
     #status { font-weight: 650; text-align: center; min-height: 1.5rem; }
   </style>
@@ -55,7 +56,7 @@
       <p class="price">£0.99 <small>/ 5 days</small></p>
       <p>Explore both Homework Premium and 11+ Premium for five days.</p>
       <ul><li>Years 1–6 homework support</li><li>11+ practice and year-round plan</li><li>Detailed explanations</li><li>No automatic renewal</li></ul>
-      <button onclick="startCheckout('trial_5day')">Start the five-day trial</button>
+      <button data-plan="trial_5day" onclick="startCheckout('trial_5day',this)" disabled>Start the five-day trial</button>
     </article>
     <article class="card">
       <span class="plan-kicker">Years 1–6</span>
@@ -63,7 +64,7 @@
       <p class="price">£4.99 <small>/ month</small></p>
       <p>For Year 1–6 homework help and progress.</p>
       <ul><li>Tutor mode</li><li>Detailed explanations</li><li>Targeted practice</li><li>Parent-controlled learning memory</li></ul>
-      <button onclick="startCheckout('homework_monthly')">Continue to secure checkout</button>
+      <button data-plan="homework_monthly" onclick="startCheckout('homework_monthly',this)" disabled>Continue to secure checkout</button>
     </article>
     <article class="card">
       <span class="plan-kicker">11+ preparation</span>
@@ -71,7 +72,7 @@
       <p class="price">£9.99 <small>/ month</small></p>
       <p>For ongoing 11+ preparation.</p>
       <ul><li>Maths and English practice</li><li>Verbal and non-verbal reasoning</li><li>Year round study plan</li><li>Progress and learning memory</li></ul>
-      <button onclick="startCheckout('elevenplus_monthly')">Continue to secure checkout</button>
+      <button data-plan="elevenplus_monthly" onclick="startCheckout('elevenplus_monthly',this)" disabled>Continue to secure checkout</button>
     </article>
 <!--    <article class="card">-->
 <!--      <h2>Family Premium</h2>-->
@@ -100,9 +101,38 @@ async function call(url,body){
   if(!response.ok)throw new Error(data.detail||data.error||'Billing request failed.');
   return data;
 }
-async function startCheckout(plan){try{status('Opening secure checkout…');const data=await call('/api/billing/checkout',{plan});location.assign(data.checkout_url);}catch(error){status(error.message,true);}}
+async function loadBillingStatus(){
+  const buttons=[...document.querySelectorAll('button[data-plan]')];
+  try{
+    const response=await fetch('/api/billing/plans',{credentials:'same-origin'});
+    const data=await response.json();
+    if(!response.ok)throw new Error('Could not check billing availability.');
+    buttons.forEach(button=>{
+      const available=data.plan_availability?.[button.dataset.plan]===true;
+      button.disabled=!available;
+      button.title=available?'':'This plan is temporarily unavailable.';
+    });
+    if(!buttons.some(button=>!button.disabled))status('Secure checkout is temporarily unavailable. Please try again later.',true);
+  }catch(error){
+    buttons.forEach(button=>button.disabled=true);
+    status(error.message,true);
+  }
+}
+async function startCheckout(plan,button){
+  if(button?.disabled)return;
+  try{
+    button.disabled=true;
+    status('Opening secure checkout…');
+    const data=await call('/api/billing/checkout',{plan});
+    location.assign(data.checkout_url);
+  }catch(error){
+    button.disabled=false;
+    status(error.message,true);
+  }
+}
 async function openPortal(){try{status('Opening your billing portal…');const data=await call('/api/billing/portal');location.assign(data.portal_url);}catch(error){status(error.message,true);}}
 const params=new URLSearchParams(location.search);if(params.get('checkout')==='success')status('Thank you. Your access will update as soon as Stripe confirms the payment.');if(params.get('checkout')==='cancelled')status('Checkout was cancelled. No changes were made.',true);
+loadBillingStatus();
 </script>
 </body>
 </html>

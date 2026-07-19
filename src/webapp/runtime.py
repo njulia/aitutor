@@ -120,6 +120,43 @@ def production_configuration_issues() -> list[str]:
     if _env_bool("STORE_RAW_AI_CONTENT", False):
         issues.append("STORE_RAW_AI_CONTENT should remain false for child privacy")
 
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    billing_flag = os.getenv("STRIPE_BILLING_ENABLED")
+    billing_enabled = (
+        _env_bool("STRIPE_BILLING_ENABLED", False)
+        if billing_flag is not None
+        else bool(stripe_key)
+    )
+    if billing_enabled:
+        expected_live_raw = os.getenv("STRIPE_EXPECTED_LIVEMODE")
+        expected_live = (
+            expected_live_raw.strip().lower() in {"1", "true", "yes", "on"}
+            if expected_live_raw is not None
+            else stripe_key.startswith(("sk_live_", "rk_live_"))
+        )
+        if not stripe_key:
+            issues.append("STRIPE_SECRET_KEY must be configured when billing is enabled")
+        elif expected_live and not stripe_key.startswith(("sk_live_", "rk_live_")):
+            issues.append("STRIPE_SECRET_KEY must be a live key for live billing")
+        elif not expected_live and not stripe_key.startswith(("sk_test_", "rk_test_")):
+            issues.append("STRIPE_SECRET_KEY must be a test key when live billing is disabled")
+        if not os.getenv("STRIPE_WEBHOOK_SECRET", "").strip().startswith("whsec_"):
+            issues.append("STRIPE_WEBHOOK_SECRET must be configured when billing is enabled")
+        stripe_price_vars = (
+            "STRIPE_PRICE_TRIAL_5DAY",
+            "STRIPE_PRICE_HOMEWORK_MONTHLY",
+            "STRIPE_PRICE_ELEVENPLUS_MONTHLY",
+        )
+        stripe_prices = []
+        for variable in stripe_price_vars:
+            price_id = os.getenv(variable, "").strip()
+            if not price_id.startswith("price_"):
+                issues.append(f"{variable} must contain a Stripe Price ID")
+            else:
+                stripe_prices.append(price_id)
+        if len(stripe_prices) != len(set(stripe_prices)):
+            issues.append("Stripe plans must use different Price IDs")
+
     provider_aliases = {
         "vertex": "vertex_ai",
         "vertexai": "vertex_ai",

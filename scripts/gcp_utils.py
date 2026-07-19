@@ -16,8 +16,6 @@ from sqlalchemy.orm import sessionmaker
 
 
 # load_dotenv()
-DATABASE_URL = "postgresql+psycopg://homework_app:w6Mpslt9EQhZyD5q1L9RkIlG361P@127.0.0.1:5433/homework_magic"
-
 
 def init_database_dev() -> int:
     url = (os.getenv("DATABASE_URL") or get_database_url()).strip()

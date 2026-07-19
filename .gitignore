@@ -29,6 +29,8 @@ env/
 !.env.example
 .env.local
 .env.*.local
+prod-env.yaml
+prod-secrets.env
 
 # 系统文件
 .DS_Store

@@ -8,6 +8,8 @@ __pycache__
 *.pyd
 .env
 .env.*
+prod-env.yaml
+prod-secrets.env
 venv
 .venv
 uploads
@@ -20,3 +22,7 @@ tests
 .DS_Store
 *.md
 *.zip
+cloud-sql-proxy
+pytest-of-root
+.coverage
+coverage.xml

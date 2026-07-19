@@ -133,7 +133,11 @@ The image runs as a non-root user and starts one worker by default because the l
 
 ## Payments
 
-Start with Stripe test mode. Configure real Price IDs and a signed webhook secret. Access decisions use webhook-synchronised local subscription state; do not restore public/manual production subscription creation.
+Start with Stripe test mode, then switch all four Stripe values to the same live
+account before accepting real payments. Access decisions use webhook-synchronised
+local subscription state; do not restore public/manual production subscription
+creation. The checkout endpoint refuses to take a payment when the webhook or
+selected Price is not ready.
 
 Configure these Stripe Price IDs:
 
@@ -143,6 +147,31 @@ STRIPE_PRICE_HOMEWORK_MONTHLY=price_...    # recurring £4.99/month price
 STRIPE_PRICE_ELEVENPLUS_MONTHLY=price_...  # recurring £9.99/month price
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
+
+For live billing, also set:
+
+```dotenv
+STRIPE_BILLING_ENABLED=true
+STRIPE_EXPECTED_LIVEMODE=true
+STRIPE_SECRET_KEY=sk_live_...              # or a suitably scoped rk_live_ restricted key
+APP_BASE_URL=https://your-domain.example
+```
+
+Create the webhook endpoint in Stripe as
+`https://your-domain.example/api/billing/stripe/webhook` and subscribe it to:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `customer.subscription.paused`
+- `customer.subscription.resumed`
+
+Enable and configure Stripe's customer portal for the live account. Before
+deployment, compare the live values with `.env.stripe-live.example`. The server
+validates that every advertised Price is active, belongs to the expected mode,
+uses GBP, and matches the advertised amount and billing interval.
 
 The paid trial is a one-time, non-renewing five-day entitlement covering both
 premium areas. The application grants it only after a signed Stripe webhook
