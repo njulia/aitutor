@@ -19,7 +19,7 @@ from src.llm_client import LLMClient, format_prompt, build_messages
 from src.cache import profile_parse_cache, make_cache_key
 from src.models import (
     UK_PRIMARY_SUBJECTS, ELEVEN_PLUS_SUBJECTS, YEAR_GROUP_AGE, KEY_STAGES,
-    get_homework_time_by_age,
+    extract_primary_subjects, get_homework_time_by_age,
 )
 from src.prompts import PROFILE_PARSE_PROMPT
 
@@ -95,7 +95,11 @@ def display_homeworks(sections) -> str:
     return iframe_html
 
 
-def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Optional[Dict[str, Any]]:
+def parse_profile_from_natural_language(
+    description: str,
+    llm: LLMClient,
+    default_year: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
     """用 LLM 将自然语言描述解析为学生档案，并从中提取科目（带缓存）
 
     Args:
@@ -108,7 +112,7 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
     safe_description = _minimise_profile_description(description)
     # Cache the minimised form so names, email addresses and locations are not
     # retained in a reusable cache key.
-    cache_key = make_cache_key("profile_parse", safe_description)
+    cache_key = make_cache_key("profile_parse", safe_description, str(default_year or ""))
     cached = profile_parse_cache.get(cache_key)
     if cached is not None:
         logger.info("[Cache] 命中学生档案解析缓存")
@@ -127,22 +131,13 @@ def parse_profile_from_natural_language(description: str, llm: LLMClient) -> Opt
         if age_num is None and year_num is not None:
             age_num = YEAR_GROUP_AGE.get(year_num, year_num + 4)
 
-        subject_aliases = {
-            "Maths": ("maths", "math", "mathematics", "numeracy"),
-            "English": ("english", "reading", "writing", "spelling", "grammar"),
-            "Science": ("science",),
-            "Computing": ("computing", "computer", "coding"),
-            "History": ("history",),
-            "Geography": ("geography",),
-            "Art and Design": ("art", "drawing", "design"),
-            "Music": ("music",),
-            "Physical Education": ("physical education", "p.e.", " sport"),
-            "Languages": ("language", "french", "spanish", "german"),
-        }
-        extracted_subjects = [
-            subject for subject in UK_PRIMARY_SUBJECTS
-            if any(_contains_alias(folded, alias) for alias in subject_aliases.get(subject, (subject.casefold(),)))
-        ]
+        extracted_subjects = extract_primary_subjects(safe_description)
+        if year_num is None and default_year is not None:
+            try:
+                year_num = max(1, min(6, int(default_year)))
+                age_num = YEAR_GROUP_AGE.get(year_num, year_num + 5)
+            except (TypeError, ValueError):
+                year_num = None
         if year_num is not None and extracted_subjects:
             homework_info = get_homework_time_by_age(year_num)
             profile = {

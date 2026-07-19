@@ -10,6 +10,7 @@
 """
 
 import json
+import ast
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -40,7 +41,11 @@ from src.prompts import (
 )
 from src.webapp.homework_assignment_store import get_assignment_store
 from src.webapp.prompt_budget import compact_profile, compact_text
-from src.webapp.question_utils import parse_public_questions, _split_homework_into_questions
+from src.webapp.question_utils import (
+    parse_public_questions,
+    _split_homework_into_questions,
+    normalise_homework_content,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -122,21 +127,46 @@ def _extract_generated_payload(raw_result: str, subject: str) -> Tuple[str, List
     """
     text = str(raw_result or "").strip()
     if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+        text = re.sub(r"^```(?:json|python)?\s*", "", text, flags=re.I)
         text = re.sub(r"\s*```$", "", text)
-    try:
-        payload = json.loads(text)
-    except (TypeError, json.JSONDecodeError):
-        payload = None
+
+    payload: Any = text
+    for _depth in range(4):
+        if not isinstance(payload, str):
+            break
+        candidate = payload.strip()
+        decoded: Any = None
+        for decoder in (json.loads, ast.literal_eval):
+            try:
+                decoded = decoder(candidate)
+                break
+            except (TypeError, ValueError, SyntaxError, json.JSONDecodeError):
+                continue
+        if decoded is None:
+            json_decoder = json.JSONDecoder()
+            for match in re.finditer(r"[\[{]", candidate):
+                try:
+                    decoded, _end = json_decoder.raw_decode(candidate[match.start():])
+                    break
+                except json.JSONDecodeError:
+                    continue
+        if decoded is None or decoded == payload:
+            payload = None
+            break
+        payload = decoded
 
     if isinstance(payload, dict):
-        homework = str(payload.get("homework") or payload.get("worksheet") or payload.get("content") or "").strip()
+        homework = normalise_homework_content(
+            payload.get("homework") or payload.get("worksheet")
+            or payload.get("content") or payload.get("questions") or ""
+        )
         answers = _normalise_answer_records(
             payload.get("correct_answers") or payload.get("answers") or payload.get("answer_key")
         )
         if homework:
             return homework, answers
 
+    text = normalise_homework_content(text)
     parts = re.split(r"(?im)^\s*#{0,6}\s*ANSWERS?\s*:?[ \t]*$", text, maxsplit=1)
     if len(parts) == 1:
         return text, []

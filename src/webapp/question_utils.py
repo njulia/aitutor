@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import ast
 import io
+import json
 import logging
 import re
 import uuid
@@ -45,6 +47,104 @@ _CONTEXT_TRANSITION_RE = re.compile(
     r"read the (?:second|following|next))",
     re.I,
 )
+
+
+def _questions_payload_to_text(items: List[Any]) -> str:
+    lines: List[str] = []
+    for index, item in enumerate(items or [], start=1):
+        if isinstance(item, dict):
+            question = str(
+                item.get("question") or item.get("prompt") or item.get("text")
+                or item.get("content") or item.get("task") or ""
+            ).strip()
+            if not question:
+                continue
+            number = item.get("number") or index
+            lines.append(f"{number}. {question}")
+            for option_index, option in enumerate(item.get("options") or []):
+                if isinstance(option, dict):
+                    label = str(option.get("label") or chr(65 + option_index)).strip().upper()
+                    option_text = str(option.get("text") or option.get("value") or "").strip()
+                else:
+                    label = chr(65 + option_index)
+                    option_text = str(option or "").strip()
+                if option_text:
+                    lines.append(f"{label}) {option_text}")
+        elif str(item or "").strip():
+            lines.append(f"{index}. {str(item).strip()}")
+    return "\n".join(lines).strip()
+
+
+def _try_decode_structured_text(text: str) -> Any:
+    candidates = [text]
+    if text.startswith("```"):
+        candidates.append(re.sub(r"^```(?:json|python)?\s*|\s*```$", "", text, flags=re.I))
+    for candidate in candidates:
+        value = candidate.strip()
+        if not value:
+            continue
+        for decoder in (json.loads, ast.literal_eval):
+            try:
+                return decoder(value)
+            except (TypeError, ValueError, SyntaxError, json.JSONDecodeError):
+                pass
+
+        # Some providers prefix otherwise valid JSON with one short sentence.
+        # Scan for a complete object instead of exposing that wrapper to pupils.
+        json_decoder = json.JSONDecoder()
+        for match in re.finditer(r"[\[{]", value):
+            try:
+                decoded, _end = json_decoder.raw_decode(value[match.start():])
+                if isinstance(decoded, (dict, list, str)):
+                    return decoded
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _decode_visible_line_breaks(text: str) -> str:
+    """Repair legacy text containing visible JSON newline escapes.
+
+    The structural check avoids changing a lone LaTeX command such as
+    ``\\neq`` while still repairing ``\\n2. Next question``.
+    """
+    value = str(text or "").replace("\\r\\n", "\\n")
+    escaped_count = value.count("\\n")
+    structural_break = re.search(
+        r"\\n(?:\\n|\s*(?:#{1,6}\s*)?(?:question\s*\d+|\d+[.)]|[A-Ha-h][).]|[-*•]))",
+        value,
+        re.I,
+    )
+    if escaped_count >= 2 or structural_break:
+        value = value.replace("\\n", "\n").replace("\\r", "\n").replace("\\t", "\t")
+    return value
+
+
+def normalise_homework_content(value: Any, _depth: int = 0) -> str:
+    """Return worksheet text from JSON, double-encoded JSON or legacy values."""
+    if _depth > 4 or value is None:
+        return ""
+    if isinstance(value, dict):
+        for key in ("homework", "worksheet", "content", "questions"):
+            if key not in value or value[key] in (None, ""):
+                continue
+            selected = value[key]
+            if key == "questions" and isinstance(selected, list):
+                return _questions_payload_to_text(selected)
+            return normalise_homework_content(selected, _depth + 1)
+        return ""
+    if isinstance(value, list):
+        return _questions_payload_to_text(value)
+
+    text = str(value or "").strip().lstrip("\ufeff")
+    if not text:
+        return ""
+    decoded = _try_decode_structured_text(text)
+    if decoded is not None and decoded != value and decoded != text:
+        unwrapped = normalise_homework_content(decoded, _depth + 1)
+        if unwrapped:
+            return unwrapped
+    return _decode_visible_line_breaks(text).strip()
 
 
 def _clean_public_text(value: Any) -> str:
@@ -101,7 +201,7 @@ def _parse_inline_options(value: str) -> List[Dict[str, str]]:
 
 
 def _question_blocks(content: str) -> tuple[str, List[tuple[int, str]]]:
-    text = _normalise_inline_options(_strip_private_answer_sections(content))
+    text = _normalise_inline_options(_strip_private_answer_sections(normalise_homework_content(content)))
     lines = text.split("\n")
     starts: List[tuple[int, int, str]] = []
     for line_index, line in enumerate(lines):
@@ -208,7 +308,7 @@ def _parse_question_block(number: int, body: str) -> Dict[str, Any] | None:
 
 def public_homework_content(homework_content: str) -> str:
     """Return learner-facing worksheet text with private answer sections removed."""
-    return _strip_private_answer_sections(homework_content)
+    return _strip_private_answer_sections(normalise_homework_content(homework_content))
 
 
 def parse_public_questions(homework_content: str) -> List[Dict[str, Any]]:

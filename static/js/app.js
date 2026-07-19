@@ -67,6 +67,36 @@ let currentHomework = [];
             [HOMEWORK_PREMIUM_PLAN]: 'Homework Premium',
             [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
         };
+        const LEARNING_CHOICES_KEY = 'homeworkMagic.learningChoices.v1';
+
+        function loadLearningChoices() {
+            try {
+                const value = JSON.parse(localStorage.getItem(LEARNING_CHOICES_KEY) || '{}');
+                return value && typeof value === 'object' ? value : {};
+            } catch (error) {
+                console.warn('Could not read saved learning choices:', error);
+                return {};
+            }
+        }
+
+        function saveLearningChoices() {
+            const existing = loadLearningChoices();
+            const homeworkYear = Number(document.getElementById('homework-year')?.value);
+            const homeworkSubject = getSelectedSubjects('homework-subjects')[0];
+            const elevenSubject = getSelectedSubjects('eleven-subjects')[0];
+            const value = {
+                ...existing,
+                homeworkYear: Number.isInteger(homeworkYear) && homeworkYear >= 1 && homeworkYear <= 6
+                    ? homeworkYear : (existing.homeworkYear || 3),
+                homeworkSubject: homeworkSubject || existing.homeworkSubject || 'Maths',
+                elevenSubject: elevenSubject || existing.elevenSubject || 'Maths'
+            };
+            try {
+                localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(value));
+            } catch (error) {
+                console.warn('Could not save learning choices:', error);
+            }
+        }
 
         function premiumPlanForContext(context = null) {
             const isElevenPlus = Boolean(
@@ -291,6 +321,8 @@ let currentHomework = [];
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
             loadSubjects();
+            const homeworkYear = document.getElementById('homework-year');
+            if (homeworkYear) homeworkYear.addEventListener('change', saveLearningChoices);
             checkAdminAccess(); // Show admin tools only to configured administrators
             const resumedPendingHomework = await restoreResumableSession();
 
@@ -588,11 +620,18 @@ let currentHomework = [];
         }
 
         function loadSubjects() {
-            fetch('/api/subjects')
+            return fetch('/api/subjects')
                 .then(response => response.json())
                 .then(data => {
-                    renderSubjects('homework-subjects', data.primary);
-                    renderSubjects('eleven-subjects', data.eleven_plus);
+                    const saved = loadLearningChoices();
+                    renderSubjects('homework-subjects', data.primary, saved.homeworkSubject);
+                    renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
+
+                    const homeworkYear = document.getElementById('homework-year');
+                    const savedYear = Number(saved.homeworkYear);
+                    if (homeworkYear && Number.isInteger(savedYear) && savedYear >= 1 && savedYear <= 6) {
+                        homeworkYear.value = String(savedYear);
+                    }
 
                     const reviewSelect = document.getElementById('review-subject');
                     reviewSelect.innerHTML = ''; // Clear existing options
@@ -607,7 +646,7 @@ let currentHomework = [];
                 .catch(error => console.error('Error loading subjects:', error));
         }
 
-        function renderSubjects(containerId, subjects) {
+        function renderSubjects(containerId, subjects, savedSubject = null) {
             const container = document.getElementById(containerId);
             if (!container) {
                 console.error(`Subject container with id '${containerId}' not found.`);
@@ -619,10 +658,11 @@ let currentHomework = [];
                 return;
             }
 
+            const selectedSubject = subjectList.includes(savedSubject)
+                ? savedSubject
+                : (subjectList.includes('Maths') ? 'Maths' : subjectList[0]);
             container.innerHTML = subjectList.map(subject => {
-                // Default select 'Maths' in both homework and 11+ tabs.
-                const isSelected = (containerId === 'homework-subjects' || containerId === 'eleven-subjects')
-                                    && subject === 'Maths';
+                const isSelected = subject === selectedSubject;
                 return `
                     <div class="subject-item ${isSelected ? 'selected' : ''}"
                          data-subject="${subject}"
@@ -640,10 +680,12 @@ let currentHomework = [];
                 item.classList.remove('selected');
             });
             element.classList.add('selected'); // Select the clicked subject
+            saveLearningChoices();
         }
 
         function getSelectedSubjects(containerId) {
             const container = document.getElementById(containerId);
+            if (!container) return [];
             const selected = container.querySelectorAll('.subject-item.selected');
             return Array.from(selected).map(el => el.dataset.subject);
         }
@@ -982,8 +1024,58 @@ let currentHomework = [];
                 .replace(/'/g, '&#39;');
         }
 
+        function unwrapHomeworkValue(value, depth = 0) {
+            if (depth > 4 || value == null) return '';
+            if (Array.isArray(value)) {
+                return value.map((item, index) => {
+                    if (item && typeof item === 'object') {
+                        const question = item.question || item.prompt || item.text || item.content || item.task || '';
+                        const options = Array.isArray(item.options)
+                            ? item.options.map((option, optionIndex) => {
+                                const label = option && typeof option === 'object'
+                                    ? (option.label || String.fromCharCode(65 + optionIndex))
+                                    : String.fromCharCode(65 + optionIndex);
+                                const optionText = option && typeof option === 'object'
+                                    ? (option.text || option.value || '') : option;
+                                return optionText ? `${label}) ${optionText}` : '';
+                            }).filter(Boolean) : [];
+                        return [`${item.number || index + 1}. ${question}`, ...options].join('\n');
+                    }
+                    return `${index + 1}. ${String(item || '')}`;
+                }).filter(Boolean).join('\n');
+            }
+            if (typeof value === 'object') {
+                return unwrapHomeworkValue(
+                    value.homework || value.worksheet || value.content || value.questions || '',
+                    depth + 1
+                );
+            }
+
+            let text = String(value || '').trim();
+            if (text.startsWith('```')) {
+                text = text.replace(/^```(?:json|javascript|python)?\s*/i, '').replace(/\s*```$/, '');
+            }
+            if (/^[\[{\"]/.test(text)) {
+                try {
+                    const decoded = JSON.parse(text);
+                    if (decoded !== text) {
+                        const unwrapped = unwrapHomeworkValue(decoded, depth + 1);
+                        if (unwrapped) return unwrapped;
+                    }
+                } catch (_error) {
+                    // Keep plain worksheet text when it is not valid JSON.
+                }
+            }
+            const escapedBreaks = (text.match(/\\n/g) || []).length;
+            const structuralBreak = /\\n(?:\\n|\s*(?:#{1,6}\s*)?(?:question\s*\d+|\d+[.)]|[A-H][).]|[-*•]))/i.test(text);
+            if (escapedBreaks >= 2 || structuralBreak) {
+                text = text.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\\t/g, '\t');
+            }
+            return text;
+        }
+
         function normaliseQuestionText(value) {
-            return String(value || '')
+            return unwrapHomeworkValue(value)
                 .replace(/\r\n?/g, '\n')
                 .replace(/[ \t]+$/gm, '')
                 .trim();

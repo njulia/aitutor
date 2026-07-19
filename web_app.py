@@ -54,6 +54,12 @@ from src.webapp.review_service import (
 )
 from src.webapp.upload_utils import decode_base64_image_to_temp
 from src.webapp.child_safety import detect_safeguarding_concern
+from src.models import (
+    ELEVEN_PLUS_SUBJECTS,
+    ELEVEN_PLUS_YEAR_ROUND_SUBJECTS,
+    canonical_primary_subject,
+    extract_primary_subjects,
+)
 
 
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -95,6 +101,11 @@ PREMIUM_PLAN_NAMES = {
     HOMEWORK_PREMIUM_PLAN: "Homework Premium",
     ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
 }
+
+OUT_OF_SCOPE_HOMEWORK_MESSAGE = (
+    "Sorry, I can only make homework for UK primary school subjects and 11+ practice. "
+    "I cannot generate that content because of our safety, privacy and learning policy."
+)
 
 
 def _is_eleven_plus_year_round(profile: Optional[dict] = None, subject: str = "") -> bool:
@@ -879,7 +890,7 @@ _YEAR_ROUND_SUBJECT_MAP = {
 
 
 def _normalise_requested_subjects(subjects: List[str], profile: Dict[str, Any], is_eleven_plus: bool) -> List[str]:
-    """Canonicalise public subject labels without changing ordinary 11+ requests."""
+    """Canonicalise and allow-list public subject labels."""
     requested_week = profile.get("plan_week")
     try:
         is_year_round = is_eleven_plus and 1 <= int(requested_week or 0) <= 52
@@ -892,6 +903,24 @@ def _normalise_requested_subjects(subjects: List[str], profile: Dict[str, Any], 
             continue
         if is_year_round:
             label = _YEAR_ROUND_SUBJECT_MAP.get(label, label)
+            if label not in ELEVEN_PLUS_YEAR_ROUND_SUBJECTS:
+                continue
+        elif is_eleven_plus:
+            compact_label = "".join(char for char in label.casefold() if char.isalnum())
+            eleven_plus_map = {
+                "maths": "Maths",
+                "mathematics": "Maths",
+                "english": "English",
+                "verbalreasoning": "Verbal Reasoning",
+                "nonverbalreasoning": "Non-Verbal Reasoning",
+            }
+            label = eleven_plus_map.get(compact_label, "")
+            if label not in ELEVEN_PLUS_SUBJECTS:
+                continue
+        else:
+            label = canonical_primary_subject(label)
+            if not label:
+                continue
         if label not in result:
             result.append(label)
     return result[:4]
@@ -945,6 +974,20 @@ async def api_generate(req: Request, request: ProfileRequest):
                 "safety_intervention": True,
                 "safety_category": concern.category,
             })
+        if (
+            not request.subjects
+            and not request.is_eleven_plus
+            and description_for_safety
+            and not extract_primary_subjects(description_for_safety)
+        ):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": OUT_OF_SCOPE_HOMEWORK_MESSAGE,
+                    "policy_blocked": True,
+                },
+            )
         profile = resolve_profile(
             request.profile,
             quick_select=request.quick_select,
@@ -958,16 +1001,34 @@ async def api_generate(req: Request, request: ProfileRequest):
             if description:
                 from src.ui.shared import parse_profile_from_natural_language
 
+                # Personalised homework is a closed learning feature, not a
+                # general chat endpoint.  Resolve a supported primary subject
+                # locally before any model call so unrelated requests cannot be
+                # answered or turned into an arbitrary homework subject.
+                extracted_primary_subjects = (
+                    [] if request.is_eleven_plus else extract_primary_subjects(description)
+                )
+                if not request.is_eleven_plus and not extracted_primary_subjects:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "success": False,
+                            "error": OUT_OF_SCOPE_HOMEWORK_MESSAGE,
+                            "policy_blocked": True,
+                        },
+                    )
+
                 parsed = await run_blocking(
                     parse_profile_from_natural_language,
                     description,
                     llm,
+                    profile.get("year_group") or request.year,
                     timeout=20,
                 )
                 if parsed:
                     profile.update(parsed)
                     profile["student_id"] = resolved_student_id
-                    subjects = list(parsed.get("extracted_subjects") or [])
+                    subjects = extracted_primary_subjects or list(parsed.get("extracted_subjects") or [])
             if not subjects:
                 return JSONResponse(
                     status_code=400,
@@ -979,7 +1040,14 @@ async def api_generate(req: Request, request: ProfileRequest):
 
         subjects = _normalise_requested_subjects(subjects, profile, request.is_eleven_plus)
         if not subjects:
-            return JSONResponse(status_code=400, content={"success": False, "error": "Please choose a subject."})
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": OUT_OF_SCOPE_HOMEWORK_MESSAGE,
+                    "policy_blocked": True,
+                },
+            )
 
         is_year_round = bool(request.is_eleven_plus) and (
             _is_eleven_plus_year_round(profile)

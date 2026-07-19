@@ -32,20 +32,108 @@ KEY_STAGES = {
     5: "KS2", 6: "KS2",           # Year 5-6: Upper Key Stage 2
 }
 
-# UK Primary School National Curriculum subjects
+# UK primary subjects offered by the tutor.  Modern and ancient languages are
+# listed separately so a child can ask for (for example) French practice in
+# natural language without the request being discarded as an unknown subject.
 UK_PRIMARY_SUBJECTS = [
     "Maths",
     "English",
-    "Spanish",
     "Science",
     "History",
     "Geography",
     "Design and Technology",
     "Art and Design",
     "Computing",
+    "Music",
+    "Physical Education",
+    "Religious Education",
+    "PSHE",
+    "French",
+    "German",
+    "Spanish",
+    "Italian",
+    "Polish",
+    "Arabic",
     "Latin",
     "Chinese",
 ]
+
+
+_PRIMARY_SUBJECT_ALIASES = {
+    "Maths": (
+        "maths", "math", "mathematics", "numeracy", "arithmetic", "number bonds",
+        "times tables", "fractions", "decimals", "percentages", "geometry", "algebra",
+    ),
+    "English": (
+        "english", "reading", "writing", "spelling", "grammar", "punctuation", "phonics",
+        "comprehension", "vocabulary", "creative writing", "poetry",
+    ),
+    "Science": ("science", "biology", "chemistry", "physics", "plants", "animals", "electricity"),
+    "History": ("history", "ancient egypt", "romans", "vikings", "stone age", "world war"),
+    "Geography": ("geography", "maps", "rivers", "mountains", "continents", "countries"),
+    "Design and Technology": ("design and technology", "design technology", "d&t", "dt"),
+    "Art and Design": ("art and design", "art", "drawing", "painting", "sculpture"),
+    "Computing": ("computing", "computer science", "computer", "coding", "programming"),
+    "Music": ("music", "rhythm", "musical", "recorder"),
+    "Physical Education": ("physical education", "p.e.", "pe", "sport", "sports"),
+    "Religious Education": ("religious education", "religion", "r.e."),
+    "PSHE": ("pshe", "personal social health education", "health education", "relationships education"),
+    "French": ("french", "français", "francais"),
+    "German": ("german", "germany", "deutsch"),
+    "Spanish": ("spanish", "español", "espanol"),
+    "Italian": ("italian", "italiano"),
+    "Polish": ("polish", "polski"),
+    "Arabic": ("arabic", "العربية"),
+    "Latin": ("latin",),
+    "Chinese": ("chinese", "mandarin", "中文"),
+}
+
+
+def _contains_subject_alias(text: str, alias: str) -> bool:
+    """Match a subject alias as words, including short labels such as PE."""
+    import re
+
+    value = str(alias or "").strip()
+    if not value:
+        return False
+    return bool(re.search(rf"(?<![A-Za-z0-9]){re.escape(value)}(?![A-Za-z0-9])", text, re.I))
+
+
+def extract_primary_subjects(text: str) -> List[str]:
+    """Extract only supported primary subjects from untrusted free text."""
+    source = str(text or "")
+    subjects = [
+        subject
+        for subject in UK_PRIMARY_SUBJECTS
+        if any(_contains_subject_alias(source, alias) for alias in _PRIMARY_SUBJECT_ALIASES[subject])
+    ]
+    language_subjects = {"French", "German", "Spanish", "Italian", "Polish", "Arabic", "Latin", "Chinese"}
+    if any(subject in language_subjects for subject in subjects):
+        # "French vocabulary" and "German grammar" describe skills within that
+        # language; generic English-skill words must not add an unwanted second
+        # worksheet unless English itself was named.
+        if "English" in subjects and not _contains_subject_alias(source, "english"):
+            subjects.remove("English")
+    return subjects
+
+
+def canonical_primary_subject(subject: str) -> str:
+    """Return the public subject label, or an empty string when it is out of scope."""
+    matches = extract_primary_subjects(str(subject or "").strip())
+    if not matches:
+        return ""
+    # A direct API subject must resolve to one subject only.  This prevents a
+    # sentence containing an allowed word from becoming a new arbitrary key.
+    folded = "".join(char for char in str(subject or "").casefold() if char.isalnum())
+    for candidate in matches:
+        candidate_folded = "".join(char for char in candidate.casefold() if char.isalnum())
+        if folded == candidate_folded:
+            return candidate
+        for alias in _PRIMARY_SUBJECT_ALIASES[candidate]:
+            alias_folded = "".join(char for char in alias.casefold() if char.isalnum())
+            if folded == alias_folded:
+                return candidate
+    return ""
 
 ELEVEN_PLUS_SUBJECTS = [
     "Maths",
@@ -121,6 +209,15 @@ SUBJECT_ICONS = {
     "Latin": "Lat",
     "Spanish": "Spa",
     "Chinese": "Chi",
+    "French": "Fr",
+    "German": "De",
+    "Italian": "It",
+    "Polish": "Pl",
+    "Arabic": "Ar",
+    "Music": "Mus",
+    "Physical Education": "PE",
+    "Religious Education": "RE",
+    "PSHE": "PSHE",
     "Maths-1year": "123",
     "English-1year": "ABC",
     "VerbalReasoning-1year": "VR",

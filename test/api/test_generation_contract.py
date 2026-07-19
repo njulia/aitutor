@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 pytestmark = pytest.mark.api
@@ -166,6 +168,17 @@ def test_subject_endpoint_exposes_separate_year_round_keys(client) -> None:
         "VerbalReasoning-1year",
         "NonVerbalReasoning-1year",
     ]
+    for subject in (
+        "German",
+        "Italian",
+        "Polish",
+        "Arabic",
+        "Music",
+        "Physical Education",
+        "Religious Education",
+        "PSHE",
+    ):
+        assert subject in data["primary"]
 
 
 def test_year_round_api_canonicalises_old_friendly_subject_name(client, app_module, monkeypatch) -> None:
@@ -320,3 +333,122 @@ def test_tutor_generation_preserves_reading_passage_context(
     assert "A fox crossed the quiet field" in question["context"]
     assert question["question"] == "What crossed the field?"
     assert question["response_type"] == "single_choice"
+
+
+def test_personalised_french_homework_uses_supported_primary_subject(
+    client, app_module, monkeypatch
+) -> None:
+    captured = {}
+
+    def fake_generate(profile, subjects, is_eleven_plus=False):
+        captured["profile"] = profile
+        captured["subjects"] = subjects
+        return [{
+            "subject": subjects[0],
+            "content": "1. Match bonjour to its English meaning.",
+            "doc_id": None,
+            "from_rag": False,
+        }]
+
+    monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
+    response = client.post(
+        "/api/generate",
+        json={
+            "profile": {
+                "description": "I am in Year 4 and want to practise French greetings.",
+                "year_group": 4,
+                "age": 9,
+            },
+            "subjects": [],
+            "mode": "homework",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert captured["subjects"] == ["French"]
+    assert captured["profile"]["year_group"] == 4
+    assert response.json()["homework"][0]["subject"] == "French"
+
+
+def test_personalised_out_of_scope_request_is_blocked_before_generation(
+    client, app_module, monkeypatch
+) -> None:
+    def unexpected_generate(*_args, **_kwargs):
+        raise AssertionError("Out-of-scope content must not reach homework generation")
+
+    monkeypatch.setattr(app_module, "generate_homework_with_profile", unexpected_generate)
+    response = client.post(
+        "/api/generate",
+        json={
+            "profile": {
+                "description": "Tell me which shares I should buy tomorrow.",
+                "year_group": 5,
+                "age": 10,
+            },
+            "subjects": [],
+            "mode": "homework",
+        },
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["success"] is False
+    assert body["policy_blocked"] is True
+    assert "privacy" in body["error"].lower()
+    assert "policy" in body["error"].lower()
+    assert "primary school subjects and 11+" in body["error"]
+
+
+def test_explicit_unknown_subject_is_blocked(client, app_module, monkeypatch) -> None:
+    def unexpected_generate(*_args, **_kwargs):
+        raise AssertionError("Unknown subject must not reach generation")
+
+    monkeypatch.setattr(app_module, "generate_homework_with_profile", unexpected_generate)
+    response = client.post(
+        "/api/generate",
+        json={
+            "quick_select": True,
+            "year": 4,
+            "subjects": ["Cryptocurrency trading"],
+            "mode": "homework",
+            "profile": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["policy_blocked"] is True
+
+
+def test_api_unwraps_legacy_json_homework_before_returning_it(
+    client, app_module, monkeypatch
+) -> None:
+    wrapped = json.dumps({
+        "homework": "1. Say hello in French.\\n2. Say goodbye in French.",
+        "correct_answers": [{"question": "1", "answer": "bonjour"}],
+    })
+
+    monkeypatch.setattr(
+        app_module,
+        "generate_homework_with_profile",
+        lambda *_args, **_kwargs: [{
+            "subject": "French",
+            "content": wrapped,
+            "doc_id": "legacy-french",
+            "from_rag": True,
+        }],
+    )
+    response = client.post(
+        "/api/generate",
+        json={
+            "quick_select": True,
+            "year": 4,
+            "subjects": ["French"],
+            "mode": "homework",
+            "profile": {},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    content = response.json()["homework"][0]["content"]
+    assert content == "1. Say hello in French.\n2. Say goodbye in French."
+    assert "correct_answers" not in content
