@@ -560,6 +560,35 @@ def _static_page(*parts: str) -> FileResponse:
     })
 
 
+def _public_legal_page(filename: str) -> HTMLResponse:
+    """Render public legal details from production-validated environment values."""
+    path = os.path.join(project_root, "static", filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Page not found")
+    with open(path, encoding="utf-8") as source:
+        content = source.read()
+    contact_email = (
+        os.getenv("BUSINESS_CONTACT_EMAIL")
+        or os.getenv("PRIVACY_CONTACT_EMAIL")
+        or "contact@homeworkmagic.co.uk"
+    )
+    replacements = {
+        "{{DATA_CONTROLLER_NAME}}": os.getenv(
+            "DATA_CONTROLLER_NAME", "[Add the legal operator name before launch]"
+        ),
+        "{{BUSINESS_CONTACT_EMAIL}}": contact_email,
+        "{{PRIVACY_CONTACT_EMAIL}}": os.getenv(
+            "PRIVACY_CONTACT_EMAIL", "[Add a privacy contact email before launch]"
+        ),
+        "{{PRIVACY_POSTAL_ADDRESS}}": os.getenv(
+            "PRIVACY_POSTAL_ADDRESS", "[Add a postal contact address before launch]"
+        ),
+    }
+    for marker, value in replacements.items():
+        content = content.replace(marker, html.escape(str(value), quote=True))
+    return HTMLResponse(content, headers={"Cache-Control": "public, max-age=300"})
+
+
 class ProfileRequest(BaseModel):
     profile: dict = Field(default_factory=dict)
     subjects: list = Field(default_factory=list)
@@ -721,24 +750,23 @@ async def login_page():
 
 
 @app.get("/pricing")
-async def login_page():
+async def pricing_page():
     return _static_page("static", "pricing.html")
 
 
 @app.get("/privacy")
 async def privacy_page():
-    path = os.path.join(project_root, "static", "privacy.html")
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="Page not found")
-    content = open(path, encoding="utf-8").read()
-    replacements = {
-        "{{DATA_CONTROLLER_NAME}}": os.getenv("DATA_CONTROLLER_NAME", "[Add the legal operator name before launch]"),
-        "{{PRIVACY_CONTACT_EMAIL}}": os.getenv("PRIVACY_CONTACT_EMAIL", "[Add a privacy contact email before launch]"),
-        "{{PRIVACY_POSTAL_ADDRESS}}": os.getenv("PRIVACY_POSTAL_ADDRESS", "[Add a postal contact address before launch]"),
-    }
-    for marker, value in replacements.items():
-        content = content.replace(marker, html.escape(str(value), quote=True))
-    return HTMLResponse(content, headers={"Cache-Control": "public, max-age=300"})
+    return _public_legal_page("privacy.html")
+
+
+@app.get("/terms")
+async def terms_page():
+    return _public_legal_page("terms.html")
+
+
+@app.get("/refund-policy")
+async def refund_policy_page():
+    return _public_legal_page("refund-policy.html")
 
 
 @app.get("/safety")

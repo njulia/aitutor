@@ -236,12 +236,24 @@ def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
     attempt = secrets.token_urlsafe(12)
     checkout_args: Dict[str, Any] = dict(
         mode="payment" if is_trial else "subscription",
+        submit_type="pay" if is_trial else "subscribe",
         customer=customer_id,
         line_items=[{"price": plans[plan], "quantity": 1}],
         success_url=f"{base}/pricing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{base}/pricing?checkout=cancelled",
         client_reference_id=account["id"],
         metadata={"account_id": account["id"], "plan": plan},
+        custom_text={
+            "submit": {
+                "message": (
+                    "This is a one-off five-day purchase and does not renew. "
+                    if is_trial
+                    else "This subscription renews monthly until cancelled. "
+                )
+                + "By paying, you agree to the Terms and Refund Policy at "
+                + f"{base}/terms and {base}/refund-policy."
+            }
+        },
         allow_promotion_codes=not is_trial,
         idempotency_key=(
             f"checkout-{account['id']}-{plan}"

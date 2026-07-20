@@ -51,7 +51,7 @@ export DB_USER="aitutor_app"
 export AR_REPOSITORY="homework-magic"
 export RUNTIME_SA_NAME="homework-magic-runtime"
 export RUNTIME_SA="${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-export DOMAIN="https://www.your-domain.example"
+export DOMAIN="https://www.homeworkmagic.co.uk"
 
 # Set the active project and default region.
 gcloud config set project "$PROJECT_ID"
@@ -480,9 +480,9 @@ TRUST_PROXY_HEADERS: "true"
 ENFORCE_PRODUCTION_CONFIG: "true"
 
 DATA_CONTROLLER_NAME: "Your legal name or registered business name"
-PRIVACY_CONTACT_EMAIL: "privacy@your-domain.example"
+PRIVACY_CONTACT_EMAIL: "privacy@homeworkmagic.co.uk"
 PRIVACY_POSTAL_ADDRESS: "Your business correspondence address"
-ADMIN_EMAILS: "admin@your-domain.example"
+ADMIN_EMAILS: "admin@homeworkmagic.co.uk"
 
 LLM_PROVIDER: "api"
 DEFAULT_ENDPOINT_OPENAI: "https://your-provider.example/v1"
@@ -532,8 +532,8 @@ PASSWORD_RESET_MAX_CLIENT_PER_HOUR: "10"
 PASSWORD_RESET_DEV_SHOW_LINK: "false"
 SMTP_HOST: "smtp.your-provider.example"
 SMTP_PORT: "587"
-SMTP_USERNAME: "support@your-domain.example"
-SMTP_FROM: "Homework Magic <support@your-domain.example>"
+SMTP_USERNAME: "support@homeworkmagic.co.uk"
+SMTP_FROM: "Homework Magic <support@homeworkmagic.co.uk>"
 SMTP_TIMEOUT_SECONDS: "15"
 
 STRIPE_EXPECTED_LIVEMODE: "true"
@@ -787,7 +787,7 @@ unset STRIPE_SECRET_KEY_VALUE
 Create a Stripe live webhook pointing to the application's production webhook route. Check the billing router in the deployed version for the exact route, commonly something such as:
 
 ```text
-https://www.your-domain.example/api/billing/webhook
+https://www.homeworkmagic.co.uk/api/billing/webhook
 ```
 
 Subscribe only to the events the application handles. Typical subscription applications need events for successful checkout/subscription creation, subscription updates/deletion and relevant payment failures.

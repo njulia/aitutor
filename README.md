@@ -79,9 +79,9 @@ Set at minimum:
 
 ```dotenv
 DEV_MODE=false
-APP_BASE_URL=https://your-domain.example
-PUBLIC_BASE_URL=https://your-domain.example
-CORS_ORIGINS=https://your-domain.example
+APP_BASE_URL=https://www.homeworkmagic.co.uk
+PUBLIC_BASE_URL=https://www.homeworkmagic.co.uk
+CORS_ORIGINS=https://www.homeworkmagic.co.uk
 COOKIE_SECURE=true
 DATABASE_URL=postgresql+psycopg://...
 PGVECTOR_DATABASE_URL=postgresql+psycopg://...
@@ -154,11 +154,11 @@ For live billing, also set:
 STRIPE_BILLING_ENABLED=true
 STRIPE_EXPECTED_LIVEMODE=true
 STRIPE_SECRET_KEY=sk_live_...              # or a suitably scoped rk_live_ restricted key
-APP_BASE_URL=https://your-domain.example
+APP_BASE_URL=https://www.homeworkmagic.co.uk
 ```
 
 Create the webhook endpoint in Stripe as
-`https://your-domain.example/api/billing/stripe/webhook` and subscribe it to:
+`https://www.homeworkmagic.co.uk/api/billing/stripe/webhook` and subscribe it to:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`

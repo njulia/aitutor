@@ -21,7 +21,7 @@ import os
 # ---------------------------------------------------------------------------
 
 SITE_NAME = "Homework Magic"
-SITE_URL = "https://your-domain.example"
+SITE_URL = "https://www.homeworkmagic.co.uk"
 TOOL_URL = "/app"
 
 project_dir = os.path.dirname(os.path.abspath(__file__))

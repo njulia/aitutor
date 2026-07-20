@@ -36,6 +36,8 @@ class _ScriptSourceParser(HTMLParser):
         "login.html",
         "register.html",
         "privacy.html",
+        "terms.html",
+        "refund-policy.html",
         "safety.html",
     ],
 )

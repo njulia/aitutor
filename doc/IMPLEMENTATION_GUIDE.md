@@ -78,7 +78,7 @@ No learner profile, learning result, prompt or homework content is sent to Strip
 Configure the webhook endpoint as:
 
 ```text
-POST https://your-domain.example/api/billing/stripe/webhook
+POST https://homeworkmagic.co.uk/api/billing/stripe/webhook
 ```
 
 Subscribe it to at least:

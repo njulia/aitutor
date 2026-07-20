@@ -81,9 +81,11 @@ def test_trial_checkout_is_one_time_and_non_renewing(monkeypatch) -> None:
 
     assert result["checkout_session_id"] == "cs_trial"
     assert captured["mode"] == "payment"
+    assert captured["submit_type"] == "pay"
     assert captured["line_items"] == [{"price": "price_trial", "quantity": 1}]
     assert "subscription_data" not in captured
     assert captured["allow_promotion_codes"] is False
+    assert "does not renew" in captured["custom_text"]["submit"]["message"]
 
 
 def test_trial_can_only_be_started_once(monkeypatch) -> None:
@@ -319,3 +321,5 @@ def test_live_checkout_verifies_price_before_opening_session(monkeypatch) -> Non
     assert result["checkout_session_id"] == "cs_live"
     assert captured["retrieved"] == ["price_live_homework_unit"]
     assert captured["checkout"]["mode"] == "subscription"
+    assert captured["checkout"]["submit_type"] == "subscribe"
+    assert "renews monthly until cancelled" in captured["checkout"]["custom_text"]["submit"]["message"]

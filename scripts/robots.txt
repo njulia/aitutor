@@ -28,6 +28,6 @@ User-agent: AhrefsBot
 Disallow: /
 
 # Sitemap location
-Sitemap: https://your-domain.example/sitemap.xml
-Sitemap: https://your-domain.example/sitemap-articles.xml
-Sitemap: https://your-domain.example/sitemap-questions.xml
+Sitemap: https://www.homeworkmagic.co.uk/sitemap.xml
+Sitemap: https://www.homeworkmagic.co.uk/sitemap-articles.xml
+Sitemap: https://www.homeworkmagic.co.uk/sitemap-questions.xml
