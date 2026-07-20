@@ -152,7 +152,7 @@ def _complete_review(
     # Ollama model names. Keep the model already loaded by a local client.
     selected_model = _resolved_model(llm_client, model)
 
-    safe_max_tokens = _bounded_int(max_tokens, default=1_000, minimum=128, maximum=4_000)
+    safe_max_tokens = _bounded_int(max_tokens, default=2_000, minimum=500, maximum=5_000)
     logger.info(
         "[Review] operation=%s provider=%s model=%s max_tokens=%s",
         operation,

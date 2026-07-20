@@ -341,6 +341,7 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature if temperature is not None else self.temperature,
             "stream": False,
+            "thinking": {"type": "disabled"}
         }
         if max_tokens:
             payload["max_tokens"] = max_tokens
@@ -410,6 +411,7 @@ class LLMClient:
                 }
             ],
             "stream": False,
+            "thinking": {"type": "disabled"}
         }
 
         try:
