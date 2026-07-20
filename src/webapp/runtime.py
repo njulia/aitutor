@@ -120,6 +120,9 @@ def production_configuration_issues() -> list[str]:
     if _env_bool("STORE_RAW_AI_CONTENT", False):
         issues.append("STORE_RAW_AI_CONTENT should remain false for child privacy")
 
+    from .email_service import password_reset_email_configuration_issues
+    issues.extend(password_reset_email_configuration_issues())
+
     stripe_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
     billing_flag = os.getenv("STRIPE_BILLING_ENABLED")
     billing_enabled = (

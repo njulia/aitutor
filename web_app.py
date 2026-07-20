@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, UTC
 from typing import Any, Dict, Optional, List
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
+from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +40,7 @@ from src.webapp.account_routes import build_account_router
 from src.webapp.memory_routes import build_memory_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
+from src.webapp.email_service import send_registration_confirmation_email
 from src.webapp.question_utils import (
     _split_homework_into_questions as split_public_homework,
     parse_public_questions,
@@ -1278,7 +1279,12 @@ async def api_review(req: Request, request_body: ReviewRequest):
             and not is_year_round_review
         )
         uses_detail_model = not uses_quick_model
-        if uses_detail_model:
+        free_rag_tutor_review = bool(
+            request_body.is_tutor_mode
+            and request_body.from_rag
+            and request_body.homework_doc_id
+        )
+        if uses_detail_model and not free_rag_tutor_review:
             required_plan = _required_premium_plan(
                 is_eleven_plus=bool(request_body.is_eleven_plus),
                 profile=profile,
@@ -1703,7 +1709,7 @@ def _password_error(password: str) -> Optional[str]:
 
 
 @app.post("/api/register")
-async def api_register(request_body: AuthRequest, req: Request):
+async def api_register(request_body: AuthRequest, req: Request, background_tasks: BackgroundTasks):
     try:
         from src.progress_db import create_user
         from src.auth_tokens import generate_token
@@ -1737,6 +1743,7 @@ async def api_register(request_body: AuthRequest, req: Request):
         account = await run_blocking(ensure_account, username, timeout=10, limit_concurrency=False)
         await run_blocking(ensure_default_student, account["id"], timeout=10, limit_concurrency=False)
         token = await run_blocking(generate_token, username, timeout=10, limit_concurrency=False)
+        background_tasks.add_task(send_registration_confirmation_email, to_email=username)
         response = JSONResponse({"success": True})
         response.set_cookie(
             "session", token, httponly=True, samesite="lax",

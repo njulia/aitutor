@@ -10,7 +10,7 @@ from typing import Callable, Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from .email_service import send_support_reply
+from src.webapp.email_service import send_support_reply
 from .message_models import AdminReplyCreate, MessageCreate, StatusChange
 from .message_store import MessageStore, VALID_CATEGORIES, VALID_STATUSES
 

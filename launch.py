@@ -14,14 +14,26 @@ import shutil
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+
+def load_local_environment():
+    """Load this checkout's development settings before app imports.
+
+    ``launch.py`` is the local-development entry point.  Make its project
+    ``.env`` authoritative so values exported for Cloud SQL Proxy or a prior
+    production shell (commonly using port 5433) cannot silently replace the
+    local PostgreSQL settings (port 5432 in ``docker-compose.yml``).
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+
+
 # PyCharm may start the script with a different working directory. Load the
 # project .env before importing any application modules.
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv(os.path.join(PROJECT_ROOT, '.env'), override=False)
-except ImportError:
-    pass
+load_local_environment()
 
 
 def generate_seo_pages():

@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, MetaData, String, Table, create_engine, insert, select, update
 from sqlalchemy.exc import IntegrityError
@@ -22,11 +22,13 @@ from .db import engine_options, normalise_database_url
 from .account_store import (
     account_has_used_plan,
     ensure_account,
+    get_account,
     get_account_by_stripe_customer_id,
     get_active_subscription,
     set_stripe_customer,
     upsert_stripe_subscription,
 )
+from .email_service import send_subscription_confirmation_email
 from .runtime import run_blocking
 
 
@@ -385,7 +387,29 @@ def ledger() -> WebhookLedger:
     return _ledger
 
 
-def process_webhook(payload: bytes, signature: str) -> str:
+def _queue_subscription_confirmation(
+    subscription: Dict[str, Any],
+    notifications: Optional[list[Dict[str, Any]]],
+) -> None:
+    """Prepare an email only when checkout has granted usable access."""
+    if notifications is None or subscription.get("status") not in {"active", "trialing"}:
+        return
+    account = get_account(str(subscription.get("account_id") or ""))
+    if not account or not account.get("email"):
+        logger.warning("Subscription confirmation skipped because its account email is unavailable")
+        return
+    notifications.append({
+        "to_email": account["email"],
+        "plan": subscription.get("plan") or "premium",
+        "current_period_end": subscription.get("current_period_end"),
+    })
+
+
+def process_webhook(
+    payload: bytes,
+    signature: str,
+    notifications: Optional[list[Dict[str, Any]]] = None,
+) -> str:
     stripe = _stripe()
     secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     if not secret:
@@ -415,14 +439,16 @@ def process_webhook(payload: bytes, signature: str) -> str:
                 # Card payments are normally paid at completion; delayed methods
                 # are granted only by async_payment_succeeded.
                 if str(_object_value(obj, "payment_status", "")).lower() == "paid":
-                    sync_trial_checkout(obj)
+                    saved_subscription = sync_trial_checkout(obj)
+                    _queue_subscription_confirmation(saved_subscription, notifications)
                 ledger().finish(event_id, "processed")
                 return "processed"
             subscription_id = _object_value(obj, "subscription")
             account_id = _object_value(obj, "client_reference_id")
             if subscription_id:
                 subscription = stripe.Subscription.retrieve(subscription_id)
-                sync_subscription(subscription, fallback_account_id=account_id)
+                saved_subscription = sync_subscription(subscription, fallback_account_id=account_id)
+                _queue_subscription_confirmation(saved_subscription, notifications)
         ledger().finish(event_id, "processed")
         return "processed"
     except Exception:
@@ -440,16 +466,25 @@ def build_billing_router(resolve_username):
         return await run_blocking(ensure_account, username, limit_concurrency=False)
 
     @router.post("/stripe/webhook")
-    async def stripe_webhook(request: Request):
+    async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
         signature = request.headers.get("Stripe-Signature", "")
         payload = await request.body()
         if not signature:
             raise HTTPException(status_code=400, detail="Missing Stripe signature")
         try:
-            status = await run_blocking(process_webhook, payload, signature, limit_concurrency=False)
+            notifications: list[Dict[str, Any]] = []
+            status = await run_blocking(
+                process_webhook,
+                payload,
+                signature,
+                notifications,
+                limit_concurrency=False,
+            )
         except Exception as exc:
             # Signature and processing failures must return non-2xx so Stripe retries.
             raise HTTPException(status_code=400, detail="Invalid Stripe webhook") from exc
+        for notification in notifications:
+            background_tasks.add_task(send_subscription_confirmation_email, **notification)
         return {"received": True, "status": status}
 
     @router.get("/plans")

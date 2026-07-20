@@ -122,6 +122,98 @@ def test_paid_trial_webhook_grants_five_days(monkeypatch) -> None:
     assert before + timedelta(days=5) <= captured["current_period_end"] <= datetime.now(UTC) + timedelta(days=5)
 
 
+def test_active_checkout_queues_subscription_confirmation_for_parent(monkeypatch) -> None:
+    period_end = datetime(2026, 8, 20, tzinfo=UTC)
+    notifications = []
+    monkeypatch.setattr(
+        billing,
+        "get_account",
+        lambda account_id: {"id": account_id, "email": "parent@example.com"},
+    )
+
+    billing._queue_subscription_confirmation(
+        {
+            "account_id": "acct_1",
+            "plan": "homework_monthly",
+            "status": "active",
+            "current_period_end": period_end,
+        },
+        notifications,
+    )
+
+    assert notifications == [{
+        "to_email": "parent@example.com",
+        "plan": "homework_monthly",
+        "current_period_end": period_end,
+    }]
+
+
+def test_inactive_checkout_does_not_queue_subscription_confirmation(monkeypatch) -> None:
+    notifications = []
+    monkeypatch.setattr(
+        billing,
+        "get_account",
+        lambda _account_id: pytest.fail("Inactive subscriptions must not resolve an email"),
+    )
+
+    billing._queue_subscription_confirmation(
+        {"account_id": "acct_1", "plan": "homework_monthly", "status": "incomplete"},
+        notifications,
+    )
+
+    assert notifications == []
+
+
+def test_verified_checkout_webhook_collects_active_subscription_email(monkeypatch) -> None:
+    finished = []
+
+    class FakeLedger:
+        def begin(self, event_id, event_type):
+            assert (event_id, event_type) == ("evt_checkout", "checkout.session.completed")
+            return True
+
+        def finish(self, event_id, status):
+            finished.append((event_id, status))
+
+    subscription = {
+        "account_id": "acct_1",
+        "plan": "homework_monthly",
+        "status": "active",
+        "current_period_end": datetime(2026, 8, 20, tzinfo=UTC),
+    }
+    fake_stripe = SimpleNamespace(
+        Webhook=SimpleNamespace(construct_event=lambda *_args: {
+            "id": "evt_checkout",
+            "type": "checkout.session.completed",
+            "livemode": False,
+            "data": {"object": {
+                "subscription": "sub_1",
+                "client_reference_id": "acct_1",
+                "metadata": {"plan": "homework_monthly"},
+            }},
+        }),
+        Subscription=SimpleNamespace(retrieve=lambda _subscription_id: {"id": "sub_1"}),
+    )
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_unit")
+    monkeypatch.setenv("STRIPE_EXPECTED_LIVEMODE", "false")
+    monkeypatch.setattr(billing, "_stripe", lambda: fake_stripe)
+    monkeypatch.setattr(billing, "ledger", lambda: FakeLedger())
+    monkeypatch.setattr(billing, "sync_subscription", lambda *_args, **_kwargs: subscription)
+    monkeypatch.setattr(
+        billing,
+        "get_account",
+        lambda _account_id: {"id": "acct_1", "email": "parent@example.com"},
+    )
+    notifications = []
+
+    status = billing.process_webhook(b"signed payload", "signature", notifications)
+
+    assert status == "processed"
+    assert finished == [("evt_checkout", "processed")]
+    assert notifications[0]["to_email"] == "parent@example.com"
+    assert notifications[0]["plan"] == "homework_monthly"
+
+
 def test_checkout_is_blocked_when_webhook_cannot_grant_access(monkeypatch) -> None:
     _configure_test_billing(
         monkeypatch,
