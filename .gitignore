@@ -12,7 +12,9 @@ build/
 *.HEIC
 *.sqlit3
 .coverage
-.pytest_cache/
+migrations/
+scripts/elevenplus/*.md
+scripts/elevenplus/*.json
 
 # 虚拟环境
 venv/
@@ -46,3 +48,8 @@ Thumbs.db
 data_archive/
 data/
 uploads/
+
+# test
+.pytest_cache/
+pytest-of-root/
+scripts/test_vector.db

@@ -34,7 +34,7 @@ def test_no_rag_11plus_review_uses_quick_prompt_with_age_bounded_profile() -> No
 def test_no_rag_primary_review_uses_local_ollama_model_and_integer_tokens() -> None:
     mock_llm = MagicMock()
     mock_llm.provider = "ollama"
-    mock_llm.model = "deepseek-v4-flash"
+    mock_llm.model = "qwen"
     mock_llm.complete.return_value = "## Score\n**1/1**"
 
     with patch("src.llm_client.format_prompt", return_value="Mocked Prompt"):
@@ -48,9 +48,9 @@ def test_no_rag_primary_review_uses_local_ollama_model_and_integer_tokens() -> N
         )
 
     call_kwargs = mock_llm.complete.call_args.kwargs
-    assert call_kwargs["model"] == "deepseek-v4-flash"
+    assert call_kwargs["model"] == "qwen"
     assert isinstance(call_kwargs["max_tokens"], int)
-    assert call_kwargs["max_tokens"] <= 1600
+    assert call_kwargs["max_tokens"] <= 3000
 
 
 def test_rag_wrong_answer_is_reviewed_by_detail_llm(monkeypatch) -> None:

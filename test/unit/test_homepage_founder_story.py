@@ -15,7 +15,7 @@ def test_homepage_includes_parent_origin_story_without_child_identity() -> None:
     assert "10–15 minutes" in homepage
     assert "helped shape the design and choose the name" in homepage
     assert "I’ll keep improving Homework Magic as my daughter uses it" in homepage
-    assert 'href="/messages">Share your feedback' in homepage
+    assert 'href="/messages">I’d love to hear your feedback' in homepage
 
 
 def test_founder_story_has_responsive_layout() -> None:

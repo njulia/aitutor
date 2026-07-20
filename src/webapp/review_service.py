@@ -108,10 +108,16 @@ def _supports_model_override(callable_obj: Any) -> bool:
 
 
 def _resolved_provider(llm_client: Any, requested_model: str) -> str:
+    configured_provider = str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    # A local-only client must never be routed to a hosted review provider.
+    # Check this before probing provider_for_model: permissive mocks and proxy
+    # objects can manufacture arbitrary attributes on access.
+    if configured_provider == "ollama":
+        return "ollama"
     resolver = getattr(llm_client, "provider_for_model", None)
     if callable(resolver):
         return str(resolver(requested_model) or "").strip().casefold()
-    return str(getattr(llm_client, "provider", "") or "").strip().casefold()
+    return configured_provider
 
 
 def _resolved_model(llm_client: Any, requested_model: str) -> str:

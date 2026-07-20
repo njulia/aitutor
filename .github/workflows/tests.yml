@@ -37,6 +37,7 @@ jobs:
       EMBEDDING_PROVIDER: local
       CHROMA_DB_PATH: /tmp/chroma_test
       APP_BASE_URL: http://127.0.0.1:5000
+      RUN_E2E: "1"
 
     steps:
       - uses: actions/checkout@v6
@@ -60,9 +61,9 @@ jobs:
         run: |
           python -m compileall web_app.py src
 
-      - name: Run unit and API tests
+      - name: Run unit, API, and integration tests
         run: |
-          pytest tests/unit tests/api \
+          pytest test/unit test/api test/integration \
             --cov=src \
             --cov=web_app \
             --cov-report=term-missing \
@@ -87,7 +88,7 @@ jobs:
 
       - name: Run browser tests
         run: |
-          pytest tests/e2e \
+          pytest test/e2e \
             --browser chromium \
             --tracing retain-on-failure \
             --screenshot only-on-failure

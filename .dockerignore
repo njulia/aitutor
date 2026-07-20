@@ -26,3 +26,7 @@ cloud-sql-proxy
 pytest-of-root
 .coverage
 coverage.xml
+pytest-of-root/
+migrations/
+scripts/elevenplus/*.md
+scripts/elevenplus/*.json
