@@ -789,12 +789,21 @@ async def app_page():
     return _static_page("static", "app.html")
 
 
+@app.get("/robots.txt")
+async def robots():
+    robots_path = os.path.join(project_root, "robots.txt")
+    if os.path.isfile(robots_path):
+        return FileResponse(robots_path, media_type="text/plain",
+                            headers={"Cache-Control": "public, max-age=3600"})
+    raise HTTPException(status_code=404, detail="robots.txt not found")
+
+
 @app.get("/year-{year}-homework")
 async def year_homework_page(year: int):
     if year < 1 or year > 6:
         raise HTTPException(status_code=404, detail="Page not found")
     seo_path = os.path.join(
-        project_root, "static", "--seo", f"year-{year}-homework.html"
+        project_root, "static", f"year-{year}-homework.html"
     )
     if os.path.isfile(seo_path):
         return FileResponse(seo_path)
@@ -803,9 +812,10 @@ async def year_homework_page(year: int):
 
 @app.get("/sitemap.xml")
 async def sitemap():
-    seo_sitemap = os.path.join(project_root, "static", "--seo", "sitemap.xml")
-    if os.path.isfile(seo_sitemap):
-        return FileResponse(seo_sitemap, media_type="application/xml")
+    sitemap_path = os.path.join(project_root, "static", "sitemap.xml")
+    if os.path.isfile(sitemap_path):
+        return FileResponse(sitemap_path, media_type="application/xml",
+                            headers={"Cache-Control": "public, max-age=3600"})
     raise HTTPException(status_code=404, detail="Sitemap not found")
 
 

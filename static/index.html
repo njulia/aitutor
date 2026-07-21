@@ -24,17 +24,91 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "EducationalApplication",
-    "name": "Homework Magic",
-    "description": "Personalised homework and encouraging feedback for UK primary school learners, covering Years 1–6 and 11+ preparation.",
-    "applicationCategory": "EducationalApplication",
-    "operatingSystem": "Web",
-    "audience": {
-      "@type": "EducationalAudience",
-      "educationalRole": "student",
-      "audienceType": "UK primary school learners aged 5 to 11 and their parents or guardians"
-    },
-    "inLanguage": "en-GB"
+    "@graph": [
+      {
+        "@type": "EducationalApplication",
+        "name": "Homework Magic",
+        "description": "Personalised homework and encouraging feedback for UK primary school learners, covering Years 1–6 and 11+ preparation.",
+        "url": "https://www.homeworkmagic.co.uk/",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "inLanguage": "en-GB",
+        "audience": {
+          "@type": "EducationalAudience",
+          "educationalRole": "student",
+          "audienceType": "UK primary school learners aged 5 to 11 and their parents or guardians"
+        },
+        "publisher": { "@id": "https://www.homeworkmagic.co.uk/#organization" }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://www.homeworkmagic.co.uk/#organization",
+        "name": "Homework Magic",
+        "url": "https://www.homeworkmagic.co.uk/",
+        "description": "Parent-built, personalised UK primary homework practice for Years 1–6, with short daily activities, kind instant feedback and focused 11+ support.",
+        "email": "contact@homeworkmagic.co.uk",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "customer support",
+          "email": "contact@homeworkmagic.co.uk",
+          "availableLanguage": ["English"]
+        }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.homeworkmagic.co.uk/#website",
+        "url": "https://www.homeworkmagic.co.uk/",
+        "name": "Homework Magic",
+        "description": "Friendly AI homework help for UK primary school children aged 5–11.",
+        "inLanguage": "en-GB",
+        "publisher": { "@id": "https://www.homeworkmagic.co.uk/#organization" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Which ages and school years can use Homework Magic?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It is designed for UK primary learners in Years 1–6, broadly ages 5–11, with extra 11+ preparation for older primary learners."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it follow the school curriculum?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Homework activities are designed around National Curriculum subjects and year groups in England. A parent, guardian or teacher should still check anything important because AI can make mistakes."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What can I use before choosing a paid plan?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Families can try available curriculum questions. Parent plans add features such as Tutor mode, deeper explanations, progress and targeted practice."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How should a child use the website safely?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A parent or guardian should manage the account. Use a learner nickname and never enter a child's school, address, phone number, exact birthday or password into a homework box."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does this replace a teacher?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Homework Magic is a practice helper. Teachers and parents know the child and should make important learning or wellbeing decisions."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
 </head>
