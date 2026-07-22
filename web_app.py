@@ -12,6 +12,7 @@ except ImportError:
 import asyncio
 import logging
 import base64
+import html
 import re  # Ensure re is imported for regex operations
 import json # Added: Import the json module
 import uuid
@@ -21,13 +22,23 @@ from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from passlib.context import CryptContext  # For password hashing
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
 from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+from src.webapp.account_routes import build_account_router
+from src.webapp.memory_routes import build_memory_router
+from src.webapp.message_routes import create_message_router
+from src.webapp.password_reset_routes import create_password_reset_router
+from src.webapp.review_service import (
+    review_homework as service_review_homework,
+    explain_deep as service_explain_deep,
+    improve_practice as service_improve_practice,
+)
+from src.webapp.runtime import install_hardening, owner_key, run_blocking
+from src.webapp.session_store import TutorSessionStore
 from src.webapp.stripe_pricing_billing import (
     billing_account_has_active_subscription,
     build_stripe_pricing_router,
@@ -68,10 +79,14 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 llm = None
 initialized = False
-tutor_sessions: Dict[str, Dict[str, Any]] = {}
+tutor_session_store = TutorSessionStore()
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+HOMEWORK_PREMIUM_PLAN = "homework_monthly"
+ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
+PREMIUM_PLAN_NAMES = {
+    HOMEWORK_PREMIUM_PLAN: "Homework Premium",
+    ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
+}
 
 
 def secure_filename(filename: str) -> str:
@@ -119,12 +134,78 @@ def _resolve_username(req: Request) -> Optional[str]:
     return None
 
 
+def _require_admin(req: Request) -> str:
+    """Require a signed-in parent account allow-listed for administration."""
+    username = _resolve_username(req)
+    if not username:
+        raise HTTPException(status_code=401, detail="Administrator login is required.")
+
+    configured = os.getenv("ADMIN_EMAILS") or os.getenv("ADMIN_EMAIL") or ""
+    allowed = {item.strip().lower() for item in configured.split(",") if item.strip()}
+    if allowed and username not in allowed:
+        raise HTTPException(status_code=403, detail="This account is not an administrator.")
+    if not allowed and not _dev_mode:
+        raise HTTPException(status_code=403, detail="Administrator access is not configured.")
+    return username
+
+
+def _is_eleven_plus_year_round(profile: Optional[dict] = None, subject: str = "") -> bool:
+    profile = profile or {}
+    try:
+        if 1 <= int(profile.get("plan_week") or 0) <= 52:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return str(subject or "").strip().lower().endswith("-1year")
+
+
+def _required_premium_plan(
+    *,
+    is_eleven_plus: bool = False,
+    profile: Optional[dict] = None,
+    subject: str = "",
+) -> str:
+    if is_eleven_plus or _is_eleven_plus_year_round(profile, subject):
+        return ELEVENPLUS_PREMIUM_PLAN
+    return HOMEWORK_PREMIUM_PLAN
+
+
+def _subscription_required_response(
+    feature: str, plan: str, username: Optional[str]
+) -> JSONResponse:
+    plan_name = PREMIUM_PLAN_NAMES.get(plan, "Premium")
+    if username is None:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "error": f"A parent or guardian needs to sign in. {feature} requires {plan_name}.",
+                "required_plan": plan,
+                "required_plan_name": plan_name,
+            },
+        )
+    return JSONResponse(
+        status_code=402,
+        content={
+            "success": False,
+            "error": f"{feature} requires {plan_name}.",
+            "required_plan": plan,
+            "required_plan_name": plan_name,
+        },
+    )
+
+
 def is_logged_in(req: Request) -> bool:
     """Check whether this request belongs to a registered parent account."""
     return _resolve_username(req) is not None
 
 
-def user_has_subscription(req: Optional[Request] = None, student_id: Optional[str] = None, username: Optional[str] = None) -> bool:
+def user_has_subscription(
+    req: Optional[Request] = None,
+    student_id: Optional[str] = None,
+    username: Optional[str] = None,
+    required_plan: Optional[str] = None,
+) -> bool:
     """Check the local entitlement state written by signed Stripe webhooks.
 
     Production requests never call Stripe directly, keeping paid learning
@@ -158,7 +239,13 @@ def user_has_subscription(req: Optional[Request] = None, student_id: Optional[st
                     if s.get("status") == "active":
                         return True
             return False
-        return bool(username and billing_account_has_active_subscription(username))
+        required_plans = [required_plan] if required_plan else None
+        return bool(
+            username
+            and billing_account_has_active_subscription(
+                username, required_plans=required_plans
+            )
+        )
     except Exception as e:
         logger.warning("Subscription check failed: %s", e)
         return False
@@ -195,6 +282,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+install_hardening(app, require_admin=_require_admin)
 
 
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
@@ -299,9 +387,13 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
     # 1. Check for logged-in user
     username = _resolve_username(req)
     if username:
-        # The legacy users table has no separate learner id, so its verified
-        # parent email remains the account identifier for these endpoints.
-        return username, username, None
+        # Billing belongs to the parent account, while learning records belong
+        # to a pseudonymous learner profile. Never use an email as a learner ID.
+        from src.webapp.account_store import ensure_account, ensure_default_student
+
+        account = ensure_account(username)
+        learner = ensure_default_student(account["id"])
+        return str(learner["id"]), username, None
 
     # 2. Check for anonymous session ID cookie
     anonymous_session_id = req.cookies.get("anon_session_id")
@@ -311,6 +403,30 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
     # 3. Generate a new anonymous session ID
     new_anon_session_id = f"anon_{uuid.uuid4().hex}" # Prefix to distinguish from real student_ids
     return new_anon_session_id, None, new_anon_session_id
+
+
+# Register the account-owned pages and APIs that are implemented in ``src/webapp``.
+# These routers were present in the Stripe-enabled archive but were not attached
+# to the FastAPI application, which made learning memory and account APIs return
+# 404 responses.
+app.include_router(
+    create_message_router(
+        resolve_identity=_get_user_or_anonymous_id,
+        require_admin=_require_admin,
+        project_root=project_root,
+    )
+)
+app.include_router(
+    build_account_router(
+        resolve_username=_resolve_username,
+        require_admin=_require_admin,
+        session_store=tutor_session_store,
+    )
+)
+app.include_router(build_memory_router(_resolve_username))
+app.include_router(
+    create_password_reset_router(project_root=project_root, dev_mode=_dev_mode)
+)
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
@@ -844,6 +960,83 @@ def improve_practice(homework_content: str, student_answers: str, subject: str,
         return {"success": False, "error": str(exc)}
 
 
+# Use the maintained review implementation for every live endpoint. The legacy
+# functions above are retained temporarily for source compatibility, but they do
+# not understand the newer RAG prompt fields or model-routing flags.
+def review_homework(
+    homework_content: str,
+    student_answers: str,
+    subject: str,
+    profile=None,
+    *,
+    quick_review: bool = False,
+    is_tutor_mode: bool = False,
+    homework_doc_id: Optional[str] = None,
+    is_eleven_plus: bool = False,
+    question_index: Optional[int] = None,
+):
+    return service_review_homework(
+        homework_content,
+        student_answers,
+        subject,
+        profile,
+        quick_review=quick_review,
+        is_tutor_mode=is_tutor_mode,
+        homework_doc_id=homework_doc_id,
+        is_eleven_plus=is_eleven_plus,
+        question_index=question_index,
+        llm_client=llm,
+    )
+
+
+def explain_deep(
+    homework_content: str,
+    student_answers: str,
+    subject: str,
+    profile=None,
+    review_feedback: str = "",
+    *,
+    homework_doc_id: Optional[str] = None,
+    is_eleven_plus: bool = False,
+    question_index: Optional[int] = None,
+):
+    return service_explain_deep(
+        homework_content,
+        student_answers,
+        subject,
+        profile,
+        review_feedback,
+        homework_doc_id=homework_doc_id,
+        is_eleven_plus=is_eleven_plus,
+        question_index=question_index,
+        llm_client=llm,
+    )
+
+
+def improve_practice(
+    homework_content: str,
+    student_answers: str,
+    subject: str,
+    profile=None,
+    review_feedback: str = "",
+    *,
+    homework_doc_id: Optional[str] = None,
+    is_eleven_plus: bool = False,
+    question_index: Optional[int] = None,
+):
+    return service_improve_practice(
+        homework_content,
+        student_answers,
+        subject,
+        profile,
+        review_feedback,
+        homework_doc_id=homework_doc_id,
+        is_eleven_plus=is_eleven_plus,
+        question_index=question_index,
+        llm_client=llm,
+    )
+
+
 def _static_page(*parts: str) -> FileResponse:
     path = os.path.join(project_root, *parts)
     if not os.path.isfile(path):
@@ -854,6 +1047,57 @@ def _static_page(*parts: str) -> FileResponse:
         "Pragma": "no-cache",
         "Expires": "0",
     })
+
+
+def _public_legal_page(filename: str) -> HTMLResponse:
+    """Render public operator details without exposing unexpanded markers."""
+    path = os.path.join(project_root, "static", filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Page not found")
+    with open(path, encoding="utf-8") as source:
+        content = source.read()
+
+    def escaped_env(name: str, fallback: str) -> str:
+        return html.escape(os.getenv(name, fallback), quote=True)
+
+    def optional_line(label: str, name: str) -> str:
+        value = str(os.getenv(name, "")).strip()
+        if not value:
+            return ""
+        return f"<br>{html.escape(label)}: {html.escape(value, quote=True)}"
+
+    contact_email = (
+        os.getenv("BUSINESS_CONTACT_EMAIL")
+        or os.getenv("PRIVACY_CONTACT_EMAIL")
+        or "contact@homeworkmagic.co.uk"
+    )
+    replacements = {
+        "{{DATA_CONTROLLER_NAME}}": escaped_env(
+            "DATA_CONTROLLER_NAME", "[Add the legal operator name before launch]"
+        ),
+        "{{BUSINESS_CONTACT_EMAIL}}": html.escape(contact_email, quote=True),
+        "{{PRIVACY_CONTACT_EMAIL}}": escaped_env(
+            "PRIVACY_CONTACT_EMAIL", contact_email
+        ),
+        "{{PRIVACY_POSTAL_ADDRESS}}": escaped_env(
+            "PRIVACY_POSTAL_ADDRESS", "[Add a postal contact address before launch]"
+        ),
+        "{{BUSINESS_SUPPORT_PHONE_LINE}}": optional_line(
+            "Phone", "BUSINESS_SUPPORT_PHONE"
+        ),
+        "{{BUSINESS_REGISTRATION_LINE}}": optional_line(
+            "Company registration number", "BUSINESS_REGISTRATION_NUMBER"
+        ),
+        "{{BUSINESS_VAT_STATUS_LINE}}": optional_line(
+            "VAT status", "BUSINESS_VAT_STATUS"
+        ),
+    }
+    for marker, value in replacements.items():
+        content = content.replace(marker, value)
+    return HTMLResponse(
+        content,
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 class ProfileRequest(BaseModel):
@@ -872,9 +1116,12 @@ class ReviewRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     session_id: Optional[str] = None
+    quick_review: bool = False
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
+    is_eleven_plus: bool = False
 
 
 class ExplainDeepRequest(BaseModel):
@@ -883,6 +1130,10 @@ class ExplainDeepRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     review_feedback: Optional[str] = None
+    from_rag: bool = False
+    homework_doc_id: Optional[str] = None
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
+    is_eleven_plus: bool = False
 
 
 class ImprovePracticeRequest(BaseModel):
@@ -891,6 +1142,10 @@ class ImprovePracticeRequest(BaseModel):
     subject: str = "Maths"
     profile: Optional[dict] = None
     review_feedback: Optional[str] = None
+    from_rag: bool = False
+    homework_doc_id: Optional[str] = None
+    question_index: Optional[int] = Field(default=None, ge=0, le=500)
+    is_eleven_plus: bool = False
 
 
 class PhotoRequest(BaseModel):
@@ -924,7 +1179,8 @@ class AdminSubscriptionCreateRequest(BaseModel):
     """管理员创建订阅请求"""
     email: str
     name: str
-    duration: str  # "5_days" 或 "30_days"
+    duration: str  # "5_days" or "1_month"
+    plan: str = HOMEWORK_PREMIUM_PLAN
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -937,7 +1193,7 @@ class AdminUserUpdateRequest(BaseModel):
 class SubscriptionRequest(BaseModel):
     email: str
     name: str
-    duration: str  # "5_days" or "30_days"
+    duration: str  # "5_days" or "1_month"
 
 
 class AuthRequest(BaseModel):
@@ -990,22 +1246,22 @@ async def login_page():
 
 @app.get("/pricing")
 async def pricing_page():
-    return _static_page("static", "pricing.html")
+    return _public_legal_page("pricing.html")
 
 
 @app.get("/privacy")
 async def privacy_page():
-    return _static_page("static", "privacy.html")
+    return _public_legal_page("privacy.html")
 
 
 @app.get("/terms")
 async def terms_page():
-    return _static_page("static", "terms.html")
+    return _public_legal_page("terms.html")
 
 
 @app.get("/refund-policy")
 async def refund_policy_page():
-    return _static_page("static", "refund-policy.html")
+    return _public_legal_page("refund-policy.html")
 
 
 @app.get("/safety")
@@ -1016,6 +1272,11 @@ async def safety_page():
 @app.get("/progress")
 async def progress_page():
     return _static_page("static", "progress.html")
+
+
+@app.get("/memory")
+async def memory_page():
+    return _static_page("static", "memory.html")
 
 
 @app.get("/app")
@@ -1088,20 +1349,19 @@ async def health():
 
 @app.get("/api/client-id")
 async def get_client_id(request: Request):
-    """Get a unique client ID based on IP address for anonymous users."""
-    # Get client IP - handle proxy headers
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "unknown"
-
-    # Generate a stable ID from IP
-    import hashlib
-    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:12]
-    anon_id = f"anon_{ip_hash}"
-
-    return {"client_id": anon_id, "ip": client_ip}
+    """Return an account-owned learner ID or a random cookie-backed anonymous ID."""
+    resolved_id, _username, new_anon_id = _get_user_or_anonymous_id(request)
+    response = JSONResponse({"client_id": resolved_id})
+    if new_anon_id:
+        response.set_cookie(
+            "anon_session_id",
+            new_anon_id,
+            httponly=True,
+            samesite="lax",
+            secure=not _dev_mode,
+            max_age=365 * 24 * 60 * 60,
+        )
+    return response
 
 
 @app.get("/api/subjects")
@@ -1231,44 +1491,84 @@ async def api_generate(req: Request, request: ProfileRequest):
 async def api_review(req: Request, request_body: ReviewRequest):
     try:
         initialize()
-
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
-
-        # Ensure profile has the resolved student_id
-        profile = request_body.profile or {}
+        profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
 
-        # If this is a tutor-mode review and the question is not from RAG, require subscription
-        if request_body.is_tutor_mode and not request_body.from_rag:
-            has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
-            if not has_sub:
-                if logged_in_username is None:
-                    return JSONResponse(status_code=401,
-                                        content={"success": False, "error": "Login required to use tutor mode review for AI-generated questions."})
-                return JSONResponse(status_code=402,
-                                    content={"success": False, "error": "Tutor mode review for AI-generated questions requires an active subscription."})
+        if request_body.session_id:
+            session_owner = owner_key(logged_in_username or resolved_student_id)
+            session = await run_blocking(
+                tutor_session_store.get,
+                request_body.session_id,
+                session_owner,
+                timeout=5,
+                limit_concurrency=False,
+            )
+            if session:
+                profile = {**session.get("profile", {}), **profile}
 
-        if request_body.session_id and request_body.session_id in tutor_sessions:
-            session = tutor_sessions[request_body.session_id]
-            session_profile = session.get("profile", {})
-            profile = {**session_profile, **profile} # Merge, request_body.profile takes precedence
-
-        # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
-            review_homework,
-            request_body.homework, request_body.answers, request_body.subject, profile,
-            is_tutor_mode=request_body.is_tutor_mode,
-            homework_doc_id=request_body.homework_doc_id,
+        is_year_round_review = _is_eleven_plus_year_round(profile, request_body.subject)
+        uses_quick_model = bool(
+            request_body.quick_review
+            and not request_body.is_tutor_mode
+            and not is_year_round_review
         )
-        
+        free_rag_tutor_review = bool(
+            request_body.is_tutor_mode
+            and request_body.from_rag
+            and request_body.homework_doc_id
+        )
+        if not uses_quick_model and not free_rag_tutor_review:
+            required_plan = _required_premium_plan(
+                is_eleven_plus=bool(request_body.is_eleven_plus),
+                profile=profile,
+                subject=request_body.subject,
+            )
+            has_sub = await run_blocking(
+                user_has_subscription,
+                req,
+                resolved_student_id,
+                logged_in_username,
+                required_plan,
+                timeout=12,
+                limit_concurrency=False,
+            )
+            if not has_sub:
+                feature = (
+                    "Review Question"
+                    if request_body.is_tutor_mode
+                    else "11+ year-round review"
+                    if is_year_round_review
+                    else "Detailed review"
+                )
+                return _subscription_required_response(
+                    feature, required_plan, logged_in_username
+                )
+
+        result = await run_blocking(
+            review_homework,
+            request_body.homework,
+            request_body.answers,
+            request_body.subject,
+            profile,
+            quick_review=bool(request_body.quick_review),
+            is_tutor_mode=bool(request_body.is_tutor_mode),
+            homework_doc_id=request_body.homework_doc_id,
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            question_index=request_body.question_index,
+            timeout=120,
+        )
         resp = JSONResponse(content=result)
         if new_anon_session_id:
             resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
         return resp
-    except Exception as exc:
-        logger.error("Error reviewing homework: %s", exc)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error reviewing homework")
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500,
+            content={"success": False, "error": "We could not check the answers just now. Please try again."},
         )
 
 
@@ -1276,36 +1576,51 @@ async def api_review(req: Request, request_body: ReviewRequest):
 async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
     try:
         initialize()
-
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
-
-        # ExplainDeep is a paid feature - require login and active subscription
-        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
-        if not has_sub:
-            if logged_in_username is None:
-                return JSONResponse(status_code=401,
-                                    content={"success": False, "error": "Login required to use Explain in Detail."})
-            return JSONResponse(status_code=402, content={"success": False,
-                                                          "error": "Explain in Detail requires an active subscription."})
-
-        profile = request_body.profile or {}
-        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
-
-        # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
-            explain_deep,
-            request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback
+        profile = dict(request_body.profile or {})
+        profile["student_id"] = resolved_student_id
+        required_plan = _required_premium_plan(
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            profile=profile,
+            subject=request_body.subject,
         )
-        
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            required_plan,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "Explain in Detail", required_plan, logged_in_username
+            )
+
+        result = await run_blocking(
+            explain_deep,
+            request_body.homework,
+            request_body.answers,
+            request_body.subject,
+            profile,
+            request_body.review_feedback or "",
+            homework_doc_id=request_body.homework_doc_id,
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            question_index=request_body.question_index,
+            timeout=120,
+        )
         resp = JSONResponse(content=result)
         if new_anon_session_id:
             resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
         return resp
-    except Exception as exc:
-        logger.error("Error in explain_deep endpoint: %s", exc)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error in explain_deep endpoint")
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500,
+            content={"success": False, "error": "We could not make the detailed explanation just now. Please try again."},
         )
 
 
@@ -1313,56 +1628,101 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
 async def api_improve_practice(req: Request, request_body: ImprovePracticeRequest):
     try:
         initialize()
-
         resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
-
-        # ImprovePractice is a paid feature - require login and active subscription
-        has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
-        if not has_sub:
-            if logged_in_username is None:
-                return JSONResponse(status_code=401,
-                                    content={"success": False, "error": "Login required to use Help me improve."})
-            return JSONResponse(status_code=402,
-                                content={"success": False, "error": "Help me improve requires an active subscription."})
-
-        profile = request_body.profile or {}
-        profile["student_id"] = resolved_student_id # Ensure profile has the resolved student_id
-
-        # 放到线程池执行，避免阻塞事件循环
-        result = await asyncio.to_thread(
-            improve_practice,
-            request_body.homework, request_body.answers, request_body.subject,
-            profile, request_body.review_feedback
+        profile = dict(request_body.profile or {})
+        profile["student_id"] = resolved_student_id
+        required_plan = _required_premium_plan(
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            profile=profile,
+            subject=request_body.subject,
         )
-        
-        resp = JSONResponse(content=result)
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            required_plan,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "Help me improve", required_plan, logged_in_username
+            )
+
+        result = await run_blocking(
+            improve_practice,
+            request_body.homework,
+            request_body.answers,
+            request_body.subject,
+            profile,
+            request_body.review_feedback or "",
+            homework_doc_id=request_body.homework_doc_id,
+            is_eleven_plus=bool(request_body.is_eleven_plus),
+            question_index=request_body.question_index,
+            timeout=120,
+        )
+        resp = JSONResponse(
+            status_code=502 if result.get("llm_no_response") else 200,
+            content=result,
+        )
         if new_anon_session_id:
             resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
         return resp
-    except Exception as exc:
-        logger.error("Error in improve_practice endpoint: %s", exc)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error in improve_practice endpoint")
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500,
+            content={
+                "success": False,
+                "error": "The AI tutor could not generate extra practice content just now. Please try again in a moment.",
+                "llm_no_response": True,
+            },
         )
 
 
+@app.get("/api/progress")
 @app.get("/api/progress/{student_id}")
-async def api_get_progress(req: Request, student_id: str, subject: Optional[str] = None):
-    """Get summary progress data for a student (daily goals, accuracy, streaks, encouraging feedback)."""
-    # Progress tracking is a paid feature - require login and active subscription
+async def api_get_progress(
+    req: Request,
+    student_id: Optional[str] = None,
+    subject: Optional[str] = None,
+):
+    """Return progress only for a learner owned by the signed-in parent."""
     try:
         resolved_student_id, logged_in_username, _ = _get_user_or_anonymous_id(req)
-
-        if logged_in_username is None: # Not logged in
+        if logged_in_username is None:
             return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
-        
-        # Ensure the requested student_id matches the logged-in user's student_id
-        # This prevents one user from viewing another's progress.
-        user_info = get_user_by_username(logged_in_username)
-        if not user_info or user_info.get("student_id") != student_id:
-            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this student's progress."})
 
-        if not user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username):
+        target_student_id = str(student_id or resolved_student_id).strip()
+        from src.webapp.account_store import ensure_account, student_belongs_to_account
+
+        account = await run_blocking(
+            ensure_account,
+            logged_in_username,
+            timeout=10,
+            limit_concurrency=False,
+        )
+        belongs = await run_blocking(
+            student_belongs_to_account,
+            target_student_id,
+            account["id"],
+            timeout=10,
+            limit_concurrency=False,
+        )
+        if not belongs:
+            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this learner's progress."})
+
+        if not await run_blocking(
+            user_has_subscription,
+            req,
+            target_student_id,
+            logged_in_username,
+            timeout=12,
+            limit_concurrency=False,
+        ):
             return JSONResponse(status_code=402, content={"success": False,
                                                           "error": "Progress tracking requires an active subscription."})
 
@@ -1376,42 +1736,36 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
             generate_progress_feedback,
         )
 
-        # 获取原始数据
-        raw_summary = get_progress_summary(student_id)
-        score_history = get_score_history(student_id, subject)
-        topics = get_topic_progress(student_id, subject)
+        raw_summary, score_history, topics, daily_goal, streak, accuracy = await asyncio.gather(
+            asyncio.to_thread(get_progress_summary, target_student_id),
+            asyncio.to_thread(get_score_history, target_student_id, subject),
+            asyncio.to_thread(get_topic_progress, target_student_id, subject),
+            asyncio.to_thread(get_daily_goal_stats, target_student_id),
+            asyncio.to_thread(get_streak_info, target_student_id),
+            asyncio.to_thread(get_accuracy_rate, target_student_id),
+        )
 
-        # 新增指标
-        daily_goal = get_daily_goal_stats(student_id)
-        streak = get_streak_info(student_id)
-        accuracy = get_accuracy_rate(student_id)
-
-        # 转换为前端期望的格式
         total_sessions = raw_summary.get("total_sessions", 0)
-        avg_score = raw_summary.get("average_score")
-        avg_accuracy_pct = round(avg_score * 10, 1) if avg_score else 0
+        avg_accuracy_pct = round(float(raw_summary.get("average_accuracy") or 0), 1)
 
-        # 转换科目数据
         by_subject = []
         for subj in raw_summary.get("subjects", []):
             by_subject.append({
                 "subject": subj["subject"],
-                "avg_accuracy": round(subj["avg_score"] * 10, 1) if subj.get("avg_score") else 0,
+                "avg_accuracy": round(float(subj.get("avg_accuracy") or 0), 1),
                 "total_sessions": subj["count"],
             })
 
-        # 转换分数历史
         score_history_formatted = []
         for s in score_history:
             score_val = s.get("score", 0) or 0
             score_history_formatted.append({
                 "subject": s.get("subject", ""),
                 "score": score_val,
-                "max_score": 10,
+                "max_score": s.get("max_score", 10) or 10,
                 "created_at": s.get("created_at", ""),
             })
 
-        # 生成鼓励性反馈
         feedback = generate_progress_feedback(
             total_sessions=total_sessions,
             avg_accuracy=avg_accuracy_pct,
@@ -1435,10 +1789,11 @@ async def api_get_progress(req: Request, student_id: str, subject: Optional[str]
             "accuracy_rate": accuracy,
             "feedback": feedback,
         }
-    except Exception as exc:
-        logger.error("Error getting progress: %s", exc)
+    except Exception:
+        logger.exception("Error getting progress")
         return JSONResponse(
-            status_code=500, content={"success": False, "error": str(exc)}
+            status_code=500,
+            content={"success": False, "error": "We could not load progress just now. Please try again."},
         )
 
 
@@ -1454,59 +1809,78 @@ async def get_quick_profile(year: int):
     return {"success": True, "profile": profile}
 
 
+def _request_session_owner(request: Request) -> tuple[str, Optional[str]]:
+    resolved_id, username, new_anon_id = _get_user_or_anonymous_id(request)
+    return owner_key(username or resolved_id), new_anon_id
+
+
 @app.post("/api/sessions")
-async def create_session():
-    """Create a tutoring session (replaces Gradio gr.State)."""
-    session_id = str(uuid.uuid4())
-    tutor_sessions[session_id] = {
+async def create_session(request: Request):
+    session_owner, new_anon_id = _request_session_owner(request)
+    payload = {
         "homework": [],
         "profile": {},
         "student_answers": "",
         "doc_id": "",
         "year_group": 3,
         "subject": "Maths",
-        "created_at": datetime.utcnow().isoformat(),
     }
-    return {"success": True, "session_id": session_id}
+    session = await asyncio.to_thread(tutor_session_store.create, session_owner, payload)
+    response = JSONResponse({"success": True, "session_id": session["session_id"]})
+    if new_anon_id:
+        response.set_cookie(
+            "anon_session_id", new_anon_id, httponly=True, samesite="lax",
+            secure=not _dev_mode, max_age=365 * 24 * 60 * 60,
+        )
+    return response
 
 
 @app.get("/api/sessions/{session_id}")
-async def get_session(session_id: str):
-    session = tutor_sessions.get(session_id)
+async def get_session(request: Request, session_id: str):
+    session_owner, _ = _request_session_owner(request)
+    session = await asyncio.to_thread(tutor_session_store.get, session_id, session_owner)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"success": True, "session": session}
 
 
 @app.put("/api/sessions/{session_id}")
-async def update_session(session_id: str, request: SessionUpdateRequest):
-    if session_id not in tutor_sessions:
+async def update_session(request: Request, session_id: str, body: SessionUpdateRequest):
+    session_owner, _ = _request_session_owner(request)
+    try:
+        session = await asyncio.to_thread(
+            tutor_session_store.update,
+            session_id,
+            session_owner,
+            body.model_dump(exclude_unset=True),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail="Session changed; please reload") from exc
+    if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    session = tutor_sessions[session_id]
-    updates = request.model_dump(exclude_unset=True)
-    session.update(updates)
-    session["updated_at"] = datetime.utcnow().isoformat()
     return {"success": True, "session": session}
 
 
 @app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: str):
-    if session_id not in tutor_sessions:
+async def delete_session(request: Request, session_id: str):
+    session_owner, _ = _request_session_owner(request)
+    deleted = await asyncio.to_thread(tutor_session_store.delete, session_id, session_owner)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
-    del tutor_sessions[session_id]
     return {"success": True}
 
 
 @app.post("/api/create-subscription")
 async def create_subscription(request: SubscriptionRequest):
     try:
-        duration_days = {"5_days": 5, "30_days": 30}
-        if request.duration not in duration_days:
+        from src.admin import subscription_duration_days
+
+        if request.duration not in {"5_days", "1_month", "30_days"}:
             raise HTTPException(status_code=400, detail="Invalid duration")
+        duration_days = subscription_duration_days(request.duration)
 
         product_name = (
-            "5-Day Premium Access" if request.duration == "5_days" else "30-Day Premium Access"
+            "5-Day Premium Access" if request.duration == "5_days" else "One-Month Premium Access"
         )
 
         # 开发模式：直接写入本地数据库
@@ -1516,7 +1890,7 @@ async def create_subscription(request: SubscriptionRequest):
                 customer_email=request.email,
                 customer_name=request.name,
                 product_name=product_name,
-                duration_days=duration_days[request.duration],
+                duration_days=duration_days,
             )
             return {
                 "success": True,
@@ -1544,16 +1918,27 @@ async def create_subscription(request: SubscriptionRequest):
 
 
 @app.get("/api/check-subscription")
-async def check_subscription_api(req: Request):
+async def check_subscription_api(req: Request, plan: Optional[str] = None):
     """API endpoint to check subscription status for the current user (logged in or anonymous)."""
     resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
 
-    has_sub = user_has_subscription(req=req, student_id=resolved_student_id, username=logged_in_username)
+    required_plan = plan if plan in PREMIUM_PLAN_NAMES else None
+    has_sub = await run_blocking(
+        user_has_subscription,
+        req,
+        resolved_student_id,
+        logged_in_username,
+        required_plan,
+        timeout=12,
+        limit_concurrency=False,
+    )
 
     response_content = {
         "has_subscription": has_sub,
         "student_id": resolved_student_id,
-        "logged_in": logged_in_username is not None
+        "logged_in": logged_in_username is not None,
+        "required_plan": required_plan,
+        "required_plan_name": PREMIUM_PLAN_NAMES.get(required_plan) if required_plan else None,
     }
     resp = JSONResponse(content=response_content)
     if new_anon_session_id:
@@ -1719,6 +2104,12 @@ async def admin_page():
     return _static_page("static", "admin.html")
 
 
+@app.get("/api/admin/access-status")
+async def admin_access_status(req: Request):
+    username = _require_admin(req)
+    return {"success": True, "is_admin": True, "username": username}
+
+
 @app.get("/api/admin/overview")
 async def admin_overview():
     """管理后台概览数据"""
@@ -1805,13 +2196,16 @@ async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
         raise HTTPException(status_code=400, detail="Email is required")
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
-    if request.duration not in ("5_days", "30_days"):
-        raise HTTPException(status_code=400, detail="Duration must be '5_days' or '30_days'")
+    if request.duration not in ("5_days", "1_month", "30_days"):
+        raise HTTPException(status_code=400, detail="Duration must be '5_days' or '1_month'")
+    if request.plan not in {HOMEWORK_PREMIUM_PLAN, ELEVENPLUS_PREMIUM_PLAN}:
+        raise HTTPException(status_code=400, detail="Please choose a valid premium plan")
     try:
         result = create_admin_subscription(
             email=request.email.strip(),
             name=request.name.strip(),
             duration=request.duration,
+            plan=request.plan,
         )
         return {"success": True, "subscription": result}
     except ValueError as e:

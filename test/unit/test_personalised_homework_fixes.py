@@ -70,3 +70,14 @@ def test_browser_source_persists_primary_and_eleven_plus_choices() -> None:
     assert "homeworkYear" in source
     assert "localStorage.setItem(LEARNING_CHOICES_KEY" in source
 
+
+def test_browser_source_remembers_tell_me_about_entries_without_a_server_call() -> None:
+    from pathlib import Path
+
+    source = (Path(__file__).parents[2] / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "homeworkPrompt" in source
+    assert "elevenPrompt" in source
+    assert "restoreLearningPrompts();" in source
+    assert "field.addEventListener('input', queueLearningChoicesSave);" in source
+    assert "clearSavedLearningPrompts();" in source

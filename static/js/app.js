@@ -68,6 +68,7 @@ let currentHomework = [];
             [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
         };
         const LEARNING_CHOICES_KEY = 'homeworkMagic.learningChoices.v1';
+        let learningChoicesSaveTimer = null;
 
         function loadLearningChoices() {
             try {
@@ -84,17 +85,52 @@ let currentHomework = [];
             const homeworkYear = Number(document.getElementById('homework-year')?.value);
             const homeworkSubject = getSelectedSubjects('homework-subjects')[0];
             const elevenSubject = getSelectedSubjects('eleven-subjects')[0];
+            const homeworkPrompt = document.getElementById('homework-profile');
+            const elevenPrompt = document.getElementById('eleven-profile');
             const value = {
                 ...existing,
                 homeworkYear: Number.isInteger(homeworkYear) && homeworkYear >= 1 && homeworkYear <= 6
                     ? homeworkYear : (existing.homeworkYear || 3),
                 homeworkSubject: homeworkSubject || existing.homeworkSubject || 'Maths',
-                elevenSubject: elevenSubject || existing.elevenSubject || 'Maths'
+                elevenSubject: elevenSubject || existing.elevenSubject || 'Maths',
+                homeworkPrompt: homeworkPrompt ? homeworkPrompt.value : (existing.homeworkPrompt || ''),
+                elevenPrompt: elevenPrompt ? elevenPrompt.value : (existing.elevenPrompt || '')
             };
             try {
                 localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(value));
             } catch (error) {
                 console.warn('Could not save learning choices:', error);
+            }
+        }
+
+        function restoreLearningPrompts() {
+            const saved = loadLearningChoices();
+            const promptFields = [
+                ['homework-profile', 'homeworkPrompt'],
+                ['eleven-profile', 'elevenPrompt']
+            ];
+            promptFields.forEach(([elementId, storageKey]) => {
+                const field = document.getElementById(elementId);
+                if (field && typeof saved[storageKey] === 'string') {
+                    field.value = saved[storageKey];
+                }
+            });
+        }
+
+        function queueLearningChoicesSave() {
+            window.clearTimeout(learningChoicesSaveTimer);
+            learningChoicesSaveTimer = window.setTimeout(saveLearningChoices, 300);
+        }
+
+        function clearSavedLearningPrompts() {
+            window.clearTimeout(learningChoicesSaveTimer);
+            const saved = loadLearningChoices();
+            delete saved.homeworkPrompt;
+            delete saved.elevenPrompt;
+            try {
+                localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(saved));
+            } catch (error) {
+                console.warn('Could not clear saved learner descriptions:', error);
             }
         }
 
@@ -320,9 +356,16 @@ let currentHomework = [];
 
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
+            restoreLearningPrompts();
             loadSubjects();
             const homeworkYear = document.getElementById('homework-year');
             if (homeworkYear) homeworkYear.addEventListener('change', saveLearningChoices);
+            ['homework-profile', 'eleven-profile'].forEach(elementId => {
+                const field = document.getElementById(elementId);
+                if (!field) return;
+                field.addEventListener('input', queueLearningChoicesSave);
+                field.addEventListener('change', saveLearningChoices);
+            });
             checkAdminAccess(); // Show admin tools only to configured administrators
             const resumedPendingHomework = await restoreResumableSession();
 
@@ -398,6 +441,7 @@ let currentHomework = [];
             localStorage.removeItem('student_id');
             localStorage.removeItem('student_email');
             localStorage.removeItem('auth_state');
+            clearSavedLearningPrompts();
             currentStudentId = null;
             currentStudentEmail = null;
             hasSubscription = null;
@@ -745,6 +789,7 @@ let currentHomework = [];
             const subjects = getSelectedSubjects('homework-subjects');
             const mode = getSelectedMode('homework-mode');
             const profileText = document.getElementById('homework-profile').value.trim();
+            saveLearningChoices();
 
             if (subjects.length === 0) {
                 alert('Please select one subject!');
@@ -817,6 +862,7 @@ let currentHomework = [];
             const profileText = document.getElementById('homework-profile').value.trim();
             const year = parseInt(document.getElementById('homework-year').value);
             const mode = getSelectedMode('homework-mode');
+            saveLearningChoices();
 
             if (!profileText) {
                 alert('Please describe the student first! The AI will analyze the description to generate personalized homework.');
@@ -944,6 +990,7 @@ let currentHomework = [];
         }
 
         async function generateCustomHomeworkEleven() {
+            saveLearningChoices();
             // Check subscription first
             if (!await requireSubscription('Smart 11+ Practice', false, 'elevenplus_monthly')) return;
 

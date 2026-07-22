@@ -98,7 +98,12 @@ def _normalise_database_url(value: str) -> str:
 
 
 def _database_url() -> str:
-    configured = os.getenv("BILLING_DATABASE_URL") or os.getenv("DATABASE_URL")
+    # Test fixtures replace DATABASE_URL per test; honour that isolated store
+    # without changing the dedicated billing database used in production.
+    if os.getenv("TESTING", "").lower() in {"1", "true", "yes"}:
+        configured = os.getenv("DATABASE_URL") or os.getenv("BILLING_DATABASE_URL")
+    else:
+        configured = os.getenv("BILLING_DATABASE_URL") or os.getenv("DATABASE_URL")
     if configured:
         return _normalise_database_url(configured.strip())
     fallback = Path(__file__).resolve().parents[2] / "data" / "stripe_billing.db"
@@ -292,10 +297,26 @@ def _active_subscription(username: str) -> Optional[Dict[str, Any]]:
     return _row_dict(row)
 
 
-def billing_account_has_active_subscription(username: str) -> bool:
-    """Fast local entitlement check; this never calls Stripe."""
+def billing_account_has_active_subscription(
+    username: str,
+    required_plans: Optional[list[str]] = None,
+) -> bool:
+    """Fast local entitlement check; this never calls Stripe.
+
+    When a feature names a plan, a Homework Premium subscription must not
+    unlock 11+ Premium (or the reverse). Family and introductory access remain
+    valid across both learning areas.
+    """
     try:
-        return _active_subscription(username) is not None
+        subscription = _active_subscription(username)
+        if subscription is None:
+            return False
+        if not required_plans:
+            return True
+        plan = str(subscription.get("plan") or "")
+        if plan in {"family_monthly", "trial_5day"}:
+            return True
+        return plan in {str(item) for item in required_plans if item}
     except (TypeError, ValueError):
         return False
 

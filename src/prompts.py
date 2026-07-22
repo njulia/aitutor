@@ -104,6 +104,9 @@ Wrong answers:
 
 Write a short quick check with exactly these sections:
 
+## Score
+- Write the score as **X/Y** using the number of questions you checked.
+
 ## What You Did Well
 - Give 1-2 specific, truthful points based only on the correct-work summary.
 - If no answer was correct, praise effort or a useful attempt without pretending it was correct.
@@ -111,6 +114,12 @@ Write a short quick check with exactly these sections:
 ## What to Improve
 - Identify the main mistakes or misconceptions.
 - Group repeated mistakes together where helpful.
+
+## Explanation for Wrong Answer
+For each answer that is wrong or incomplete:
+- Name the question briefly.
+- Give the correct answer, or the best expected answer for an open-ended task.
+- Give one simple method, using no more than 2 short sentences.
 
 ## Keep Going
 - End with a positive, specific message about the pupil's effort and next step.
@@ -146,10 +155,10 @@ Pupil profile:
 Subject: {subject}
 Score summary: {score_summary}
 
-Correct answers, supplied in compact form:
-{correct_answer_items}
+Correct-work summary:
+{correct_work_summary}
 
-Wrong answers, supplied with full marking context:
+Wrong answers:
 {wrong_answer_items}
 
 Write a detailed check with exactly these sections:
@@ -167,7 +176,8 @@ Cover every question in number order.
 
 For each correct answer:
 - Mark it as correct.
-- Give a clear but compact explanation of why it is correct or how to reach it.
+- Explain the method step by step in simple language.
+- Give one short tip to avoid mistake.
 
 For each wrong answer:
 - Name the question briefly.
@@ -229,7 +239,7 @@ Write a short quick check with exactly these sections:
 For each answer that is wrong or incomplete:
 - Name the question briefly.
 - Give the correct answer, or the best expected answer for an open-ended task.
-- Give one simple explanation or method, using no more than 2 short sentences.
+- Give one simple method, using no more than 2 short sentences.
 
 ## Keep Going
 - End with a positive, specific message about the pupil's effort and next step.
@@ -283,7 +293,8 @@ Cover every question in number order.
 
 For each correct answer:
 - Mark it as correct.
-- Give a clear but compact explanation of why it is correct or how to reach it.
+- Explain the method step by step in simple language.
+- Give one short tip to avoid mistake.
 
 For each wrong answer:
 - Name the question briefly.
@@ -383,7 +394,8 @@ Student's Answer/Work:
 Please review the student's answer for this SINGLE question and provide:
 For correct answer:
 - Mark it as correct.
-- Give a clear but compact explanation of why it is correct or how to reach it.
+- Explain the method step by step in simple language.
+- Give one short tip to avoid mistake.
 
 For wrong answer:
 - Mark it as incorrect.

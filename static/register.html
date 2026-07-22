@@ -245,7 +245,8 @@
             if (plan) {
                 const planNames = {
                     '5-day': '5-Day Pass',
-                    '30-day': '30-Day Plan',
+                    '1-month': '1-Month Plan',
+                    '30-day': '1-Month Plan', // Backward-compatible old link.
                 };
                 const badge = document.getElementById('plan-badge');
                 const nameEl = document.getElementById('plan-name');

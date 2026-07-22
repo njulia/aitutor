@@ -1,0 +1,7 @@
+# Test and quality tools. Matching versions are present in requirements-lock.txt.
+pytest==8.3.5
+pytest-asyncio==0.25.3
+pytest-base-url==2.1.0
+pytest-cov==7.1.0
+pytest-playwright==0.8.0
+playwright==1.51.0

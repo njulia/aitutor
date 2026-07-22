@@ -41,6 +41,45 @@ def test_last_primary_year_and_subject_are_restored(
     )
 
 
+def test_last_tell_me_about_entries_are_restored(
+    page: Page,
+    e2e_base_url: str,
+    mock_common_app_endpoints,
+) -> None:
+    page.add_init_script(
+        """
+        localStorage.setItem(
+          'homeworkMagic.learningChoices.v1',
+          JSON.stringify({
+            homeworkPrompt: 'Mia enjoys fractions and needs help with times tables.',
+            elevenPrompt: 'Leo is preparing for GL verbal reasoning.'
+          })
+        );
+        """
+    )
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+
+    expect(page.locator("#homework-profile")).to_have_value(
+        "Mia enjoys fractions and needs help with times tables."
+    )
+    expect(page.locator("#eleven-profile")).to_have_value(
+        "Leo is preparing for GL verbal reasoning."
+    )
+
+    page.locator("#homework-profile").fill("Mia would like more Year 4 fractions practice.")
+    page.get_by_role("button", name=re.compile(r"11\+ practice", re.I)).click()
+    page.locator("#eleven-profile").fill("Leo is now focusing on GL English comprehension.")
+    page.wait_for_timeout(500)
+    page.reload(wait_until="domcontentloaded")
+
+    expect(page.locator("#homework-profile")).to_have_value(
+        "Mia would like more Year 4 fractions practice."
+    )
+    expect(page.locator("#eleven-profile")).to_have_value(
+        "Leo is now focusing on GL English comprehension."
+    )
+
+
 def test_primary_homework_generate_answer_and_review_journey(
     page: Page,
     e2e_base_url: str,

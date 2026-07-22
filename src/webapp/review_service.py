@@ -369,18 +369,23 @@ def _table(rows: List[Dict[str, Any]]) -> str:
         return ""
     header = "| Result | Question | Your answer | Correct answer |\n|---|---|---|---|\n"
     body = []
-    # We use a custom replacement to avoid breaking Markdown table structure.
-    # We replace | with \| and ensure no single-line row breaks.
+
+    def markdown_cell(value: Any) -> str:
+        # A generated multiple-choice question can contain blank lines between
+        # its stem and options. Markdown treats those newlines as the end of the
+        # table, so collapse all whitespace and escape column separators.
+        return re.sub(r"\s+", " ", str(value or "")).strip().replace("|", "\\|")
+
     for row in rows:
         question = _clean_question_text(row["question"])
         values = [
             "✅" if row["is_correct"] else "❌",
-            str(question).replace("\n", " ").replace("|", "\\|"),
-            str(row["student_answer"]).replace("\n", " ").replace("|", "\\|"),
-            str(row["correct_answer"]).replace("\n", " ").replace("|", "\\|"),
+            markdown_cell(question),
+            markdown_cell(row["student_answer"]),
+            markdown_cell(row["correct_answer"]),
         ]
         body.append("| " + " | ".join(values) + " |")
-    return "\n\n## Check your answers\n\n" + header + "\n".join(body) + "\n\n"
+    return "\n\n## Homework Review Summary\n\n" + header + "\n".join(body) + "\n\n"
 
 
 def _score_summary(rows: List[Dict[str, Any]]) -> str:

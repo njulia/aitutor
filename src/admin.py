@@ -13,7 +13,8 @@
 
 import logging
 import os
-from datetime import datetime, timedelta
+from calendar import monthrange
+from datetime import UTC, datetime
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,26 @@ logger = logging.getLogger(__name__)
 def is_dev_mode() -> bool:
     """判断是否处于开发模式（绕过 Stripe）"""
     return os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
+
+
+def subscription_duration_days(duration: str, now: Optional[datetime] = None) -> int:
+    """Translate a test-plan term into days without calling 1 month "30 days".
+
+    Stripe monthly subscriptions renew on the same calendar day where possible.
+    The local development entitlement mirrors that calendar-month boundary.
+    ``30_days`` remains accepted only as a backward-compatible API alias.
+    """
+    if duration == "5_days":
+        return 5
+    if duration not in {"1_month", "30_days"}:
+        raise ValueError("Invalid duration, must be '5_days' or '1_month'")
+
+    start = now or datetime.now(UTC)
+    next_year = start.year + (1 if start.month == 12 else 0)
+    next_month = 1 if start.month == 12 else start.month + 1
+    next_day = min(start.day, monthrange(next_year, next_month)[1])
+    period_end = start.replace(year=next_year, month=next_month, day=next_day)
+    return max(1, (period_end - start).days)
 
 
 # ---- 缓存统计 ----
@@ -177,9 +198,7 @@ def create_admin_subscription(email: str, name: str, duration: str, plan: str = 
         raise ValueError(
             "Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks."
         )
-    duration_days = {"5_days": 5, "30_days": 30}
-    if duration not in duration_days:
-        raise ValueError("Invalid duration, must be '5_days' or '30_days'")
+    duration_days = subscription_duration_days(duration)
 
     from src.progress_db import create_local_subscription
     from src.webapp.account_store import ensure_account, create_subscription
@@ -196,7 +215,7 @@ def create_admin_subscription(email: str, name: str, duration: str, plan: str = 
 
     legacy = create_local_subscription(
         customer_email=email, customer_name=name, product_name=product_name,
-        duration_days=duration_days[duration],
+        duration_days=duration_days,
     )
 
     # 2. Also create a materialised entitlement in the new account store
@@ -205,7 +224,7 @@ def create_admin_subscription(email: str, name: str, duration: str, plan: str = 
         account_id=account["id"],
         plan=plan,
         status="active",
-        duration_days=duration_days[duration]
+        duration_days=duration_days
     )
 
     return {
