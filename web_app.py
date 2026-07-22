@@ -22,7 +22,7 @@ from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -1296,11 +1296,39 @@ async def year_homework_page(year: int):
     raise HTTPException(status_code=404, detail="Page not found")
 
 
-@app.get("/sitemap.xml")
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """Serve crawler rules from the application root.
+
+    Cloud Run does not automatically expose project-root files, so an explicit
+    route is required even when ``robots.txt`` is included in the container.
+    """
+    robots_path = os.path.join(project_root, "robots.txt")
+    if os.path.isfile(robots_path):
+        return FileResponse(robots_path, media_type="text/plain; charset=utf-8")
+
+    # Safe production fallback if the deployment image omits the text file.
+    return PlainTextResponse(
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /uploads/\n"
+        "Disallow: /api/\n\n"
+        "Sitemap: https://homeworkmagic.co.uk/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap():
-    seo_sitemap = os.path.join(project_root, "static", "--seo", "sitemap.xml")
-    if os.path.isfile(seo_sitemap):
-        return FileResponse(seo_sitemap, media_type="application/xml")
+    # The current production bundle stores the sitemap directly under static/.
+    # Keep the legacy --seo location as a fallback for older deployments.
+    sitemap_candidates = (
+        os.path.join(project_root, "static", "sitemap.xml"),
+        os.path.join(project_root, "static", "--seo", "sitemap.xml"),
+    )
+    for sitemap_path in sitemap_candidates:
+        if os.path.isfile(sitemap_path):
+            return FileResponse(sitemap_path, media_type="application/xml")
     raise HTTPException(status_code=404, detail="Sitemap not found")
 
 

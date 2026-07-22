@@ -175,6 +175,7 @@ Write a detailed check with exactly these sections:
 Cover every question in number order.
 
 For each correct answer:
+- Name the question briefly.
 - Mark it as correct.
 - Explain the method step by step in simple language.
 - Give one short tip to avoid mistake.
@@ -292,6 +293,7 @@ Write a detailed check with exactly these sections:
 Cover every question in number order.
 
 For each correct answer:
+- Name the question briefly.
 - Mark it as correct.
 - Explain the method step by step in simple language.
 - Give one short tip to avoid mistake.

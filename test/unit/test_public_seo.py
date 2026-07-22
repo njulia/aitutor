@@ -91,6 +91,23 @@ def test_sitemap_contains_only_the_public_canonical_urls() -> None:
     assert not any("www.homeworkmagic.co.uk" in location for location in locations)
 
 
+def test_robots_endpoint_is_available_and_points_to_canonical_sitemap(client) -> None:
+    response = client.get("/robots.txt")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "User-agent: *" in response.text
+    assert f"Sitemap: {ORIGIN}/sitemap.xml" in response.text
+
+
+def test_sitemap_endpoint_serves_the_current_static_sitemap(client) -> None:
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+    assert f"<loc>{ORIGIN}/</loc>" in response.text
+
+
 @pytest.mark.parametrize(
     ("legacy", "canonical"),
     [
