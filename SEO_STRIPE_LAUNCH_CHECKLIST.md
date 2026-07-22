@@ -133,6 +133,8 @@ Subscribe it to the events listed in `README.md`, enable the Stripe customer por
 - A signed webhook, not the browser redirect, grants access.
 - The confirmation email arrives.
 - Cancellation works in the billing portal.
+- Changing between Homework Premium and 11+ Premium works, and the signed
+  `customer.subscription.updated` webhook changes access to the selected plan.
 - The bank statement description is recognisable as Homework Magic.
 
 ## 6. Final public review

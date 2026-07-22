@@ -28,6 +28,8 @@ class StripeObject(dict):
 class FakeStripe:
     event = None
     subscription = None
+    portal_configurations = []
+    portal_sessions = []
 
     class Customer:
         @staticmethod
@@ -52,6 +54,20 @@ class FakeStripe:
             assert subscription_id == "sub_parent"
             return FakeStripe.subscription
 
+    class Price:
+        @staticmethod
+        def retrieve(price_id):
+            products = {
+                "price_homework": "prod_homework",
+                "price_elevenplus": "prod_elevenplus",
+            }
+            return StripeObject(
+                id=price_id,
+                product=products[price_id],
+                active=True,
+                recurring=StripeObject(interval="month"),
+            )
+
     class Webhook:
         @staticmethod
         def construct_event(payload, signature, secret):
@@ -61,11 +77,24 @@ class FakeStripe:
             return FakeStripe.event
 
     class billing_portal:
+        class Configuration:
+            @staticmethod
+            def list(**kwargs):
+                assert kwargs == {"limit": 100}
+                return StripeObject(data=[])
+
+            @staticmethod
+            def create(**kwargs):
+                FakeStripe.portal_configurations.append(kwargs)
+                return StripeObject(id="bpc_homework_magic")
+
         class Session:
             @staticmethod
             def create(**kwargs):
                 assert kwargs["customer"] == "cus_parent"
-                assert kwargs["return_url"] == "https://homeworkmagic.co.uk/pricing"
+                assert kwargs["return_url"] == "https://homeworkmagic.co.uk/pricing?billing=returned"
+                assert kwargs["configuration"] == "bpc_homework_magic"
+                FakeStripe.portal_sessions.append(kwargs)
                 return StripeObject(url="https://billing.stripe.com/p/session")
 
 
@@ -79,12 +108,19 @@ def isolated_billing_database(tmp_path, monkeypatch):
     monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", billing.DEFAULT_PUBLISHABLE_KEY)
     monkeypatch.setenv("STRIPE_PRICING_TABLE_ID", billing.DEFAULT_PRICING_TABLE_ID)
     monkeypatch.setenv("APP_BASE_URL", "https://homeworkmagic.co.uk")
+    monkeypatch.setenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "price_homework")
+    monkeypatch.setenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "price_elevenplus")
+    monkeypatch.delenv("STRIPE_PRICE_FAMILY_MONTHLY", raising=False)
+    monkeypatch.delenv("STRIPE_PORTAL_CONFIGURATION_ID", raising=False)
     monkeypatch.delenv("DEV_MODE", raising=False)
     monkeypatch.setattr(billing, "_billing_engine", None)
     monkeypatch.setattr(billing, "_billing_engine_url", None)
     monkeypatch.setattr(billing, "_stripe", lambda: FakeStripe)
+    billing._portal_configuration_cache.clear()
     FakeStripe.event = None
     FakeStripe.subscription = None
+    FakeStripe.portal_configurations = []
+    FakeStripe.portal_sessions = []
 
 
 def subscription(status="active"):
@@ -172,6 +208,36 @@ def test_existing_subscription_is_sent_to_portal_not_duplicate_checkout():
     assert billing.create_customer_portal("parent@example.com").startswith(
         "https://billing.stripe.com/"
     )
+    configuration = FakeStripe.portal_configurations[0]
+    assert configuration["features"]["subscription_cancel"]["enabled"] is True
+    assert configuration["features"]["subscription_cancel"]["mode"] == "at_period_end"
+    assert configuration["features"]["subscription_update"]["enabled"] is True
+    assert configuration["features"]["subscription_update"]["default_allowed_updates"] == ["price"]
+    assert {
+        product["product"] for product in configuration["features"]["subscription_update"]["products"]
+    } == {"prod_homework", "prod_elevenplus"}
+
+
+def test_change_and_cancel_open_explicit_stripe_portal_flows():
+    billing.create_pricing_table_session("parent@example.com")
+    FakeStripe.event = event("customer.subscription.created", subscription())
+    billing.process_stripe_webhook(b"signed payload", "timestamp.signature")
+
+    billing.create_customer_portal("parent@example.com", "change")
+    change_flow = FakeStripe.portal_sessions[-1]["flow_data"]
+    assert change_flow["type"] == "subscription_update"
+    assert change_flow["subscription_update"] == {"subscription": "sub_parent"}
+    assert change_flow["after_completion"]["redirect"]["return_url"].endswith(
+        "/pricing?billing=changed"
+    )
+
+    billing.create_customer_portal("parent@example.com", "cancel")
+    cancel_flow = FakeStripe.portal_sessions[-1]["flow_data"]
+    assert cancel_flow["type"] == "subscription_cancel"
+    assert cancel_flow["subscription_cancel"] == {"subscription": "sub_parent"}
+    assert cancel_flow["after_completion"]["redirect"]["return_url"].endswith(
+        "/pricing?billing=cancelled"
+    )
 
 
 def test_pricing_page_contains_only_public_stripe_identifiers():
@@ -185,3 +251,12 @@ def test_pricing_page_contains_only_public_stripe_identifiers():
     assert "client-reference-id" in page
     assert "sk_live_" not in page
     assert "whsec_" not in page
+    assert 'id="change-plan-button"' in page
+    assert 'id="cancel-plan-button"' in page
+    assert "/api/billing/portal/change" not in page  # Built from a fixed allow-listed action.
+    assert "openPortal('change')" in page
+    assert "openPortal('cancel')" in page
+
+    app_page = page_path.with_name("app.html")
+    if app_page.is_file():
+        assert 'id="billing-link"' in app_page.read_text(encoding="utf-8")

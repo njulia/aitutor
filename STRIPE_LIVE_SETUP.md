@@ -53,14 +53,21 @@ Reveal the endpoint signing secret, which starts with `whsec_`. This is differen
 
 References: [Stripe Pricing Table fulfilment](https://docs.stripe.com/payments/checkout/pricing-table#handle-fulfillment-with-the-stripe-api) and [webhook signature verification](https://docs.stripe.com/webhooks/signature).
 
-## 5. Activate the customer portal
+## 5. Activate and brand the customer portal
 
-In Stripe Dashboard, activate the customer portal and allow parents to:
+In Stripe Dashboard, activate the customer portal and review its branding. The
+application creates or reuses its own portal configuration so signed-in parents
+can:
 
 - update payment methods;
 - view invoices;
 - cancel subscriptions;
-- change plans only if that is part of the intended product design.
+- change between the configured monthly plans.
+
+The Stripe secret or restricted key must be allowed to read and create Billing
+Portal configurations and sessions. If you manage a configuration yourself,
+set its `bpc_...` ID as `STRIPE_PORTAL_CONFIGURATION_ID`; it must enable both
+subscription cancellation and price changes for the configured monthly products.
 
 Also enable Stripe's option to limit a Customer to one active subscription. Existing subscribers are sent to the portal instead of being offered a duplicate checkout.
 
@@ -108,9 +115,10 @@ The publishable key and Pricing Table ID are public identifiers; the secret key 
 
 The application creates `stripe_billing_accounts` and `stripe_billing_subscriptions` in `DATABASE_URL` on first use. The production database user therefore needs permission to create these two tables.
 
-## 8. Optional plan labels
+## 8. Plan labels and switching
 
-The existing application treats any active Stripe subscription as premium access. To record friendly plan labels, copy the three live Price IDs from Stripe and set the relevant variables:
+Copy the live Price IDs from Stripe and set the relevant variables. The two
+monthly IDs are required for plan switching and plan-specific access checks:
 
 ```text
 STRIPE_PRICE_TRIAL_5DAY=price_...
@@ -118,7 +126,7 @@ STRIPE_PRICE_HOMEWORK_MONTHLY=price_...
 STRIPE_PRICE_ELEVENPLUS_MONTHLY=price_...
 ```
 
-These labels do not by themselves restrict features by plan. Separate Homework-versus-11+ entitlement enforcement should be implemented only after the intended access rules and Price IDs are confirmed.
+The app verifies plan changes from Stripe webhooks before updating local access.
 
 ## 9. Verify after deployment
 
@@ -129,4 +137,3 @@ These labels do not by themselves restrict features by plan. Separate Homework-v
 5. Confirm `/api/check-subscription` changes to `has_subscription: true` after the webhook.
 6. Cancel in the customer portal and confirm access remains until the paid period ends, then becomes inactive.
 7. Verify no learner name, answer, school information or learning-memory content appears in Stripe metadata.
-

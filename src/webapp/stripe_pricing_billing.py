@@ -8,6 +8,7 @@ and learning-memory content are never sent to Stripe.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -50,6 +51,8 @@ _metadata = MetaData()
 _engine_lock = threading.Lock()
 _billing_engine: Optional[Engine] = None
 _billing_engine_url: Optional[str] = None
+_portal_configuration_lock = threading.Lock()
+_portal_configuration_cache: Dict[str, str] = {}
 
 billing_accounts = Table(
     "stripe_billing_accounts",
@@ -361,15 +364,186 @@ def create_pricing_table_session(username: str) -> Dict[str, Any]:
     }
 
 
-def create_customer_portal(username: str) -> str:
+def _portal_price_ids() -> list[str]:
+    """Return recurring plans that parents may switch between in Stripe."""
+    configured = (
+        os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "").strip(),
+        os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "").strip(),
+        os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", "").strip(),
+    )
+    return list(
+        dict.fromkeys(
+            price_id for price_id in configured if price_id.startswith("price_")
+        )
+    )
+
+
+def _portal_product_catalog(stripe: Any, price_ids: list[str]) -> list[Dict[str, Any]]:
+    """Resolve Price IDs to the Product catalogue required by Stripe Portal."""
+    grouped: Dict[str, list[str]] = {}
+    for price_id in price_ids:
+        price = stripe.Price.retrieve(price_id)
+        if not bool(_object_value(price, "active", False)):
+            raise RuntimeError("A Stripe plan configured for changes is inactive")
+        recurring = _object_value(price, "recurring", {}) or {}
+        if str(_object_value(recurring, "interval", "")) != "month":
+            raise RuntimeError("Stripe plan changes require recurring monthly prices")
+        product = _object_value(price, "product")
+        product_id = str(_object_value(product, "id", product) or "")
+        if not product_id.startswith("prod_"):
+            raise RuntimeError("Stripe returned an invalid product for a monthly plan")
+        grouped.setdefault(product_id, []).append(price_id)
+    return [
+        {
+            "product": product_id,
+            "prices": prices,
+            "adjustable_quantity": {"enabled": False},
+        }
+        for product_id, prices in sorted(grouped.items())
+    ]
+
+
+def _portal_configuration(stripe: Any, *, enable_plan_changes: bool) -> str:
+    """Create one idempotent, app-owned portal configuration per plan catalogue.
+
+    Stripe's default portal can have plan switching disabled. Supplying this
+    explicit configuration makes cancellation and switching predictable in
+    every deployment while retaining Stripe's hosted confirmation screens.
+    """
+    price_ids = _portal_price_ids() if enable_plan_changes else []
+    if enable_plan_changes and len(price_ids) < 2:
+        raise RuntimeError(
+            "At least two monthly Stripe Price IDs are required for plan changes"
+        )
+
+    configured_id = os.getenv("STRIPE_PORTAL_CONFIGURATION_ID", "").strip()
+    if configured_id:
+        if not configured_id.startswith("bpc_"):
+            raise RuntimeError("STRIPE_PORTAL_CONFIGURATION_ID is invalid")
+        return configured_id
+
+    stripe_mode = "live" if _is_live_key(_publishable_key()) else "test"
+    catalogue_key = f"{stripe_mode}:" + (",".join(sorted(price_ids)) or "cancel-only")
+    fingerprint = hashlib.sha256(catalogue_key.encode("utf-8")).hexdigest()[:24]
+    cached = _portal_configuration_cache.get(fingerprint)
+    if cached:
+        return cached
+
+    with _portal_configuration_lock:
+        cached = _portal_configuration_cache.get(fingerprint)
+        if cached:
+            return cached
+
+        configurations = stripe.billing_portal.Configuration.list(limit=100)
+        for existing in _object_value(configurations, "data", []) or []:
+            metadata = _object_value(existing, "metadata", {}) or {}
+            if (
+                bool(_object_value(existing, "active", False))
+                and str(_object_value(metadata, "catalogue_fingerprint", ""))
+                == fingerprint
+                and str(_object_value(metadata, "schema", ""))
+                == "subscription_management_v1"
+            ):
+                configuration_id = str(_object_value(existing, "id", ""))
+                if configuration_id.startswith("bpc_"):
+                    _portal_configuration_cache[fingerprint] = configuration_id
+                    return configuration_id
+
+        products = _portal_product_catalog(stripe, price_ids) if price_ids else []
+        subscription_update: Dict[str, Any] = {"enabled": bool(products)}
+        if products:
+            subscription_update.update(
+                {
+                    "default_allowed_updates": ["price"],
+                    "proration_behavior": "create_prorations",
+                    "products": products,
+                }
+            )
+        base_url = _base_url()
+        configuration = stripe.billing_portal.Configuration.create(
+            name="Homework Magic subscription management",
+            default_return_url=f"{base_url}/pricing",
+            business_profile={
+                "headline": "Manage your Homework Magic plan securely",
+                "privacy_policy_url": f"{base_url}/privacy",
+                "terms_of_service_url": f"{base_url}/terms",
+            },
+            features={
+                "customer_update": {"enabled": False, "allowed_updates": []},
+                "invoice_history": {"enabled": True},
+                "payment_method_update": {"enabled": True},
+                "subscription_cancel": {
+                    "enabled": True,
+                    "mode": "at_period_end",
+                    "proration_behavior": "none",
+                    "cancellation_reason": {
+                        "enabled": True,
+                        "options": [
+                            "too_expensive",
+                            "missing_features",
+                            "switched_service",
+                            "unused",
+                            "other",
+                        ],
+                    },
+                },
+                "subscription_update": subscription_update,
+            },
+            metadata={
+                "service": "homework_magic",
+                "catalogue_fingerprint": fingerprint,
+                "schema": "subscription_management_v1",
+            },
+            idempotency_key=f"homework-magic-portal-v1-{fingerprint}",
+        )
+        configuration_id = str(_object_value(configuration, "id", ""))
+        if not configuration_id.startswith("bpc_"):
+            raise RuntimeError("Stripe did not return a valid portal configuration")
+        _portal_configuration_cache[fingerprint] = configuration_id
+        return configuration_id
+
+
+def create_customer_portal(username: str, action: str = "manage") -> str:
+    if action not in {"manage", "change", "cancel"}:
+        raise ValueError("Unknown billing action")
     account = ensure_billing_account(username)
     customer_id = account.get("stripe_customer_id")
     if not customer_id:
         raise ValueError("No Stripe billing account exists yet")
-    portal = _stripe().billing_portal.Session.create(
-        customer=customer_id,
-        return_url=f"{_base_url()}/pricing",
-    )
+    subscription = _active_subscription(username)
+    if action in {"change", "cancel"} and not subscription:
+        raise ValueError("No active subscription is available to change or cancel")
+
+    stripe = _stripe()
+    return_url = f"{_base_url()}/pricing?billing=returned"
+    can_change_plan = len(_portal_price_ids()) >= 2
+    session_params: Dict[str, Any] = {
+        "customer": customer_id,
+        "return_url": return_url,
+        "configuration": _portal_configuration(
+            stripe,
+            enable_plan_changes=action == "change"
+            or (action == "manage" and can_change_plan),
+        ),
+    }
+    if action in {"change", "cancel"}:
+        flow_type = (
+            "subscription_update" if action == "change" else "subscription_cancel"
+        )
+        subscription_id = str(subscription["stripe_subscription_id"])
+        completion = "changed" if action == "change" else "cancelled"
+        session_params["flow_data"] = {
+            "type": flow_type,
+            flow_type: {"subscription": subscription_id},
+            "after_completion": {
+                "type": "redirect",
+                "redirect": {
+                    "return_url": f"{_base_url()}/pricing?billing={completion}"
+                },
+            },
+        }
+
+    portal = stripe.billing_portal.Session.create(**session_params)
     portal_url = str(_object_value(portal, "url", ""))
     if not portal_url.startswith("https://"):
         raise RuntimeError("Stripe did not return a secure billing portal URL")
@@ -607,17 +781,33 @@ def build_stripe_pricing_router(
                 "cancel_at_period_end": bool(subscription["cancel_at_period_end"]),
             }
         return JSONResponse(
-            {"success": True, "has_subscription": bool(subscription), "subscription": public_subscription},
+            {
+                "success": True,
+                "has_subscription": bool(subscription),
+                "subscription": public_subscription,
+                "management": {
+                    "can_change": bool(subscription) and len(_portal_price_ids()) >= 2,
+                    "can_cancel": bool(subscription)
+                    and not bool(subscription.get("cancel_at_period_end")),
+                },
+            },
             headers={"Cache-Control": "no-store, private"},
         )
 
-    @router.post("/portal")
-    async def customer_portal(request: Request):
+    async def portal_response(request: Request, action: str):
         username = require_parent(request)
         try:
-            portal_url = await asyncio.to_thread(create_customer_portal, username)
+            portal_url = await asyncio.to_thread(
+                create_customer_portal, username, action
+            )
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error("Stripe customer portal is not ready: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Subscription management is temporarily unavailable.",
+            ) from exc
         except Exception as exc:
             logger.exception("Unable to create Stripe customer portal session")
             raise HTTPException(
@@ -625,9 +815,19 @@ def build_stripe_pricing_router(
                 detail="The billing portal is temporarily unavailable. Please try again.",
             ) from exc
         return JSONResponse(
-            {"success": True, "portal_url": portal_url},
+            {"success": True, "portal_url": portal_url, "action": action},
             headers={"Cache-Control": "no-store, private"},
         )
+
+    @router.post("/portal")
+    async def customer_portal(request: Request):
+        return await portal_response(request, "manage")
+
+    @router.post("/portal/{action}")
+    async def customer_portal_action(action: str, request: Request):
+        if action not in {"change", "cancel"}:
+            raise HTTPException(status_code=404, detail="Unknown billing action")
+        return await portal_response(request, action)
 
     @router.post("/stripe/webhook")
     async def stripe_webhook(request: Request):

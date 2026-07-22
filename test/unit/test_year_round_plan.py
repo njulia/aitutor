@@ -197,7 +197,9 @@ def test_rag_marking_uses_detail_llm_with_answer_key_context(monkeypatch) -> Non
 
     assert result["correct_count"] == 1
     assert "Add the hundreds carefully" in result["review"]
+    assert "Add five hundreds" in result["review"]
     assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
     prompt_messages = llm.complete.call_args.args[0]
-    assert "Add five hundreds" in prompt_messages[0]["content"]
+    assert "Add five hundreds" not in prompt_messages[0]["content"]
+    assert "Line up the place values" not in prompt_messages[0]["content"]
     assert "1,500" in prompt_messages[0]["content"]

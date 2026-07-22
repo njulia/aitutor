@@ -177,7 +177,10 @@ Create the webhook endpoint in Stripe as
 - `customer.subscription.paused`
 - `customer.subscription.resumed`
 
-Enable and configure Stripe's customer portal for the live account. Before
+Enable and brand Stripe's customer portal for the live account. The server
+creates an app-owned configuration that enables end-of-period cancellation and
+switching between the configured monthly Price IDs. A restricted Stripe key
+therefore needs Billing Portal configuration and session permissions. Before
 deployment, compare the live values with `.env.example` and the launch checklist. The server
 validates that every advertised Price is active, belongs to the expected mode,
 uses GBP, and matches the advertised amount and billing interval.

@@ -75,6 +75,9 @@
       margin: 1rem 0;
     }
     #account-actions { text-align: center; }
+    #account-actions .button { margin: .3rem; }
+    #subscription-summary { margin: 0 0 .8rem; font-weight: 700; }
+    .billing-help { margin: .8rem auto 0; max-width: 680px; color: #52606d; font-size: .94rem; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -162,8 +165,12 @@
 
   <p id="status" role="status" aria-live="polite"></p>
   <div id="account-actions" hidden>
+    <p id="subscription-summary"></p>
     <a class="button" href="/app">Continue learning</a>
-    <button class="button secondary" type="button" id="portal-button">Manage subscription</button>
+    <button class="button secondary" type="button" id="change-plan-button">Change plan</button>
+    <button class="button secondary" type="button" id="cancel-plan-button">Cancel subscription</button>
+    <button class="button secondary" type="button" id="portal-button">Payment details &amp; invoices</button>
+    <p class="billing-help">Changes and cancellation are completed on Stripe’s secure billing page. Cancelling a monthly plan stops its next renewal; access continues to the end of the paid month.</p>
   </div>
 
   <section class="card privacy">
@@ -199,7 +206,11 @@ const stripePanel = document.getElementById('stripe-panel');
 const pricingTableContainer = document.getElementById('stripe-pricing-table-container');
 const pricingTableTemplate = document.getElementById('stripe-pricing-table-template');
 const accountActions = document.getElementById('account-actions');
+const subscriptionSummary = document.getElementById('subscription-summary');
+const changePlanButton = document.getElementById('change-plan-button');
+const cancelPlanButton = document.getElementById('cancel-plan-button');
 const portalButton = document.getElementById('portal-button');
+const billingButtons = [changePlanButton, cancelPlanButton, portalButton];
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -228,9 +239,29 @@ function showActiveSubscription(data) {
   planSummary.hidden = true;
   stripePanel.hidden = true;
   accountActions.hidden = false;
+  const planNames = {
+    homework_monthly: 'Homework Premium',
+    elevenplus_monthly: '11+ Premium',
+    family_monthly: 'Family Premium',
+    trial_5day: 'Five-day access'
+  };
+  const planName = planNames[data.subscription?.plan] || 'Homework Magic';
   const end = data.subscription?.current_period_end;
-  const endText = end ? ` Your current access runs to ${new Date(end).toLocaleDateString('en-GB')}.` : '';
-  setStatus(`Your Homework Magic plan is active.${endText}`);
+  const endDate = end ? new Date(end).toLocaleDateString('en-GB') : '';
+  subscriptionSummary.textContent = `Current plan: ${planName}`;
+  changePlanButton.disabled = data.management?.can_change === false;
+  changePlanButton.title = changePlanButton.disabled
+    ? 'Plan changes are temporarily unavailable. Please contact support.' : '';
+  const cancellationScheduled = data.subscription?.cancel_at_period_end === true;
+  cancelPlanButton.disabled = cancellationScheduled || data.management?.can_cancel === false;
+  cancelPlanButton.textContent = cancellationScheduled ? 'Cancellation scheduled' : 'Cancel subscription';
+  if (cancellationScheduled) {
+    const until = endDate ? ` Access continues until ${endDate}.` : '';
+    setStatus(`Your ${planName} plan will not renew.${until}`);
+    return;
+  }
+  const endText = endDate ? ` Your current paid month runs to ${endDate}.` : '';
+  setStatus(`Your ${planName} plan is active.${endText}`);
 }
 
 async function activatePricingTable() {
@@ -289,29 +320,47 @@ async function pollForAccess() {
   setStatus('Thank you. Stripe is still confirming your plan. Please refresh this page in a moment.');
 }
 
-async function openPortal() {
-  portalButton.disabled = true;
+async function openPortal(action = 'manage') {
+  const previousDisabledState = billingButtons.map(button => button.disabled);
+  billingButtons.forEach(button => { button.disabled = true; });
+  const labels = {
+    change: 'Opening Stripe to change your plan…',
+    cancel: 'Opening Stripe to cancel your subscription…',
+    manage: 'Opening your secure Stripe billing details…'
+  };
+  setStatus(labels[action] || labels.manage);
   try {
-    const response = await fetch('/api/billing/portal', {
+    const endpoint = action === 'manage' ? '/api/billing/portal' : `/api/billing/portal/${action}`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json' }
     });
     const data = await readJson(response);
+    const portalUrl = new URL(data.portal_url);
+    if (portalUrl.protocol !== 'https:') throw new Error('Stripe returned an invalid billing link.');
     window.location.assign(data.portal_url);
   } catch (error) {
-    portalButton.disabled = false;
+    billingButtons.forEach((button, index) => { button.disabled = previousDisabledState[index]; });
     setStatus(error.message || 'The billing portal is temporarily unavailable.', true);
   }
 }
 
-portalButton.addEventListener('click', openPortal);
+changePlanButton.addEventListener('click', () => openPortal('change'));
+cancelPlanButton.addEventListener('click', () => openPortal('cancel'));
+portalButton.addEventListener('click', () => openPortal('manage'));
 const params = new URLSearchParams(window.location.search);
 if (params.get('checkout') === 'success') {
   setStatus('Thank you. Stripe is confirming your plan…');
   pollForAccess();
 } else if (params.get('checkout') === 'cancelled') {
   setStatus('Checkout was cancelled. No changes were made.', true);
+  initialiseBilling();
+} else if (params.get('billing') === 'changed') {
+  setStatus('Your plan change was submitted securely. Stripe is confirming it…');
+  initialiseBilling();
+} else if (params.get('billing') === 'cancelled') {
+  setStatus('Your cancellation was submitted securely. Stripe is confirming it…');
   initialiseBilling();
 } else {
   initialiseBilling();

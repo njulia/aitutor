@@ -82,7 +82,8 @@ def test_detailed_rag_explanation_is_local_and_child_friendly(monkeypatch) -> No
     assert result["success"] is True
     assert result["model_tier"] == "plus"
     assert "Connect one half with 0.5" in result["explanation"]
+    assert "One half means one of two equal parts" in result["explanation"]
     assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
     prompt_messages = llm.complete.call_args.args[0]
-    assert "One half means one of two equal parts" in prompt_messages[0]["content"]
-    assert "Link one half, 50%, and 0.5" in prompt_messages[0]["content"]
+    assert "One half means one of two equal parts" not in prompt_messages[0]["content"]
+    assert "Link one half, 50%, and 0.5" not in prompt_messages[0]["content"]
