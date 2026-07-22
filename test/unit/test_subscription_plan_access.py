@@ -14,6 +14,9 @@ def _configure_test_billing(monkeypatch, **prices) -> None:
     monkeypatch.setenv("STRIPE_EXPECTED_LIVEMODE", "false")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_unit")
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_unit")
+    monkeypatch.setenv("DATA_CONTROLLER_NAME", "Homework Magic Test Operator")
+    monkeypatch.setenv("PRIVACY_POSTAL_ADDRESS", "1 Test Road, London, SW1A 1AA")
+    monkeypatch.setenv("BUSINESS_CONTACT_EMAIL", "support@example.com")
     for name, value in prices.items():
         monkeypatch.setenv(name, value)
 
@@ -85,6 +88,7 @@ def test_trial_checkout_is_one_time_and_non_renewing(monkeypatch) -> None:
     assert captured["line_items"] == [{"price": "price_trial", "quantity": 1}]
     assert "subscription_data" not in captured
     assert captured["allow_promotion_codes"] is False
+    assert captured["consent_collection"] == {"terms_of_service": "required"}
     assert "does not renew" in captured["custom_text"]["submit"]["message"]
 
 
@@ -98,6 +102,19 @@ def test_trial_can_only_be_started_once(monkeypatch) -> None:
             {"id": "acct_1", "email": "parent@example.com", "stripe_customer_id": "cus_1"},
             billing.TRIAL_PLAN,
         )
+
+
+def test_checkout_is_blocked_until_public_merchant_identity_is_configured(monkeypatch) -> None:
+    _configure_test_billing(monkeypatch, STRIPE_PRICE_TRIAL_5DAY="price_trial")
+    monkeypatch.delenv("DATA_CONTROLLER_NAME")
+    monkeypatch.delenv("PRIVACY_POSTAL_ADDRESS")
+    monkeypatch.delenv("BUSINESS_CONTACT_EMAIL")
+
+    issues = billing.billing_configuration_issues(billing.TRIAL_PLAN)
+
+    assert any("DATA_CONTROLLER_NAME" in issue for issue in issues)
+    assert any("PRIVACY_POSTAL_ADDRESS" in issue for issue in issues)
+    assert any("BUSINESS_CONTACT_EMAIL" in issue for issue in issues)
 
 
 def test_paid_trial_webhook_grants_five_days(monkeypatch) -> None:
@@ -310,6 +327,9 @@ def test_live_checkout_verifies_price_before_opening_session(monkeypatch) -> Non
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_unit")
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_live_unit")
     monkeypatch.setenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "price_live_homework_unit")
+    monkeypatch.setenv("DATA_CONTROLLER_NAME", "Homework Magic Test Operator")
+    monkeypatch.setenv("PRIVACY_POSTAL_ADDRESS", "1 Test Road, London, SW1A 1AA")
+    monkeypatch.setenv("BUSINESS_CONTACT_EMAIL", "support@example.com")
     monkeypatch.setattr(billing, "_stripe", lambda: fake_stripe)
     monkeypatch.setattr(billing, "get_active_subscription", lambda _account_id: None)
 
@@ -322,4 +342,5 @@ def test_live_checkout_verifies_price_before_opening_session(monkeypatch) -> Non
     assert captured["retrieved"] == ["price_live_homework_unit"]
     assert captured["checkout"]["mode"] == "subscription"
     assert captured["checkout"]["submit_type"] == "subscribe"
+    assert captured["checkout"]["consent_collection"] == {"terms_of_service": "required"}
     assert "renews monthly until cancelled" in captured["checkout"]["custom_text"]["submit"]["message"]

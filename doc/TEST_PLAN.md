@@ -1,55 +1,29 @@
-# Test plan
+# Risk-based test plan
 
-## Objectives
+## Release gates
 
-1. Prevent regressions in parent-account ownership and learner isolation.
-2. Confirm learning flows are understandable for pupils aged 5–11.
-3. Check privacy-protective defaults and safeguarding responses.
-4. Keep AI, database and payment failures from destabilising the site.
-5. Control latency, prompt size and unnecessary provider calls.
+A release is ready only when:
 
-## Test layers
+- Python compilation succeeds;
+- unit, API and integration suites pass;
+- affected browser journeys pass;
+- no high-severity security, privacy, billing or child-safety defect remains open;
+- public prices, product descriptions and policy pages match the configured payment products;
+- database and webhook migrations have a rollback or forward-fix plan.
 
-| Layer | Folder | Main purpose |
+## Priority areas
+
+| Priority | Area | Main evidence |
 |---|---|---|
-| Unit | `test/unit` | Pure functions, validation, privacy filters, RAG and storage contracts |
-| API | `test/api` | Authentication, authorisation, public routes and request/response contracts |
-| Integration | `test/integration` | Complete multi-route family and learning journeys |
-| Browser E2E | `test/e2e` | Real pages, JavaScript, forms, redirects and learner interactions |
+| Critical | Parent authentication and account ownership | API and browser tests |
+| Critical | Payment webhook verification and entitlements | Billing unit/API tests |
+| Critical | Child privacy, content minimisation and safeguarding | Privacy/safety tests |
+| High | Homework generation, review and model routing | Contract and routing tests |
+| High | Progress, memory and retention | Store/API tests |
+| High | Public SEO, legal identity and refund disclosures | Public-site contract tests |
+| Medium | Accessibility and responsive presentation | Browser tests and manual review |
+| Medium | Performance under concurrent AI requests | Timeouts, bulkhead tests and staging load checks |
 
-## Required release gates
+## Regression selection
 
-- Python compilation passes.
-- Unit, API and integration tests pass.
-- Coverage is at least 55% for the active `src.webapp` package and `web_app`; raise this ratchet as coverage grows.
-- Chromium E2E tests pass in CI.
-- No test requires a production secret.
-- No raw child content appears in test logs or browser-storage assertions.
-- Administrator routes reject anonymous and normal family accounts.
-- Account A cannot read or modify Account B's learner profile.
-- Safety and privacy pages remain accessible without login.
-
-## High-risk scenarios
-
-- Session theft or email-bearing session cookies.
-- Insecure direct object references to learner IDs.
-- Open redirects after login or registration.
-- Answer keys exposed before submission.
-- A child identifier sent to an AI provider.
-- Raw learner answers persisted when disabled.
-- Uploaded file decompression or extraction abuse.
-- Stripe access granted without a verified local subscription state.
-- AI timeout causing request pile-up.
-- Local SQLite or Chroma state used in multi-instance production.
-
-## Manual checks before launch
-
-- Keyboard-only navigation and visible focus.
-- Screen-reader labels on authentication, homework and payment forms.
-- Mobile layouts at 320, 375 and 768 pixels.
-- Plain-language review by a UK primary teacher.
-- Safeguarding review by an appropriate professional.
-- Parent account deletion, learner deletion and data export.
-- Stripe test checkout, webhook, cancellation and failed payment.
-- Password-reset email delivery and one-time token behaviour.
-- Database backup restore drill.
+Changes to shared middleware, accounts, databases, billing, prompts or learner rendering require the full non-browser suite. HTML-only public-site changes require the focused SEO/legal tests plus browser smoke checks. Payment changes require test-mode Checkout, portal and signed webhook verification before any controlled live test.

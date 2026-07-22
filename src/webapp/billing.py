@@ -120,6 +120,16 @@ def billing_configuration_issues(plan: Optional[str] = None) -> list[str]:
     if not webhook_secret.startswith("whsec_"):
         issues.append("STRIPE_WEBHOOK_SECRET is not configured")
 
+    public_business_fields = {
+        "DATA_CONTROLLER_NAME": "Homework Magic",
+        "PRIVACY_POSTAL_ADDRESS": "Homework Magic",
+        "BUSINESS_CONTACT_EMAIL": "contact@homeworkmagic.co.uk",
+    }
+    for variable, description in public_business_fields.items():
+        value = os.getenv(variable, "").strip()
+        if not value or value.casefold() in {"todo", "tbd", "..."} or value.startswith("["):
+            issues.append(f"{variable} must contain {description} before billing is enabled")
+
     requested_plans = (plan,) if plan else REQUIRED_PUBLIC_PLANS
     plans = _plans()
     for plan_name in requested_plans:
@@ -254,6 +264,7 @@ def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
                 + f"{base}/terms and {base}/refund-policy."
             }
         },
+        consent_collection={"terms_of_service": "required"},
         allow_promotion_codes=not is_trial,
         idempotency_key=(
             f"checkout-{account['id']}-{plan}"

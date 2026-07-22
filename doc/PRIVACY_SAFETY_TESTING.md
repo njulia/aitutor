@@ -1,47 +1,26 @@
-# Privacy and safeguarding testing
+# Privacy and safety testing for children under 12
 
-This document describes engineering checks. It is not a legal opinion or a substitute for a child-focused DPIA and professional safeguarding review.
+Homework Magic is parent-managed and designed for UK primary learners. Testing must follow data minimisation and use fictional identities and homework.
 
-## Privacy contracts covered by automated tests
+## Automated checks
 
-- Parent or guardian email is used for account ownership.
-- Learner profiles accept nicknames and reject obvious contact or school information.
-- Session cookies are HttpOnly and do not contain the email address.
-- Learner IDs are pseudonymous and are not derived from IP addresses.
-- One account cannot access another account's learners, memory or progress.
-- Learning memory is off by default.
-- Raw questions and answers are removed from structured memory metadata.
-- Memory exports do not include the parent email.
-- Admin pages and APIs are allowlist protected.
-- Public pages do not load learner JavaScript from third-party CDNs.
-- Browser storage checks reject obvious email, school and address fields.
+- Parent ownership is required for learner, progress, memory and billing records.
+- Learner profiles reject or minimise unnecessary identifying details.
+- Raw learner and AI content storage remains off by default.
+- Password-reset tokens are short-lived, single-use and stored safely.
+- Support messages cannot be read by another parent or anonymous session.
+- Child profiles, answers and progress are not sent in payment metadata.
+- Model prompts and rendered model output preserve safety boundaries.
+- Explicit safeguarding concerns return trusted-adult, emergency and Childline guidance.
+- Public privacy text identifies the controller, purposes, lawful bases, processors, retention, rights and contact routes.
 
-## Safeguarding contracts covered by automated tests
+## Manual review
 
-- Explicit first-person danger disclosures interrupt normal tutoring.
-- Safety guidance uses simple language suitable for ages 5–11.
-- The safety page tells the child to contact a trusted adult.
-- Immediate-danger guidance includes 999.
-- Childline guidance includes 0800 1111.
-- Ordinary maths and homework text is not incorrectly blocked.
+- Use age-appropriate words and short instructions in learner journeys.
+- Keep purchase prompts and payment details in parent/guardian areas.
+- Never ask a child for a full name, school, address, phone number, exact date of birth or password.
+- Confirm optional learning memory can be reviewed and controlled by the parent.
+- Check that deletion and privacy-request routes are understandable and reachable.
+- Review third-party AI, email, hosting, monitoring and payment configurations before introducing a new processor or transfer location.
 
-## Manual safeguarding tests
-
-Use fictional content only. Do not enter real child disclosures into staging systems.
-
-Check that:
-
-- the intervention is calm and does not interrogate the child;
-- it does not promise secrecy;
-- it tells the child to seek a trusted adult;
-- it distinguishes immediate danger from general worry;
-- normal tutoring stops during an urgent intervention; and
-- logs do not retain the disclosure text when raw storage is disabled.
-
-## Test-data rules
-
-- Use invented learner nicknames.
-- Use `example.com` email addresses.
-- Never use a real school, address, phone number or date of birth.
-- Never copy a real child's homework, medical information or disclosure into tests.
-- Keep screenshots and Playwright traces private because they can contain form data.
+Any test artefact containing real child or parent data must be stopped, reported and handled under the incident process; it must not be copied into bug trackers, screenshots or model prompts.

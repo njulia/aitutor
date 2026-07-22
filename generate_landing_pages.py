@@ -21,7 +21,7 @@ import os
 # ---------------------------------------------------------------------------
 
 SITE_NAME = "Homework Magic"
-SITE_URL = "https://www.homeworkmagic.co.uk"
+SITE_URL = "https://homeworkmagic.co.uk"
 TOOL_URL = "/app"
 
 project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -283,7 +283,7 @@ HOME_SECTIONS = [
 HOME_FAQS = [
     {
         "q": "Is Homework Magic free to use?",
-        "a": "Yes, Homework Magic is completely free for personal use with your own AI API key.",
+        "a": "Families can try available curriculum questions before choosing a plan. Paid parent plans add Tutor mode, deeper explanations, progress and targeted practice.",
     },
     {
         "q": "Does it follow the UK National Curriculum?",

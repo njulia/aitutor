@@ -6,8 +6,8 @@ The current refactor focuses on child privacy, safeguarding, correct account own
 
 ## Read first
 
-- `doc/REFACTOR_REPORT_2026-07-18.md` — changes, tests and production actions
-- `doc/UK_CHILD_SAFETY_AND_DPIA_CHECKLIST.md` — launch governance checklist
+- `SEO_STRIPE_LAUNCH_CHECKLIST.md` — canonical domain, Google indexing and payment review
+- `doc/PRIVACY_SAFETY_TESTING.md` — child-focused privacy and safety checks
 - `doc/README.md` — documentation index
 - `.env.example` — configuration without real secrets
 
@@ -71,7 +71,7 @@ RUN_E2E=1 E2E_BASE_URL=http://127.0.0.1:5000 pytest -q test/e2e --browser chromi
 
 See `doc/TESTING.md` and `doc/END_TO_END_TESTING.md` for the complete test guide.
 
-Verified result: **93 unit/API/integration tests passed and 16 Chromium E2E tests passed**. The active web-layer coverage gate is 55%, with 59.28% measured coverage.
+Current verified result: **247 unit/API/integration tests passed**. Browser tests are opt-in and must be run separately against a local or staging server.
 
 ## Production essentials
 
@@ -79,15 +79,21 @@ Set at minimum:
 
 ```dotenv
 DEV_MODE=false
-APP_BASE_URL=https://www.homeworkmagic.co.uk
-PUBLIC_BASE_URL=https://www.homeworkmagic.co.uk
-CORS_ORIGINS=https://www.homeworkmagic.co.uk
+APP_BASE_URL=https://homeworkmagic.co.uk
+PUBLIC_BASE_URL=https://homeworkmagic.co.uk
+CORS_ORIGINS=https://homeworkmagic.co.uk
+CANONICAL_REDIRECT_HOSTS=www.homeworkmagic.co.uk
 COOKIE_SECURE=true
 DATABASE_URL=postgresql+psycopg://...
 PGVECTOR_DATABASE_URL=postgresql+psycopg://...
 DATA_CONTROLLER_NAME=...
 PRIVACY_CONTACT_EMAIL=...
 PRIVACY_POSTAL_ADDRESS=...
+BUSINESS_CONTACT_EMAIL=contact@homeworkmagic.co.uk
+# Optional public details when applicable:
+BUSINESS_SUPPORT_PHONE=...
+BUSINESS_REGISTRATION_NUMBER=...
+BUSINESS_VAT_STATUS=Not VAT registered
 ADMIN_EMAILS=...
 AUTH_SECRET=...
 SESSION_SECRET=...
@@ -99,6 +105,9 @@ WEB_CONCURRENCY=1
 ```
 
 Use a secret manager rather than placing production secrets in a file.
+
+Before submitting the domain to Google or requesting live payment review, follow
+[`SEO_STRIPE_LAUNCH_CHECKLIST.md`](SEO_STRIPE_LAUNCH_CHECKLIST.md).
 
 ## Privacy and safeguarding defaults
 
@@ -154,11 +163,11 @@ For live billing, also set:
 STRIPE_BILLING_ENABLED=true
 STRIPE_EXPECTED_LIVEMODE=true
 STRIPE_SECRET_KEY=sk_live_...              # or a suitably scoped rk_live_ restricted key
-APP_BASE_URL=https://www.homeworkmagic.co.uk
+APP_BASE_URL=https://homeworkmagic.co.uk
 ```
 
 Create the webhook endpoint in Stripe as
-`https://www.homeworkmagic.co.uk/api/billing/stripe/webhook` and subscribe it to:
+`https://homeworkmagic.co.uk/api/billing/stripe/webhook` and subscribe it to:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
@@ -169,7 +178,7 @@ Create the webhook endpoint in Stripe as
 - `customer.subscription.resumed`
 
 Enable and configure Stripe's customer portal for the live account. Before
-deployment, compare the live values with `.env.stripe-live.example`. The server
+deployment, compare the live values with `.env.example` and the launch checklist. The server
 validates that every advertised Price is active, belongs to the expected mode,
 uses GBP, and matches the advertised amount and billing interval.
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Homework Magic">
+  <rect width="48" height="48" rx="12" fill="#6659d6"/>
+  <path d="M24 6l3.7 11.3L39 21l-11.3 3.7L24 36l-3.7-11.3L9 21l11.3-3.7L24 6z" fill="#fff4a8"/>
+  <circle cx="37" cy="10" r="3" fill="#fff"/>
+  <circle cx="11" cy="37" r="2.5" fill="#fff"/>
+</svg>

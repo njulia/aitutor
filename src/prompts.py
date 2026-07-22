@@ -380,16 +380,18 @@ Question:
 Student's Answer/Work:
 {student_answer}
 
-Write a detailed check with exactly these sections:
-
 Please review the student's answer for this SINGLE question and provide:
-1. A clear indication of whether the answer is correct or incorrect.
-2. Show the expected answer where one exists.
-3. Explain the method or reasoning step by step in simple language.
-4. If wrong, explain the likely mistake without blaming the student.
-5. Encouragement and motivation relevant to this single question.
+For correct answer:
+- Mark it as correct.
+- Give a clear but compact explanation of why it is correct or how to reach it.
 
-For open-ended work:
+For wrong answer:
+- Mark it as incorrect.
+- Give the correct answer, or the best expected answer for an open-ended question.
+- Explain the method step by step in simple language.
+- Give one short tip to avoid the same mistake next time.
+
+For open-ended question:
 - Explain what was effective.
 - Explain one or two clear improvements.
 - Do not pretend there is only one possible answer.

@@ -1,48 +1,24 @@
-# Continuous integration
+# CI/CD safeguards
 
-The GitHub Actions workflow is `.github/workflows/tests.yml`.
+The repository workflow should run on pull requests and protected-branch pushes.
 
-It has two independent jobs:
+## Continuous integration
 
-1. `python-tests` runs compilation, unit, API and integration tests with coverage.
-2. `browser-tests` starts the FastAPI app and runs Chromium E2E tests.
+1. Check out the exact revision.
+2. Install dependencies from the lock file.
+3. Run `python -m compileall -q web_app.py src scripts test`.
+4. Run `pytest -q test/unit test/api test/integration`.
+5. Run browser tests when UI dependencies are available.
+6. Build the container without production secrets.
+7. Scan the change and image for committed credentials and vulnerable dependencies.
 
-## Why the jobs are separate
+## Deployment
 
-- Browser installation is slower and does not delay fast feedback.
-- Unit/API failures are easier to diagnose separately.
-- Playwright traces, screenshots and videos can be uploaded only for browser failures.
+- Deploy an immutable image by digest.
+- Inject secrets through Google Secret Manager and public configuration through controlled environment values.
+- Keep `DEV_MODE=false`, raw learner/AI content storage disabled and secure cookies enabled.
+- Run readiness checks before shifting traffic.
+- Preserve the previous healthy revision for rollback.
+- Verify the canonical domain, public policy pages, support email, payment mode and webhook health after deployment.
 
-## CI data safety
-
-- CI uses a disposable SQLite database.
-- AI and payment endpoints are not called with real keys.
-- Raw learner and AI content storage is disabled.
-- Test emails use the reserved `example.com` domain.
-- CI secrets are not required for the default test jobs.
-
-## Branch protection recommendation
-
-Require both checks before merging to `main`:
-
-- `Automated tests / python-tests`
-- `Automated tests / browser-tests`
-
-Also require at least one review for changes to:
-
-- authentication and session code;
-- account or learner ownership checks;
-- payment webhooks;
-- data retention and deletion;
-- safeguarding logic;
-- AI prompt construction; and
-- upload processing.
-
-## Adding a regression test
-
-1. Reproduce the bug with a failing test in the narrowest suitable folder.
-2. Apply the fix.
-3. Run the focused test.
-4. Run `pytest -q`.
-5. Run browser tests if HTML or JavaScript changed.
-6. Update documentation when behaviour or setup changed.
+Do not automatically enable live billing merely because a deployment succeeded. Live payment keys, price IDs, webhook secret and public legal details must all belong to the reviewed production account.

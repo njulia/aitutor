@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from src.webapp.email_service import send_support_reply
 from .message_models import AdminReplyCreate, MessageCreate, StatusChange
@@ -69,10 +69,13 @@ def create_message_router(
         token = (request.headers.get("X-Message-Access-Token") or "").strip()
         return token or None
 
-    @router.get("/contact-me")
     @router.get("/messages")
     async def messages_page():
         return _safe_page(project_root, "messages.html")
+
+    @router.get("/contact-me", include_in_schema=False)
+    async def legacy_contact_page():
+        return RedirectResponse("/messages", status_code=308)
 
     @router.get("/admin/messages")
     async def admin_messages_page(request: Request):

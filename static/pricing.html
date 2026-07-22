@@ -3,35 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Parent plans | Homework Magic</title>
-  <meta name="description" content="Parent and guardian subscription plans for Homework Magic.">
+  <title>Parent plans and prices | Homework Magic</title>
+  <meta name="description" content="Compare Homework Magic plans for UK primary homework and 11+ practice. Parent-managed payment through secure Stripe Checkout.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://homeworkmagic.co.uk/pricing">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <script async src="https://js.stripe.com/v3/pricing-table.js"></script>
   <style>
-    :root { font-family: system-ui, sans-serif; color: #25304a; background: #f4f6fb; }
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #25304a;
+      background: #f4f6fb;
+    }
+    * { box-sizing: border-box; }
     body { margin: 0; }
     header { background: #fff; padding: 1rem 5%; border-bottom: 1px solid #dde3ef; }
     header a { color: #4257b2; margin-right: 1rem; text-decoration: none; }
-    main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
-    .intro { text-align: center; max-width: 720px; margin: 0 auto 2rem; }
-    .plans { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 1rem; }
-    .card { background: #fff; border-radius: 18px; padding: 1.5rem; box-shadow: 0 5px 22px #1e2b4a14; }
+    main { max-width: 1080px; margin: 2rem auto; padding: 0 1rem; }
+    .intro { text-align: center; max-width: 760px; margin: 0 auto 2rem; }
+    .intro h1 { margin-bottom: .7rem; }
+    .billing-points { display: flex; flex-wrap: wrap; justify-content: center; gap: .7rem; }
+    .billing-points span { background: #fff; border-radius: 999px; padding: .55rem .8rem; }
+    .plans {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 1.5rem;
+      box-shadow: 0 5px 22px #1e2b4a14;
+    }
     .card h2 { margin-top: 0; }
-    .price { font-size: 1.5rem; font-weight: bold; }
-    .discount { color: #3c8b60; font-weight: bold; }
-    ul { padding-left: 1.3rem; line-height: 1.7; }
-    button { font: inherit; border: 0; border-radius: 999px; padding: .8rem 1.2rem; cursor: pointer; background: #4257b2; color: #fff; }
-    button.secondary { background: #e7eaf4; color: #25304a; }
-    button:disabled { cursor: not-allowed; opacity: .55; box-shadow: none; transform: none; }
-    .privacy { border-left: 5px solid #3c8b60; }
+    .featured { border: 2px solid #7a68d8; }
+    .price { font-size: 1.45rem; font-weight: 750; }
     .billing-term { color: #52606d; font-size: .94rem; min-height: 3rem; }
-    .currency-note { font-weight: 700; color: #34436a; }
-    .legal-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 1rem; margin-top: 1rem; }
+    ul { padding-left: 1.3rem; line-height: 1.7; }
+    .button {
+      display: inline-block;
+      border: 0;
+      border-radius: 999px;
+      padding: .8rem 1.2rem;
+      cursor: pointer;
+      background: #4257b2;
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .button.secondary { background: #e7eaf4; color: #25304a; }
+    .stripe-panel { margin: 1.5rem 0; }
+    .stripe-panel > h2, .stripe-panel > p { text-align: center; }
+    .privacy { border-left: 5px solid #3c8b60; margin-top: 1.2rem; }
+    .legal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
     .legal-grid section { padding: 1rem; border-radius: 12px; background: #f7f8fc; }
     .legal-grid h3 { margin: 0 0 .4rem; font-size: 1rem; }
     .legal-links { text-align: center; margin: 1.5rem 0; line-height: 1.8; }
-    .legal-links a { color: #4257b2; font-weight: 650; }
-    #status { font-weight: 650; text-align: center; min-height: 1.5rem; }
+    .legal-links a, main a:not(.button) { color: #4257b2; font-weight: 650; }
+    #status {
+      min-height: 1.5rem;
+      text-align: center;
+      font-weight: 650;
+      margin: 1rem 0;
+    }
+    #account-actions { text-align: center; }
+    [hidden] { display: none !important; }
   </style>
-  <link rel="stylesheet" href="/static/css/theme.css">
 </head>
 <body class="hm-page hm-pricing">
 <header>
@@ -45,116 +90,227 @@
     </nav>
   </div>
 </header>
+
 <main>
   <section class="intro">
     <p class="hm-kicker">Simple parent plans</p>
-    <h1>Choose the support your learner needs.</h1>
-    <p>Start with the part of Homework Magic your family will use most. A parent or guardian manages the account, checkout and subscription.</p>
-    <p class="currency-note">All prices are in pounds sterling (GBP). Any applicable tax and the final amount are shown before payment.</p>
+    <h1>Choose the support your learner needs</h1>
+    <p>A parent or guardian manages the account, checkout and subscription. Children should never enter payment details.</p>
+    <p><strong>All prices are in pounds sterling (GBP).</strong> The exact charge, renewal period and any applicable tax are shown before payment.</p>
     <div class="billing-points" aria-label="Billing information">
       <span>🔒 Stripe-hosted checkout</span>
       <span>🛡️ No learning data sent to Stripe</span>
       <span>⚙️ Manage or cancel in the billing portal</span>
     </div>
   </section>
-  <section class="plans">
-    <article class="card featured">
-      <span class="plan-kicker">Try everything</span>
-      <h2>Paid five-day trial</h2>
-      <p class="price">£0.99 GBP <small>/ 5 days</small></p>
-      <p>Explore both Homework Premium and 11+ Premium for five days.</p>
-      <ul><li>Years 1–6 homework support</li><li>11+ practice and year-round plan</li><li>Detailed explanations</li><li>No automatic renewal</li></ul>
-      <p class="billing-term">One payment of £0.99 GBP. Access ends after five days and does not renew automatically.</p>
-      <button data-plan="trial_5day" onclick="startCheckout('trial_5day',this)" disabled>Start the five-day trial</button>
-    </article>
-    <article class="card">
-      <span class="plan-kicker">Years 1–6</span>
-      <h2>Homework Premium</h2>
-      <p class="price">£4.99 GBP <small>/ month</small></p>
-      <p>For Year 1–6 homework help and progress.</p>
-      <ul><li>Tutor mode</li><li>Detailed explanations</li><li>Targeted practice</li><li>Parent-controlled learning memory</li></ul>
-      <p class="billing-term">£4.99 GBP is charged each month until cancelled. Cancel at any time from the billing portal.</p>
-      <button data-plan="homework_monthly" onclick="startCheckout('homework_monthly',this)" disabled>Continue to secure checkout</button>
-    </article>
-    <article class="card">
-      <span class="plan-kicker">11+ preparation</span>
-      <h2>11+ Premium</h2>
-      <p class="price">£9.99 GBP <small>/ month</small></p>
-      <p>For ongoing 11+ preparation.</p>
-      <ul><li>Maths and English practice</li><li>Verbal and non-verbal reasoning</li><li>Year round study plan</li><li>Progress and learning memory</li></ul>
-      <p class="billing-term">£9.99 GBP is charged each month until cancelled. Cancel at any time from the billing portal.</p>
-      <button data-plan="elevenplus_monthly" onclick="startCheckout('elevenplus_monthly',this)" disabled>Continue to secure checkout</button>
-    </article>
-<!--    <article class="card">-->
-<!--      <h2>Family Premium</h2>-->
-<!--      <p class="price">£12.99/month <span class="discount">(40% off)</span></p>-->
-<!--      <p>Multiple learner profiles under one parent account.</p>-->
-<!--      <ul><li>Year 1–6 and 11+</li><li>Separate progress for each learner</li><li>Separate memory controls</li><li>Parent billing portal</li></ul>-->
-<!--      <button onclick="startCheckout('family_monthly')">Continue to secure checkout</button>-->
-<!--    </article>-->
+
+  <section id="public-plan-summary" aria-labelledby="plan-summary-title">
+    <h2 id="plan-summary-title" hidden>Plan summary</h2>
+    <div class="plans">
+      <article class="card featured">
+        <p class="hm-kicker">Try everything</p>
+        <h2>Five-day access</h2>
+        <p class="price">£0.99 GBP / 5 days</p>
+        <ul>
+          <li>Years 1–6 homework support</li>
+          <li>11+ practice and study plan</li>
+          <li>Detailed explanations</li>
+        </ul>
+        <p class="billing-term">Check the live Stripe payment screen for the exact renewal or expiry terms before paying.</p>
+        <a class="button" href="/login?next=/pricing">Parent sign in to choose</a>
+      </article>
+      <article class="card">
+        <p class="hm-kicker">Years 1–6</p>
+        <h2>Homework Premium</h2>
+        <p class="price">£4.99 GBP / month</p>
+        <ul>
+          <li>Tutor mode</li>
+          <li>Detailed explanations</li>
+          <li>Targeted practice</li>
+          <li>Progress and learning memory</li>
+        </ul>
+        <p class="billing-term">Monthly subscription. It renews until cancelled through the billing portal.</p>
+        <a class="button" href="/login?next=/pricing">Parent sign in to choose</a>
+      </article>
+      <article class="card">
+        <p class="hm-kicker">11+ preparation</p>
+        <h2>11+ Premium</h2>
+        <p class="price">£9.99 GBP / month</p>
+        <ul>
+          <li>Maths and English practice</li>
+          <li>Verbal and non-verbal reasoning</li>
+          <li>Year-round study plan</li>
+          <li>Progress and learning memory</li>
+        </ul>
+        <p class="billing-term">Monthly subscription. It renews until cancelled through the billing portal.</p>
+        <a class="button" href="/login?next=/pricing">Parent sign in to choose</a>
+      </article>
+    </div>
   </section>
+
+  <section id="stripe-panel" class="card stripe-panel" hidden aria-labelledby="secure-checkout-title">
+    <h2 id="secure-checkout-title">Choose your plan securely</h2>
+    <p>The live options below come directly from Homework Magic’s Stripe account.</p>
+    <div id="stripe-pricing-table-container"></div>
+    <template id="stripe-pricing-table-template">
+      <stripe-pricing-table
+        pricing-table-id="prctbl_1TvlP9A7C4P8kXJMSS8t4VRT"
+        publishable-key="pk_live_fYeIDSqsqYC6MDKau5eFsI0U">
+      </stripe-pricing-table>
+    </template>
+  </section>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <div id="account-actions" hidden>
+    <a class="button" href="/app">Continue learning</a>
+    <button class="button secondary" type="button" id="portal-button">Manage subscription</button>
+  </div>
+
   <section class="card privacy">
-    <span class="plan-kicker">Parent controls</span>
+    <p class="hm-kicker">Parent controls</p>
     <h2>Billing designed with families in mind</h2>
-    <p>Learner names, answers, school details and learning memory are not sent to Stripe. Card details stay on Stripe’s hosted pages. Access begins after the payment confirmation is securely verified.</p>
-    <button class="secondary" onclick="openPortal()">Manage an existing subscription</button>
+    <p>Learner names, answers, school details and learning memory are not sent to Stripe. Card details stay on Stripe’s hosted pages. Access starts only after Stripe securely confirms the subscription.</p>
   </section>
+
   <section class="card" aria-labelledby="purchase-information">
     <h2 id="purchase-information">Before you purchase</h2>
     <div class="legal-grid">
       <section><h3>Digital delivery</h3><p>There is nothing to ship. Access normally starts as soon as Stripe confirms successful payment.</p></section>
       <section><h3>Cancellation and refunds</h3><p>Monthly plans can be cancelled in the billing portal. Read the <a href="/refund-policy">refund and cancellation conditions</a>.</p></section>
-      <section><h3>Secure payment</h3><p>Payment details are handled by Stripe-hosted Checkout. Available card and payment methods are shown there.</p></section>
+      <section><h3>Secure payment</h3><p>Payment details are handled by Stripe-hosted Checkout. Available payment methods appear there.</p></section>
       <section><h3>Customer support</h3><p>Email <a href="mailto:contact@homeworkmagic.co.uk">contact@homeworkmagic.co.uk</a> or use the <a href="/messages">support form</a>.</p></section>
     </div>
-    <p>By purchasing, you agree to the <a href="/terms">Terms of Service</a>. Your statutory consumer rights are not affected.</p>
+    <p>By purchasing, you agree to the <a href="/terms">Terms of Service</a> and acknowledge the <a href="/refund-policy">refund and cancellation policy</a>. Your statutory consumer rights are not affected.</p>
   </section>
-  <p id="status" role="status" aria-live="polite"></p>
+
   <p class="legal-links"><a href="/terms">Terms of Service</a> · <a href="/refund-policy">Refunds &amp; cancellation</a> · <a href="/privacy">Privacy</a> · <a href="/messages">Contact</a></p>
 </main>
+
 <script>
 'use strict';
-const statusEl=document.getElementById('status');
-function status(message,error=false){statusEl.textContent=message;statusEl.style.color=error?'#a52b3a':'#245d3a';}
-async function call(url,body){
-  const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
-  const data=await response.json().catch(()=>({}));
-  if(response.status===401){location.href='/login?next=/pricing';throw new Error('Please sign in as a parent or guardian.');}
-  if(!response.ok)throw new Error(data.detail||data.error||'Billing request failed.');
+const statusEl = document.getElementById('status');
+const planSummary = document.getElementById('public-plan-summary');
+const stripePanel = document.getElementById('stripe-panel');
+const pricingTableContainer = document.getElementById('stripe-pricing-table-container');
+const pricingTableTemplate = document.getElementById('stripe-pricing-table-template');
+const accountActions = document.getElementById('account-actions');
+const portalButton = document.getElementById('portal-button');
+
+function setStatus(message, isError = false) {
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? '#a52b3a' : '#245d3a';
+}
+
+async function readJson(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.detail || data.error || 'The billing request failed.');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
-async function loadBillingStatus(){
-  const buttons=[...document.querySelectorAll('button[data-plan]')];
-  try{
-    const response=await fetch('/api/billing/plans',{credentials:'same-origin'});
-    const data=await response.json();
-    if(!response.ok)throw new Error('Could not check billing availability.');
-    buttons.forEach(button=>{
-      const available=data.plan_availability?.[button.dataset.plan]===true;
-      button.disabled=!available;
-      button.title=available?'':'This plan is temporarily unavailable.';
+
+async function billingStatus() {
+  const response = await fetch('/api/billing/status', {
+    credentials: 'same-origin',
+    headers: { 'Accept': 'application/json' }
+  });
+  return readJson(response);
+}
+
+function showActiveSubscription(data) {
+  planSummary.hidden = true;
+  stripePanel.hidden = true;
+  accountActions.hidden = false;
+  const end = data.subscription?.current_period_end;
+  const endText = end ? ` Your current access runs to ${new Date(end).toLocaleDateString('en-GB')}.` : '';
+  setStatus(`Your Homework Magic plan is active.${endText}`);
+}
+
+async function activatePricingTable() {
+  const response = await fetch('/api/billing/pricing-table-session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Accept': 'application/json' }
+  });
+  const data = await readJson(response);
+  const pricingTable = pricingTableTemplate.content.firstElementChild.cloneNode(true);
+  pricingTable.setAttribute('pricing-table-id', data.pricing_table_id);
+  pricingTable.setAttribute('publishable-key', data.publishable_key);
+  pricingTable.setAttribute('customer-session-client-secret', data.client_secret);
+  pricingTable.setAttribute('client-reference-id', data.account_ref);
+  pricingTableContainer.replaceChildren(pricingTable);
+  stripePanel.hidden = false;
+  planSummary.hidden = true;
+  setStatus('Choose a plan below. Stripe will show the full payment terms before you confirm.');
+}
+
+async function initialiseBilling() {
+  try {
+    const data = await billingStatus();
+    if (data.has_subscription) {
+      showActiveSubscription(data);
+      return;
+    }
+    await activatePricingTable();
+  } catch (error) {
+    if (error.status === 401) {
+      setStatus('A parent or guardian needs to sign in before choosing a plan.');
+      return;
+    }
+    if (error.status === 409) {
+      accountActions.hidden = false;
+      setStatus(error.message);
+      return;
+    }
+    setStatus(error.message || 'Secure checkout is temporarily unavailable.', true);
+  }
+}
+
+async function pollForAccess() {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const data = await billingStatus();
+      if (data.has_subscription) {
+        showActiveSubscription(data);
+        return;
+      }
+    } catch (_) {
+      break;
+    }
+    await new Promise(resolve => window.setTimeout(resolve, 1500));
+  }
+  setStatus('Thank you. Stripe is still confirming your plan. Please refresh this page in a moment.');
+}
+
+async function openPortal() {
+  portalButton.disabled = true;
+  try {
+    const response = await fetch('/api/billing/portal', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
     });
-    if(!buttons.some(button=>!button.disabled))status('Secure checkout is temporarily unavailable. Please try again later.',true);
-  }catch(error){
-    buttons.forEach(button=>button.disabled=true);
-    status(error.message,true);
+    const data = await readJson(response);
+    window.location.assign(data.portal_url);
+  } catch (error) {
+    portalButton.disabled = false;
+    setStatus(error.message || 'The billing portal is temporarily unavailable.', true);
   }
 }
-async function startCheckout(plan,button){
-  if(button?.disabled)return;
-  try{
-    button.disabled=true;
-    status('Opening secure checkout…');
-    const data=await call('/api/billing/checkout',{plan});
-    location.assign(data.checkout_url);
-  }catch(error){
-    button.disabled=false;
-    status(error.message,true);
-  }
+
+portalButton.addEventListener('click', openPortal);
+const params = new URLSearchParams(window.location.search);
+if (params.get('checkout') === 'success') {
+  setStatus('Thank you. Stripe is confirming your plan…');
+  pollForAccess();
+} else if (params.get('checkout') === 'cancelled') {
+  setStatus('Checkout was cancelled. No changes were made.', true);
+  initialiseBilling();
+} else {
+  initialiseBilling();
 }
-async function openPortal(){try{status('Opening your billing portal…');const data=await call('/api/billing/portal');location.assign(data.portal_url);}catch(error){status(error.message,true);}}
-const params=new URLSearchParams(location.search);if(params.get('checkout')==='success')status('Thank you. Your access will update as soon as Stripe confirms the payment.');if(params.get('checkout')==='cancelled')status('Checkout was cancelled. No changes were made.',true);
-loadBillingStatus();
 </script>
 </body>
 </html>

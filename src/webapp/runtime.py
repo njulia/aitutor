@@ -20,12 +20,13 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Iterable, Optional, TypeVar
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
+from starlette.responses import RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -100,6 +101,15 @@ def production_configuration_issues() -> list[str]:
     base_url = (os.getenv("APP_BASE_URL") or "").strip().lower()
     if not base_url.startswith("https://"):
         issues.append("APP_BASE_URL must be an HTTPS URL")
+    else:
+        parsed_base_url = urlparse(base_url)
+        if (
+            not parsed_base_url.hostname
+            or parsed_base_url.path not in {"", "/"}
+            or parsed_base_url.query
+            or parsed_base_url.fragment
+        ):
+            issues.append("APP_BASE_URL must be the canonical site origin without a path, query or fragment")
     origins = _csv("CORS_ORIGINS")
     if not origins or any(origin == "*" for origin in origins):
         issues.append("CORS_ORIGINS must list exact HTTPS origins")
@@ -111,6 +121,8 @@ def production_configuration_issues() -> list[str]:
         issues.append("PRIVACY_CONTACT_EMAIL must be configured")
     if not os.getenv("PRIVACY_POSTAL_ADDRESS", "").strip():
         issues.append("PRIVACY_POSTAL_ADDRESS must be configured")
+    if not os.getenv("BUSINESS_CONTACT_EMAIL", "").strip():
+        issues.append("BUSINESS_CONTACT_EMAIL must be configured for customer support")
     if len(os.getenv("SESSION_OWNER_SECRET", "")) < 32:
         issues.append("SESSION_OWNER_SECRET must contain at least 32 characters")
     if (os.getenv("COOKIE_SECURE") or "").strip().lower() in {"0", "false", "no", "off"}:
@@ -304,11 +316,60 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith(sensitive_prefixes):
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Pragma"] = "no-cache"
+        static_path = request.url.path.lower()
+        if static_path.startswith("/static/"):
+            # HTML files live below /static for the clean public routes to serve,
+            # but their implementation URLs must never compete in search.
+            if static_path.endswith((".html", ".htm")):
+                response.headers["X-Robots-Tag"] = "noindex, nofollow"
+                response.headers.setdefault("Cache-Control", "public, max-age=300")
+            elif static_path.endswith((".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2")):
+                response.headers.setdefault(
+                    "Cache-Control", "public, max-age=3600, stale-while-revalidate=86400"
+                )
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         if not settings.dev_mode:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
+
+
+class CanonicalHostMiddleware(BaseHTTPMiddleware):
+    """Permanently consolidate the configured alternate host onto APP_BASE_URL."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if _env_bool("DEV_MODE", False) or _env_bool("TESTING", False):
+            return await call_next(request)
+
+        canonical = urlparse((os.getenv("APP_BASE_URL") or "").strip())
+        canonical_host = (canonical.hostname or "").lower()
+        if canonical.scheme not in {"http", "https"} or not canonical_host:
+            return await call_next(request)
+
+        request_host = (request.headers.get("host") or "").split(":", 1)[0].strip().lower()
+        configured_alternates = {
+            value.lower() for value in _csv("CANONICAL_REDIRECT_HOSTS")
+        }
+        if not configured_alternates:
+            configured_alternates.add(
+                canonical_host[4:] if canonical_host.startswith("www.") else f"www.{canonical_host}"
+            )
+
+        forwarded_proto = (
+            request.headers.get("x-forwarded-proto") or request.url.scheme
+        ).split(",", 1)[0].strip().lower()
+        wrong_host = request_host in configured_alternates
+        wrong_scheme = request_host == canonical_host and forwarded_proto != canonical.scheme
+        if not (wrong_host or wrong_scheme):
+            return await call_next(request)
+
+        raw_path = request.scope.get("raw_path") or b"/"
+        path = raw_path.decode("latin-1")
+        query = (request.scope.get("query_string") or b"").decode("latin-1")
+        target = f"{canonical.scheme}://{canonical.netloc}{path}"
+        if query:
+            target += f"?{query}"
+        return RedirectResponse(target, status_code=308)
 
 
 class RequestSizeMiddleware(BaseHTTPMiddleware):
@@ -483,3 +544,4 @@ def install_hardening(app: FastAPI, require_admin: Callable[[Request], Any]) -> 
     app.add_middleware(SameOriginWriteMiddleware)
     app.add_middleware(SensitiveRouteRateLimitMiddleware)
     app.add_middleware(AdminPathGuardMiddleware, require_admin=require_admin)
+    app.add_middleware(CanonicalHostMiddleware)

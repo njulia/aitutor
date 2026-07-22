@@ -1,42 +1,8 @@
-# End-to-end testing
-
-The browser suite is under `test/e2e/` and uses `pytest-playwright`.
-
-It covers:
-
-- homepage and learner app loading;
-- same-origin script loading;
-- primary and 11+ question rendering;
-- a complete generate → answer → review journey;
-- unanswered-question validation;
-- parent registration and guardian confirmation;
-- safe post-login redirects;
-- child-friendly privacy and safety pages;
-- key form labels and heading structure; and
-- the 11+ year-round practice journey.
+# End-to-end browser testing
 
 ## Run locally
 
-Terminal 1:
-
-```bash
-TESTING=true \
-DEV_MODE=true \
-DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-ACCOUNT_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-AUTH_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-PROGRESS_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-SESSION_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-MEMORY_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-MESSAGE_DATABASE_URL=sqlite+pysqlite:////tmp/aitutor-e2e.db \
-ADMIN_EMAILS=admin@example.com \
-APP_BASE_URL=http://127.0.0.1:5000 \
-CORS_ORIGINS=http://127.0.0.1:5000 \
-LLM_PROVIDER=ollama \
-uvicorn web_app:app --host 127.0.0.1 --port 5000
-```
-
-Terminal 2:
+Start the application with isolated test data, then run:
 
 ```bash
 RUN_E2E=1 \
@@ -44,37 +10,19 @@ E2E_BASE_URL=http://127.0.0.1:5000 \
 pytest -q test/e2e --browser chromium
 ```
 
-When using a system-installed browser instead of Playwright's managed browser:
+Do not point automated browser tests at production unless a test account, test payment mode and written release procedure explicitly permit it.
 
-```bash
-E2E_BROWSER_EXECUTABLE=/usr/bin/chromium \
-RUN_E2E=1 E2E_BASE_URL=http://127.0.0.1:5000 \
-pytest -q test/e2e --browser chromium
-```
+## Required smoke journeys
 
-The browser tests intercept AI-generation, AI-review and subscription endpoints where needed. This makes the user journeys deterministic and prevents paid calls.
+- Homepage loads, contains the Homework Magic heading and reaches the learning app.
+- Parent registration, login and logout work without exposing whether unrelated accounts exist.
+- A Year 1–6 learner can open a short activity and submit an answer.
+- 11+ practice, topic mastery and year-round plan open successfully.
+- Progress and learning memory remain attached to the signed-in parent account.
+- Contact form rejects missing details and warns against including child identifiers.
+- Pricing clearly shows GBP amounts, one-off versus recurring billing and policy links.
+- Keyboard navigation, focus visibility, headings, form labels and live status messages remain usable.
 
-## Debug a failure
+## Public launch smoke checks
 
-```bash
-RUN_E2E=1 E2E_BASE_URL=http://127.0.0.1:5000 \
-pytest test/e2e \
-  --browser chromium \
-  --headed \
-  --slowmo 250 \
-  --tracing retain-on-failure \
-  --screenshot only-on-failure \
-  --video retain-on-failure
-```
-
-Use a test or staging environment only. Never point destructive account tests at production.
-
-## Staging smoke test
-
-```bash
-RUN_E2E=1 \
-E2E_BASE_URL=https://staging.example.com \
-pytest -q test/e2e/test_browser_smoke.py
-```
-
-For staging, use test accounts and Stripe test mode. AI endpoints mocked by browser routes do not need model keys.
+Use read-only requests to confirm the canonical host, sitemap, robots file and legal pages. Use Stripe test mode for checkout journeys. A live low-value payment should be a controlled final verification performed by the account owner and refunded/cancelled according to the launch checklist.
