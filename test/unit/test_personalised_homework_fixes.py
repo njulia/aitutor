@@ -71,13 +71,17 @@ def test_browser_source_persists_primary_and_eleven_plus_choices() -> None:
     assert "localStorage.setItem(LEARNING_CHOICES_KEY" in source
 
 
-def test_browser_source_remembers_tell_me_about_entries_without_a_server_call() -> None:
+def test_browser_source_remembers_primary_prompt_but_removes_legacy_eleven_prompt() -> None:
     from pathlib import Path
 
     source = (Path(__file__).parents[2] / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
     assert "homeworkPrompt" in source
-    assert "elevenPrompt" in source
+    assert "delete saved.elevenPrompt" in source
     assert "restoreLearningPrompts();" in source
     assert "field.addEventListener('input', queueLearningChoicesSave);" in source
     assert "clearSavedLearningPrompts();" in source
+    save_choices_body = source.split("function saveLearningChoices()", 1)[1].split(
+        "function restoreLearningPrompts", 1
+    )[0]
+    assert "eleven-parent-notes" not in save_choices_body

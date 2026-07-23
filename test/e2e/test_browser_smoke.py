@@ -15,7 +15,7 @@ def test_homepage_and_app_load(page: Page, e2e_base_url: str) -> None:
     expect(page.get_by_text("Homework Magic").first).to_be_visible()
 
     page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
-    expect(page.locator("body")).to_contain_text("Generate Homework")
+    expect(page.locator("body")).to_contain_text("Make today’s homework with me")
 
 
 def test_no_public_script_cdn_on_learner_pages(page: Page, e2e_base_url: str) -> None:

@@ -11,6 +11,7 @@ class ProfileRequest(BaseModel):
     student_id: Optional[str] = Field(default=None, max_length=128)
     is_eleven_plus: bool = False
     mode: Optional[str] = Field(default="homework", pattern="^(homework|tutor)$")
+    question_count: Optional[int] = Field(default=None, ge=1, le=20)
 
 
 class ReviewRequest(BaseModel):

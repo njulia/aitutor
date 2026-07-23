@@ -378,6 +378,265 @@ def resolve_profile(
     return profile
 
 
+_GUIDED_HOMEWORK_DIFFICULTY_LEVELS = {
+    "gentle",
+    "just_right",
+    "challenge",
+}
+_GUIDED_HOMEWORK_MINUTES_TO_QUESTION_COUNT = {
+    10: 5,
+    15: 8,
+    20: 10,
+}
+_GUIDED_ELEVEN_CONFIDENCE_LEVELS = {
+    "confident",
+    "sometimes_tricky",
+    "needs_help",
+}
+_GUIDED_ELEVEN_EXAM_FORMATS = {
+    "Not sure",
+    "GL Assessment",
+    "CEM",
+    "ISEB Common Pre-Test",
+    "School-specific",
+}
+
+
+def _clean_guided_text(value: Any, max_length: int) -> Optional[str]:
+    """Minimise and bound an optional parent-entered learning note."""
+    if value is None:
+        return None
+    from src.webapp.prompt_budget import compact_text
+
+    cleaned = compact_text(value, max(40, max_length))
+    return cleaned[:max_length].strip() or None
+
+
+def normalise_guided_homework_profile(raw_profile: dict, student_id: str) -> dict:
+    """Build a small, non-identifying profile from the Years 1-6 guide."""
+    raw_profile = raw_profile or {}
+    try:
+        year_group = int(raw_profile.get("year_group", 3))
+    except (TypeError, ValueError):
+        year_group = 3
+    year_group = min(6, max(1, year_group))
+
+    try:
+        requested_minutes = int(raw_profile.get("session_minutes", 15))
+    except (TypeError, ValueError):
+        requested_minutes = 15
+    session_minutes = (
+        requested_minutes
+        if requested_minutes in _GUIDED_HOMEWORK_MINUTES_TO_QUESTION_COUNT
+        else 15
+    )
+
+    difficulty = str(raw_profile.get("difficulty", "just_right"))
+    if difficulty not in _GUIDED_HOMEWORK_DIFFICULTY_LEVELS:
+        difficulty = "just_right"
+
+    from src.models import canonical_primary_subject
+
+    subject = canonical_primary_subject(
+        _clean_guided_text(raw_profile.get("subject"), 60) or ""
+    ) or "Maths"
+    learning_notes = _clean_guided_text(raw_profile.get("learning_notes"), 300)
+
+    support_message = {
+        "gentle": (
+            "Begin with short confidence-building questions and increase "
+            "difficulty only a little."
+        ),
+        "just_right": (
+            "Use age-appropriate questions with a gentle increase in difficulty."
+        ),
+        "challenge": (
+            "Use a short warm-up, then include an age-appropriate challenge."
+        ),
+    }[difficulty]
+    learning_needs = support_message
+    if learning_notes:
+        learning_needs = f"{support_message} Parent learning note: {learning_notes}"
+
+    profile = {
+        "setup_source": "guided_homework",
+        "year_group": year_group,
+        "age": year_group + 5,
+        "subject": subject,
+        "difficulty": difficulty,
+        "question_count": _GUIDED_HOMEWORK_MINUTES_TO_QUESTION_COUNT[session_minutes],
+        "preferred_session_minutes": session_minutes,
+        "learning_needs": learning_needs,
+        "learning_goals": [
+            f"Practise {subject} at Year {year_group} curriculum level."
+        ],
+        "student_id": student_id,
+    }
+    return profile
+
+
+def guided_homework_client_profile(profile: dict) -> dict:
+    """Return the daily choices without identifiers or parent free text."""
+    allowed = (
+        "setup_source",
+        "year_group",
+        "age",
+        "subject",
+        "difficulty",
+        "question_count",
+        "preferred_session_minutes",
+        "learning_goals",
+    )
+    return {
+        key: profile[key]
+        for key in allowed
+        if key in profile and profile[key] not in (None, "")
+    }
+
+
+def normalise_guided_eleven_profile(raw_profile: dict, student_id: str) -> dict:
+    """Build a small, non-identifying profile from the guided 11+ choices."""
+    raw_profile = raw_profile or {}
+    try:
+        year_group = int(raw_profile.get("year_group", 5))
+    except (TypeError, ValueError):
+        year_group = 5
+    year_group = min(6, max(3, year_group))
+
+    try:
+        requested_count = int(raw_profile.get("question_count", 8))
+    except (TypeError, ValueError):
+        requested_count = 8
+    question_count = 5 if requested_count <= 5 else 8
+
+    confidence = str(raw_profile.get("confidence", "sometimes_tricky"))
+    if confidence not in _GUIDED_ELEVEN_CONFIDENCE_LEVELS:
+        confidence = "sometimes_tricky"
+
+    exam_format = str(raw_profile.get("exam_format", "Not sure"))
+    if exam_format not in _GUIDED_ELEVEN_EXAM_FORMATS:
+        exam_format = "Not sure"
+
+    from src.models import ELEVEN_PLUS_SUBJECTS
+
+    subject = _clean_guided_text(raw_profile.get("subject"), 60) or "Maths"
+    if subject not in ELEVEN_PLUS_SUBJECTS:
+        subject = "Maths"
+    learning_notes = _clean_guided_text(raw_profile.get("learning_notes"), 300)
+
+    exam_month = None
+    raw_exam_date = str(raw_profile.get("exam_date") or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw_exam_date):
+        try:
+            exam_month = datetime.strptime(raw_exam_date, "%Y-%m-%d").strftime("%B %Y")
+        except ValueError:
+            exam_month = None
+
+    support_message = {
+        "confident": "Begin briskly and include an age-appropriate challenge.",
+        "sometimes_tricky": "Use gradual difficulty and short, clear wording.",
+        "needs_help": "Start gently and build confidence before increasing difficulty.",
+    }[confidence]
+    learning_needs = support_message
+    if learning_notes:
+        learning_needs = f"{support_message} Parent learning note: {learning_notes}"
+
+    learning_goals = [f"Practise {subject} for the 11+."]
+    if exam_format != "Not sure":
+        learning_goals.append(f"Use {exam_format} style where suitable.")
+    if exam_month:
+        learning_goals.append(f"Build confidence before {exam_month}.")
+
+    profile = {
+        "setup_source": "guided_11plus",
+        "year_group": year_group,
+        "age": year_group + 5,
+        "subject": subject,
+        "confidence": confidence,
+        "question_count": question_count,
+        "exam_format": exam_format,
+        "learning_needs": learning_needs,
+        "learning_goals": learning_goals,
+        "preferred_session_minutes": 10 if question_count == 5 else 15,
+        "student_id": student_id,
+    }
+    if confidence == "needs_help":
+        profile["weak_areas"] = [subject]
+    if exam_month:
+        profile["exam_month"] = exam_month
+    return profile
+
+
+def guided_eleven_client_profile(profile: dict) -> dict:
+    """Return useful guided choices without identifiers or parent free text."""
+    allowed = (
+        "setup_source",
+        "year_group",
+        "age",
+        "subject",
+        "confidence",
+        "question_count",
+        "exam_format",
+        "exam_month",
+        "learning_goals",
+        "preferred_session_minutes",
+    )
+    return {
+        key: profile[key]
+        for key in allowed
+        if key in profile and profile[key] not in (None, "")
+    }
+
+
+def _format_public_question_subset(questions: list) -> str:
+    """Convert a bounded structured question list back to answer-free text."""
+    blocks: List[str] = []
+    for index, question in enumerate(questions, start=1):
+        if not isinstance(question, dict):
+            continue
+        lines: List[str] = []
+        context = str(question.get("context") or "").strip()
+        if context:
+            lines.append(context)
+        prompt = str(question.get("question") or "").strip()
+        if not prompt:
+            continue
+        lines.append(f"{index}. {prompt}")
+        for option in question.get("options") or []:
+            if not isinstance(option, dict):
+                continue
+            label = str(option.get("label") or "").strip()
+            text = str(option.get("text") or "").strip()
+            if label and text:
+                lines.append(f"{label}) {text}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def limit_homework_question_count(homework_results: list, question_count: Optional[int]) -> list:
+    """Limit public worksheet questions without exposing stored answer material."""
+    if not question_count:
+        return homework_results
+    limit = max(1, min(int(question_count), 20))
+    limited_results = []
+    for result in homework_results:
+        if not isinstance(result, dict):
+            limited_results.append(result)
+            continue
+        item = dict(result)
+        questions = item.get("questions")
+        if isinstance(questions, list) and questions:
+            limited_questions = [dict(question) for question in questions[:limit]]
+            for index, question in enumerate(limited_questions, start=1):
+                question["number"] = index
+            item["questions"] = limited_questions
+            limited_content = _format_public_question_subset(limited_questions)
+            if limited_content:
+                item["content"] = limited_content
+        limited_results.append(item)
+    return limited_results
+
+
 def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
     """
     Determines the student_id and username for the current request.
@@ -1108,6 +1367,7 @@ class ProfileRequest(BaseModel):
     student_id: Optional[str] = None
     is_eleven_plus: bool = False
     mode: Optional[str] = "homework"  # Added mode field
+    question_count: Optional[int] = Field(default=None, ge=1, le=20)
 
 
 class ReviewRequest(BaseModel):
@@ -1227,6 +1487,11 @@ async def ks2_homework():
 @app.get("/elevenplus-practice")
 async def eleven_plus():
     return _static_page("static", "elevenplus-practice.html")
+
+
+@app.get("/elevenplus-year-round-plan")
+async def eleven_plus_year_round_plan():
+    return _static_page("static", "elevenplus-year-round-plan.html")
 
 
 @app.get("/check-my-homework")
@@ -1428,13 +1693,66 @@ async def api_generate(req: Request, request: ProfileRequest):
         else:
             request.profile = {"student_id": resolved_student_id}
 
-        profile = resolve_profile(
-            request.profile,
-            quick_select=request.quick_select,
-            year=request.year,
-            student_id=request.student_id,
+        is_guided_eleven = (
+            request.is_eleven_plus
+            and request.profile.get("setup_source") == "guided_11plus"
         )
-        subjects = request.subjects
+        is_guided_homework = (
+            not request.is_eleven_plus
+            and request.profile.get("setup_source") == "guided_homework"
+        )
+        if is_guided_eleven:
+            profile = normalise_guided_eleven_profile(
+                request.profile,
+                resolved_student_id,
+            )
+        elif is_guided_homework:
+            profile = normalise_guided_homework_profile(
+                request.profile,
+                resolved_student_id,
+            )
+        else:
+            profile = resolve_profile(
+                request.profile,
+                quick_select=request.quick_select,
+                year=request.year,
+                student_id=request.student_id,
+            )
+
+        subjects = list(request.subjects or [])
+        if is_guided_eleven:
+            subjects = [profile["subject"]]
+        elif is_guided_homework:
+            subjects = [profile["subject"]]
+
+        mode = request.mode if request.mode in {"homework", "tutor"} else "homework"
+        question_limit = request.question_count
+        if is_guided_eleven:
+            question_limit = profile["question_count"]
+
+            if not user_has_subscription(
+                req=req,
+                student_id=resolved_student_id,
+                username=logged_in_username,
+                required_plan=ELEVENPLUS_PREMIUM_PLAN,
+            ):
+                response = _subscription_required_response(
+                    "Guided 11+ Practice",
+                    ELEVENPLUS_PREMIUM_PLAN,
+                    logged_in_username,
+                )
+                if new_anon_session_id:
+                    response.set_cookie(
+                        "anon_session_id",
+                        new_anon_session_id,
+                        httponly=True,
+                        samesite="lax",
+                        secure=not _dev_mode,
+                        max_age=365 * 24 * 60 * 60,
+                    )
+                return response
+        elif is_guided_homework:
+            question_limit = profile["question_count"]
 
         # If no subjects selected, use LLM to extract from description
         if not subjects:
@@ -1463,8 +1781,18 @@ async def api_generate(req: Request, request: ProfileRequest):
         all_homework_results = await asyncio.to_thread(
             generate_homework_with_profile, profile, subjects, request.is_eleven_plus
         )
+        for result in all_homework_results:
+            if isinstance(result, dict):
+                result["is_eleven_plus"] = bool(request.is_eleven_plus)
 
-        if request.mode == "tutor":
+        if is_guided_eleven:
+            client_profile = guided_eleven_client_profile(profile)
+        elif is_guided_homework:
+            client_profile = guided_homework_client_profile(profile)
+        else:
+            client_profile = profile
+
+        if mode == "tutor":
             individual_questions = []
             for hw_block in all_homework_results:
                 # Split each subject's homework content into individual questions
@@ -1473,6 +1801,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                 for q in split_questions:
                     q["doc_id"] = hw_block.get("doc_id")
                     q["from_rag"] = bool(hw_block.get("from_rag", False))
+                    q["is_eleven_plus"] = bool(request.is_eleven_plus)
                 individual_questions.extend(split_questions)
 
             # Check subscription for tutor mode (only for non-RAG questions)
@@ -1481,8 +1810,10 @@ async def api_generate(req: Request, request: ProfileRequest):
             if not has_sub:
                 # Filter out non-RAG questions if not subscribed
                 rag_only_questions = [q for q in individual_questions if q.get("from_rag")]
+                if question_limit:
+                    rag_only_questions = rag_only_questions[:question_limit]
                 if rag_only_questions:
-                    response_content = {"success": True, "homework": rag_only_questions, "profile": profile, "mode": "tutor",
+                    response_content = {"success": True, "homework": rag_only_questions, "profile": client_profile, "mode": "tutor",
                                         "note": "Partial results: only RAG-sourced questions (free). Subscribe for full tutor mode."}
                     resp = JSONResponse(content=response_content)
                     if new_anon_session_id:
@@ -1497,13 +1828,19 @@ async def api_generate(req: Request, request: ProfileRequest):
                                         content={"success": False, "error": "Tutor mode for AI-generated questions requires an active subscription."})
             else:
                 # User has subscription, return all questions
-                response_content = {"success": True, "homework": individual_questions, "profile": profile, "mode": "tutor"}
+                if question_limit:
+                    individual_questions = individual_questions[:question_limit]
+                response_content = {"success": True, "homework": individual_questions, "profile": client_profile, "mode": "tutor"}
                 resp = JSONResponse(content=response_content)
                 if new_anon_session_id:
                     resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)
                 return resp
         else:  # Default to homework mode
-            response_content = {"success": True, "homework": all_homework_results, "profile": profile, "mode": "homework"}
+            all_homework_results = limit_homework_question_count(
+                all_homework_results,
+                question_limit,
+            )
+            response_content = {"success": True, "homework": all_homework_results, "profile": client_profile, "mode": "homework"}
             resp = JSONResponse(content=response_content)
             if new_anon_session_id:
                 resp.set_cookie("anon_session_id", new_anon_session_id, httponly=True, samesite="lax", secure=not _dev_mode, max_age=365 * 24 * 60 * 60)

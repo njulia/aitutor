@@ -21,6 +21,364 @@ let currentHomework = [];
         let currentStudentId = localStorage.getItem('auth_state') === 'logged_in' ? 'authenticated' : null;
         let currentStudentEmail = null;
         let anonymousClientId = null; // Server-issued random cookie ID
+        let primarySubjects = ['Maths', 'English', 'Science'];
+        let elevenPlusSubjects = ['Maths', 'English', 'Verbal Reasoning', 'Non-Verbal Reasoning'];
+
+        const HOMEWORK_COMMON_SUBJECTS = ['Maths', 'English', 'Science'];
+        const HOMEWORK_SESSION_QUESTIONS = {
+            10: 5,
+            15: 8,
+            20: 10
+        };
+        const HOMEWORK_DIFFICULTY_LABELS = {
+            gentle: '😊 Gentle',
+            just_right: '👍 Just right',
+            challenge: '🚀 Challenge me'
+        };
+        const homeworkGuideState = {
+            stepIndex: 0,
+            answers: {},
+            showAllSubjects: false,
+            showQuickStart: false
+        };
+
+        function getHomeworkGuideSteps() {
+            const commonSubjects = HOMEWORK_COMMON_SUBJECTS.filter(subject => primarySubjects.includes(subject));
+            const subjectOptions = homeworkGuideState.showAllSubjects
+                ? primarySubjects.map(subject => ({value: subject, label: subject}))
+                : [
+                    ...commonSubjects.map(subject => ({value: subject, label: subject})),
+                    ...(primarySubjects.length > commonSubjects.length
+                        ? [{value: '__more__', label: '➕ More subjects'}]
+                        : [])
+                ];
+            return [
+                {
+                    key: 'year_group',
+                    question: 'Hi! What year are you in?',
+                    options: [1, 2, 3, 4, 5, 6].map(year => ({
+                        value: year,
+                        label: `Year ${year}`
+                    }))
+                },
+                {
+                    key: 'subject',
+                    question: 'What shall we practise today?',
+                    options: subjectOptions
+                },
+                {
+                    key: 'session_minutes',
+                    question: 'How long shall we practise?',
+                    options: [
+                        {value: 10, label: '10 minutes · Quick'},
+                        {value: 15, label: '15 minutes · Just enough'},
+                        {value: 20, label: '20 minutes · Longer'}
+                    ]
+                },
+                {
+                    key: 'difficulty',
+                    question: 'How tricky should it be?',
+                    options: Object.entries(HOMEWORK_DIFFICULTY_LABELS).map(([value, label]) => ({
+                        value,
+                        label
+                    }))
+                }
+            ];
+        }
+
+        function isHomeworkGuideComplete() {
+            const answers = homeworkGuideState.answers;
+            return Number.isInteger(Number(answers.year_group))
+                && Number(answers.year_group) >= 1
+                && Number(answers.year_group) <= 6
+                && primarySubjects.includes(answers.subject)
+                && Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, Number(answers.session_minutes))
+                && Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty);
+        }
+
+        function appendHomeworkSummaryItem(list, label, value) {
+            const item = document.createElement('li');
+            const strong = document.createElement('strong');
+            strong.textContent = `${label}: `;
+            item.append(strong, document.createTextNode(String(value)));
+            list.appendChild(item);
+        }
+
+        function renderHomeworkGuideSummary() {
+            const summary = document.getElementById('homework-guide-summary');
+            if (!summary) return;
+            const answers = homeworkGuideState.answers;
+            summary.replaceChildren();
+
+            const title = document.createElement('h3');
+            title.textContent = 'Your homework plan';
+            summary.appendChild(title);
+
+            const list = document.createElement('ul');
+            list.className = 'guide-summary-list';
+            appendHomeworkSummaryItem(list, 'Year', `Year ${answers.year_group}`);
+            appendHomeworkSummaryItem(list, 'Subject', answers.subject);
+            appendHomeworkSummaryItem(list, 'Time', `${answers.session_minutes} minutes`);
+            appendHomeworkSummaryItem(list, 'Level', HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]);
+            summary.appendChild(list);
+        }
+
+        function renderHomeworkQuickStart() {
+            const answers = homeworkGuideState.answers;
+            const title = document.getElementById('homework-quick-title');
+            const detail = document.getElementById('homework-quick-detail');
+            if (!title || !detail) return;
+            title.textContent = `Ready for Year ${answers.year_group} ${answers.subject} for ${answers.session_minutes} minutes?`;
+            detail.textContent = `${HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]} · Tap Start now, or change your choices.`;
+        }
+
+        function renderHomeworkGuide() {
+            const panel = document.getElementById('homework-guide-panel');
+            const quickStart = document.getElementById('homework-quick-start');
+            const question = document.getElementById('homework-guide-question');
+            const optionsContainer = document.getElementById('homework-guide-options');
+            const stepLabel = document.getElementById('homework-guide-step-label');
+            const progress = document.getElementById('homework-guide-progress');
+            const summary = document.getElementById('homework-guide-summary');
+            const backButton = document.getElementById('homework-guide-back');
+            const startButton = document.getElementById('homework-guide-start');
+            if (!panel || !quickStart || !question || !optionsContainer || !stepLabel
+                || !progress || !summary || !backButton || !startButton) {
+                return;
+            }
+
+            if (homeworkGuideState.showQuickStart && isHomeworkGuideComplete()) {
+                panel.hidden = true;
+                quickStart.hidden = false;
+                renderHomeworkQuickStart();
+                return;
+            }
+
+            panel.hidden = false;
+            quickStart.hidden = true;
+            const steps = getHomeworkGuideSteps();
+            const isSummary = homeworkGuideState.stepIndex >= steps.length;
+            const completed = Math.min(homeworkGuideState.stepIndex + 1, steps.length);
+            progress.style.width = `${(completed / steps.length) * 100}%`;
+
+            if (isSummary) {
+                stepLabel.textContent = 'Ready to start';
+                question.textContent = 'Great! I have made your homework plan.';
+                optionsContainer.replaceChildren();
+                optionsContainer.hidden = true;
+                summary.hidden = false;
+                startButton.hidden = false;
+                backButton.hidden = false;
+                renderHomeworkGuideSummary();
+                return;
+            }
+
+            const step = steps[homeworkGuideState.stepIndex];
+            stepLabel.textContent = `Step ${homeworkGuideState.stepIndex + 1} of ${steps.length}`;
+            question.textContent = step.question;
+            optionsContainer.hidden = false;
+            summary.hidden = true;
+            startButton.hidden = true;
+            backButton.hidden = homeworkGuideState.stepIndex === 0;
+            optionsContainer.replaceChildren();
+
+            step.options.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'guide-option';
+                button.textContent = option.label;
+                const isMoreButton = option.value === '__more__';
+                const isSelected = !isMoreButton
+                    && String(homeworkGuideState.answers[step.key]) === String(option.value);
+                button.setAttribute('aria-pressed', String(isSelected));
+                if (isSelected) button.classList.add('selected');
+                button.addEventListener('click', () => {
+                    if (isMoreButton) {
+                        homeworkGuideState.showAllSubjects = true;
+                        renderHomeworkGuide();
+                        return;
+                    }
+                    homeworkGuideState.answers[step.key] = option.value;
+                    homeworkGuideState.stepIndex += 1;
+                    if (homeworkGuideState.stepIndex >= steps.length) {
+                        saveLearningChoices();
+                    }
+                    renderHomeworkGuide();
+                });
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        function previousHomeworkGuideStep() {
+            if (homeworkGuideState.stepIndex > 0) {
+                homeworkGuideState.stepIndex -= 1;
+                renderHomeworkGuide();
+            }
+        }
+
+        function changeHomeworkGuide() {
+            homeworkGuideState.showQuickStart = false;
+            homeworkGuideState.stepIndex = 0;
+            renderHomeworkGuide();
+        }
+
+        const elevenGuideState = {
+            stepIndex: 0,
+            answers: {}
+        };
+
+        function getElevenGuideSteps() {
+            return [
+                {
+                    key: 'year_group',
+                    question: 'Hi! What year are you in?',
+                    options: [3, 4, 5, 6].map(year => ({
+                        value: year,
+                        label: `Year ${year}`
+                    }))
+                },
+                {
+                    key: 'subject',
+                    question: 'Which subject would you like to practise?',
+                    options: elevenPlusSubjects.map(subject => ({
+                        value: subject,
+                        label: subject
+                    }))
+                },
+                {
+                    key: 'confidence',
+                    question: 'How does this subject feel today?',
+                    options: [
+                        { value: 'confident', label: '😊 I feel confident' },
+                        { value: 'sometimes_tricky', label: '😐 Sometimes tricky' },
+                        { value: 'needs_help', label: '🌱 I need some help' }
+                    ]
+                },
+                {
+                    key: 'question_count',
+                    question: 'How much practice shall we do?',
+                    options: [
+                        { value: 5, label: '5 questions · Quick' },
+                        { value: 8, label: '8 questions · Full set' }
+                    ]
+                },
+                {
+                    key: 'mode',
+                    question: 'How shall I show the questions?',
+                    options: [
+                        { value: 'tutor', label: '🪄 One at a time' },
+                        { value: 'homework', label: '📄 All together' }
+                    ]
+                }
+            ];
+        }
+
+        function findElevenGuideLabel(step, value) {
+            const option = step.options.find(item => String(item.value) === String(value));
+            return option ? option.label : String(value || '');
+        }
+
+        function appendElevenSummaryItem(list, label, value) {
+            if (!value) return;
+            const item = document.createElement('li');
+            const strong = document.createElement('strong');
+            strong.textContent = `${label}: `;
+            item.append(strong, document.createTextNode(String(value)));
+            list.appendChild(item);
+        }
+
+        function renderElevenGuideSummary(steps) {
+            const summary = document.getElementById('eleven-guide-summary');
+            if (!summary) return;
+            summary.replaceChildren();
+
+            const title = document.createElement('h3');
+            title.textContent = 'Your practice plan';
+            summary.appendChild(title);
+
+            const list = document.createElement('ul');
+            list.className = 'guide-summary-list';
+            appendElevenSummaryItem(list, 'Year', findElevenGuideLabel(steps[0], elevenGuideState.answers.year_group));
+            appendElevenSummaryItem(list, 'Subject', findElevenGuideLabel(steps[1], elevenGuideState.answers.subject));
+            appendElevenSummaryItem(list, 'How it feels', findElevenGuideLabel(steps[2], elevenGuideState.answers.confidence));
+            appendElevenSummaryItem(list, 'Practice', findElevenGuideLabel(steps[3], elevenGuideState.answers.question_count));
+            appendElevenSummaryItem(list, 'Style', findElevenGuideLabel(steps[4], elevenGuideState.answers.mode));
+
+            const examBoard = document.getElementById('eleven-exam-board')?.value;
+            const examDate = document.getElementById('eleven-exam-date')?.value;
+            const targetSchool = document.getElementById('eleven-target-school')?.value.trim();
+            if (examBoard && examBoard !== 'Not sure') appendElevenSummaryItem(list, 'Exam format', examBoard);
+            if (examDate) appendElevenSummaryItem(list, 'Exam date', examDate);
+            if (targetSchool) appendElevenSummaryItem(list, 'Target school', targetSchool);
+            summary.appendChild(list);
+        }
+
+        function renderElevenGuide() {
+            const question = document.getElementById('eleven-guide-question');
+            const optionsContainer = document.getElementById('eleven-guide-options');
+            const stepLabel = document.getElementById('eleven-guide-step-label');
+            const progress = document.getElementById('eleven-guide-progress');
+            const summary = document.getElementById('eleven-guide-summary');
+            const backButton = document.getElementById('eleven-guide-back');
+            const startButton = document.getElementById('eleven-guide-start');
+            if (!question || !optionsContainer || !stepLabel || !progress || !summary || !backButton || !startButton) {
+                return;
+            }
+
+            const steps = getElevenGuideSteps();
+            const isSummary = elevenGuideState.stepIndex >= steps.length;
+            const completed = Math.min(elevenGuideState.stepIndex + 1, steps.length);
+            progress.style.width = `${(completed / steps.length) * 100}%`;
+
+            if (isSummary) {
+                stepLabel.textContent = 'Ready to start';
+                question.textContent = 'Brilliant! I have made your practice plan.';
+                optionsContainer.replaceChildren();
+                optionsContainer.hidden = true;
+                summary.hidden = false;
+                startButton.hidden = false;
+                backButton.hidden = false;
+                renderElevenGuideSummary(steps);
+                return;
+            }
+
+            const step = steps[elevenGuideState.stepIndex];
+            stepLabel.textContent = `Step ${elevenGuideState.stepIndex + 1} of ${steps.length}`;
+            question.textContent = step.question;
+            optionsContainer.hidden = false;
+            summary.hidden = true;
+            startButton.hidden = true;
+            backButton.hidden = elevenGuideState.stepIndex === 0;
+            optionsContainer.replaceChildren();
+
+            step.options.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'guide-option';
+                button.textContent = option.label;
+                const isSelected = String(elevenGuideState.answers[step.key]) === String(option.value);
+                button.setAttribute('aria-pressed', String(isSelected));
+                if (isSelected) button.classList.add('selected');
+                button.addEventListener('click', () => {
+                    elevenGuideState.answers[step.key] = option.value;
+                    elevenGuideState.stepIndex += 1;
+                    renderElevenGuide();
+                });
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        function previousElevenGuideStep() {
+            if (elevenGuideState.stepIndex > 0) {
+                elevenGuideState.stepIndex -= 1;
+                renderElevenGuide();
+            }
+        }
+
+        function isElevenGuideComplete() {
+            return ['year_group', 'subject', 'confidence', 'question_count', 'mode']
+                .every(key => elevenGuideState.answers[key] !== undefined);
+        }
 
         // Get the server-resolved learner ID. It is backed by an HttpOnly
         // cookie and is never derived from an IP address.
@@ -68,7 +426,6 @@ let currentHomework = [];
             [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
         };
         const LEARNING_CHOICES_KEY = 'homeworkMagic.learningChoices.v1';
-        let learningChoicesSaveTimer = null;
 
         function loadLearningChoices() {
             try {
@@ -82,20 +439,34 @@ let currentHomework = [];
 
         function saveLearningChoices() {
             const existing = loadLearningChoices();
-            const homeworkYear = Number(document.getElementById('homework-year')?.value);
-            const homeworkSubject = getSelectedSubjects('homework-subjects')[0];
+            // Legacy free-text learner descriptions and current parent notes
+            // are deliberately never persisted.
+            delete existing.homeworkPrompt;
+            delete existing.elevenPrompt;
             const elevenSubject = getSelectedSubjects('eleven-subjects')[0];
-            const homeworkPrompt = document.getElementById('homework-profile');
-            const elevenPrompt = document.getElementById('eleven-profile');
             const value = {
                 ...existing,
-                homeworkYear: Number.isInteger(homeworkYear) && homeworkYear >= 1 && homeworkYear <= 6
-                    ? homeworkYear : (existing.homeworkYear || 3),
-                homeworkSubject: homeworkSubject || existing.homeworkSubject || 'Maths',
-                elevenSubject: elevenSubject || existing.elevenSubject || 'Maths',
-                homeworkPrompt: homeworkPrompt ? homeworkPrompt.value : (existing.homeworkPrompt || ''),
-                elevenPrompt: elevenPrompt ? elevenPrompt.value : (existing.elevenPrompt || '')
+                elevenSubject: elevenSubject || existing.elevenSubject || 'Maths'
             };
+            const answers = homeworkGuideState.answers;
+            const yearGroup = Number(answers.year_group);
+            const sessionMinutes = Number(answers.session_minutes);
+            if (Number.isInteger(yearGroup) && yearGroup >= 1 && yearGroup <= 6) {
+                value.homeworkYear = yearGroup;
+            }
+            if (typeof answers.subject === 'string' && answers.subject) {
+                value.homeworkSubject = answers.subject;
+            }
+            if (Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, sessionMinutes)) {
+                value.homeworkMinutes = sessionMinutes;
+            }
+            if (Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty)) {
+                value.homeworkDifficulty = answers.difficulty;
+            }
+            const questionStyle = document.getElementById('homework-question-style')?.value;
+            if (questionStyle === 'homework' || questionStyle === 'tutor') {
+                value.homeworkMode = questionStyle;
+            }
             try {
                 localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(value));
             } catch (error) {
@@ -103,27 +474,47 @@ let currentHomework = [];
             }
         }
 
-        function restoreLearningPrompts() {
+        function restoreLearningChoices() {
             const saved = loadLearningChoices();
-            const promptFields = [
-                ['homework-profile', 'homeworkPrompt'],
-                ['eleven-profile', 'elevenPrompt']
-            ];
-            promptFields.forEach(([elementId, storageKey]) => {
-                const field = document.getElementById(elementId);
-                if (field && typeof saved[storageKey] === 'string') {
-                    field.value = saved[storageKey];
-                }
+            let removedLegacyText = false;
+            ['homeworkPrompt', 'elevenPrompt'].forEach(key => {
+                if (!Object.prototype.hasOwnProperty.call(saved, key)) return;
+                removedLegacyText = true;
+                delete saved[key];
             });
-        }
+            if (removedLegacyText) {
+                try {
+                    localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(saved));
+                } catch (error) {
+                    console.warn('Could not remove an old learner description:', error);
+                }
+            }
 
-        function queueLearningChoicesSave() {
-            window.clearTimeout(learningChoicesSaveTimer);
-            learningChoicesSaveTimer = window.setTimeout(saveLearningChoices, 300);
+            const yearGroup = Number(saved.homeworkYear);
+            const sessionMinutes = Number(saved.homeworkMinutes);
+            if (Number.isInteger(yearGroup) && yearGroup >= 1 && yearGroup <= 6) {
+                homeworkGuideState.answers.year_group = yearGroup;
+            }
+            if (typeof saved.homeworkSubject === 'string' && saved.homeworkSubject.trim()) {
+                homeworkGuideState.answers.subject = saved.homeworkSubject.trim();
+                homeworkGuideState.showAllSubjects = !HOMEWORK_COMMON_SUBJECTS.includes(
+                    homeworkGuideState.answers.subject
+                );
+            }
+            if (Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, sessionMinutes)) {
+                homeworkGuideState.answers.session_minutes = sessionMinutes;
+            }
+            if (Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, saved.homeworkDifficulty)) {
+                homeworkGuideState.answers.difficulty = saved.homeworkDifficulty;
+            }
+            const questionStyle = document.getElementById('homework-question-style');
+            if (questionStyle && (saved.homeworkMode === 'homework' || saved.homeworkMode === 'tutor')) {
+                questionStyle.value = saved.homeworkMode;
+            }
+            homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
         }
 
         function clearSavedLearningPrompts() {
-            window.clearTimeout(learningChoicesSaveTimer);
             const saved = loadLearningChoices();
             delete saved.homeworkPrompt;
             delete saved.elevenPrompt;
@@ -356,15 +747,23 @@ let currentHomework = [];
 
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
-            restoreLearningPrompts();
+            restoreLearningChoices();
+            renderHomeworkGuide();
+            renderElevenGuide();
             loadSubjects();
-            const homeworkYear = document.getElementById('homework-year');
-            if (homeworkYear) homeworkYear.addEventListener('change', saveLearningChoices);
-            ['homework-profile', 'eleven-profile'].forEach(elementId => {
+            const homeworkQuestionStyle = document.getElementById('homework-question-style');
+            if (homeworkQuestionStyle) {
+                homeworkQuestionStyle.addEventListener('change', saveLearningChoices);
+            }
+            ['eleven-exam-board', 'eleven-exam-date', 'eleven-target-school'].forEach(elementId => {
                 const field = document.getElementById(elementId);
                 if (!field) return;
-                field.addEventListener('input', queueLearningChoicesSave);
-                field.addEventListener('change', saveLearningChoices);
+                const eventName = field.tagName === 'INPUT' && field.type === 'text' ? 'input' : 'change';
+                field.addEventListener(eventName, () => {
+                    if (elevenGuideState.stepIndex >= getElevenGuideSteps().length) {
+                        renderElevenGuide();
+                    }
+                });
             });
             checkAdminAccess(); // Show admin tools only to configured administrators
             const resumedPendingHomework = await restoreResumableSession();
@@ -668,13 +1067,26 @@ let currentHomework = [];
                 .then(response => response.json())
                 .then(data => {
                     const saved = loadLearningChoices();
-                    renderSubjects('homework-subjects', data.primary, saved.homeworkSubject);
+                    if (Array.isArray(data.primary) && data.primary.length > 0) {
+                        primarySubjects = data.primary;
+                        const selectedSubject = homeworkGuideState.answers.subject;
+                        if (selectedSubject && !primarySubjects.includes(selectedSubject)) {
+                            delete homeworkGuideState.answers.subject;
+                            homeworkGuideState.showQuickStart = false;
+                        } else if (selectedSubject) {
+                            homeworkGuideState.showAllSubjects = !HOMEWORK_COMMON_SUBJECTS.includes(selectedSubject);
+                        }
+                        homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
+                        renderHomeworkGuide();
+                    }
                     renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
-
-                    const homeworkYear = document.getElementById('homework-year');
-                    const savedYear = Number(saved.homeworkYear);
-                    if (homeworkYear && Number.isInteger(savedYear) && savedYear >= 1 && savedYear <= 6) {
-                        homeworkYear.value = String(savedYear);
+                    if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
+                        elevenPlusSubjects = data.eleven_plus;
+                        const selectedSubject = elevenGuideState.answers.subject;
+                        if (selectedSubject && !elevenPlusSubjects.includes(selectedSubject)) {
+                            delete elevenGuideState.answers.subject;
+                        }
+                        renderElevenGuide();
                     }
 
                     const reviewSelect = document.getElementById('review-subject');
@@ -773,53 +1185,51 @@ let currentHomework = [];
             clearSavedState();
         }
 
-        function getSelectedMode(name) {
-            const radios = document.getElementsByName(name);
-            for (const radio of radios) {
-                if (radio.checked) {
-                    return radio.value;
-                }
-            }
-            return 'homework'; // Default to homework mode
-        }
-
-        // Generate Homework - uses selected subjects directly
-        async function generateHomework() {
-            const year = parseInt(document.getElementById('homework-year').value);
-            const subjects = getSelectedSubjects('homework-subjects');
-            const mode = getSelectedMode('homework-mode');
-            const profileText = document.getElementById('homework-profile').value.trim();
-            saveLearningChoices();
-
-            if (subjects.length === 0) {
-                alert('Please select one subject!');
+        // The guided setup is deterministic and makes no extra AI call. It
+        // sends the same generation request with a small structured profile.
+        async function generateGuidedHomework() {
+            if (!isHomeworkGuideComplete()) {
+                alert('Please answer each short question first.');
+                homeworkGuideState.showQuickStart = false;
+                homeworkGuideState.stepIndex = 0;
+                renderHomeworkGuide();
                 return;
             }
 
-            // Build profile
+            const answers = homeworkGuideState.answers;
+            const yearGroup = Number(answers.year_group);
+            const sessionMinutes = Number(answers.session_minutes);
+            const questionCount = HOMEWORK_SESSION_QUESTIONS[sessionMinutes];
+            const questionStyle = document.getElementById('homework-question-style')?.value;
+            const mode = questionStyle === 'tutor' ? 'tutor' : 'homework';
+            const learningNotes = document.getElementById('homework-parent-notes')?.value.trim() || null;
+            const studentId = await getEffectiveStudentId();
             const profile = {
-                year_group: year,
-                age: 5 + (year - 1),
-                student_id: await getEffectiveStudentId()
+                setup_source: 'guided_homework',
+                year_group: yearGroup,
+                age: yearGroup + 5,
+                subject: answers.subject,
+                session_minutes: sessionMinutes,
+                difficulty: answers.difficulty,
+                learning_notes: learningNotes,
+                student_id: studentId
             };
-            if (profileText) {
-                profile.description = profileText;
-            }
 
+            saveLearningChoices();
+            homeworkGuideState.showQuickStart = true;
             clearSavedState();
             showLoading();
 
             try {
                 const response = await fetch('/api/generate', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        quick_select: true,
-                        year: year,
-                        subjects: subjects,
-                        student_id: profile.student_id,
-                        mode: mode,
-                        profile: profile
+                        profile,
+                        subjects: [answers.subject],
+                        student_id: studentId,
+                        mode,
+                        question_count: questionCount
                     })
                 });
 
@@ -840,6 +1250,7 @@ let currentHomework = [];
                     currentHomeworkMode = mode;
                     currentQuestionIndex = 0;
                     currentQuestionAnswers = {};
+                    renderHomeworkGuide();
 
                     if (currentHomeworkMode === 'tutor') {
                         displayTutorQuestion(currentQuestionIndex);
@@ -847,81 +1258,11 @@ let currentHomework = [];
                         displayHomework(data.homework);
                     }
                 } else {
-                    alert('Error: ' + data.error);
+                    alert('Error: ' + (data.error || 'We could not make that homework just now.'));
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Smart Homework - uses LLM to analyze description and determine subjects/profile
-        async function generateSmartHomework() {
-            const profileText = document.getElementById('homework-profile').value.trim();
-            const year = parseInt(document.getElementById('homework-year').value);
-            const mode = getSelectedMode('homework-mode');
-            saveLearningChoices();
-
-            if (!profileText) {
-                alert('Please describe the student first! The AI will analyze the description to generate personalized homework.');
-                return;
-            }
-
-            // Build profile with description for LLM analysis
-            const profile = {
-                description: profileText,
-                year_group: year,
-                age: 5 + (year - 1),
-                student_id: await getEffectiveStudentId()
-            };
-
-            clearSavedState();
-            showLoading();
-
-            try {
-                // Send to API - the backend will use LLM to parse the profile and determine subjects
-                const response = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        profile: profile,
-                        subjects: [], // Empty - let LLM determine from description
-                        mode: mode,
-                        student_id: profile.student_id
-                    })
-                });
-
-                const data = await response.json().catch(() => ({}));
-                if (response.status === 402) {
-                    alert(data.error || 'Subscription required for this feature.');
-                    redirectToPricing(data.resume_session_id || null);
-                    return;
-                }
-                if (response.status === 401) {
-                    redirectToLogin(data.resume_session_id || null);
-                    return;
-                }
-
-                if (data.success) {
-                    currentHomework = data.homework;
-                    currentProfile = data.profile;
-                    currentHomeworkMode = mode;
-                    currentQuestionIndex = 0;
-                    currentQuestionAnswers = {};
-
-                    if (currentHomeworkMode === 'tutor') {
-                        displayTutorQuestion(currentQuestionIndex);
-                    } else {
-                        displayHomework(data.homework);
-                    }
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred');
+                alert('We could not make that homework just now. Please try again.');
             } finally {
                 hideLoading();
             }
@@ -929,15 +1270,18 @@ let currentHomework = [];
 
         async function generateQuickHomeworkEleven() {
             const subjects = getSelectedSubjects('eleven-subjects');
-            const mode = getSelectedMode('eleven-mode');
+            const mode = 'homework';
 
             if (subjects.length === 0) {
                 alert('Please select one subject!');
                 return;
             }
 
-            // Set student_id in profile for subscription checks
-            const profile = { student_id: currentStudentId };
+            const profile = {
+                year_group: 5,
+                age: 10,
+                student_id: await getEffectiveStudentId()
+            };
 
             clearSavedState();
             showLoading();
@@ -948,10 +1292,11 @@ let currentHomework = [];
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         quick_select: true,
+                        year: 5,
                         subjects: subjects,
                         is_eleven_plus: true,
-                        mode: mode, // Pass the selected mode
-                        profile: profile // Pass profile with student_id
+                        mode: mode,
+                        profile: profile
                     })
                 });
 
@@ -990,16 +1335,39 @@ let currentHomework = [];
         }
 
         async function generateCustomHomeworkEleven() {
-            saveLearningChoices();
-            // Check subscription first
-            if (!await requireSubscription('Smart 11+ Practice', false, 'elevenplus_monthly')) return;
+            if (!isElevenGuideComplete()) {
+                alert('Please answer each short question first.');
+                elevenGuideState.stepIndex = 0;
+                renderElevenGuide();
+                return;
+            }
 
-            const profileText = document.getElementById('eleven-profile').value;
-            const subjects = getSelectedSubjects('eleven-subjects');
-            const mode = getSelectedMode('eleven-mode');
+            if (!await requireSubscription('Guided 11+ Practice', false, 'elevenplus_monthly')) return;
 
-            // Set student_id in profile for subscription checks
-            const profile = { description: profileText, student_id: currentStudentId };
+            const answers = elevenGuideState.answers;
+            const yearGroup = Number(answers.year_group);
+            const ageByYear = {3: 8, 4: 9, 5: 10, 6: 11};
+            const examBoard = document.getElementById('eleven-exam-board')?.value || 'Not sure';
+            const examDate = document.getElementById('eleven-exam-date')?.value || null;
+            const parentNotes = document.getElementById('eleven-parent-notes')?.value.trim() || null;
+            const studentId = await getEffectiveStudentId();
+            const subjects = [answers.subject];
+            const mode = answers.mode;
+
+            // Target school is deliberately not included. It is an on-page
+            // parent note only and never leaves the browser.
+            const profile = {
+                setup_source: 'guided_11plus',
+                year_group: yearGroup,
+                age: ageByYear[yearGroup] || 10,
+                subject: answers.subject,
+                confidence: answers.confidence,
+                question_count: Number(answers.question_count),
+                exam_format: examBoard,
+                exam_date: examDate,
+                learning_notes: parentNotes,
+                student_id: studentId
+            };
 
             clearSavedState();
             showLoading();
@@ -1009,10 +1377,12 @@ let currentHomework = [];
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        profile: profile, // Pass profile with student_id
+                        profile: profile,
                         subjects: subjects,
                         is_eleven_plus: true,
-                        mode: mode // Pass the selected mode
+                        mode: mode,
+                        question_count: Number(answers.question_count),
+                        student_id: studentId
                     })
                 });
 
@@ -1030,9 +1400,9 @@ let currentHomework = [];
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    currentHomeworkMode = mode; // Set the global mode
-                    currentQuestionIndex = 0; // Reset question index for new homework
-                    currentQuestionAnswers = {}; // Reset answers for new homework
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
 
                     if (currentHomeworkMode === 'tutor') {
                         displayTutorQuestion(currentQuestionIndex);

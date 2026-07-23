@@ -139,10 +139,6 @@
             min-width: 150px;
         }
 
-        #homework-year {
-            width: 100%;
-        }
-
         label {
             display: block;
             margin-bottom: 8px;
@@ -213,6 +209,227 @@
         .btn-secondary {
             background: #f0f0f0;
             color: #333;
+        }
+
+        /* Child-friendly, no-typing guided setup */
+        .homework-guide,
+        .eleven-guide {
+            max-width: 860px;
+            margin: 0 auto;
+        }
+
+        .guide-heading {
+            text-align: center;
+            margin-bottom: 22px;
+        }
+
+        .guide-heading h2 {
+            color: #4b3f72;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+
+        .guide-heading p {
+            color: #666;
+            line-height: 1.55;
+        }
+
+        .guide-step-label {
+            margin-bottom: 7px;
+            color: #666;
+            font-size: 0.94rem;
+            text-align: right;
+        }
+
+        .guide-progress {
+            height: 10px;
+            overflow: hidden;
+            margin-bottom: 24px;
+            border-radius: 999px;
+            background: #ececf7;
+        }
+
+        .guide-progress-bar {
+            width: 20%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            transition: width 0.25s ease;
+        }
+
+        .guide-teacher-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .guide-avatar {
+            width: 52px;
+            height: 52px;
+            flex: 0 0 52px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffdc73, #ff9f68);
+            box-shadow: 0 4px 12px rgba(118, 75, 162, 0.18);
+            font-size: 28px;
+        }
+
+        .guide-bubble {
+            flex: 1;
+            min-height: 64px;
+            padding: 18px 20px;
+            border-radius: 8px 20px 20px;
+            background: #f5f3ff;
+            color: #35304c;
+            font-size: 1.15rem;
+            font-weight: 650;
+            line-height: 1.45;
+        }
+
+        .guide-options {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin: 0 0 22px 66px;
+        }
+
+        .guide-option {
+            min-height: 58px;
+            padding: 12px 16px;
+            border: 2px solid #dedcf0;
+            border-radius: 14px;
+            background: white;
+            color: #3f3a55;
+            cursor: pointer;
+            font: inherit;
+            font-size: 1rem;
+            font-weight: 650;
+            line-height: 1.35;
+            transition: border-color 0.2s, background 0.2s, transform 0.2s;
+        }
+
+        .guide-option:hover,
+        .guide-option:focus-visible {
+            border-color: #667eea;
+            background: #f8f9ff;
+            outline: none;
+            transform: translateY(-1px);
+        }
+
+        .guide-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .guide-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-left: 66px;
+        }
+
+        .guide-summary {
+            margin: 0 0 22px 66px;
+            padding: 20px;
+            border: 2px solid #dddaf2;
+            border-radius: 16px;
+            background: #fbfaff;
+        }
+
+        .guide-summary h3 {
+            margin-bottom: 12px;
+            color: #4b3f72;
+        }
+
+        .guide-summary-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px 18px;
+            list-style: none;
+        }
+
+        .guide-summary-list li {
+            color: #4f4a61;
+            line-height: 1.45;
+        }
+
+        .parent-setup,
+        .quick-eleven-start {
+            max-width: 860px;
+            margin: 26px auto 0;
+            border: 1px solid #dedcf0;
+            border-radius: 15px;
+            background: #fbfaff;
+        }
+
+        .parent-setup summary,
+        .quick-eleven-start summary {
+            padding: 17px 20px;
+            color: #4b3f72;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .parent-setup-content,
+        .quick-eleven-content {
+            padding: 4px 20px 20px;
+        }
+
+        .parent-fields {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .parent-fields .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .privacy-note {
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            background: #f0effa;
+            color: #514b68;
+            font-size: 0.93rem;
+            line-height: 1.5;
+        }
+
+        .homework-quick-start {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 24px;
+            border: 2px solid #dddaf2;
+            border-radius: 18px;
+            background: #fbfaff;
+        }
+
+        .homework-quick-start[hidden] {
+            display: none;
+        }
+
+        .homework-quick-start h2 {
+            margin-bottom: 8px;
+            color: #4b3f72;
+            font-size: 1.55rem;
+            line-height: 1.35;
+        }
+
+        .homework-quick-start p {
+            color: #625c75;
+            line-height: 1.5;
+        }
+
+        .quick-start-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 20px 0 0 66px;
         }
         
         /* Loading */
@@ -646,6 +863,30 @@
             .form-grid {
                 grid-template-columns: 1fr;
             }
+
+            .guide-options,
+            .guide-summary,
+            .guide-actions,
+            .quick-start-actions {
+                margin-left: 0;
+            }
+
+            .guide-options,
+            .guide-summary-list,
+            .parent-fields {
+                grid-template-columns: 1fr;
+            }
+
+            .guide-avatar {
+                width: 46px;
+                height: 46px;
+                flex-basis: 46px;
+                font-size: 24px;
+            }
+
+            .guide-bubble {
+                font-size: 1.05rem;
+            }
         }
 
         /* Progress dashboard */
@@ -805,103 +1046,179 @@
         <!-- Combined Homework Generator Tab -->
         <div id="homework" class="content active">
             <div class="card">
-                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
-                    <div class="form-group">
-                        <label for="homework-profile">Tell me about your learner</label>
-                        <textarea id="homework-profile" rows="5"
-                            placeholder="e.g. Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics...">
-Ana is a 7-year-old student in Year 2 in London. She has a particular interest in mathematics. Ana is committed to spending 15-30 minutes each day developing her maths skills.
-</textarea>
+                <div class="homework-guide" id="homework-guide-panel" aria-labelledby="homework-guide-title">
+                    <div class="guide-heading">
+                        <h2 id="homework-guide-title">Make today’s homework with me</h2>
+                        <p>Your Magic Teacher will ask one short question at a time. Just tap your answers—no long typing.</p>
                     </div>
-                    <div class="form-group">
-                        <label>Choose how to practise</label>
-                        <div class="mode-selection">
-                            <label>
-                                <input type="radio" name="homework-mode" value="homework" checked>
-                                Worksheet mode — all questions together
-                            </label>
-                            <label>
-                                <input type="radio" name="homework-mode" value="tutor">
-                                Tutor mode — one question at a time
-                            </label>
+
+                    <div class="guide-step-label" id="homework-guide-step-label" aria-live="polite">Step 1 of 4</div>
+                    <div class="guide-progress" aria-hidden="true">
+                        <div class="guide-progress-bar" id="homework-guide-progress"></div>
+                    </div>
+
+                    <div class="guide-teacher-row">
+                        <div class="guide-avatar" aria-hidden="true">🪄</div>
+                        <div class="guide-bubble" id="homework-guide-question" aria-live="polite">
+                            Hi! What year are you in?
                         </div>
-                        <button class="btn btn-primary" onclick="generateSmartHomework()">
-                            Make personalised homework
+                    </div>
+
+                    <div class="guide-options" id="homework-guide-options" role="group" aria-label="Choose an answer"></div>
+                    <div class="guide-summary" id="homework-guide-summary" hidden></div>
+
+                    <div class="guide-actions">
+                        <button type="button" class="btn btn-secondary" id="homework-guide-back"
+                                onclick="previousHomeworkGuideStep()" hidden>
+                            ← Back
+                        </button>
+                        <span aria-hidden="true"></span>
+                        <button type="button" class="btn btn-primary" id="homework-guide-start"
+                                onclick="generateGuidedHomework()" hidden>
+                            ✨ Make my homework
                         </button>
                     </div>
                 </div>
 
-                <!-- ADDED LINE HERE WITH SPACING -->
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
-
-                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
-                    <div class="form-group">
-                        <label>1. Pick one subject</label>
-                        <div class="subject-grid" id="homework-subjects"></div>
+                <section class="homework-quick-start" id="homework-quick-start" aria-labelledby="homework-quick-title" hidden>
+                    <div class="guide-teacher-row">
+                        <div class="guide-avatar" aria-hidden="true">🪄</div>
+                        <div>
+                            <h2 id="homework-quick-title">Ready for today’s homework?</h2>
+                            <p id="homework-quick-detail">Your saved choices are ready.</p>
+                        </div>
                     </div>
-                    <div class="form-group" style="min-width: 150px;">
-                        <label for="homework-year">2. Pick a year group</label>
-                        <select id="homework-year" style="width: 100%;">
-                            <option value="1">Year 1</option>
-                            <option value="2">Year 2</option>
-                            <option value="3" selected>Year 3</option>
-                            <option value="4">Year 4</option>
-                            <option value="5">Year 5</option>
-                            <option value="6">Year 6</option>
-                        </select>
-<!--                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">-->
-                        <button class="btn btn-primary" onclick="generateHomework()" style="width: 100%">
-                            Let’s go!
+                    <div class="quick-start-actions">
+                        <button type="button" class="btn btn-primary" onclick="generateGuidedHomework()">
+                            Start now ✨
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="changeHomeworkGuide()">
+                            Change it
                         </button>
                     </div>
-               </div>
+                </section>
+
+                <details class="parent-setup">
+                    <summary>Parent settings (optional)</summary>
+                    <div class="parent-setup-content">
+                        <p class="privacy-note">
+                            Please do not enter your child’s name, school, home address, postcode,
+                            email address or phone number. Learning notes are not saved in this browser.
+                        </p>
+                        <div class="parent-fields">
+                            <div class="form-group">
+                                <label for="homework-question-style">Show questions</label>
+                                <select id="homework-question-style">
+                                    <option value="homework" selected>All together (worksheet)</option>
+                                    <option value="tutor">One at a time (Tutor mode)</option>
+                                </select>
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="homework-parent-notes">Learning notes (optional)</label>
+                                <textarea id="homework-parent-notes" rows="3" maxlength="300"
+                                          autocomplete="off"
+                                          placeholder="For example: times tables are tricky; enjoys space questions. Do not include personal details."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </details>
             </div>
         </div>
 
         <!-- 11+ Practice Tab -->
         <div id="eleven" class="content">
             <div class="card">
-                <div class="homework-grid">
-                    <div class="form-group">
-                        <label for="eleven-profile">Tell me about your 11+ goal</label>
-                        <textarea id="eleven-profile" rows="6">
-Ana is a 10 years old student in Year 5 in London. She is a strong student with a solid foundation in mathematics and numerical reasoning. Exam Target: 11+ Grammar School Entrance Exams (focusing on GL Assessment style, covering Mathematics, English, Verbal Reasoning, and Non-Verbal Reasoning)
-</textarea>
+                <div class="eleven-guide" aria-labelledby="eleven-guide-title">
+                    <div class="guide-heading">
+                        <h2 id="eleven-guide-title">Plan my practice with me</h2>
+                        <p>Your Magic Teacher will ask one short question at a time. You do not need to type a long answer.</p>
                     </div>
-                    <div class="form-group">
-                        <label>Choose how to practise</label>
-                        <div class="mode-selection">
-                            <label>
-                                <input type="radio" name="eleven-mode" value="homework" checked>
-                                Practice set — all questions together
-                            </label>
-                            <label>
-                                <input type="radio" name="eleven-mode" value="tutor">
-                                Tutor mode — one question at a time
-                            </label>
+
+                    <div class="guide-step-label" id="eleven-guide-step-label" aria-live="polite">Step 1 of 5</div>
+                    <div class="guide-progress" aria-hidden="true">
+                        <div class="guide-progress-bar" id="eleven-guide-progress"></div>
+                    </div>
+
+                    <div class="guide-teacher-row">
+                        <div class="guide-avatar" aria-hidden="true">🪄</div>
+                        <div class="guide-bubble" id="eleven-guide-question" aria-live="polite">
+                            Hi! What year are you in?
                         </div>
-                        <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">
-                        Make personalised 11+ practice
+                    </div>
+
+                    <div class="guide-options" id="eleven-guide-options" role="group" aria-label="Choose an answer"></div>
+                    <div class="guide-summary" id="eleven-guide-summary" hidden></div>
+
+                    <div class="guide-actions">
+                        <button type="button" class="btn btn-secondary" id="eleven-guide-back"
+                                onclick="previousElevenGuideStep()" hidden>
+                            ← Back
+                        </button>
+                        <span aria-hidden="true"></span>
+                        <button type="button" class="btn btn-primary" id="eleven-guide-start"
+                                onclick="generateCustomHomeworkEleven()" hidden>
+                            Let’s go! ✨
                         </button>
                     </div>
                 </div>
-                <!-- ADDED LINE HERE WITH SPACING -->
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
 
-                <div class="homework-grid">
-                    <div class="form-group">
-                        <label>Pick one subject for a quick practice set</label>
-                        <div class="subject-grid" id="eleven-subjects"></div>
+                <details class="parent-setup">
+                    <summary>Parent setup (optional)</summary>
+                    <div class="parent-setup-content">
+                        <p class="privacy-note">
+                            Please do not enter your child’s name, current school, home address, postcode,
+                            email address or phone number. The target-school note stays on this page and is
+                            not sent to the AI.
+                        </p>
+                        <div class="parent-fields">
+                            <div class="form-group">
+                                <label for="eleven-exam-board">Exam format</label>
+                                <select id="eleven-exam-board">
+                                    <option value="Not sure" selected>Not sure yet</option>
+                                    <option value="GL Assessment">GL Assessment</option>
+                                    <option value="CEM">CEM</option>
+                                    <option value="ISEB Common Pre-Test">ISEB Common Pre-Test</option>
+                                    <option value="School-specific">School-specific test</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="eleven-exam-date">Exam date</label>
+                                <input id="eleven-exam-date" type="date">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="eleven-target-school">Target school (optional, for your on-page plan only)</label>
+                                <input id="eleven-target-school" type="text" maxlength="120"
+                                       autocomplete="off" placeholder="Do not enter your child’s current school">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="eleven-parent-notes">Learning notes (optional)</label>
+                                <textarea id="eleven-parent-notes" rows="3" maxlength="300"
+                                          placeholder="For example: fractions are tricky; enjoys word puzzles. Do not include personal details."></textarea>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group" style="min-width: 150px;">
-                        <button class="btn btn-primary" onclick="generateQuickHomeworkEleven()" style="width: 100%;">
-                        Start 11+ practice
-                        </button>
-    <!--                <button class="btn btn-primary" onclick="generateCustomHomeworkEleven()">-->
-    <!--                    Smart 11+ Practice!-->
-    <!--                </button>-->
+                </details>
+
+                <details class="quick-eleven-start">
+                    <summary>Quick start: choose one subject</summary>
+                    <div class="quick-eleven-content">
+                        <p style="color: #666; margin-bottom: 18px;">
+                            Skip the guided setup and get a standard practice set.
+                        </p>
+                        <div class="homework-grid">
+                            <div class="form-group">
+                                <label>Subject</label>
+                                <div class="subject-grid" id="eleven-subjects"></div>
+                            </div>
+                            <div class="form-group" style="min-width: 150px;">
+                                <button type="button" class="btn btn-primary"
+                                        onclick="generateQuickHomeworkEleven()" style="width: 100%;">
+                                    Start quick practice
+                                </button>
+                            </div>
+                        </div>
                     </div>
-               </div>
+                </details>
             </div>
         </div>
 
@@ -1125,7 +1442,7 @@ Ana is a 10 years old student in Year 5 in London. She is a strong student with 
         <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
     </div>
 
-    <script src="/static/js/app.js?v=20260722-prompt-memory" defer></script>
+    <script src="/static/js/app.js?v=20260723-guided-homework" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

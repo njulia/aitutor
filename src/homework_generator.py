@@ -210,6 +210,12 @@ def generate_homework_for_subject(
 
     homework_info = get_homework_time_by_age(year_group)
     homework_time = homework_info["daily_homework_minutes"]
+    try:
+        preferred_minutes = int(student_profile.get("preferred_session_minutes") or 0)
+    except (TypeError, ValueError):
+        preferred_minutes = 0
+    if preferred_minutes in {10, 15, 20}:
+        homework_time = str(preferred_minutes)
     learner_key = str(student_profile.get("student_id") or "anonymous")[:100]
     try:
         requested_week = int(student_profile.get("plan_week") or 0)

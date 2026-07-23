@@ -40,6 +40,69 @@ def test_year1_maths_generation_preserves_rag_metadata(client, app_module, monke
     assert item["is_eleven_plus"] is False
 
 
+def test_guided_primary_generation_uses_structured_choices_and_time_limit(
+    client, app_module, monkeypatch
+) -> None:
+    captured = {}
+
+    def fake_generate(profile, subjects, is_eleven_plus=False):
+        captured["profile"] = profile
+        captured["subjects"] = subjects
+        assert is_eleven_plus is False
+        return [{
+            "subject": "Science",
+            "content": "full worksheet",
+            "questions": [
+                {
+                    "number": index,
+                    "question": f"Question {index}?",
+                    "response_type": "text",
+                    "options": [],
+                }
+                for index in range(1, 11)
+            ],
+            "doc_id": "science_y2_guided",
+            "from_rag": True,
+        }]
+
+    monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
+    response = client.post(
+        "/api/generate",
+        json={
+            "profile": {
+                "setup_source": "guided_homework",
+                "year_group": 2,
+                "subject": "Science",
+                "session_minutes": 10,
+                "difficulty": "gentle",
+                "learning_notes": "Email pupil@example.com. Reading is tricky.",
+                "description": "Do not keep this.",
+                "target_school": "Do not keep this.",
+            },
+            "subjects": ["Unknown subject"],
+            "mode": "homework",
+            "question_count": 20,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    profile = captured["profile"]
+    assert captured["subjects"] == ["Science"]
+    assert profile["preferred_session_minutes"] == 10
+    assert profile["question_count"] == 5
+    assert "pupil@example.com" not in profile["learning_needs"]
+    assert "description" not in profile
+    assert "target_school" not in profile
+
+    body = response.json()
+    assert len(body["homework"][0]["questions"]) == 5
+    assert "Question 5?" in body["homework"][0]["content"]
+    assert "Question 6?" not in body["homework"][0]["content"]
+    assert "student_id" not in body["profile"]
+    assert "learning_needs" not in body["profile"]
+    assert body["profile"]["difficulty"] == "gentle"
+
+
 def test_tutor_mode_keeps_question_index_and_doc_id(client, app_module, monkeypatch) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         return [{
@@ -452,3 +515,98 @@ def test_api_unwraps_legacy_json_homework_before_returning_it(
     content = response.json()["homework"][0]["content"]
     assert content == "1. Say hello in French.\n2. Say goodbye in French."
     assert "correct_answers" not in content
+
+
+def test_guided_elevenplus_uses_structured_profile_and_requested_length(
+    client, app_module, monkeypatch
+) -> None:
+    questions = [
+        {
+            "number": index,
+            "question": f"Choose answer {index}.",
+            "response_type": "single_choice",
+            "options": [
+                {"label": "A", "text": "First"},
+                {"label": "B", "text": "Second"},
+            ],
+        }
+        for index in range(1, 9)
+    ]
+
+    def fake_generate(profile, subjects, is_eleven_plus=False):
+        assert subjects == ["English"]
+        assert is_eleven_plus is True
+        assert profile["year_group"] == 4
+        assert profile["question_count"] == 5
+        assert profile["confidence"] == "sometimes_tricky"
+        assert "target_school" not in profile
+        assert "child@example.com" not in profile["learning_needs"]
+        return [{
+            "subject": "English",
+            "content": "full worksheet",
+            "questions": questions,
+            "doc_id": "guided_english",
+            "from_rag": True,
+        }]
+
+    monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
+    monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: True)
+
+    response = client.post(
+        "/api/generate",
+        json={
+            "profile": {
+                "setup_source": "guided_11plus",
+                "year_group": 4,
+                "subject": "English",
+                "confidence": "sometimes_tricky",
+                "question_count": 5,
+                "exam_format": "GL Assessment",
+                "learning_notes": "Email child@example.com. Reading is tricky.",
+                "target_school": "Must not be retained",
+            },
+            "subjects": ["Maths"],
+            "is_eleven_plus": True,
+            "mode": "homework",
+            "question_count": 5,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["homework"][0]["questions"]) == 5
+    assert body["homework"][0]["is_eleven_plus"] is True
+    assert "Choose answer 6." not in body["homework"][0]["content"]
+    assert "student_id" not in body["profile"]
+    assert "learning_needs" not in body["profile"]
+
+
+def test_guided_elevenplus_checks_entitlement_before_generation(
+    client, app_module, monkeypatch
+) -> None:
+    monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: False)
+    monkeypatch.setattr(
+        app_module,
+        "generate_homework_with_profile",
+        lambda *_args, **_kwargs: pytest.fail("Generation must not run before entitlement"),
+    )
+
+    response = client.post(
+        "/api/generate",
+        json={
+            "profile": {
+                "setup_source": "guided_11plus",
+                "year_group": 5,
+                "subject": "Maths",
+                "confidence": "confident",
+                "question_count": 5,
+            },
+            "subjects": ["Maths"],
+            "is_eleven_plus": True,
+            "mode": "tutor",
+            "question_count": 5,
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["required_plan"] == "elevenplus_monthly"

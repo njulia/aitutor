@@ -8,6 +8,20 @@ from playwright.sync_api import Page, expect
 pytestmark = pytest.mark.e2e
 
 
+def complete_homework_guide(
+    page: Page,
+    *,
+    year: int = 2,
+    subject: str = "Maths",
+    minutes: int = 10,
+    difficulty: str = "Gentle",
+) -> None:
+    page.get_by_role("button", name=f"Year {year}", exact=True).click()
+    page.get_by_role("button", name=subject, exact=True).click()
+    page.get_by_role("button", name=re.compile(rf"^{minutes} minutes")).click()
+    page.get_by_role("button", name=re.compile(difficulty, re.I)).click()
+
+
 def test_last_primary_year_and_subject_are_restored(
     page: Page,
     e2e_base_url: str,
@@ -18,30 +32,39 @@ def test_last_primary_year_and_subject_are_restored(
         if (!localStorage.getItem('homeworkMagic.learningChoices.v1')) {
           localStorage.setItem(
             'homeworkMagic.learningChoices.v1',
-            JSON.stringify({homeworkYear: 5, homeworkSubject: 'English'})
+            JSON.stringify({
+              homeworkYear: 5,
+              homeworkSubject: 'English',
+              homeworkMinutes: 15,
+              homeworkDifficulty: 'just_right'
+            })
           );
         }
         """
     )
     page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
 
-    expect(page.locator("#homework-subjects .subject-item").first).to_be_visible()
-    expect(page.locator("#homework-year")).to_have_value("5")
-    expect(page.locator('#homework-subjects .subject-item[data-subject="English"]')).to_have_class(
-        re.compile(r"\bselected\b")
+    expect(page.locator("#homework-quick-title")).to_have_text(
+        "Ready for Year 5 English for 15 minutes?"
     )
 
-    page.locator("#homework-year").select_option("4")
-    page.locator('#homework-subjects .subject-item[data-subject="Science"]').click()
+    page.get_by_role("button", name="Change it").click()
+    complete_homework_guide(
+        page,
+        year=4,
+        subject="Science",
+        minutes=20,
+        difficulty="Challenge me",
+    )
+    expect(page.locator("#homework-guide-step-label")).to_have_text("Ready to start")
     page.reload(wait_until="domcontentloaded")
 
-    expect(page.locator("#homework-year")).to_have_value("4")
-    expect(page.locator('#homework-subjects .subject-item[data-subject="Science"]')).to_have_class(
-        re.compile(r"\bselected\b")
+    expect(page.locator("#homework-quick-title")).to_have_text(
+        "Ready for Year 4 Science for 20 minutes?"
     )
 
 
-def test_last_tell_me_about_entries_are_restored(
+def test_legacy_descriptions_are_removed_and_parent_notes_are_not_saved(
     page: Page,
     e2e_base_url: str,
     mock_common_app_endpoints,
@@ -59,25 +82,25 @@ def test_last_tell_me_about_entries_are_restored(
     )
     page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
 
-    expect(page.locator("#homework-profile")).to_have_value(
-        "Mia enjoys fractions and needs help with times tables."
+    expect(page.locator("#homework-profile")).to_have_count(0)
+    expect(page.locator("#homework-parent-notes")).to_have_value("")
+    expect(page.locator("#eleven-profile")).to_have_count(0)
+    expect(page.locator("#eleven-guide-question")).to_contain_text("What year")
+    saved = page.evaluate(
+        "() => JSON.parse(localStorage.getItem('homeworkMagic.learningChoices.v1') || '{}')"
     )
-    expect(page.locator("#eleven-profile")).to_have_value(
-        "Leo is preparing for GL verbal reasoning."
-    )
+    assert "homeworkPrompt" not in saved
+    assert "elevenPrompt" not in saved
 
-    page.locator("#homework-profile").fill("Mia would like more Year 4 fractions practice.")
+    page.locator("#homework-parent-notes").fill("Fractions are tricky.")
     page.get_by_role("button", name=re.compile(r"11\+ practice", re.I)).click()
-    page.locator("#eleven-profile").fill("Leo is now focusing on GL English comprehension.")
+    page.get_by_role("button", name="Year 4").click()
+    expect(page.locator("#eleven-guide-step-label")).to_have_text("Step 2 of 5")
     page.wait_for_timeout(500)
     page.reload(wait_until="domcontentloaded")
 
-    expect(page.locator("#homework-profile")).to_have_value(
-        "Mia would like more Year 4 fractions practice."
-    )
-    expect(page.locator("#eleven-profile")).to_have_value(
-        "Leo is now focusing on GL English comprehension."
-    )
+    expect(page.locator("#homework-parent-notes")).to_have_value("")
+    expect(page.locator("#eleven-guide-step-label")).to_have_text("Step 1 of 5")
 
 
 def test_primary_homework_generate_answer_and_review_journey(
@@ -140,9 +163,9 @@ def test_primary_homework_generate_answer_and_review_journey(
 
     page.route("**/api/review", handle_review)
     page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
-    expect(page.locator("#homework-subjects .subject-item").first).to_be_visible()
-    page.locator("#homework-year").select_option("2")
-    page.get_by_role("button", name="Generate Homework", exact=True).click()
+    expect(page.locator("#homework-guide-question")).to_contain_text("What year")
+    complete_homework_guide(page, year=2, subject="Maths", minutes=10, difficulty="Gentle")
+    page.get_by_role("button", name="Make my homework", exact=False).click()
 
     expect(page.locator(".question-response-item")).to_have_count(2)
     page.locator(".multiple-choice-option").nth(1).click()
@@ -203,8 +226,9 @@ def test_review_requires_every_visible_answer(
     page.route("**/api/review", handle_review)
     page.on("dialog", lambda dialog: dialog.accept())
     page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
-    expect(page.locator("#homework-subjects .subject-item").first).to_be_visible()
-    page.get_by_role("button", name="Generate Homework", exact=True).click()
+    expect(page.locator("#homework-guide-question")).to_contain_text("What year")
+    complete_homework_guide(page, year=1, subject="Maths", minutes=10, difficulty="Gentle")
+    page.get_by_role("button", name="Make my homework", exact=False).click()
     page.locator(".multiple-choice-option").first.click()
     page.get_by_role("button", name="Quick Review").click()
     page.wait_for_timeout(200)
