@@ -454,7 +454,10 @@ let currentHomework = [];
             if (Number.isInteger(yearGroup) && yearGroup >= 1 && yearGroup <= 6) {
                 value.homeworkYear = yearGroup;
             }
-            if (typeof answers.subject === 'string' && answers.subject) {
+            const homeworkGridSubject = getSelectedSubjects('homework-subjects')[0];
+            if (homeworkGridSubject) {
+                value.homeworkSubject = homeworkGridSubject;
+            } else if (typeof answers.subject === 'string' && answers.subject) {
                 value.homeworkSubject = answers.subject;
             }
             if (Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, sessionMinutes)) {
@@ -1079,8 +1082,9 @@ let currentHomework = [];
                         homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
                         renderHomeworkGuide();
                     }
-                    renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
-                    if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
+                    renderSubjects('homework-subjects', data.primary, saved.homeworkSubject);
+            renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
+            if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
                         elevenPlusSubjects = data.eleven_plus;
                         const selectedSubject = elevenGuideState.answers.subject;
                         if (selectedSubject && !elevenPlusSubjects.includes(selectedSubject)) {
@@ -1263,6 +1267,91 @@ let currentHomework = [];
             } catch (error) {
                 console.error('Error:', error);
                 alert('We could not make that homework just now. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function getSelectedMode(name) {
+            const radios = document.getElementsByName(name);
+            for (const radio of radios) {
+                if (radio.checked) {
+                    return radio.value;
+                }
+            }
+            return 'homework'; // Default to homework mode
+        }
+
+        // Generate Homework - uses selected subjects directly
+        async function generateHomework() {
+            const year = parseInt(document.getElementById('homework-year').value);
+            const subjects = getSelectedSubjects('homework-subjects');
+            const questionStyle = document.getElementById('homework-question-style')?.value;
+            const mode = questionStyle === 'tutor' ? 'tutor' : 'homework';
+            const profileText = document.getElementById('homework-parent-notes')?.value.trim() || '';
+            saveLearningChoices();
+
+            if (subjects.length === 0) {
+                alert('Please select one subject!');
+                return;
+            }
+
+            // Build profile
+            const profile = {
+                year_group: year,
+                age: 5 + (year - 1),
+                student_id: await getEffectiveStudentId()
+            };
+            if (profileText) {
+                profile.description = profileText;
+            }
+
+            clearSavedState();
+            showLoading();
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quick_select: true,
+                        year: year,
+                        subjects: subjects,
+                        student_id: profile.student_id,
+                        mode: mode,
+                        profile: profile
+                    })
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 402) {
+                    alert(data.error || 'Subscription required for this feature.');
+                    redirectToPricing(data.resume_session_id || null);
+                    return;
+                }
+                if (response.status === 401) {
+                    redirectToLogin(data.resume_session_id || null);
+                    return;
+                }
+
+                if (data.success) {
+                    currentHomework = data.homework;
+                    currentProfile = data.profile;
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
+
+                    if (currentHomeworkMode === 'tutor') {
+                        displayTutorQuestion(currentQuestionIndex);
+                    } else {
+                        displayHomework(data.homework);
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred');
             } finally {
                 hideLoading();
             }

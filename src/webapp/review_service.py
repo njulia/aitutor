@@ -44,9 +44,11 @@ _PRACTICE_SECTION_RE = re.compile(
     r"(?:(?:similar|targeted|extra|adaptive)\s+)?practice questions?\s*:?[\s*]*$"
 )
 _NUMBERED_PRACTICE_QUESTION_RE = re.compile(
-    r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?"
-    r"(?:(?:practice|challenge)\s+)?(?:question|q)?\s*\d+\s*"
-    r"(?:[).:\-]|\*\*)\s*\S"
+    r"(?im)^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?"
+    r"(?:(?:practice|challenge)\s+)?(?:question|q)?\s*\d+[ \t]*"
+    # 接受三种编号问题格式：1) 行内带标点正文、2) 加粗 **1.** 正文、
+    # 3) 标题式 ### Question 1（编号后直接换行，正文在下一行）
+    r"(?:[).:\-][ \t]*\S|\*\*[ \t]*\S|$)"
 )
 
 
