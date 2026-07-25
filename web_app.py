@@ -813,35 +813,113 @@ async def sitemap():
 async def elevenplus_articles():
     return _static_page("static", "elevenplus", "articles.html")
 
+@app.get("/elevenplus/11plus-exam-formats")
+async def elevenplus_exam_formats():
+    return _static_page("static", "elevenplus", "11plus-exam-formats.html")
 
-@app.get("/elevenplus/uk-grammar-guide")
-async def elevenplus_grammar_guide():
-    return _static_page("static", "elevenplus", "uk_grammar_guide.html")
-
-
-@app.get("/elevenplus/11plus-vocabulary-list")
-async def elevenplus_vocabulary_list():
-    return _static_page("static", "elevenplus", "11plus_vocabulary_list.html")
-
+@app.get("/elevenplus/11plus-preparation-timeline")
+async def elevenplus_preparation_timeline():
+    return _static_page("static", "elevenplus", "11plus-preparation-timeline.html")
 
 @app.get("/elevenplus/11plus-acceptance-rates-gcse")
 async def elevenplus_acceptance_rates_gcse():
     return _static_page("static", "elevenplus", "11plus_acceptance_rates_gcse.html")
 
-
 @app.get("/elevenplus/11plus-maths-common-mistake")
 async def elevenplus_math_common_mistake():
     return _static_page("static", "elevenplus", "11plus_maths_common_mistakes.html")
-
 
 @app.get("/elevenplus/11plus-school-guide")
 async def elevenplus_school_guide():
     return _static_page("static", "elevenplus", "11plus_school_guide.html")
 
-
 @app.get("/elevenplus/11plus-time-management")
 async def elevenplus_time_management():
     return _static_page("static", "elevenplus", "11plus_time_management.html")
+
+@app.get("/elevenplus/11plus-vocabulary-list")
+async def elevenplus_vocabulary_list():
+    return _static_page("static", "elevenplus", "11plus_vocabulary_list.html")
+
+@app.get("/elevenplus/comprehension-question-types")
+async def elevenplus_comprehension_question_types():
+    return _static_page("static", "elevenplus", "comprehension-question-types.html")
+
+@app.get("/elevenplus/english-comprehension-strategies")
+async def elevenplus_english_comprehension_strategies():
+    return _static_page("static", "elevenplus", "english-comprehension-strategies.html")
+
+@app.get("/elevenplus/essay-writing-guide")
+async def elevenplus_essay_writing_guide():
+    return _static_page("static", "elevenplus", "essay-writing-guide.html")
+
+@app.get("/elevenplus/exam-day-preparation")
+async def elevenplus_exam_day_preparation():
+    return _static_page("static", "elevenplus", "exam-day-preparation.html")
+
+@app.get("/elevenplus/fractions-decimals-percentages")
+async def elevenplus_fractions_decimals_percentages():
+    return _static_page("static", "elevenplus", "fractions-decimals-percentages.html")
+
+@app.get("/elevenplus/geometry-algebra-fundamentals")
+async def elevenplus_geometry_algebra_fundamentals():
+    return _static_page("static", "elevenplus", "geometry-algebra-fundamentals.html")
+
+@app.get("/elevenplus/managing-test-anxiety")
+async def elevenplus_managing_test_anxiety():
+    return _static_page("static", "elevenplus", "managing-test-anxiety.html")
+
+@app.get("/elevenplus/maths-topics-checklist")
+async def elevenplus_maths_topics_checklist():
+    return _static_page("static", "elevenplus", "maths-topics-checklist.html")
+
+@app.get("/elevenplus/mock-exam-strategy")
+async def elevenplus_mock_exam_strategy():
+    return _static_page("static", "elevenplus", "mock-exam-strategy.html")
+
+@app.get("/elevenplus/non-verbal-reasoning-guide")
+async def elevenplus_non_verbal_reasoning_guide():
+    return _static_page("static", "elevenplus", "non-verbal-reasoning-guide.html")
+
+@app.get("/elevenplus/problem-solving-techniques")
+async def elevenplus_problem_solving_techniques():
+    return _static_page("static", "elevenplus", "problem-solving-techniques.html")
+
+@app.get("/elevenplus/revision-techniques")
+async def elevenplus_revision_techniques():
+    return _static_page("static", "elevenplus", "revision-techniques.html")
+
+@app.get("/elevenplus/selective-schools-admission")
+async def elevenplus_selective_schools_admission():
+    return _static_page("static", "elevenplus", "selective-schools-admission.html")
+
+@app.get("/elevenplus/spatial-awareness-practice")
+async def elevenplus_spatial_awareness_practice():
+    return _static_page("static", "elevenplus", "spatial-awareness-practice.html")
+
+@app.get("/elevenplus/spelling-punctuation-grammar")
+async def elevenplus_spelling_punctuation_grammar():
+    return _static_page("static", "elevenplus", "spelling-punctuation-grammar.html")
+
+@app.get("/elevenplus/stress-management-techniques")
+async def elevenplus_stress_management_techniques():
+    return _static_page("static", "elevenplus", "stress-management-techniques.html")
+
+@app.get("/elevenplus/supporting-child-preparation")
+async def elevenplus_supporting_child_preparation():
+    return _static_page("static", "elevenplus", "supporting-child-preparation.html")
+
+@app.get("/elevenplus/tutoring-vs-self-study")
+async def elevenplus_tutoring_vs_self_study():
+    return _static_page("static", "elevenplus", "tutoring-vs-self-study.html")
+
+@app.get("/elevenplus/uk-grammar-guide")
+async def elevenplus_grammar_guide():
+    return _static_page("static", "elevenplus", "uk_grammar_guide.html")
+
+@app.get("/elevenplus/verbal-reasoning-tips")
+async def elevenplus_verbal_reasoning_tips():
+    return _static_page("static", "elevenplus", "verbal-reasoning-tips.html")
 
 
 # --- API endpoints ---

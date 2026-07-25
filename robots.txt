@@ -1,10 +1,10 @@
 # Homework Magic - robots.txt
-# This file controls how search engines crawl and index the website
+# https://homeworkmagic.co.uk/robots.txt
 
-# Allow all robots
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /admin-messages/
 Disallow: /private/
 Disallow: /user-data/
 Disallow: /uploads/
@@ -12,22 +12,31 @@ Disallow: /*.pdf$
 Disallow: /api/
 Disallow: /temp/
 Disallow: /cache/
+Disallow: /app
+Disallow: /homework
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /progress
+Disallow: /memory
 
-# Allow specific slow crawlers with delay
+# Crawl-delay for aggressive bots
 User-agent: AhrefsBot
 Crawl-delay: 10
 
 User-agent: SemrushBot
 Crawl-delay: 5
 
-# Block bad bots
+# Block bad bots entirely
 User-agent: MJ12bot
 Disallow: /
 
-User-agent: AhrefsBot
+User-agent: GPTBot
 Disallow: /
 
-# Sitemap location
-Sitemap: https://www.homeworkmagic.co.uk/sitemap.xml
-Sitemap: https://www.homeworkmagic.co.uk/sitemap-articles.xml
-Sitemap: https://www.homeworkmagic.co.uk/sitemap-questions.xml
+User-agent: CCBot
+Disallow: /
+
+# Sitemap
+Sitemap: https://homeworkmagic.co.uk/sitemap.xml
