@@ -992,6 +992,55 @@
             background: #e0e0e0;
             color: #333;
         }
+
+        /* ===== Voice Feature Styles (Tier 0) ===== */
+        .voice-controls-tutor,
+        .voice-controls-answer {
+            margin: 10px 0;
+        }
+
+        .voice-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            margin-right: 8px;
+            margin-bottom: 12px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .voice-btn:hover {
+            background: #f8f9ff;
+            transform: translateY(-1px);
+        }
+
+        .voice-btn.listening {
+            background: #fdecea;
+            border-color: #e53935;
+            color: #e53935;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Ensure voice controls don't break mobile layout */
+        @media (max-width: 768px) {
+            .voice-btn {
+                font-size: 13px;
+                padding: 6px 12px;
+                margin-right: 6px;
+            }
+        }
     </style>
     <link rel="stylesheet" href="/static/css/theme.css">
 </head>

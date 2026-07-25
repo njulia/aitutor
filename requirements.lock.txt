@@ -348,7 +348,8 @@ PyJWT @ file:///private/var/folders/c_/qfmhj66j0tn016nkx_th4hxm0000gp/T/abs_e3fl
 pylint @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_b4nhjj9cv2/croot/pylint_1676919902809/work
 pylint-venv @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_3dahm2v5f3/croot/pylint-venv_1709837629826/work
 pyls-spyder==0.4.0
-PyNaCl @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_40httoxu79/croot/pynacl_1736542507946/work
+PyNa
+Cl @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_40httoxu79/croot/pynacl_1736542507946/work
 pyobjc-core @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_36yvgw3oz6/croot/pyobjc-core_1710189033524/work
 pyobjc-framework-Cocoa @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_12r73jqs07/croot/pyobjc-framework-cocoa_1710191901366/work
 pyobjc-framework-CoreServices @ file:///private/var/folders/c_/qfmhj66j0tn016nkx_th4hxm0000gp/T/abs_199hfpy51p/croot/pyobjc-framework-coreservices_1710193933908/work

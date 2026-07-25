@@ -2230,5 +2230,70 @@ Press Ctrl+C to stop
     )
 
 
+# ===== VOICE FEATURE ENDPOINTS (Tier 0: Browser-native) =====
+
+@app.post("/api/log-voice-usage")
+async def log_voice_usage(request: Request):
+    """Log voice feature usage events (TTS or STT activation).
+    
+    POST body: {
+        event_type: 'tts_used' | 'stt_used',
+        year_group: int (1-6),
+        subject: str,
+        student_id: Optional[str]
+    }
+    """
+    try:
+        data = await request.json()
+    except Exception as e:
+        logger.warning("[Voice] Failed to parse JSON: %s", e)
+        return JSONResponse({"success": False, "error": "Invalid JSON"}, status_code=400)
+
+    event_type = data.get("event_type")
+    year_group = data.get("year_group")
+    subject = data.get("subject")
+    student_id = data.get("student_id")
+
+    if event_type not in ("tts_used", "stt_used") or year_group is None or not subject:
+        return JSONResponse(
+            {"success": False, "error": "Missing or invalid fields"},
+            status_code=400
+        )
+
+    try:
+        from src.homework_rag import log_voice_event
+        log_voice_event(
+            event_type=event_type,
+            year_group=int(year_group),
+            subject=subject,
+            student_id=student_id
+        )
+        return JSONResponse({"success": True})
+    except Exception as e:
+        logger.error("[Voice] Failed to log event: %s", e)
+        return JSONResponse(
+            {"success": False, "error": "Failed to log event"},
+            status_code=500
+        )
+
+
+@app.get("/api/admin/voice-usage-stats")
+async def voice_usage_stats(request: Request):
+    """Get aggregated voice feature usage stats by age and subject.
+    
+    Access: admin/dev-mode only (gate via existing auth checks if applicable)
+    """
+    try:
+        from src.homework_rag import get_voice_usage_stats
+        stats = get_voice_usage_stats()
+        return JSONResponse({"success": True, "stats": stats})
+    except Exception as e:
+        logger.error("[Voice] Failed to fetch stats: %s", e)
+        return JSONResponse(
+            {"success": False, "error": "Failed to fetch stats"},
+            status_code=500
+        )
+
+
 if __name__ == "__main__":
     main()

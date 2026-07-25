@@ -24,6 +24,19 @@ let currentHomework = [];
         let primarySubjects = ['Maths', 'English', 'Science'];
         let elevenPlusSubjects = ['Maths', 'English', 'Verbal Reasoning', 'Non-Verbal Reasoning'];
 
+        // ===== Voice Feature Detection & State (Tier 0: Browser-native) =====
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRec) {
+            console.log("Speech recognition is supported!");
+//            const recognition = new SpeechRecognition();
+        } else {
+            console.log("Speech recognition is not supported in this browser.");
+        }
+        const ttsSupported = 'speechSynthesis' in window;
+        const sttSupported = !!SpeechRec;
+        let recognizer = null;
+        let isListening = false;
+
         const HOMEWORK_COMMON_SUBJECTS = ['Maths', 'English', 'Science'];
         const HOMEWORK_SESSION_QUESTIONS = {
             10: 5,
@@ -1721,10 +1734,14 @@ let currentHomework = [];
                 const bodyClass = inputSpec.kind === 'input'
                     ? 'single-question-body single-question-body-inline'
                     : 'single-question-body single-question-body-stacked';
+                const answerInputId = `homework-answer-${idx}-${questionIndex}`;
                 return `
                     <section class="single-question-card" data-question-index="${questionIndex}">
                         <div class="single-question-heading">Question ${questionIndex + 1} of ${questions.length}</div>
                         <div class="${bodyClass}">
+                            <div class="voice-controls-tutor">
+                                ${ttsSupported ? `<button type="button" class="voice-btn" onclick="speakQuestionFromCard(this)" title="Read question aloud">\uD83D\uDD0A Read it to me</button>` : ''}
+                            </div>
                             <div class="single-question-text">${formatQuestions(renderSafeMarkdown(questionText))}</div>
                             ${renderQuestionAnswerControl({
                                 questionText: questionText,
@@ -1733,6 +1750,9 @@ let currentHomework = [];
                                 subject: subject,
                                 inputSpec: inputSpec
                             })}
+                            <div class="voice-controls-answer">
+                                ${sttSupported ? `<button type="button" class="voice-btn" onclick="toggleVoiceAnswerFor(this, '${answerInputId}')" title="Answer by speaking">\uD83C\uDFA4 Answer by voice</button>` : ''}
+                            </div>
                         </div>
                     </section>
                 `;
@@ -1805,6 +1825,9 @@ let currentHomework = [];
                         <h3 class="subject-header">${escapeHomeworkText(hw.subject || 'Homework')} (Question ${index + 1} of ${currentHomework.length}) ${hw.from_rag ? '(Free - from library)' : ''}</h3>
                         <section class="single-question-card">
                             <div class="${bodyClass}">
+                                <div class="voice-controls-tutor">
+                                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-question-btn" onclick="speakQuestion()" title="Read question aloud">\uD83D\uDD0A Read it to me</button>` : ''}
+                                </div>
                                 <div class="single-question-text">${formatQuestions(renderSafeMarkdown(tutorQuestion))}</div>
                                 ${renderQuestionAnswerControl({
                                     questionText: tutorQuestion,
@@ -1815,6 +1838,9 @@ let currentHomework = [];
                                     savedAnswer: savedAnswer,
                                     inputSpec: inputSpec
                                 })}
+                                <div class="voice-controls-answer">
+                                    ${sttSupported ? `<button type="button" class="voice-btn" id="voice-answer-btn" onclick="toggleVoiceAnswer()" title="Answer by speaking">\uD83C\uDFA4 Answer by voice</button>` : ''}
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -2683,4 +2709,156 @@ let currentHomework = [];
                 testSubscriptionMessage.classList.add('error-message');
                 testSubscriptionMessage.textContent = 'An error occurred: ' + error.message;
             }
+        }
+
+        // ===== VOICE FEATURE FUNCTIONS (Tier 0: Browser-native) =====
+
+        function getYearGroupForLogging() {
+            // Extract year_group from currentProfile if available
+            return (currentProfile && currentProfile.year_group) || null;
+        }
+
+        function logVoiceUsage(eventType) {
+            const yearGroup = getYearGroupForLogging();
+            const subject = currentHomework[currentQuestionIndex]?.subject;
+            if (!yearGroup || !subject) return; // skip if context is unknown — never guess
+
+            fetch('/api/log-voice-usage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event_type: eventType,
+                    year_group: yearGroup,
+                    subject: subject,
+                    student_id: currentStudentId || null,
+                })
+            }).catch(() => {}); // never surface a logging failure to the child
+        }
+
+        // Text to speech: read the current question aloud
+        function speakQuestion() {
+            if (!ttsSupported) return;
+            logVoiceUsage('tts_used');
+            window.speechSynthesis.cancel(); // stop any previous utterance
+            const hw = currentHomework[currentQuestionIndex];
+
+            // Strip markdown/numbering noise so it reads naturally
+            const plainText = hw.content
+                .replace(/[#*_`]/g, '')
+                .replace(/^\d+\.\s*/gm, '');
+
+            const utterance = new SpeechSynthesisUtterance(plainText);
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.9; // slightly slower for a young reader
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Speech to text: dictate the answer into the textarea
+        function toggleVoiceAnswer() {
+            if (!sttSupported) return;
+            const btn = document.getElementById('voice-answer-btn');
+            const input = document.getElementById('tutor-answer-input');
+
+            if (isListening) {
+                recognizer.stop();
+                return;
+            }
+
+            recognizer = new SpeechRec();
+            recognizer.lang = 'en-GB';
+            recognizer.interimResults = true;
+            recognizer.continuous = false;
+
+            recognizer.onstart = () => {
+                isListening = true;
+                logVoiceUsage('stt_used');  // Log once when actual listening starts
+                btn.textContent = '🔴 Listening... (tap to stop)';
+                btn.classList.add('listening');
+            };
+
+            recognizer.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(r => r[0].transcript)
+                    .join('');
+                input.value = transcript;
+            };
+
+            recognizer.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                // Fall back silently — child can still type
+            };
+
+            recognizer.onend = () => {
+                isListening = false;
+                btn.textContent = '🎤 Answer by voice';
+                btn.classList.remove('listening');
+            };
+
+            recognizer.start();
+        }
+
+        // 朗读指定文本（标准作业模式下每道题的语音按钮复用）
+        function speakText(text) {
+            if (!ttsSupported) return;
+            logVoiceUsage('tts_used');
+            window.speechSynthesis.cancel();
+            const plainText = String(text || '')
+                .replace(/[#*_`]/g, '')
+                .replace(/^\d+\.\s*/gm, '');
+            const utterance = new SpeechSynthesisUtterance(plainText);
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 标准作业模式：从按钮所在的问题卡片读取题目文本并朗读
+        function speakQuestionFromCard(btn) {
+            if (!ttsSupported) return;
+            const card = btn.closest('.single-question-card');
+            const textEl = card ? card.querySelector('.single-question-text') : null;
+            if (!textEl) return;
+            speakText(textEl.innerText);
+        }
+
+        // 标准作业模式：将语音识别结果填入指定输入框
+        function toggleVoiceAnswerFor(btn, inputId) {
+            if (!sttSupported) return;
+            const input = document.getElementById(inputId);
+            if (!input) return;
+
+            if (isListening) {
+                recognizer.stop();
+                return;
+            }
+
+            recognizer = new SpeechRec();
+            recognizer.lang = 'en-GB';
+            recognizer.interimResults = true;
+            recognizer.continuous = false;
+
+            recognizer.onstart = () => {
+                isListening = true;
+                logVoiceUsage('stt_used');
+                btn.textContent = '\uD83D\uDD34 Listening... (tap to stop)';
+                btn.classList.add('listening');
+            };
+
+            recognizer.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(r => r[0].transcript)
+                    .join('');
+                input.value = transcript;
+            };
+
+            recognizer.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+            };
+
+            recognizer.onend = () => {
+                isListening = false;
+                btn.textContent = '\uD83C\uDFA4 Answer by voice';
+                btn.classList.remove('listening');
+            };
+
+            recognizer.start();
         }
