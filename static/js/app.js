@@ -37,6 +37,27 @@ let currentHomework = [];
         let recognizer = null;
         let isListening = false;
 
+        // 获取女声教师语音（en-GB优先）
+        function getFemaleVoice() {
+            if (!ttsSupported) return null;
+            const voices = window.speechSynthesis.getVoices();
+            // 优先匹配明确的女性英音
+            const femaleGb = voices.find(v =>
+                v.lang === 'en-GB' && /female|woman|girl/i.test(v.name)
+            );
+            if (femaleGb) return femaleGb;
+            // 回退：任意女性英文语音
+            const femaleAny = voices.find(v =>
+                v.lang.startsWith('en') && /female|woman|girl/i.test(v.name)
+            );
+            if (femaleAny) return femaleAny;
+            // 再回退：en-GB 任意语音
+            const anyGb = voices.find(v => v.lang === 'en-GB');
+            if (anyGb) return anyGb;
+            // 最终回退：任意英文语音
+            return voices.find(v => v.lang.startsWith('en')) || null;
+        }
+
         const HOMEWORK_COMMON_SUBJECTS = ['Maths', 'English', 'Science'];
         const HOMEWORK_SESSION_QUESTIONS = {
             10: 5,
@@ -2249,7 +2270,10 @@ let currentHomework = [];
 
             const container = document.getElementById('review-result');
             container.innerHTML = `
-                <h3 class="teacher-feedback-heading">Teacher Feedback</h3>
+                <div class="review-header">
+                    <h3 class="teacher-feedback-heading">Teacher Feedback</h3>
+                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read feedback aloud">\uD83D\uDD0A Read it to me</button>` : ''}
+                </div>
                 <div class="review-output">${renderSafeMarkdown(review)}</div>
             `;
 
@@ -2345,7 +2369,10 @@ let currentHomework = [];
             const hasSavedReview = savedHomeworkState && savedHomeworkState.reviewHTML && savedHomeworkState.reviewHTML.trim();
             container.innerHTML = `
                 ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
-                <h3 style="margin-top: 20px; margin-bottom: 20px;">Deep Explanation</h3>
+                <div class="review-header" style="margin-top: 20px; margin-bottom: 20px;">
+                    <h3>Deep Explanation</h3>
+                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read explanation aloud">\uD83D\uDD0A Read it to me</button>` : ''}
+                </div>
                 <div class="review-output">${renderSafeMarkdown(explanation)}</div>
             `;
 
@@ -2749,7 +2776,8 @@ let currentHomework = [];
 
             const utterance = new SpeechSynthesisUtterance(plainText);
             utterance.lang = 'en-GB';
-            utterance.rate = 0.9; // slightly slower for a young reader
+            utterance.rate = 0.8; // slightly slower for a young reader
+            utterance.voice = getFemaleVoice();
             window.speechSynthesis.speak(utterance);
         }
 
@@ -2807,7 +2835,8 @@ let currentHomework = [];
                 .replace(/^\d+\.\s*/gm, '');
             const utterance = new SpeechSynthesisUtterance(plainText);
             utterance.lang = 'en-GB';
-            utterance.rate = 0.9;
+            utterance.rate = 0.8;
+            utterance.voice = getFemaleVoice();
             window.speechSynthesis.speak(utterance);
         }
 
@@ -2818,6 +2847,28 @@ let currentHomework = [];
             const textEl = card ? card.querySelector('.single-question-text') : null;
             if (!textEl) return;
             speakText(textEl.innerText);
+        }
+
+        // 朗读评审/反馈/解释文本（tutor模式下评审结果和深度解释的语音朗读）
+        function speakReviewFeedback() {
+            if (!ttsSupported) return;
+            const reviewEl = document.querySelector('#review-result .review-output');
+            if (!reviewEl) return;
+            const btn = document.getElementById('speak-review-btn');
+            logVoiceUsage('tts_used');
+            window.speechSynthesis.cancel();
+            const plainText = String(reviewEl.innerText || '')
+                .replace(/[#*_`]/g, '')
+                .replace(/^\d+\.\s*/gm, '');
+            const utterance = new SpeechSynthesisUtterance(plainText);
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.8;
+            utterance.voice = getFemaleVoice();
+            if (btn) {
+                utterance.onstart = () => { btn.classList.add('listening'); };
+                utterance.onend = () => { btn.classList.remove('listening'); };
+            }
+            window.speechSynthesis.speak(utterance);
         }
 
         // 标准作业模式：将语音识别结果填入指定输入框

@@ -154,7 +154,7 @@ def _complete_review(
     # Ollama model names. Keep the model already loaded by a local client.
     selected_model = _resolved_model(llm_client, model)
 
-    safe_max_tokens = _bounded_int(max_tokens, default=2_000, minimum=500, maximum=5_000)
+    safe_max_tokens = _bounded_int(max_tokens, default=5000, minimum=2000, maximum=8000)
     logger.info(
         "[Review] operation=%s provider=%s model=%s max_tokens=%s",
         operation,
@@ -351,18 +351,22 @@ def _mark_rows(
 
 
 def _clean_question_text(text: str) -> str:
-    """Remove common homework title prefixes from question text."""
+    """Remove full homework headers including Topic and (Set XXX) while preserving leading numbers."""
     if not text:
         return ""
     # Remove "Maths Homework - Year X - Topic (Set Y)" or similar prefixes
     # Matches: "Maths Homework - Year 2 - Fractions (Halves and Quarters) (Set 12) "
     # or "English Homework - Year 3 - Punctuation "
-    clean = re.sub(
-        r"^[a-zA-Z\s]+Homework\s*-\s*Year\s*\d+\s*-\s*.*?(?:\(Set\s*\d+\))?\s*",
-        "",
-        str(text),
-        flags=re.IGNORECASE
-    ).strip()
+    pattern = r"^[a-zA-Z\s]+Homework\s*-\s*Year\s*\d+\s*-\s*.*?(?:\(Set\s*\d+\))?\s*"
+    clean = re.sub(pattern,"", str(text), flags=re.IGNORECASE).strip()
+
+    if "Homework" in clean:
+        # \1 captures leading number like "1. "
+        # Match through (Set XXX) if present, or up to the start of the question text
+        pattern = r"^(\d+[\.\)]\s*)?[a-zA-Z\s]+Homework\s*-\s*Year\s*\d+\s*-\s*(?:.*?\(Set\s*\d+\)|.*?)\s*"
+        clean = re.sub(pattern, r"\1", str(text), flags=re.IGNORECASE).strip()
+        return clean or str(text)
+
     return clean or str(text)
 
 
@@ -538,9 +542,9 @@ def review_homework(
             model=selected_model,
             temperature=0.2 if use_detail_model else 0.15,
             max_tokens=(
-                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=5000)
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000)
                 if use_detail_model else
-                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=3000)
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 1000, maximum=5000)
             ),
             operation= "detail_review_with_rag" if use_detail_model else "quick_review_with_rag",
         )
@@ -560,9 +564,9 @@ def review_homework(
             model=selected_model,
             temperature=0.15,
             max_tokens=(
-                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=5000)
+                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000)
                 if use_detail_model else
-                _token_limit("QUICK_REVIEW_MAX_TOKENS", 900, maximum=3000)
+                _token_limit("QUICK_REVIEW_MAX_TOKENS", 1000, maximum=5000)
             ),
             operation=(
                 "detail_review_no_rag"
@@ -683,7 +687,7 @@ def explain_deep(
             build_messages(prompt),
             model=DETAIL_REVIEW_MODEL,
             temperature=0.2,
-            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000),
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
             operation="detail_explanation_with_rag",
         )
         explanation = _table(rows) + f"**Score: {correct_count}/{len(rows)}**\n\n" + ai_explanation
@@ -702,7 +706,7 @@ def explain_deep(
             build_messages(prompt),
             model=DETAIL_REVIEW_MODEL,
             temperature=0.2,
-            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 1_600, maximum=3_000),
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
             operation="detail_review_no_rag_all_answers",
         )
         score, max_score = _extract_score(explanation)
@@ -800,7 +804,7 @@ def improve_practice(
         build_messages(prompt),
         model=DETAIL_REVIEW_MODEL,
         temperature=0.25,
-        max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 1_000, maximum=1_600),
+        max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 3000, maximum=5000),
         operation="targeted_practice",
     )
     practice, questions = _usable_generated_practice(raw_result)
