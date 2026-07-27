@@ -1191,10 +1191,7 @@
 
                 <details class="homework-quick-start">
                     <summary>Quick start: choose one subject and year</summary>
-<!--                    <div class="quick-eleven-content">-->
-<!--                         <div class="homework-grid">-->
-<!--                <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">-->
-                <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
+                    <div class="homework-grid" style="display: grid; grid-template-columns: 4fr 1fr; gap: 20px; align-items: start;">
                     <div class="form-group">
                         <label>1. Pick one subject</label>
                         <div class="subject-grid" id="homework-subjects"></div>
@@ -1209,12 +1206,28 @@
                             <option value="5">Year 5</option>
                             <option value="6">Year 6</option>
                         </select>
-<!--                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">-->
-                        <button class="btn btn-primary" onclick="generateHomework()" style="width: 100%">
+                        <fieldset class="form-group full-width">
+                            <label>3. Show questions</label>
+                            <div class="mode-selection">
+                            <label for="homework-quick-mode-tutor">
+                                <input type="radio" id="homework-quick-mode-tutor"
+                                       name="homework-quick-mode" value="tutor">
+                                🪄 Once at a time
+                            </label>
+                            <label for="homework-quick-mode-homework">
+                                <input type="radio" id="homework-quick-mode-homework"
+                                       name="homework-quick-mode" value="homework" checked>
+                                📄 All together
+                            </label>
+                            </div>
+                        </fieldset>
+                        <div class="form-group full-width">
+                        <button type="button" class="btn btn-primary"
+                                onclick="generateHomework()" style="width: 100%">
                             Let’s go!
                         </button>
                     </div>
-<!--               </div>-->
+                    </div>
                 </details>
             </div>
         </div>
@@ -1313,19 +1326,30 @@
 
                 <details class="quick-eleven-start">
                     <summary>Quick start: choose one subject</summary>
-                    <div class="quick-eleven-content">
-<!--                        <p style="color: #666; margin-bottom: 18px;">-->
-<!--                            Skip the guided setup and get a standard practice set.-->
-<!--                        </p>-->
                         <div class="homework-grid">
                             <div class="form-group">
-                                <label>Subject</label>
+                                <label>1. Pick one subject</label>
                                 <div class="subject-grid" id="eleven-subjects"></div>
+                                <fieldset class="form-group full-width">
+                                    <label>2. Show questions</label>
+                                    <div class="mode-selection" style="display: flex; flex-direction: row; gap: 15px;">
+                                        <label for="eleven-mode-tutor">
+                                            <input type="radio" id="eleven-mode-tutor"
+                                                   name="eleven-quick-mode" value="tutor">
+                                            🪄 Once at a time
+                                        </label>
+                                        <label for="eleven-mode-homework">
+                                            <input type="radio" id="eleven-mode-homework"
+                                                   name="eleven-quick-mode" value="homework" checked>
+                                            📄 All together
+                                        </label>
+                                    </div>
+                                </fieldset>
                             </div>
                             <div class="form-group" style="min-width: 150px;">
                                 <button type="button" class="btn btn-primary"
                                         onclick="generateQuickHomeworkEleven()" style="width: 100%;">
-                                    Start quick practice
+                                    Let’s go!
                                 </button>
                             </div>
                         </div>
@@ -1554,7 +1578,7 @@
         <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
     </div>
 
-    <script src="/static/js/app.js?v=20260723-guided-homework" defer></script>
+    <script src="/static/js/app.js?v=20260727-homework-quick-mode" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

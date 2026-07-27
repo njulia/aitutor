@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import random
+import re
 import sys
 from typing import Iterable, Sequence
 
@@ -23,6 +25,140 @@ from src.homework_rag import get_homework_rag_store
 
 RAG_WRITE_BATCH_SIZE = 250
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Content policy: question banks in these generators are original, locally
+# maintained material aligned to the publicly available National Curriculum for
+# England.  The scripts do not scrape, download, or depend on paid/proprietary
+# question banks.  Curriculum source (Open Government Licence):
+# https://www.gov.uk/government/collections/national-curriculum
+PUBLIC_FREE_RESOURCE_POLICY = "original-content-and-open-government-curriculum"
+
+
+_OPTION_LINE = re.compile(r"^[A-D]\.\s+(.*)$")
+_NUMBERED_QUESTION = re.compile(r"(?m)^\d+\.\s+")
+
+
+def _normalise_question_stem(question: object) -> str:
+    """Return a stable identity for a question, ignoring option order/case."""
+    first_line = str(question).strip().splitlines()[0]
+    return " ".join(first_line.casefold().split())
+
+
+def _mcq_options(question: str) -> list[str]:
+    """Extract option text from a question produced by :func:`make_mcq`."""
+    output: list[str] = []
+    for line in question.splitlines()[1:]:
+        match = _OPTION_LINE.match(line.strip())
+        if match:
+            output.append(match.group(1).strip())
+    return output
+
+
+def _checked_answer_variant(
+    *,
+    question: str,
+    answer: str,
+    subject: str,
+    year_group: int,
+    topic: str,
+    index: int,
+    occurrence: int,
+) -> tuple[str, str]:
+    """Turn a repeated recall prompt into a distinct answer-checking prompt."""
+    stem = question.strip().splitlines()[0]
+    options = _mcq_options(question)
+    candidates = unique_values([answer, *options])
+    if not candidates:
+        raise ValueError(f"Cannot vary repeated question: {question!r}")
+
+    # Alternate correct and incorrect proposed answers where possible, while
+    # keeping the choice deterministic for a given worksheet.
+    wrong = [candidate for candidate in candidates if candidate.casefold() != answer.casefold()]
+    if occurrence % 2 and wrong:
+        candidate = wrong[(index + occurrence) % len(wrong)]
+        is_correct = False
+    else:
+        candidate = answer
+        is_correct = True
+
+    pupil_names = ("Aisha", "Ben", "Chloe", "Dev", "Eva", "Finn", "Grace", "Hugo")
+    pupil = pupil_names[(index + occurrence - 1) % len(pupil_names)]
+    varied_stem = (
+        f'{pupil} chose "{candidate}" for this question: {stem} '
+        "Is that answer correct?"
+    )
+    rng = stable_random(
+        subject,
+        year_group,
+        f"{topic}|duplicate-check|{_normalise_question_stem(question)}",
+        index * 100 + occurrence,
+    )
+    return make_mcq(
+        varied_stem,
+        "Yes" if is_correct else "No",
+        [
+            "No" if is_correct else "Yes",
+            "Not enough information",
+            "Both yes and no",
+        ],
+        rng,
+    )
+
+
+def _permutation_for_index(length: int, index: int) -> list[int]:
+    """Map an index to a deterministic permutation using factoradics.
+
+    For ten-question worksheets this provides 10! distinct orderings, so the
+    production range of set numbers cannot accidentally emit identical ordered
+    worksheets merely because the same questions are reused.
+    """
+    if length < 2:
+        return list(range(length))
+    code = (index - 1) % math.factorial(length)
+    available = list(range(length))
+    permutation: list[int] = []
+    for remaining in range(length, 0, -1):
+        block = math.factorial(remaining - 1)
+        position, code = divmod(code, block)
+        permutation.append(available.pop(position))
+    return permutation
+
+
+def _worksheet_questions(content: str) -> list[str]:
+    """Split rendered content into numbered question blocks."""
+    matches = list(_NUMBERED_QUESTION.finditer(content))
+    return [
+        content[match.end() : matches[position + 1].start() if position + 1 < len(matches) else None].strip()
+        for position, match in enumerate(matches)
+    ]
+
+
+def validate_homework_items(homework_items: Sequence[dict]) -> None:
+    """Fail before a RAG write if a worksheet violates uniqueness guarantees."""
+    seen_sets: dict[tuple[str, ...], str] = {}
+    for item in homework_items:
+        content = str(item.get("content", ""))
+        questions = _worksheet_questions(content)
+        if len(questions) != 10:
+            raise ValueError(f"{item.get('doc_id', '<unknown>')} must contain 10 questions")
+
+        stems = [_normalise_question_stem(question) for question in questions]
+        if len(stems) != len(set(stems)):
+            raise ValueError(
+                f"{item.get('doc_id', '<unknown>')} contains duplicate questions"
+            )
+
+        # Keep order in the signature: reusing questions is allowed, but two
+        # different homework sets must not be identical.
+        signature = tuple(
+            " ".join(question.casefold().split()) for question in questions
+        )
+        previous_id = seen_sets.get(signature)
+        if previous_id is not None and previous_id != item.get("doc_id"):
+            raise ValueError(
+                f"Homework sets {previous_id} and {item.get('doc_id')} are identical"
+            )
+        seen_sets[signature] = str(item.get("doc_id", ""))
 
 
 def count_year_homework(store, year_group: int, subject: str) -> int:
@@ -72,6 +208,7 @@ def check_year_homework_exists(store, year_group: int, subject: str) -> bool:
 
 def add_homework_in_batches(store, homework_items: list) -> int:
     """Store homework safely in small, restartable batches."""
+    validate_homework_items(homework_items)
     added_total = 0
     for start in range(0, len(homework_items), RAG_WRITE_BATCH_SIZE):
         batch = homework_items[start : start + RAG_WRITE_BATCH_SIZE]
@@ -173,17 +310,48 @@ def render_homework(
         raise ValueError(
             f"{subject} Year {year_group} {topic!r} must contain exactly 10 questions"
         )
+    unique_pairs: list[tuple[str, str]] = []
+    occurrences: dict[str, int] = {}
+    for question, answer in question_answer_pairs:
+        clean_question = str(question).strip()
+        clean_answer = str(answer).strip()
+        if not clean_question or not clean_answer:
+            raise ValueError("Questions and answers must not be empty")
+        stem_key = _normalise_question_stem(clean_question)
+        occurrence = occurrences.get(stem_key, 0)
+        occurrences[stem_key] = occurrence + 1
+        if occurrence:
+            clean_question, clean_answer = _checked_answer_variant(
+                question=clean_question,
+                answer=clean_answer,
+                subject=subject,
+                year_group=year_group,
+                topic=topic,
+                index=index,
+                occurrence=occurrence,
+            )
+        unique_pairs.append((clean_question, clean_answer))
+
+    # Set-specific factoradic ordering gives distinct worksheets without
+    # forbidding legitimate reuse of an individual question in another set.
+    permutation = _permutation_for_index(len(unique_pairs), index)
+    ordered_pairs = [unique_pairs[position] for position in permutation]
+
+    final_stems = [_normalise_question_stem(question) for question, _ in ordered_pairs]
+    if len(final_stems) != len(set(final_stems)):
+        raise ValueError(
+            f"{subject} Year {year_group} {topic!r} still contains duplicate questions"
+        )
+
     title = f"{subject} Homework - Year {year_group} - {topic} (Set {index})"
     lines = [title]
     if note:
         lines.extend(["", note.strip()])
     lines.append("")
     answers: list[str] = []
-    for number, (question, answer) in enumerate(question_answer_pairs, start=1):
+    for number, (question, answer) in enumerate(ordered_pairs, start=1):
         clean_question = str(question).strip()
         clean_answer = str(answer).strip()
-        if not clean_question or not clean_answer:
-            raise ValueError("Questions and answers must not be empty")
         lines.append(f"{number}. {clean_question}")
         answers.append(clean_answer)
     return "\n".join(lines), answers

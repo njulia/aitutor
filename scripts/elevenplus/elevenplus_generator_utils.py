@@ -13,9 +13,18 @@ from __future__ import annotations
 
 import contextvars
 import hashlib
+import json
 import random as _stdlib_random
 import re
-from typing import Any, Iterable, List, Mapping, MutableSequence, Sequence
+from typing import Any, Callable, Iterable, List, Mapping, MutableSequence, Sequence
+
+
+# Every question is generated locally from original templates and algorithms.
+# The scripts do not scrape, download, or depend on paid/proprietary question
+# banks.  The curriculum reference is public and released under the Open
+# Government Licence:
+# https://www.gov.uk/government/collections/national-curriculum
+PUBLIC_FREE_RESOURCE_POLICY = "original-content-and-public-free-guidance-only"
 
 _DIFFICULTIES = {
     "foundation": "foundation",
@@ -187,6 +196,115 @@ def _key(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value).strip()).casefold()
 
 
+def _question_text(record: Mapping[str, Any]) -> str:
+    value = record.get("question") or record.get("questionText") or ""
+    return re.sub(r"^\s*\d+[.)]\s*", "", str(value).strip(), count=1)
+
+
+def _option_text(option: Any) -> str:
+    if isinstance(option, Mapping):
+        return str(option.get("text") or option.get("value") or "").strip()
+    return str(option).strip()
+
+
+def question_fingerprint(record: Mapping[str, Any]) -> str:
+    """Return a stable identity for one complete MCQ.
+
+    Option order and question numbering are ignored.  A repeated generic stem
+    with genuinely different choices remains a different question, while the
+    same question with shuffled A-E labels is still recognised as a duplicate.
+    """
+    stem = _key(_question_text(record))
+    options = sorted(
+        _key(_option_text(option))
+        for option in record.get("options", [])
+        if _option_text(option)
+    )
+    raw = "\x1f".join([stem, *options]).encode("utf-8", "replace")
+    return hashlib.blake2b(raw, digest_size=16).hexdigest()
+
+
+def semantic_question_fingerprint(record: Mapping[str, Any]) -> str:
+    """Identify the problem being asked, independently of its distractors.
+
+    Regenerating only the wrong answer choices must not turn a repeated problem
+    into a new question.  The complete, possibly multi-line prompt and its
+    correct answer therefore define the semantic identity used for within-set
+    duplicate checks.
+    """
+    stem = _key(_question_text(record))
+    answer = _key(record.get("answer") or record.get("correct_value") or "")
+    raw = "\x1f".join([stem, answer]).encode("utf-8", "replace")
+    return hashlib.blake2b(raw, digest_size=16).hexdigest()
+
+
+def homework_set_fingerprint(
+    records: Sequence[Mapping[str, Any]],
+    *,
+    order_sensitive: bool = False,
+) -> str:
+    """Identify a complete set while still allowing questions to be reused.
+
+    The default is intentionally order-insensitive: merely shuffling the same
+    ten questions does not count as a new homework set.
+    """
+    fingerprints = [question_fingerprint(record) for record in records]
+    if not order_sensitive:
+        fingerprints.sort()
+    raw = "\x1e".join(fingerprints).encode("ascii")
+    return hashlib.blake2b(raw, digest_size=20).hexdigest()
+
+
+def generate_unique_question_set(
+    generator: Callable[[int], tuple[str, Sequence[Mapping[str, Any]]]],
+    *,
+    subject: str,
+    topic: str,
+    set_index: int,
+    difficulty: Any = "standard",
+    variant: int = 0,
+    expected: int = 10,
+    max_attempts: int = 50,
+) -> tuple[str, str, List[dict[str, Any]]]:
+    """Generate a worksheet whose ten complete questions are all different.
+
+    Random collisions are handled by regenerating the whole set from a
+    deterministic alternate seed.  This keeps the public generator API and
+    answer-record schema unchanged and makes rebuilds repeatable.
+    """
+    public_index = int(set_index)
+    attempts = max(1, int(max_attempts))
+    for attempt in range(attempts):
+        if variant == 0 and attempt == 0:
+            seed_index = public_index
+        else:
+            seed_index = 1 + stable_seed(
+                subject,
+                topic,
+                public_index,
+                normalise_difficulty(difficulty),
+                "set-variant",
+                int(variant),
+                attempt,
+            ) % 2_000_000_000
+
+        difficulty_name = begin_generation(subject, topic, seed_index, difficulty)
+        body, raw_records = generator(seed_index)
+        records = [dict(record) for record in raw_records]
+        if len(records) != expected:
+            continue
+        semantic_fingerprints = [
+            semantic_question_fingerprint(record) for record in records
+        ]
+        if len(semantic_fingerprints) == len(set(semantic_fingerprints)):
+            return difficulty_name, str(body), records
+
+    raise ValueError(
+        f"Could not generate {expected} unique questions for "
+        f"{subject} / {topic} set {public_index} after {attempts} attempts"
+    )
+
+
 def _fallback_distractors(correct: Any, existing: Sequence[Any], needed: int) -> List[str]:
     result: List[str] = []
     correct_text = str(correct).strip()
@@ -303,6 +421,74 @@ def validate_answer_records(records: Sequence[Mapping[str, Any]], expected: int 
         if _key(options[ord(letter) - 65]) != _key(answer):
             raise ValueError(f"Question {expected_number} answer does not match its option")
 
+    semantic_fingerprints = [
+        semantic_question_fingerprint(record) for record in records
+    ]
+    if len(semantic_fingerprints) != len(set(semantic_fingerprints)):
+        raise ValueError("Homework set contains duplicate questions")
+
+
+def _rendered_question_first_lines(content: Any) -> List[str]:
+    matches = list(re.finditer(r"(?m)^\d+\.\s+", str(content or "")))
+    blocks = [
+        str(content)[
+            match.end() :
+            matches[index + 1].start() if index + 1 < len(matches) else None
+        ].strip()
+        for index, match in enumerate(matches)
+    ]
+    return [
+        _key(block.splitlines()[0] if block.splitlines() else "")
+        for block in blocks
+    ]
+
+
+def validate_homework_batch(homework_items: Sequence[Mapping[str, Any]]) -> None:
+    """Validate uniqueness before a batch can be written to the 11+ RAG.
+
+    Individual questions may appear in multiple sets.  Only duplicates inside
+    one set and completely identical ten-question sets are rejected.
+    """
+    seen_sets: dict[str, str] = {}
+    for item in homework_items:
+        doc_id = str(item.get("doc_id") or "<unknown>")
+        metadata = item.get("metadata")
+        if not isinstance(metadata, Mapping):
+            raise ValueError(f"{doc_id} has invalid metadata")
+        raw_records: Any = metadata.get("correct_answers")
+        if isinstance(raw_records, str):
+            try:
+                raw_records = json.loads(raw_records)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{doc_id} has invalid correct_answers JSON") from exc
+        if not isinstance(raw_records, list):
+            raise ValueError(f"{doc_id} is missing structured answer records")
+
+        validate_answer_records(raw_records)
+        answer_first_lines = [
+            _key(_question_text(record).splitlines()[0])
+            for record in raw_records
+        ]
+        if len(answer_first_lines) != len(set(answer_first_lines)):
+            raise ValueError(f"{doc_id} contains duplicate displayed question stems")
+
+        rendered_first_lines = _rendered_question_first_lines(item.get("content"))
+        if len(rendered_first_lines) != len(raw_records):
+            raise ValueError(
+                f"{doc_id} renders {len(rendered_first_lines)} questions "
+                f"but stores {len(raw_records)} answer records"
+            )
+        if rendered_first_lines != answer_first_lines:
+            raise ValueError(f"{doc_id} question content does not match its answer records")
+        if len(rendered_first_lines) != len(set(rendered_first_lines)):
+            raise ValueError(f"{doc_id} contains duplicate rendered questions")
+
+        signature = homework_set_fingerprint(raw_records)
+        previous = seen_sets.get(signature)
+        if previous is not None and previous != doc_id:
+            raise ValueError(f"Homework sets {previous} and {doc_id} are identical")
+        seen_sets[signature] = doc_id
+
 
 def balanced_weighted_sequence(
     topic_weights: Sequence[tuple[str, int]], count: int, *, seed: Any = "11plus"
@@ -339,6 +525,67 @@ def strip_student_header(content: str) -> str:
         or lines[0].startswith("Answer each question")
     ):
         lines.pop(0)
+    return "\n".join(lines).strip()
+
+
+def ensure_unique_question_stems(
+    records: Sequence[Mapping[str, Any]],
+) -> List[dict[str, Any]]:
+    """Make repeated generic stems distinct without changing their answers.
+
+    Some valid 11+ questions deliberately share an instruction such as
+    ``Which word is spelt correctly?`` while presenting different choices.
+    The common RAG writer identifies questions by their first visible line, so
+    those records must also have distinct first-line stems.  Repeated stems are
+    labelled as choice groups; options, answers, explanations and metadata are
+    preserved.
+    """
+    copied = [dict(record) for record in records]
+    bare_questions = [_question_text(record) for record in copied]
+    first_line_keys = [
+        _key(question.splitlines()[0] if question.splitlines() else "")
+        for question in bare_questions
+    ]
+    totals: dict[str, int] = {}
+    for key in first_line_keys:
+        totals[key] = totals.get(key, 0) + 1
+
+    occurrences: dict[str, int] = {}
+    for index, (record, question, key) in enumerate(
+        zip(copied, bare_questions, first_line_keys), start=1
+    ):
+        lines = question.splitlines() or [""]
+        if totals.get(key, 0) > 1:
+            occurrence = occurrences.get(key, 0) + 1
+            occurrences[key] = occurrence
+            lines[0] = f"Choice group {occurrence}: {lines[0]}"
+        rendered = "\n".join(lines).strip()
+        record["q"] = index
+        record["question"] = f"{index}. {rendered}"
+        if "questionText" in record:
+            record["questionText"] = rendered
+
+    first_lines = [
+        _key(_question_text(record).splitlines()[0])
+        for record in copied
+    ]
+    if len(first_lines) != len(set(first_lines)):
+        raise ValueError("Could not make all question stems unique")
+    return copied
+
+
+def render_student_question_set(
+    records: Sequence[Mapping[str, Any]],
+) -> str:
+    """Render canonical answer records as the existing numbered A-E worksheet."""
+    lines: List[str] = []
+    for index, record in enumerate(records, start=1):
+        question_lines = _question_text(record).splitlines() or [""]
+        lines.append(f"{index}. {question_lines[0]}")
+        lines.extend(question_lines[1:])
+        for option_index, option in enumerate(record.get("options", [])):
+            lines.append(f"   {chr(65 + option_index)}) {_option_text(option)}")
+        lines.append("")
     return "\n".join(lines).strip()
 
 

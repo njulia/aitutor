@@ -32,9 +32,10 @@ except ImportError:
     get_elevenplus_rag_store = None
 
 from scripts.elevenplus.elevenplus_generator_utils import (
+    ensure_unique_question_stems,
     normalise_difficulty,
     recommended_set_minutes,
-    strip_student_header,
+    render_student_question_set,
     validate_answer_records,
 )
 
@@ -100,7 +101,7 @@ def generate_topic_mastery_plan() -> list:
             seed_index = topic_idx * 100 + set_num
             
             # Generate the 10 MCQ questions for this set
-            raw_content, answer_records = generate_11plus_english_homework(base_topic, seed_index, difficulty=tier_info["difficulty"])
+            _, answer_records = generate_11plus_english_homework(base_topic, seed_index, difficulty=tier_info["difficulty"])
             
             # Modify and decorate the content to highlight the mastery level
             header = (
@@ -113,8 +114,9 @@ def generate_topic_mastery_plan() -> list:
                 f"Suggested Time: {recommended_set_minutes(tier_info['difficulty'])} minutes. "
                 f"Work accurately first, then improve speed.\n\n"
             )
+            answer_records = ensure_unique_question_stems(answer_records)
             validate_answer_records(answer_records)
-            final_content = header + strip_student_header(raw_content)
+            final_content = header + render_student_question_set(answer_records)
             
             # Build Metadata compatible with ChromaDB sanitization rules
             metadata = {

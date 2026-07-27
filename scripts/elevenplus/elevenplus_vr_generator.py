@@ -35,13 +35,17 @@ from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metad
 from scripts.homework_generator.homework_generator_utils import add_homework_in_batches, get_rag_stats
 from scripts.elevenplus.elevenplus_generator_utils import (
     balanced_weighted_sequence,
-    begin_generation,
     build_multiple_choice_question,
     current_difficulty,
     difficulty_for_batch_position,
+    ensure_unique_question_stems,
+    generate_unique_question_set,
+    homework_set_fingerprint,
     normalise_difficulty,
+    render_student_question_set,
     seeded_random as random,
     validate_answer_records,
+    validate_homework_batch,
 )
 
 
@@ -142,6 +146,16 @@ HIDDEN_WORD_BANK = [
     ("lion", "essence", "ones"),
     ("drag", "online", "dragon"),
     ("pea", "cockpit", "peacock"),
+    ("some", "thing", "something"),
+    ("with", "outcome", "without"),
+    ("butter", "flywheel", "butterfly"),
+    ("rain", "bowling", "rainbow"),
+    ("book", "casework", "bookcase"),
+    ("foot", "balloon", "football"),
+    ("sun", "flowerpot", "sunflower"),
+    ("bed", "roommate", "bedroom"),
+    ("door", "bellows", "doorbell"),
+    ("note", "booklet", "notebook"),
 ]
 
 INSERT_LETTER_BANK = [
@@ -535,26 +549,50 @@ TOPIC_GENERATORS = {
     "Insert a Letter (Completes Both Words)": _gen_insert_letter,
 }
 
-def generate_11plus_vr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
-    """Generate one original Verbal Reasoning worksheet with 10 locally markable MCQs.
-
-    ``difficulty`` is optional, so existing generation and review callers remain compatible.
-    """
+def _generate_11plus_vr_homework(
+    topic: str,
+    index: int,
+    difficulty: str,
+    *,
+    variant: int,
+) -> tuple:
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ Verbal Reasoning topic: {topic}")
-    difficulty_name = begin_generation("verbal_reasoning", topic, index, difficulty)
-    body, answer_records = generator(index)
+    difficulty_name, _body, answer_records = generate_unique_question_set(
+        generator,
+        subject="verbal_reasoning",
+        topic=topic,
+        set_index=index,
+        difficulty=difficulty,
+        variant=variant,
+    )
     for record in answer_records:
         record["difficulty"] = difficulty_name
         record["topic"] = topic
+    answer_records = ensure_unique_question_stems(answer_records)
     validate_answer_records(answer_records)
+    body = render_student_question_set(answer_records)
     header = (
         f"11+ Verbal Reasoning Practice (GL-style familiarisation) - {topic} (Set {index})\n"
         f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
         f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
+
+
+def generate_11plus_vr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original Verbal Reasoning worksheet with 10 locally markable MCQs.
+
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
+    """
+    return _generate_11plus_vr_homework(
+        topic,
+        index,
+        difficulty,
+        variant=0,
+    )
+
 
 def _weighted_topic_sequence(count: int) -> list:
     """Build a deterministic near-exact topic distribution for the library."""
@@ -590,10 +628,23 @@ def generate_11plus_vr_batch(count: int = 300) -> list:
     """生成指定数量的 11+ 言语推理练习，主题在 10 个类别间大致均匀分布"""
     topic_sequence = _weighted_topic_sequence(count)
     batch_data = []
+    seen_sets = set()
 
     for i, topic in enumerate(topic_sequence, start=1):
         difficulty = difficulty_for_batch_position(i, count)
-        content, answer_records = generate_11plus_vr_homework(topic, i, difficulty=difficulty)
+        for variant in range(50):
+            content, answer_records = _generate_11plus_vr_homework(
+                topic,
+                i,
+                difficulty,
+                variant=variant,
+            )
+            signature = homework_set_fingerprint(answer_records)
+            if signature not in seen_sets:
+                seen_sets.add(signature)
+                break
+        else:
+            raise ValueError(f"Could not create a distinct Verbal Reasoning set {i}")
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -620,6 +671,7 @@ def generate_11plus_vr_batch(count: int = 300) -> list:
         if i % 10 == 0:
             print(f"  已生成 {i}/{count} 份 11+ 言语推理作业")
 
+    validate_homework_batch(batch_data)
     return batch_data
 
 def main():

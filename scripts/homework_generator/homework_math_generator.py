@@ -45,7 +45,7 @@ from scripts.homework_generator.homework_generator_utils import (
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-HOMEWORK_COUNT = {1: 960, 2: 1120, 3: 1500, 4: 1980, 5: 2400, 6: 2640}
+HOMEWORK_COUNT = {1: 600, 2: 600, 3: 1000, 4: 1000, 5: 2000, 6: 2000}
 
 MATH_TOPICS_BY_YEAR = {
     1: [

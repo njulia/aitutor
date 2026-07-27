@@ -23,13 +23,17 @@ from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metad
 from scripts.homework_generator.homework_generator_utils import add_homework_in_batches, get_rag_stats
 from scripts.elevenplus.elevenplus_generator_utils import (
     balanced_weighted_sequence,
-    begin_generation,
     build_multiple_choice_question,
     current_difficulty,
     difficulty_for_batch_position,
+    ensure_unique_question_stems,
+    generate_unique_question_set,
+    homework_set_fingerprint,
     normalise_difficulty,
+    render_student_question_set,
     seeded_random as random,
     validate_answer_records,
+    validate_homework_batch,
 )
 
 
@@ -348,7 +352,43 @@ PUNCTUATION_TEMPLATES = [
      "Proper nouns for cities must always be capitalised, and lists of items must be separated with commas!"),
     ("the cat sat quietly it did not move at all", "The cat sat quietly; it did not move at all.",
      "This sentence consists of two closely related independent clauses. To avoid a run-on sentence, we use a semicolon (';') to separate them.",
-     "Use a semicolon ';' to join two complete, closely related thoughts without using a conjunction like 'and' or 'but'!")
+     "Use a semicolon ';' to join two complete, closely related thoughts without using a conjunction like 'and' or 'but'!"),
+    ("on monday we travelled to york by train", "On Monday, we travelled to York by train.",
+     "Days of the week and place names are proper nouns, so 'Monday' and 'York' need capital letters.",
+     "Circle every name, day, month, and place before checking capitals."),
+    ("where did amira leave her blue notebook", "Where did Amira leave her blue notebook?",
+     "A direct question needs a question mark, and the name 'Amira' must begin with a capital letter.",
+     "Read the sentence aloud: if it asks for an answer, use a question mark."),
+    ("the rabbits hutch was cleaned yesterday", "The rabbit's hutch was cleaned yesterday.",
+     "The hutch belongs to one rabbit, so a singular possessive apostrophe is placed before the s.",
+     "For one owner, add apostrophe-s to show possession."),
+    ("we dont need to hurry said leo", "\"We don't need to hurry,\" said Leo.",
+     "Direct speech needs speech marks and punctuation; 'don't' needs an apostrophe, and 'Leo' needs a capital letter.",
+     "Check speech marks, the reporting clause, contractions, and names separately."),
+    ("please pack socks a towel sun cream and a hat", "Please pack socks, a towel, sun cream, and a hat.",
+     "Commas separate the items in this list, while the sentence begins with a capital and ends with a full stop.",
+     "Use commas between list items, but place 'and' before the final item."),
+    ("the match was cancelled however we still met at the park", "The match was cancelled; however, we still met at the park.",
+     "A semicolon can join the two complete clauses, and 'however' is followed by a comma.",
+     "When 'however' links two full sentences, check for punctuation on both sides."),
+    ("mrs patel asked have you finished your project", "Mrs Patel asked, \"Have you finished your project?\"",
+     "The spoken question needs speech marks, a capital letter, and a question mark inside the closing speech mark.",
+     "Put the punctuation belonging to spoken words inside the speech marks."),
+    ("my brothers bicycle has a broken light", "My brother's bicycle has a broken light.",
+     "The bicycle belongs to one brother, so 'brother' takes apostrophe-s.",
+     "Decide whether there is one owner or more than one before placing the apostrophe."),
+    ("the museum displayed three treasures a crown a shield and a silver cup", "The museum displayed three treasures: a crown, a shield, and a silver cup.",
+     "A colon introduces the list after a complete clause, and commas separate the listed treasures.",
+     "Use a colon when a complete sentence announces that a list is coming."),
+    ("after lunch we read sketched and played chess", "After lunch, we read, sketched, and played chess.",
+     "The opening phrase is followed by a comma, and commas separate the three actions in the list.",
+     "Pause after an opening phrase and between items in a list."),
+    ("i cant find ellies green scarf anywhere", "I can't find Ellie's green scarf anywhere.",
+     "'I' and 'Ellie' need capitals; 'can't' is a contraction, and 'Ellie's' shows possession.",
+     "Look for contractions, possession, and proper nouns one at a time."),
+    ("how quietly the snow is falling", "How quietly the snow is falling!",
+     "This sentence expresses wonder, so it begins with a capital letter and ends with an exclamation mark.",
+     "An exclamation can show strong feeling even when it does not begin with 'What'.")
 ]
 
 
@@ -404,7 +444,43 @@ CLOZE_TEMPLATES = [
      "Look at the verb 'praised' - it requires a highly positive descriptor for the effort!"),
     ("It was such a {} day that we decided to stay inside and read.", "gloomy", ["glorious", "bright", "warm", "cloudless"],
      "Staying inside to read is typical of a dark, cold, or wet day. 'Gloomy' means dark or depressing, which matches the context.",
-     "If people choose to stay inside, the weather is likely unfavorable or gloomy!")
+     "If people choose to stay inside, the weather is likely unfavorable or gloomy!"),
+    ("Mina gave a {} explanation, so everyone understood the rules at once.", "clear", ["vague", "confusing", "muddled", "silent"],
+     "If everyone understood immediately, the explanation must have been clear.",
+     "Use the result in the second clause to work out the missing description."),
+    ("The path became so {} that the hikers had to walk in single file.", "narrow", ["spacious", "wide", "open", "enormous"],
+     "Walking in single file suggests there was very little space, so 'narrow' fits best.",
+     "Picture the action described and choose the word that makes it necessary."),
+    ("Owen was {} to lend his notes to a classmate who had been absent.", "willing", ["reluctant", "unable", "careless", "forgetful"],
+     "Lending helpful notes is a positive, cooperative action, so 'willing' is the best fit.",
+     "Check whether the sentence has a positive or negative tone."),
+    ("The audience remained completely {} while the violinist performed.", "silent", ["restless", "noisy", "cheerful", "crowded"],
+     "During a performance, remaining completely silent means making no sound.",
+     "Words such as 'completely' often point to a precise condition."),
+    ("The instructions were so {} that we had to ask for help twice.", "unclear", ["precise", "simple", "helpful", "obvious"],
+     "Needing help twice shows that the instructions were not easy to understand.",
+     "Use the consequence after 'that' to infer the missing word."),
+    ("After weeks without rain, the garden soil was extremely {}.", "dry", ["damp", "muddy", "soaked", "flooded"],
+     "A long period without rain causes soil to become dry.",
+     "Look for the cause earlier in the sentence."),
+    ("The goalkeeper made a {} leap and stopped the ball at the last second.", "swift", ["sluggish", "delayed", "careless", "gentle"],
+     "Stopping the ball at the last second requires a quick or swift movement.",
+     "Timing clues such as 'at the last second' point to speed."),
+    ("Although the task looked simple, it proved surprisingly {}.", "challenging", ["effortless", "obvious", "brief", "ordinary"],
+     "'Although' signals a contrast: the task looked simple but was actually difficult.",
+     "A contrast word tells you to look for an opposite idea."),
+    ("The librarian asked us to speak {} so that other readers could concentrate.", "quietly", ["loudly", "angrily", "suddenly", "carelessly"],
+     "Speaking quietly helps other readers concentrate in a library.",
+     "Choose the adverb that matches the purpose after 'so that'."),
+    ("Priya checked every calculation twice because she wanted her work to be {}.", "accurate", ["hasty", "approximate", "untidy", "unfinished"],
+     "Checking calculations twice is a way to make work correct and accurate.",
+     "The action before 'because' reveals the intended result."),
+    ("The tiny seedling looked {}, but its stem survived the strong wind.", "delicate", ["massive", "sturdy", "powerful", "unbreakable"],
+     "A tiny seedling may look delicate, and 'but' contrasts that appearance with its survival.",
+     "Use both size and the contrast word to select the best adjective."),
+    ("The rescue team acted {} when the alarm sounded.", "promptly", ["eventually", "slowly", "casually", "reluctantly"],
+     "Emergency teams need to act without delay, so 'promptly' is the best word.",
+     "Think about how an effective response to an alarm should happen.")
 ]
 
 
@@ -488,7 +564,43 @@ GRAMMAR_TEMPLATES = [
      "Remember: 'Each' means 'each single one', so it is always singular!"),
     ("This is the best film {} I have ever seen.", "that", ["who", "whose", "when", "whom"],
      "The relative pronoun 'that' (or 'which') is used to introduce restrictive clauses referring to things like 'film'. 'Who' and 'whom' are only used for people.",
-     "Use 'that' or 'which' when referring back to objects or things like a movie!")
+     "Use 'that' or 'which' when referring back to objects or things like a movie!"),
+    ("The puppy wagged {} tail when the family returned.", "its", ["it's", "their", "his", "our"],
+     "'Its' is the possessive determiner for an animal or thing; 'it's' means 'it is'.",
+     "Try replacing the word with 'it is'. If that does not fit, use 'its'."),
+    ("We waited indoors {} the heavy rain had stopped.", "until", ["because", "although", "unless", "while"],
+     "'Until' shows that the waiting continued up to the time when the rain stopped.",
+     "Choose the conjunction that gives the correct time relationship."),
+    ("Sam and I {} preparing a model for the science fair.", "are", ["is", "am", "was", "be"],
+     "The compound subject 'Sam and I' is plural, so it takes the plural verb 'are'.",
+     "Two people joined by 'and' usually make a plural subject."),
+    ("The parcel was delivered {} our neighbour.", "by", ["from", "at", "with", "into"],
+     "In a passive sentence, 'by' introduces the person who performed the action.",
+     "Ask who carried out the action; use 'by' before that person."),
+    ("I have lived in this street {} three years.", "for", ["since", "during", "until", "from"],
+     "'For' is used with a length of time, while 'since' is used with a starting point.",
+     "Use 'for' with a duration and 'since' with a date or moment."),
+    ("The choir sang beautifully, {} the audience applauded.", "so", ["but", "unless", "although", "because"],
+     "'So' introduces the result of the choir's beautiful singing.",
+     "Decide whether the second clause gives a cause, contrast, or result."),
+    ("If the weather improves, we {} play outside after lunch.", "will", ["would", "had", "were", "have"],
+     "This first conditional describes a possible future event, using 'will' in the result clause.",
+     "For a real future possibility, use 'if' plus present tense, then 'will'."),
+    ("The shoes under the bench {} covered in mud.", "were", ["was", "is", "be", "has"],
+     "The plural subject 'shoes' takes the plural past-tense verb 'were'.",
+     "Ignore the location phrase and match the verb to the main noun."),
+    ("Lena completed the puzzle more quickly {} I did.", "than", ["then", "that", "when", "where"],
+     "'Than' is used to make comparisons; 'then' refers to time or sequence.",
+     "Comparative words such as 'more' usually pair with 'than'."),
+    ("The teacher asked Tariq and {} to collect the books.", "me", ["I", "my", "mine", "myself"],
+     "After the verb 'asked', the object pronoun 'me' is required.",
+     "Remove the other name: 'The teacher asked me' sounds correct."),
+    ("Before the bell rang, the pupils {} their equipment away.", "had put", ["have put", "putting", "will put", "puts"],
+     "The past perfect 'had put' shows that storing the equipment happened before the bell rang.",
+     "Use 'had' plus a past participle for the earlier of two past actions."),
+    ("The red kite, which had a long tail, {} above the trees.", "soared", ["soar", "soaring", "have soared", "were soaring"],
+     "The singular subject 'kite' needs the singular past-tense verb 'soared'.",
+     "Ignore the extra information between commas and find the main subject.")
 ]
 
 
@@ -556,7 +668,7 @@ def _gen_comprehension(index: int) -> tuple:
     blocks.append(f"Read the passage, then answer the questions below.\n\n{passage1}\n")
     for i, (q_text, correct, distractors, exp, tip) in enumerate(questions1, start=1):
         block, rec = _build_question(
-            i, q_text, correct, distractors[:4],
+            i, f"Passage 1: {q_text}", correct, distractors[:4],
             explanation=exp, tip=tip, difficulty="standard"
         )
         blocks.append(block)
@@ -567,7 +679,7 @@ def _gen_comprehension(index: int) -> tuple:
     blocks.append(f"\nRead the second passage, then answer the questions below.\n\n{passage2}\n")
     for j, (q_text, correct, distractors, exp, tip) in enumerate(questions2, start=len(questions1) + 1):
         block, rec = _build_question(
-            j, q_text, correct, distractors[:4],
+            j, f"Passage 2: {q_text}", correct, distractors[:4],
             explanation=exp, tip=tip, difficulty="standard"
         )
         blocks.append(block)
@@ -586,26 +698,50 @@ TOPIC_GENERATORS = {
 }
 
 
-def generate_11plus_english_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
-    """Generate one original English worksheet with 10 locally markable MCQs.
-
-    ``difficulty`` is optional, so existing generation and review callers remain compatible.
-    """
+def _generate_11plus_english_homework(
+    topic: str,
+    index: int,
+    difficulty: str,
+    *,
+    variant: int,
+) -> tuple:
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ English topic: {topic}")
-    difficulty_name = begin_generation("english", topic, index, difficulty)
-    body, answer_records = generator(index)
+    difficulty_name, _body, answer_records = generate_unique_question_set(
+        generator,
+        subject="english",
+        topic=topic,
+        set_index=index,
+        difficulty=difficulty,
+        variant=variant,
+    )
     for record in answer_records:
         record["difficulty"] = difficulty_name
         record["topic"] = topic
+    answer_records = ensure_unique_question_stems(answer_records)
     validate_answer_records(answer_records)
+    body = render_student_question_set(answer_records)
     header = (
         f"11+ English Practice (GL-style familiarisation) - {topic} (Set {index})\n"
         f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
         f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
+
+
+def generate_11plus_english_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original English worksheet with 10 locally markable MCQs.
+
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
+    """
+    return _generate_11plus_english_homework(
+        topic,
+        index,
+        difficulty,
+        variant=0,
+    )
+
 
 def _weighted_topic_sequence(count: int) -> list:
     """Build a deterministic near-exact topic distribution for the library."""
@@ -642,10 +778,23 @@ def generate_11plus_english_batch(count: int = 500) -> list:
     """生成指定数量的 11+ 英语练习，主题按权重分布"""
     topic_sequence = _weighted_topic_sequence(count)
     batch_data = []
+    seen_sets = set()
 
     for i, topic in enumerate(topic_sequence, start=1):
         difficulty = difficulty_for_batch_position(i, count)
-        content, answer_records = generate_11plus_english_homework(topic, i, difficulty=difficulty)
+        for variant in range(50):
+            content, answer_records = _generate_11plus_english_homework(
+                topic,
+                i,
+                difficulty,
+                variant=variant,
+            )
+            signature = homework_set_fingerprint(answer_records)
+            if signature not in seen_sets:
+                seen_sets.add(signature)
+                break
+        else:
+            raise ValueError(f"Could not create a distinct English homework set {i}")
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -672,6 +821,7 @@ def generate_11plus_english_batch(count: int = 500) -> list:
         if i % 10 == 0:
             print(f"  已生成 {i}/{count} 份 11+ 英语作业")
 
+    validate_homework_batch(batch_data)
     return batch_data
 
 

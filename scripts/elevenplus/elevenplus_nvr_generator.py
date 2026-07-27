@@ -25,13 +25,17 @@ from src.elevenplus_rag import get_elevenplus_rag_store, count_homework_by_metad
 from scripts.homework_generator.homework_generator_utils import add_homework_in_batches, get_rag_stats
 from scripts.elevenplus.elevenplus_generator_utils import (
     balanced_weighted_sequence,
-    begin_generation,
     build_multiple_choice_question,
     current_difficulty,
     difficulty_for_batch_position,
+    ensure_unique_question_stems,
+    generate_unique_question_set,
+    homework_set_fingerprint,
     normalise_difficulty,
+    render_student_question_set,
     seeded_random as random,
     validate_answer_records,
+    validate_homework_batch,
 )
 
 
@@ -82,6 +86,11 @@ ARROWS = ["⬆️", "↗️", "➡️", "↘️", "⬇️", "↙️", "⬅️", 
 VERTICAL_MIRROR = {
     "⬆️": "⬆️", "↗️": "↖️", "➡️": "⬅️", "↘️": "↙️",
     "⬇️": "⬇️", "↙️": "↘️", "⬅️": "➡️", "↖️": "↗️",
+}
+
+HORIZONTAL_MIRROR = {
+    "⬆️": "⬇️", "↗️": "↘️", "➡️": "➡️", "↘️": "↗️",
+    "⬇️": "⬆️", "↙️": "↖️", "⬅️": "⬅️", "↖️": "↙️",
 }
 
 WARM_COLORS = ["red", "orange", "yellow", "brown"]
@@ -181,13 +190,17 @@ def _gen_rotation_sequences(index: int) -> tuple:
 
 def _gen_odd_one_out(index: int) -> tuple:
     blocks, records = [], []
-    for i in range(1, 11):
-        shared_type = random.choice(SHAPE_TYPES)
-        shared_colors = random.sample(COLORS, 4)
+    cases = random.sample(
+        [(shared_type, odd_color) for shared_type in SHAPE_TYPES for odd_color in COLORS],
+        10,
+    )
+    for i, (shared_type, odd_color) in enumerate(cases, start=1):
+        shared_colors = random.sample(
+            [color for color in COLORS if color != odd_color],
+            4,
+        )
         same_group = [_emoji(shared_type, c) for c in shared_colors]
         odd_type = SHAPE_TYPES[1] if shared_type == SHAPE_TYPES[0] else SHAPE_TYPES[0]
-        remaining_colors = [c for c in COLORS if c not in shared_colors]
-        odd_color = random.choice(remaining_colors)
         correct = _emoji(odd_type, odd_color)
 
         text = "Which shape does NOT belong with the other four?"
@@ -447,20 +460,37 @@ def _gen_shape_counting(index: int) -> tuple:
 
 def _gen_reflection(index: int) -> tuple:
     blocks, records = [], []
-    for i in range(1, 11):
-        arrow = random.choice(ARROWS)
-        correct = VERTICAL_MIRROR[arrow]
+    cases = random.sample(
+        [
+            (axis, arrow)
+            for axis in ("vertical", "horizontal")
+            for arrow in ARROWS
+        ],
+        10,
+    )
+    for i, (axis, arrow) in enumerate(cases, start=1):
+        mirror = VERTICAL_MIRROR if axis == "vertical" else HORIZONTAL_MIRROR
+        correct = mirror[arrow]
         distractors = [a for a in ARROWS if a != correct]
         distractors = random.sample(distractors, 4)
         
-        text = f"If this pointing arrow is reflected across a vertical mirror line, which way will it point in the reflection?\n   Original Arrow: {arrow}"
+        text = (
+            f"If this pointing arrow is reflected across a {axis} mirror line, "
+            "which way will it point in the reflection?\n"
+            f"   Original Arrow: {arrow}"
+        )
         
+        unchanged_axis = "vertical" if axis == "vertical" else "horizontal"
+        flipped_axis = "horizontal" if axis == "vertical" else "vertical"
         explanation = (
-            f"Under vertical mirror reflection, vertical alignments (up/down) remain identical, "
-            f"while horizontal coordinates are flipped (left turns into right and vice versa). "
+            f"Under {axis} mirror reflection, {unchanged_axis} alignment stays the same "
+            f"while the {flipped_axis} direction is reversed. "
             f"Therefore, {arrow} reflects into {correct}."
         )
-        tip = "Imagine a flat vertical mirror running along the right side of the shape. What points closest to the mirror line must stay closest."
+        tip = (
+            f"Imagine a flat {axis} mirror beside the arrow. "
+            "The part closest to the mirror line must stay closest."
+        )
         
         block, rec = _build_question(i, text, correct, distractors, explanation, tip)
         blocks.append(block)
@@ -508,30 +538,110 @@ def _gen_layering(index: int) -> tuple:
 def _gen_3d_nets(index: int) -> tuple:
     blocks, records = [], []
     faces = ["🔴", "🟩", "🔵", "🟡", "🟣", "⚫"]
-    for i in range(1, 11):
-        # 3D spatial query
-        correct = "🔵 (Right)"
-        distractors = ["🟡 (Bottom)", "🟣 (Left)", "⚫ (Back)", "🟩 (Bottom)"]
-        
+    positions = ["Top", "Bottom", "Front", "Back", "Right", "Left"]
+    rotations = [
+        (
+            "forward",
+            "the Top face moves to the Front",
+            {
+                "Top": "Back",
+                "Bottom": "Front",
+                "Front": "Top",
+                "Back": "Bottom",
+                "Right": "Right",
+                "Left": "Left",
+            },
+        ),
+        (
+            "backward",
+            "the Top face moves to the Back",
+            {
+                "Top": "Front",
+                "Bottom": "Back",
+                "Front": "Bottom",
+                "Back": "Top",
+                "Right": "Right",
+                "Left": "Left",
+            },
+        ),
+        (
+            "to the left",
+            "the Right face moves to the Front",
+            {
+                "Top": "Top",
+                "Bottom": "Bottom",
+                "Front": "Right",
+                "Back": "Left",
+                "Right": "Back",
+                "Left": "Front",
+            },
+        ),
+        (
+            "to the right",
+            "the Left face moves to the Front",
+            {
+                "Top": "Top",
+                "Bottom": "Bottom",
+                "Front": "Left",
+                "Back": "Right",
+                "Right": "Front",
+                "Left": "Back",
+            },
+        ),
+    ]
+    seen = set()
+    attempts = 0
+    while len(records) < 10 and attempts < 200:
+        attempts += 1
+        initial = dict(zip(positions, random.sample(faces, len(faces))))
+        rotation_name, movement, new_from_old = random.choice(rotations)
+        target = random.choice(positions)
+        identity = (
+            tuple(initial[position] for position in positions),
+            rotation_name,
+            target,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+
+        source_position = new_from_old[target]
+        correct = initial[source_position]
+        distractors = random.sample(
+            [face for face in faces if face != correct],
+            4,
+        )
         text = (
-            f"A 3D cube is constructed with the following face layout:\n"
-            f"   Top Face: 🔴\n"
-            f"   Front Face: 🟩\n"
-            f"   Right Face: 🔵\n"
-            f"If the cube is rotated forward by 90 degrees (so the Top face 🔴 is now the Front face), "
-            f"which face is now positioned on the Right side?"
+            "A cube starts with these coloured faces:\n"
+            f"   Top {initial['Top']} | Bottom {initial['Bottom']}\n"
+            f"   Front {initial['Front']} | Back {initial['Back']}\n"
+            f"   Right {initial['Right']} | Left {initial['Left']}\n"
+            f"The whole cube is rotated {rotation_name} by 90° so {movement}. "
+            f"Which coloured face is now at the {target}?"
         )
-        
         explanation = (
-            f"Rotating a cube forward or backward by 90 degrees shifts the Top, Front, Bottom, and Back faces. "
-            f"However, the lateral Right and Left faces simply spin in place but do not swap positions. "
-            f"Therefore, the Right Face remains 🔵."
+            f"After this rotation, the new {target} position is occupied by the "
+            f"face that began at the {source_position}. The {source_position} "
+            f"face was {correct}, so {correct} is now at the {target}."
         )
-        tip = "Visualize rotating a real cardboard box, or use your physical eraser/pencil sharpener as a 3D model."
-        
-        block, rec = _build_question(i, text, correct, distractors, explanation, tip)
+        tip = (
+            "Keep Top and Front fixed in your mind, then move every face one "
+            "quarter-turn. A small box can help you check the motion."
+        )
+
+        number = len(records) + 1
+        block, rec = _build_question(
+            number,
+            text,
+            correct,
+            distractors,
+            explanation,
+            tip,
+        )
         blocks.append(block)
         records.append(rec)
+    if len(records) != 10:
+        raise ValueError("Could not build ten distinct 3D cube questions")
     return "\n\n".join(blocks), records
 
 TOPIC_GENERATORS = {
@@ -548,26 +658,50 @@ TOPIC_GENERATORS = {
     "3D Spatial Nets & Isometric Reasoning": _gen_3d_nets,
 }
 
-def generate_11plus_nvr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
-    """Generate one original Non-Verbal Reasoning worksheet with 10 locally markable MCQs.
-
-    ``difficulty`` is optional, so existing generation and review callers remain compatible.
-    """
+def _generate_11plus_nvr_homework(
+    topic: str,
+    index: int,
+    difficulty: str,
+    *,
+    variant: int,
+) -> tuple:
     generator = TOPIC_GENERATORS.get(topic)
     if generator is None:
         raise ValueError(f"Unknown 11+ Non-Verbal Reasoning topic: {topic}")
-    difficulty_name = begin_generation("non_verbal_reasoning", topic, index, difficulty)
-    body, answer_records = generator(index)
+    difficulty_name, _body, answer_records = generate_unique_question_set(
+        generator,
+        subject="non_verbal_reasoning",
+        topic=topic,
+        set_index=index,
+        difficulty=difficulty,
+        variant=variant,
+    )
     for record in answer_records:
         record["difficulty"] = difficulty_name
         record["topic"] = topic
+    answer_records = ensure_unique_question_stems(answer_records)
     validate_answer_records(answer_records)
+    body = render_student_question_set(answer_records)
     header = (
         f"11+ Non-Verbal Reasoning Practice (GL-style familiarisation) - {topic} (Set {index})\n"
         f"Difficulty: {difficulty_name.title()} | Choose one option A-E for each question.\n"
         f"Suggested pace: {answer_records[0]['time_target_seconds']} seconds per question.\n\n"
     )
     return header + body, answer_records
+
+
+def generate_11plus_nvr_homework(topic: str, index: int, difficulty: str = "standard") -> tuple:
+    """Generate one original Non-Verbal Reasoning worksheet with 10 locally markable MCQs.
+
+    ``difficulty`` is optional, so existing generation and review callers remain compatible.
+    """
+    return _generate_11plus_nvr_homework(
+        topic,
+        index,
+        difficulty,
+        variant=0,
+    )
+
 
 def _weighted_topic_sequence(count: int) -> list:
     """Build a deterministic near-exact topic distribution for the library."""
@@ -622,10 +756,23 @@ def clean_11plus_nvr() -> int:
 def generate_11plus_nvr_batch(count: int = 300) -> list:
     topic_sequence = _weighted_topic_sequence(count)
     batch_data = []
+    seen_sets = set()
 
     for i, topic in enumerate(topic_sequence, start=1):
         difficulty = difficulty_for_batch_position(i, count)
-        content, answer_records = generate_11plus_nvr_homework(topic, i, difficulty=difficulty)
+        for variant in range(50):
+            content, answer_records = _generate_11plus_nvr_homework(
+                topic,
+                i,
+                difficulty,
+                variant=variant,
+            )
+            signature = homework_set_fingerprint(answer_records)
+            if signature not in seen_sets:
+                seen_sets.add(signature)
+                break
+        else:
+            raise ValueError(f"Could not create a distinct Non-Verbal Reasoning set {i}")
 
         metadata = {
             "year_group": YEAR_GROUP,
@@ -652,6 +799,7 @@ def generate_11plus_nvr_batch(count: int = 300) -> list:
         if i % 10 == 0:
             print(f"  Generated {i}/{count} NVR homework documents")
 
+    validate_homework_batch(batch_data)
     return batch_data
 
 def main():

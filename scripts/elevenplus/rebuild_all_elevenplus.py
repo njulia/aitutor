@@ -136,6 +136,8 @@ def _validate_batch(
     batch: Sequence[dict[str, Any]],
     general_count_override: int | None = None,
 ) -> None:
+    from scripts.elevenplus.elevenplus_generator_utils import validate_homework_batch
+
     expected = (
         general_count_override
         if spec.family == "practice" and general_count_override is not None
@@ -161,6 +163,13 @@ def _validate_batch(
             raise RuntimeError(f"{doc_id}: missing private answer records")
         if not str(item.get("content") or "").strip():
             raise RuntimeError(f"{doc_id}: empty public question content")
+
+    try:
+        validate_homework_batch(batch)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"{spec.label} {spec.family}: question uniqueness validation failed: {exc}"
+        ) from exc
 
 
 def _target_counts(store: Any, specs: Sequence[GeneratorSpec]) -> dict[str, int]:

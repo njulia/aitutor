@@ -28,6 +28,7 @@ except ImportError:
 from scripts.elevenplus.elevenplus_generator_utils import (
     build_multiple_choice_question,
     difficulty_for_week,
+    ensure_unique_question_stems,
     records_to_year_round_questions,
     validate_answer_records,
 )
@@ -445,6 +446,7 @@ def get_questions_for_week(week_num: int) -> List[dict]:
         for record in records:
             record["curriculum_topic"] = curriculum_topic
             record["focus"] = str(week.get("focus") or "")
+    records = ensure_unique_question_stems(records)
     validate_answer_records(records)
     return records_to_year_round_questions(records)
 

@@ -136,6 +136,14 @@ let currentHomework = [];
                         value,
                         label
                     }))
+                },
+                {
+                    key: 'mode',
+                    question: 'How shall I show the questions?',
+                    options: [
+                        {value: 'tutor', label: '🪄 One at a time'},
+                        {value: 'homework', label: '📄 All together'}
+                    ]
                 }
             ];
         }
@@ -147,7 +155,8 @@ let currentHomework = [];
                 && Number(answers.year_group) <= 6
                 && primarySubjects.includes(answers.subject)
                 && Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, Number(answers.session_minutes))
-                && Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty);
+                && Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty)
+                && (answers.mode === 'homework' || answers.mode === 'tutor');
         }
 
         function appendHomeworkSummaryItem(list, label, value) {
@@ -174,6 +183,9 @@ let currentHomework = [];
             appendHomeworkSummaryItem(list, 'Subject', answers.subject);
             appendHomeworkSummaryItem(list, 'Time', `${answers.session_minutes} minutes`);
             appendHomeworkSummaryItem(list, 'Level', HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]);
+            const modeStep = getHomeworkGuideSteps().find(step => step.key === 'mode');
+            const modeOption = modeStep?.options.find(option => option.value === answers.mode);
+            appendHomeworkSummaryItem(list, 'Style', modeOption?.label || answers.mode);
             summary.appendChild(list);
         }
 
@@ -183,7 +195,33 @@ let currentHomework = [];
             const detail = document.getElementById('homework-quick-detail');
             if (!title || !detail) return;
             title.textContent = `Ready for Year ${answers.year_group} ${answers.subject} for ${answers.session_minutes} minutes?`;
-            detail.textContent = `${HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]} · Tap Start now, or change your choices.`;
+            const style = answers.mode === 'tutor' ? '🪄 One at a time' : '📄 All together';
+            detail.textContent = `${HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]} · ${style}. Tap Start now, or change your choices.`;
+        }
+
+        function hideLegacyHomeworkQuestionStyle() {
+            const questionStyle = document.getElementById('homework-question-style');
+            if (!questionStyle) return;
+
+            // Keep the old select in the page for compatibility with older
+            // handlers, but move its choice into the guided homework steps.
+            questionStyle.value = homeworkGuideState.answers.mode === 'tutor' ? 'tutor' : 'homework';
+            const wrapper = questionStyle.closest(
+                '.form-group, .field-group, .setting-row, .settings-row, .parent-setting'
+            );
+            if (wrapper) {
+                wrapper.hidden = true;
+                wrapper.style.display = 'none';
+                return;
+            }
+
+            const label = document.querySelector('label[for="homework-question-style"]');
+            if (label) {
+                label.hidden = true;
+                label.style.display = 'none';
+            }
+            questionStyle.hidden = true;
+            questionStyle.style.display = 'none';
         }
 
         function renderHomeworkGuide() {
@@ -253,6 +291,10 @@ let currentHomework = [];
                         return;
                     }
                     homeworkGuideState.answers[step.key] = option.value;
+                    if (step.key === 'mode') {
+                        const questionStyle = document.getElementById('homework-question-style');
+                        if (questionStyle) questionStyle.value = option.value;
+                    }
                     homeworkGuideState.stepIndex += 1;
                     if (homeworkGuideState.stepIndex >= steps.length) {
                         saveLearningChoices();
@@ -368,42 +410,74 @@ let currentHomework = [];
             summary.appendChild(list);
         }
 
-        function ensureElevenQuickStart() {
-            let quickStart = document.getElementById('eleven-quick-start');
-            if (quickStart) return quickStart;
-
+        function getElevenGuidePanel() {
             const question = document.getElementById('eleven-guide-question');
-            if (!question || !question.parentElement) return null;
+            if (!question) return null;
+            return document.getElementById('eleven-guide-panel')
+                || question.closest('.guide-panel')
+                || question.parentElement;
+        }
 
-            quickStart = document.createElement('section');
-            quickStart.id = 'eleven-quick-start';
+        function setElementHidden(element, hidden) {
+            if (!element) return;
+            element.hidden = hidden;
+            // Some page styles set display on cards and override the browser's
+            // default [hidden] rule. Set display as well so the two 11+ states
+            // can never appear together or leave an empty card behind.
+            element.style.display = hidden ? 'none' : '';
+        }
+
+        function ensureElevenQuickStart() {
+            const panel = getElevenGuidePanel();
+            if (!panel || !panel.parentElement) return null;
+
+            let quickStart = document.getElementById('eleven-quick-start');
+            if (!quickStart) {
+                quickStart = document.createElement('section');
+                quickStart.id = 'eleven-quick-start';
+            }
+
             quickStart.className = 'quick-start-card';
-            quickStart.hidden = true;
 
-            const title = document.createElement('h3');
-            title.id = 'eleven-quick-title';
+            // Keep quick start outside the editor, just like Make Homework.
+            // Older HTML/JS versions may already have placed it inside the
+            // editor; moving the same node also avoids duplicate cards.
+            if (quickStart.parentElement !== panel.parentElement
+                || quickStart.nextElementSibling !== panel) {
+                panel.parentElement.insertBefore(quickStart, panel);
+            }
 
-            const detail = document.createElement('p');
-            detail.id = 'eleven-quick-detail';
+            // Rebuild once so pre-existing page markup cannot leave an
+            // unbound "Change it" button.
+            if (quickStart.dataset.elevenQuickStartReady !== 'true') {
+                const title = document.createElement('h3');
+                title.id = 'eleven-quick-title';
 
-            const actions = document.createElement('div');
-            actions.className = 'quick-start-actions';
+                const detail = document.createElement('p');
+                detail.id = 'eleven-quick-detail';
 
-            const startButton = document.createElement('button');
-            startButton.type = 'button';
-            startButton.className = 'btn btn-primary';
-            startButton.textContent = 'Start now';
-            startButton.addEventListener('click', generateCustomHomeworkEleven);
+                const actions = document.createElement('div');
+                actions.className = 'quick-start-actions';
 
-            const changeButton = document.createElement('button');
-            changeButton.type = 'button';
-            changeButton.className = 'btn btn-secondary';
-            changeButton.textContent = 'Change it';
-            changeButton.addEventListener('click', changeElevenGuide);
+                const startButton = document.createElement('button');
+                startButton.type = 'button';
+                startButton.id = 'eleven-quick-start-button';
+                startButton.className = 'btn btn-primary';
+                startButton.textContent = 'Start now';
+                startButton.addEventListener('click', generateCustomHomeworkEleven);
 
-            actions.append(startButton, changeButton);
-            quickStart.append(title, detail, actions);
-            question.parentElement.insertBefore(quickStart, question);
+                const changeButton = document.createElement('button');
+                changeButton.type = 'button';
+                changeButton.id = 'eleven-quick-change-button';
+                changeButton.className = 'btn btn-secondary';
+                changeButton.textContent = 'Change it';
+                changeButton.addEventListener('click', changeElevenGuide);
+
+                actions.append(startButton, changeButton);
+                quickStart.replaceChildren(title, detail, actions);
+                quickStart.dataset.elevenQuickStartReady = 'true';
+            }
+
             return quickStart;
         }
 
@@ -418,13 +492,13 @@ let currentHomework = [];
             ];
             controlIds.forEach(id => {
                 const element = document.getElementById(id);
-                if (element) element.hidden = hidden;
+                setElementHidden(element, hidden);
             });
 
             const progress = document.getElementById('eleven-guide-progress');
             if (progress) {
                 const progressContainer = progress.closest('.guide-progress') || progress;
-                progressContainer.hidden = hidden;
+                setElementHidden(progressContainer, hidden);
             }
         }
 
@@ -456,16 +530,22 @@ let currentHomework = [];
 
             const steps = getElevenGuideSteps();
             const quickStart = ensureElevenQuickStart();
+            const panel = getElevenGuidePanel();
             if (elevenGuideState.showQuickStart && isElevenGuideComplete()) {
+                // A saved plan uses only the compact Start now / Change it
+                // card. Hide legacy summary and navigation controls even on
+                // older page structures where they sit outside the panel.
                 setElevenGuideControlsHidden(true);
-                if (quickStart) {
-                    quickStart.hidden = false;
-                    renderElevenQuickStart(steps);
-                }
+                setElementHidden(panel, true);
+                setElementHidden(quickStart, false);
+                renderElevenQuickStart(steps);
                 return;
             }
 
-            if (quickStart) quickStart.hidden = true;
+            setElementHidden(quickStart, true);
+            setElementHidden(panel, false);
+            // This remains as a compatibility fallback for older pages where
+            // the guide controls do not share a dedicated panel.
             setElevenGuideControlsHidden(false);
             const isSummary = elevenGuideState.stepIndex >= steps.length;
             const completed = Math.min(elevenGuideState.stepIndex + 1, steps.length);
@@ -522,6 +602,8 @@ let currentHomework = [];
         function changeElevenGuide() {
             elevenGuideState.showQuickStart = false;
             elevenGuideState.stepIndex = 0;
+            setElementHidden(document.getElementById('eleven-quick-start'), true);
+            setElementHidden(getElevenGuidePanel(), false);
             renderElevenGuide();
         }
 
@@ -592,8 +674,6 @@ let currentHomework = [];
 
         function saveLearningChoices() {
             const existing = loadLearningChoices();
-            // Legacy free-text learner descriptions and current parent notes
-            // are deliberately never persisted.
             delete existing.homeworkPrompt;
             delete existing.elevenPrompt;
             const elevenSubject = elevenGuideState.answers.subject
@@ -620,9 +700,18 @@ let currentHomework = [];
             if (Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty)) {
                 value.homeworkDifficulty = answers.difficulty;
             }
-            const questionStyle = document.getElementById('homework-question-style')?.value;
-            if (questionStyle === 'homework' || questionStyle === 'tutor') {
-                value.homeworkMode = questionStyle;
+            const homeworkMode = answers.mode
+                || document.getElementById('homework-question-style')?.value;
+            if (homeworkMode === 'homework' || homeworkMode === 'tutor') {
+                value.homeworkMode = homeworkMode;
+            }
+            const homeworkQuickYear = Number(document.getElementById('homework-year')?.value);
+            const homeworkQuickMode = getSelectedMode('homework-quick-mode');
+            if (Number.isInteger(homeworkQuickYear) && homeworkQuickYear >= 1 && homeworkQuickYear <= 6) {
+                value.homeworkQuickYear = homeworkQuickYear;
+            }
+            if (homeworkQuickMode === 'homework' || homeworkQuickMode === 'tutor') {
+                value.homeworkQuickMode = homeworkQuickMode;
             }
 
             const elevenAnswers = elevenGuideState.answers;
@@ -642,6 +731,14 @@ let currentHomework = [];
             }
             if (elevenAnswers.mode === 'homework' || elevenAnswers.mode === 'tutor') {
                 value.elevenMode = elevenAnswers.mode;
+            }
+            const elevenQuickYear = Number(document.getElementById('eleven-year')?.value);
+            const elevenQuickMode = getSelectedMode('eleven-quick-mode');
+            if ([3, 4, 5, 6].includes(elevenQuickYear)) {
+                value.elevenQuickYear = elevenQuickYear;
+            }
+            if (elevenQuickMode === 'homework' || elevenQuickMode === 'tutor') {
+                value.elevenQuickMode = elevenQuickMode;
             }
             try {
                 localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(value));
@@ -683,11 +780,33 @@ let currentHomework = [];
             if (Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, saved.homeworkDifficulty)) {
                 homeworkGuideState.answers.difficulty = saved.homeworkDifficulty;
             }
-            const questionStyle = document.getElementById('homework-question-style');
-            if (questionStyle && (saved.homeworkMode === 'homework' || saved.homeworkMode === 'tutor')) {
-                questionStyle.value = saved.homeworkMode;
+            if (saved.homeworkMode === 'homework' || saved.homeworkMode === 'tutor') {
+                homeworkGuideState.answers.mode = saved.homeworkMode;
+                const questionStyle = document.getElementById('homework-question-style');
+                if (questionStyle) questionStyle.value = saved.homeworkMode;
             }
             homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
+
+            const homeworkQuickYear = Number(saved.homeworkQuickYear);
+            const homeworkYearSelect = document.getElementById('homework-year');
+            if (homeworkYearSelect
+                    && Number.isInteger(homeworkQuickYear)
+                    && homeworkQuickYear >= 1
+                    && homeworkQuickYear <= 6) {
+                homeworkYearSelect.value = String(homeworkQuickYear);
+            } else if (homeworkYearSelect
+                    && Number.isInteger(yearGroup)
+                    && yearGroup >= 1
+                    && yearGroup <= 6) {
+                homeworkYearSelect.value = String(yearGroup);
+            }
+            const homeworkQuickMode = saved.homeworkQuickMode || saved.homeworkMode;
+            if (homeworkQuickMode === 'homework' || homeworkQuickMode === 'tutor') {
+                const quickModeInput = document.querySelector(
+                    `input[name="homework-quick-mode"][value="${homeworkQuickMode}"]`
+                );
+                if (quickModeInput) quickModeInput.checked = true;
+            }
 
             const elevenYear = Number(saved.elevenYear);
             const elevenQuestionCount = Number(saved.elevenQuestionCount);
@@ -707,6 +826,19 @@ let currentHomework = [];
                 elevenGuideState.answers.mode = saved.elevenMode;
             }
             elevenGuideState.showQuickStart = isElevenGuideComplete();
+
+            const elevenQuickYear = Number(saved.elevenQuickYear);
+            const elevenYearSelect = document.getElementById('eleven-year');
+            if (elevenYearSelect && [3, 4, 5, 6].includes(elevenQuickYear)) {
+                elevenYearSelect.value = String(elevenQuickYear);
+            }
+            const elevenQuickMode = saved.elevenQuickMode;
+            if (elevenQuickMode === 'homework' || elevenQuickMode === 'tutor') {
+                const quickModeInput = document.querySelector(
+                    `input[name="eleven-quick-mode"][value="${elevenQuickMode}"]`
+                );
+                if (quickModeInput) quickModeInput.checked = true;
+            }
         }
 
         function clearSavedLearningPrompts() {
@@ -730,22 +862,19 @@ let currentHomework = [];
 
         // 检查订阅状态
         async function checkSubscription(plan = null) {
-            // Always check if plan is specified, otherwise use cached status
             if (plan === null && hasSubscription !== null) return hasSubscription;
 
-            // If not logged in, the backend will handle anonymous session ID and return has_subscription: false
             const url = plan ? `/api/check-subscription?plan=${encodeURIComponent(plan)}` : `/api/check-subscription`;
             try {
                 const resp = await fetch(url);
                 const data = await resp.json();
                 const result = data.has_subscription === true;
                 if (plan === null) hasSubscription = result;
-                
-                // Extra check for 11+ Premium specifically if requested
+
                 if (plan === 'elevenplus_monthly' && !result) {
                     console.warn('11+ Premium subscription check failed');
                 }
-                
+
                 return result;
             } catch(e) {
                 console.error('Failed to check subscription:', e);
@@ -756,11 +885,9 @@ let currentHomework = [];
 
         // 检查是否需要订阅才能使用高级功能
         async function requireSubscription(featureName, isFree = false, plan = null) {
-            // If the feature/content is free, we don't need to check subscription
             if (isFree) return true;
 
-            // Paid features always require a logged-in user with a real student_id
-            if (!currentStudentId) { // currentStudentId is only set for logged-in users
+            if (!currentStudentId) {
                 redirectToLogin()
                 return false;
             }
@@ -778,9 +905,6 @@ let currentHomework = [];
         // 状态保存（用于在功能切换时保留答案和批改结果）
         let savedHomeworkState = null;
 
-        // Homework-mode actions are deliberately rebuilt from this fixed template.
-        // Practice mode may temporarily replace the action area, but it must never
-        // leave homework mode with a different or incomplete set of buttons.
         const HOMEWORK_ACTION_BUTTONS_HTML = `
             <button class="btn btn-primary" onclick="reviewGeneratedHomework()">
                 Quick Review
@@ -902,7 +1026,6 @@ let currentHomework = [];
         }
 
         function saveCurrentState() {
-            // 只保存一次，避免后续操作覆盖原始状态
             if (savedHomeworkState) return;
             savedHomeworkState = {
                 answers: {},
@@ -913,9 +1036,7 @@ let currentHomework = [];
 
         function restoreSavedState() {
             if (!savedHomeworkState) return false;
-            // 恢复答案
             restoreVisibleAnswers(savedHomeworkState.answers);
-            // 恢复批改结果
             document.getElementById('review-result').innerHTML = savedHomeworkState.reviewHTML || '';
             return true;
         }
@@ -943,6 +1064,7 @@ let currentHomework = [];
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
             restoreLearningChoices();
+            hideLegacyHomeworkQuestionStyle();
             renderHomeworkGuide();
             renderElevenGuide();
             loadSubjects();
@@ -950,6 +1072,13 @@ let currentHomework = [];
             if (homeworkQuestionStyle) {
                 homeworkQuestionStyle.addEventListener('change', saveLearningChoices);
             }
+            const elevenYear = document.getElementById('eleven-year');
+            if (elevenYear) {
+                elevenYear.addEventListener('change', saveLearningChoices);
+            }
+            document.querySelectorAll('input[name="eleven-quick-mode"]').forEach(input => {
+                input.addEventListener('change', saveLearningChoices);
+            });
             ['eleven-exam-board', 'eleven-exam-date', 'eleven-target-school'].forEach(elementId => {
                 const field = document.getElementById(elementId);
                 if (!field) return;
@@ -984,12 +1113,11 @@ let currentHomework = [];
                     sessionStorage.removeItem('homeworkState');
                     const state = JSON.parse(savedStr);
                     if (state.homework && state.homework.length > 0) {
-                        // Wait for subjects to load and UI to be ready
                         const restore = () => {
                             currentHomework = state.homework;
                             currentProfile = state.profile;
                             currentSubject = state.subject || 'Maths';
-                            currentHomeworkMode = state.mode || 'homework'; // Restore mode
+                            currentHomeworkMode = state.mode || 'homework';
                             if (currentHomeworkMode === 'tutor') {
                                 currentQuestionIndex = state.questionIndex || 0;
                                 currentQuestionAnswers = state.questionAnswers || {};
@@ -998,19 +1126,17 @@ let currentHomework = [];
                                 displayHomework(state.homework);
                             }
 
-                            // 恢复答案
                             setTimeout(() => {
                                 restoreVisibleAnswers(state.answers);
                                 if (window.HomeworkQuestionRenderer) {
                                     window.HomeworkQuestionRenderer.restoreFromProxies(document);
                                 }
-                                // 恢复批改结果
                                 if (state.reviewHTML) {
                                     document.getElementById('review-result').innerHTML = state.reviewHTML;
                                 }
                             }, 50);
                         };
-                        
+
                         if (document.getElementById('homework-results')) {
                             setTimeout(restore, 200);
                         } else {
@@ -1046,21 +1172,17 @@ let currentHomework = [];
         function setInputMethod(method, selectedButton = null) {
             currentInputMethod = method;
 
-            // Update tab styles
             document.querySelectorAll('.input-method-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
             if (selectedButton) selectedButton.classList.add('active');
 
-            // Hide all content
             document.querySelectorAll('.input-method-content').forEach(content => {
                 content.style.display = 'none';
             });
 
-            // Show selected content
             document.getElementById('input-' + method).style.display = 'block';
 
-            // The uploaded file is marked from its own content, so no subject choice is needed.
             const subjectGroup = document.getElementById('review-subject-group');
             if (subjectGroup) subjectGroup.style.display = method === 'file' ? 'none' : 'block';
         }
@@ -1074,12 +1196,10 @@ let currentHomework = [];
             reader.onload = function(e) {
                 currentPhotoData = e.target.result;
 
-                // Show preview
                 document.getElementById('photo-img').src = currentPhotoData;
                 document.getElementById('photo-preview').style.display = 'block';
                 document.querySelector('#input-photo .upload-placeholder').style.display = 'none';
 
-                // Process the photo
                 processPhoto(currentPhotoData);
             };
             reader.readAsDataURL(file);
@@ -1129,12 +1249,10 @@ let currentHomework = [];
 
             currentFileData = file;
 
-            // Show file info
             document.getElementById('file-name').textContent = file.name;
             document.getElementById('file-info').style.display = 'block';
             document.querySelector('#input-file .upload-placeholder').style.display = 'none';
 
-            // Process the file and keep the promise so Get Feedback can wait for it.
             fileUploadPromise = processFile(file);
         }
 
@@ -1327,11 +1445,10 @@ let currentHomework = [];
 
         function toggleSubject(element, containerId) {
             const container = document.getElementById(containerId);
-            // Deselect all other subjects in the same container
             container.querySelectorAll('.subject-item.selected').forEach(item => {
                 item.classList.remove('selected');
             });
-            element.classList.add('selected'); // Select the clicked subject
+            element.classList.add('selected');
             saveLearningChoices();
         }
 
@@ -1391,8 +1508,6 @@ let currentHomework = [];
             clearSavedState();
         }
 
-        // The guided setup is deterministic and makes no extra AI call. It
-        // sends the same generation request with a small structured profile.
         async function generateGuidedHomework() {
             if (!isHomeworkGuideComplete()) {
                 alert('Please answer each short question first.');
@@ -1406,8 +1521,7 @@ let currentHomework = [];
             const yearGroup = Number(answers.year_group);
             const sessionMinutes = Number(answers.session_minutes);
             const questionCount = HOMEWORK_SESSION_QUESTIONS[sessionMinutes];
-            const questionStyle = document.getElementById('homework-question-style')?.value;
-            const mode = questionStyle === 'tutor' ? 'tutor' : 'homework';
+            const mode = answers.mode === 'tutor' ? 'tutor' : 'homework';
             const learningNotes = document.getElementById('homework-parent-notes')?.value.trim() || null;
             const studentId = await getEffectiveStudentId();
             const profile = {
@@ -1481,15 +1595,13 @@ let currentHomework = [];
                     return radio.value;
                 }
             }
-            return 'homework'; // Default to homework mode
+            return 'homework';
         }
 
-        // Generate Homework - uses selected subjects directly
         async function generateHomework() {
             const year = parseInt(document.getElementById('homework-year').value);
             const subjects = getSelectedSubjects('homework-subjects');
-            const questionStyle = document.getElementById('homework-question-style')?.value;
-            const mode = questionStyle === 'tutor' ? 'tutor' : 'homework';
+            const mode = getSelectedMode('homework-quick-mode');
             const profileText = document.getElementById('homework-parent-notes')?.value.trim() || '';
             saveLearningChoices();
 
@@ -1498,7 +1610,6 @@ let currentHomework = [];
                 return;
             }
 
-            // Build profile
             const profile = {
                 year_group: year,
                 age: 5 + (year - 1),
@@ -1561,7 +1672,10 @@ let currentHomework = [];
 
         async function generateQuickHomeworkEleven() {
             const subjects = getSelectedSubjects('eleven-subjects');
-            const mode = 'homework';
+            const selectedYear = Number(document.getElementById('eleven-year')?.value);
+            const year = [3, 4, 5, 6].includes(selectedYear) ? selectedYear : 5;
+            const mode = getSelectedMode('eleven-quick-mode') === 'tutor' ? 'tutor' : 'homework';
+            const ageByYear = {3: 8, 4: 9, 5: 10, 6: 11};
 
             if (subjects.length === 0) {
                 alert('Please select one subject!');
@@ -1569,11 +1683,12 @@ let currentHomework = [];
             }
 
             const profile = {
-                year_group: 5,
-                age: 10,
+                year_group: year,
+                age: ageByYear[year],
                 student_id: await getEffectiveStudentId()
             };
 
+            saveLearningChoices();
             clearSavedState();
             showLoading();
 
@@ -1583,7 +1698,7 @@ let currentHomework = [];
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         quick_select: true,
-                        year: 5,
+                        year: year,
                         subjects: subjects,
                         is_eleven_plus: true,
                         mode: mode,
@@ -1605,9 +1720,9 @@ let currentHomework = [];
                 if (data.success) {
                     currentHomework = data.homework;
                     currentProfile = data.profile;
-                    currentHomeworkMode = mode; // Set the global mode
-                    currentQuestionIndex = 0; // Reset question index for new homework
-                    currentQuestionAnswers = {}; // Reset answers for new homework
+                    currentHomeworkMode = mode;
+                    currentQuestionIndex = 0;
+                    currentQuestionAnswers = {};
 
                     if (currentHomeworkMode === 'tutor') {
                         displayTutorQuestion(currentQuestionIndex);
@@ -1650,8 +1765,6 @@ let currentHomework = [];
             const subjects = [answers.subject];
             const mode = answers.mode;
 
-            // Target school is deliberately not included. It is an on-page
-            // parent note only and never leaves the browser.
             const profile = {
                 setup_source: 'guided_11plus',
                 year_group: yearGroup,
@@ -1717,12 +1830,8 @@ let currentHomework = [];
         }
 
         function formatQuestions(html) {
-            // 在每个问题前后添加更好的间距和格式
-            // 查找编号的问题（如 1.、2.、(1)、(2) 等）
             let formatted = html
-                // 给编号问题添加间距
                 .replace(/<p>(\d+\.)/g, '<p class="question-number">$1')
-                // 增强列表项
                 .replace(/<li>/g, '<li class="question-item">');
 
             return formatted;
@@ -1776,7 +1885,6 @@ let currentHomework = [];
                         if (unwrapped) return unwrapped;
                     }
                 } catch (_error) {
-                    // Keep plain worksheet text when it is not valid JSON.
                 }
             }
             const escapedBreaks = (text.match(/\\n/g) || []).length;
@@ -1832,7 +1940,7 @@ let currentHomework = [];
                 const numbered = line.match(numberedStart);
                 if (numbered) {
                     if (foundNumberedQuestion) pushCurrent();
-                    else current = []; // Drop headings or instructions before Question 1.
+                    else current = [];
                     foundNumberedQuestion = true;
                     current.push(numbered[1].trim());
                     return;
@@ -1845,9 +1953,6 @@ let currentHomework = [];
 
             if (foundNumberedQuestion && questions.length) return questions;
 
-            // Some generators use bullets rather than numbers. Only treat bullets as
-            // separate questions when at least two are present, to avoid breaking a
-            // single question that contains a short list.
             const bulletQuestions = lines
                 .map(line => {
                     const match = line.match(bulletStart);
@@ -2057,7 +2162,6 @@ let currentHomework = [];
                 return;
             }
 
-            // Save the current answer
             currentQuestionAnswers[currentQuestionIndex] = studentAnswer;
 
             const hw = currentHomework[currentQuestionIndex];
@@ -2079,13 +2183,13 @@ let currentHomework = [];
                         answers: studentAnswer,
                         subject: subject,
                         profile: getLearnerReviewProfile(),
-                        is_tutor_mode: true, // Indicate tutor mode review
-                        from_rag: hw.from_rag, // Pass from_rag status
-                        homework_doc_id: hw.doc_id, // Source RAG document
+                        is_tutor_mode: true,
+                        from_rag: hw.from_rag,
+                        homework_doc_id: hw.doc_id,
                         is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
-                            : currentQuestionIndex // Backward-compatible fallback
+                            : currentQuestionIndex
                     })
                 });
 
@@ -2123,7 +2227,6 @@ let currentHomework = [];
         }
 
         function nextQuestion() {
-            // Save the current answer before moving to the next question.
             const answerInput = document.getElementById('tutor-answer-input');
             if (answerInput) {
                 currentQuestionAnswers[currentQuestionIndex] = answerInput.value.trim();
@@ -2281,16 +2384,13 @@ let currentHomework = [];
         }
 
         async function reviewHomework() {
-            // 检查登录和订阅状态
             if (!currentStudentId) {
                 saveStateToSessionStorage();
-                // alert('Please login to use Mark Homework.');
                 window.location.href = '/login';
                 return;
             }
             if (!await requireSubscription('Mark Homework', false, HOMEWORK_PREMIUM_PLAN)) return;
 
-            // 根据当前输入方式收集数据
             let homeworkText = '';
             let answersText = '';
 
@@ -2353,7 +2453,6 @@ let currentHomework = [];
                     subject: subject,
                     profile: getLearnerReviewProfile()
                 };
-                // Add doc_id if available (for RAG answer lookup)
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
                     requestBody.is_eleven_plus = currentHomework.some(item => item.is_eleven_plus === true);
@@ -2374,7 +2473,6 @@ let currentHomework = [];
                 }
                 if (response.status === 401) {
                     saveStateToSessionStorage();
-                    // alert('Please login or register to use this feature.');
                     window.location.href = '/login';
                     return;
                 }
@@ -2450,8 +2548,6 @@ let currentHomework = [];
                 <div class="review-output">${renderSafeMarkdown(review)}</div>
             `;
 
-            // Make sure results section is visible. The uploaded homework stays
-            // in the read-only box above the Get Feedback button.
             document.getElementById('results').style.display = 'block';
         }
 
@@ -2466,10 +2562,8 @@ let currentHomework = [];
             const isFree = false;
             const requiredPlan = premiumPlanForContext(reviewContext);
 
-            // Check subscription first
             if (!await requireSubscription('Explain in Detail', isFree, requiredPlan)) return;
 
-            // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
 
             const homework = String(reviewContext.homework || '').trim();
@@ -2485,7 +2579,6 @@ let currentHomework = [];
                 return;
             }
 
-            // Get existing review feedback (if answers have been checked)
             const reviewEl = document.querySelector('#review-result .review-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
@@ -2569,10 +2662,8 @@ let currentHomework = [];
             const isFree = false;
             const requiredPlan = premiumPlanForContext(reviewContext);
 
-            // Check subscription first
             if (!await requireSubscription('Help me improve', isFree, requiredPlan)) return;
 
-            // Save current state (answers + review results), so it can be restored when returning
             saveCurrentState();
 
             const homework = String(reviewContext.homework || '').trim();
@@ -2588,7 +2679,6 @@ let currentHomework = [];
                 return;
             }
 
-            // Get existing review feedback (if answers have been checked)
             const reviewEl = document.querySelector('#review-result .review-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
@@ -2782,12 +2872,8 @@ let currentHomework = [];
         function exitPracticeMode() {
             isPracticeMode = false;
             currentPracticeContent = '';
-            // 重新显示原始作业
             displayHomework(currentHomework);
-            // 恢复之前保存的答案和批改结果
             restoreSavedState();
-            // Always restore the canonical homework-mode actions. Do not restore
-            // a saved HTML snapshot because it may already contain practice controls.
             resetHomeworkActionButtons();
             clearSavedState();
         }
@@ -2795,8 +2881,6 @@ let currentHomework = [];
         // ---- 学习进度追踪 ----
 
         async function TrackProgress() {
-            // Open the new tab immediately while this click is still a direct user action.
-            // This avoids browsers blocking it after the subscription check finishes.
             const progressWindow = window.open('about:blank', '_blank');
             if (!progressWindow) {
                 alert('Please allow pop-ups so Progress can open in a new tab.');
@@ -2804,7 +2888,6 @@ let currentHomework = [];
             }
             progressWindow.opener = null;
 
-            // Check subscription before loading private progress information.
             if (!await requireSubscription('Track Progress', false, premiumPlanForContext())) {
                 progressWindow.close();
                 return;
@@ -2821,8 +2904,6 @@ let currentHomework = [];
             const adminTab = document.getElementById('admin-tools-tab');
             if (!adminTab) return;
 
-            // Hidden by default. Only the server can make it visible after
-            // checking the authenticated user's email against ADMIN_EMAILS.
             adminTab.style.display = 'none';
             try {
                 const response = await fetch('/api/admin/access-status', {
@@ -2914,14 +2995,13 @@ let currentHomework = [];
         // ===== VOICE FEATURE FUNCTIONS (Tier 0: Browser-native) =====
 
         function getYearGroupForLogging() {
-            // Extract year_group from currentProfile if available
             return (currentProfile && currentProfile.year_group) || null;
         }
 
         function logVoiceUsage(eventType) {
             const yearGroup = getYearGroupForLogging();
             const subject = currentHomework[currentQuestionIndex]?.subject;
-            if (!yearGroup || !subject) return; // skip if context is unknown — never guess
+            if (!yearGroup || !subject) return;
 
             fetch('/api/log-voice-usage', {
                 method: 'POST',
@@ -2932,7 +3012,30 @@ let currentHomework = [];
                     subject: subject,
                     student_id: currentStudentId || null,
                 })
-            }).catch(() => {}); // never surface a logging failure to the child
+            }).catch(() => {});
+        }
+
+        function resetSpeechButtons() {
+            if (activeSpeechButton) {
+                activeSpeechButton.classList.remove('speaking');
+                if (activeSpeechButton.dataset.originalText) {
+                    activeSpeechButton.textContent = activeSpeechButton.dataset.originalText;
+                }
+            }
+            document.querySelectorAll('.voice-btn.speaking').forEach(b => {
+                b.classList.remove('speaking');
+                if (b.dataset.originalText) b.textContent = b.dataset.originalText;
+            });
+            activeSpeechButton = null;
+        }
+
+        function stopSpeechPlayback() {
+            speechPlaybackId += 1;
+            activeSpeechUtterance = null;
+            resetSpeechButtons();
+            if (ttsSupported && window.speechSynthesis) {
+                try { window.speechSynthesis.cancel(); } catch (e) {}
+            }
         }
 
         // Split long feedback into short phrases. Chrome and Safari can silently
@@ -3077,7 +3180,7 @@ let currentHomework = [];
 
             recognizer.onstart = () => {
                 isListening = true;
-                logVoiceUsage('stt_used');  // Log once when actual listening starts
+                logVoiceUsage('stt_used');
                 btn.textContent = '🔴 Listening... (tap to stop)';
                 btn.classList.add('listening');
             };
@@ -3091,7 +3194,6 @@ let currentHomework = [];
 
             recognizer.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
-                // Fall back silently — child can still type
             };
 
             recognizer.onend = () => {
