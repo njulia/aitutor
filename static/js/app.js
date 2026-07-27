@@ -28,7 +28,6 @@ let currentHomework = [];
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             console.log("Speech recognition is supported!");
-//            const recognition = new SpeechRecognition();
         } else {
             console.log("Speech recognition is not supported in this browser.");
         }
@@ -36,10 +35,31 @@ let currentHomework = [];
         const sttSupported = !!SpeechRec;
         let recognizer = null;
         let isListening = false;
+        let speechPlaybackId = 0;
+        let activeSpeechUtterance = null;
+        let activeSpeechButton = null;
+
+        // Warm up and cache voices asynchronously for Web Speech API
+        let voiceCache = [];
+        function updateVoiceCache() {
+            if (ttsSupported && window.speechSynthesis) {
+                try {
+                    voiceCache = window.speechSynthesis.getVoices() || [];
+                } catch (e) {
+                    voiceCache = [];
+                }
+            }
+        }
+        if (ttsSupported && window.speechSynthesis) {
+            updateVoiceCache();
+            if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+                window.speechSynthesis.onvoiceschanged = updateVoiceCache;
+            }
+        }
 
         // 获取女声教师语音（en-GB优先）
         function getFemaleVoice() {
-            if (!ttsSupported) return null;
+            if (!ttsSupported || !window.speechSynthesis) return null;
             const voices = window.speechSynthesis.getVoices();
             // 优先匹配明确的女性英音
             const femaleGb = voices.find(v =>
@@ -258,7 +278,8 @@ let currentHomework = [];
 
         const elevenGuideState = {
             stepIndex: 0,
-            answers: {}
+            answers: {},
+            showQuickStart: false
         };
 
         function getElevenGuideSteps() {
@@ -290,10 +311,10 @@ let currentHomework = [];
                 },
                 {
                     key: 'question_count',
-                    question: 'How much practice shall we do?',
+                    question: 'How long shall we practise?',
                     options: [
-                        { value: 5, label: '5 questions · Quick' },
-                        { value: 8, label: '8 questions · Full set' }
+                        {value: 10, label: '10 minutes · Quick'},
+                        {value: 15, label: '15 minutes · Longer'}
                     ]
                 },
                 {
@@ -347,6 +368,80 @@ let currentHomework = [];
             summary.appendChild(list);
         }
 
+        function ensureElevenQuickStart() {
+            let quickStart = document.getElementById('eleven-quick-start');
+            if (quickStart) return quickStart;
+
+            const question = document.getElementById('eleven-guide-question');
+            if (!question || !question.parentElement) return null;
+
+            quickStart = document.createElement('section');
+            quickStart.id = 'eleven-quick-start';
+            quickStart.className = 'quick-start-card';
+            quickStart.hidden = true;
+
+            const title = document.createElement('h3');
+            title.id = 'eleven-quick-title';
+
+            const detail = document.createElement('p');
+            detail.id = 'eleven-quick-detail';
+
+            const actions = document.createElement('div');
+            actions.className = 'quick-start-actions';
+
+            const startButton = document.createElement('button');
+            startButton.type = 'button';
+            startButton.className = 'btn btn-primary';
+            startButton.textContent = 'Start now';
+            startButton.addEventListener('click', generateCustomHomeworkEleven);
+
+            const changeButton = document.createElement('button');
+            changeButton.type = 'button';
+            changeButton.className = 'btn btn-secondary';
+            changeButton.textContent = 'Change it';
+            changeButton.addEventListener('click', changeElevenGuide);
+
+            actions.append(startButton, changeButton);
+            quickStart.append(title, detail, actions);
+            question.parentElement.insertBefore(quickStart, question);
+            return quickStart;
+        }
+
+        function setElevenGuideControlsHidden(hidden) {
+            const controlIds = [
+                'eleven-guide-step-label',
+                'eleven-guide-question',
+                'eleven-guide-options',
+                'eleven-guide-summary',
+                'eleven-guide-back',
+                'eleven-guide-start'
+            ];
+            controlIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.hidden = hidden;
+            });
+
+            const progress = document.getElementById('eleven-guide-progress');
+            if (progress) {
+                const progressContainer = progress.closest('.guide-progress') || progress;
+                progressContainer.hidden = hidden;
+            }
+        }
+
+        function renderElevenQuickStart(steps) {
+            const answers = elevenGuideState.answers;
+            const title = document.getElementById('eleven-quick-title');
+            const detail = document.getElementById('eleven-quick-detail');
+            if (!title || !detail) return;
+
+            const year = findElevenGuideLabel(steps[0], answers.year_group);
+            const subject = findElevenGuideLabel(steps[1], answers.subject);
+            const questionCount = findElevenGuideLabel(steps[3], answers.question_count);
+            const mode = findElevenGuideLabel(steps[4], answers.mode);
+            title.textContent = `Ready for ${year} 11+ ${subject}?`;
+            detail.textContent = `${questionCount} · ${mode}. Tap Start now, or change your choices.`;
+        }
+
         function renderElevenGuide() {
             const question = document.getElementById('eleven-guide-question');
             const optionsContainer = document.getElementById('eleven-guide-options');
@@ -360,6 +455,18 @@ let currentHomework = [];
             }
 
             const steps = getElevenGuideSteps();
+            const quickStart = ensureElevenQuickStart();
+            if (elevenGuideState.showQuickStart && isElevenGuideComplete()) {
+                setElevenGuideControlsHidden(true);
+                if (quickStart) {
+                    quickStart.hidden = false;
+                    renderElevenQuickStart(steps);
+                }
+                return;
+            }
+
+            if (quickStart) quickStart.hidden = true;
+            setElevenGuideControlsHidden(false);
             const isSummary = elevenGuideState.stepIndex >= steps.length;
             const completed = Math.min(elevenGuideState.stepIndex + 1, steps.length);
             progress.style.width = `${(completed / steps.length) * 100}%`;
@@ -396,6 +503,9 @@ let currentHomework = [];
                 button.addEventListener('click', () => {
                     elevenGuideState.answers[step.key] = option.value;
                     elevenGuideState.stepIndex += 1;
+                    if (elevenGuideState.stepIndex >= steps.length) {
+                        saveLearningChoices();
+                    }
                     renderElevenGuide();
                 });
                 optionsContainer.appendChild(button);
@@ -409,9 +519,18 @@ let currentHomework = [];
             }
         }
 
+        function changeElevenGuide() {
+            elevenGuideState.showQuickStart = false;
+            elevenGuideState.stepIndex = 0;
+            renderElevenGuide();
+        }
+
         function isElevenGuideComplete() {
-            return ['year_group', 'subject', 'confidence', 'question_count', 'mode']
-                .every(key => elevenGuideState.answers[key] !== undefined);
+            return getElevenGuideSteps().every(step =>
+                step.options.some(option =>
+                    String(option.value) === String(elevenGuideState.answers[step.key])
+                )
+            );
         }
 
         // Get the server-resolved learner ID. It is backed by an HttpOnly
@@ -477,7 +596,8 @@ let currentHomework = [];
             // are deliberately never persisted.
             delete existing.homeworkPrompt;
             delete existing.elevenPrompt;
-            const elevenSubject = getSelectedSubjects('eleven-subjects')[0];
+            const elevenSubject = elevenGuideState.answers.subject
+                || getSelectedSubjects('eleven-subjects')[0];
             const value = {
                 ...existing,
                 elevenSubject: elevenSubject || existing.elevenSubject || 'Maths'
@@ -503,6 +623,25 @@ let currentHomework = [];
             const questionStyle = document.getElementById('homework-question-style')?.value;
             if (questionStyle === 'homework' || questionStyle === 'tutor') {
                 value.homeworkMode = questionStyle;
+            }
+
+            const elevenAnswers = elevenGuideState.answers;
+            const elevenYear = Number(elevenAnswers.year_group);
+            const elevenQuestionCount = Number(elevenAnswers.question_count);
+            if ([3, 4, 5, 6].includes(elevenYear)) {
+                value.elevenYear = elevenYear;
+            }
+            if (typeof elevenAnswers.subject === 'string' && elevenAnswers.subject.trim()) {
+                value.elevenSubject = elevenAnswers.subject.trim();
+            }
+            if (['confident', 'sometimes_tricky', 'needs_help'].includes(elevenAnswers.confidence)) {
+                value.elevenConfidence = elevenAnswers.confidence;
+            }
+            if ([5, 8].includes(elevenQuestionCount)) {
+                value.elevenQuestionCount = elevenQuestionCount;
+            }
+            if (elevenAnswers.mode === 'homework' || elevenAnswers.mode === 'tutor') {
+                value.elevenMode = elevenAnswers.mode;
             }
             try {
                 localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(value));
@@ -549,6 +688,25 @@ let currentHomework = [];
                 questionStyle.value = saved.homeworkMode;
             }
             homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
+
+            const elevenYear = Number(saved.elevenYear);
+            const elevenQuestionCount = Number(saved.elevenQuestionCount);
+            if ([3, 4, 5, 6].includes(elevenYear)) {
+                elevenGuideState.answers.year_group = elevenYear;
+            }
+            if (typeof saved.elevenSubject === 'string' && saved.elevenSubject.trim()) {
+                elevenGuideState.answers.subject = saved.elevenSubject.trim();
+            }
+            if (['confident', 'sometimes_tricky', 'needs_help'].includes(saved.elevenConfidence)) {
+                elevenGuideState.answers.confidence = saved.elevenConfidence;
+            }
+            if ([5, 8].includes(elevenQuestionCount)) {
+                elevenGuideState.answers.question_count = elevenQuestionCount;
+            }
+            if (saved.elevenMode === 'homework' || saved.elevenMode === 'tutor') {
+                elevenGuideState.answers.mode = saved.elevenMode;
+            }
+            elevenGuideState.showQuickStart = isElevenGuideComplete();
         }
 
         function clearSavedLearningPrompts() {
@@ -1117,8 +1275,8 @@ let currentHomework = [];
                         renderHomeworkGuide();
                     }
                     renderSubjects('homework-subjects', data.primary, saved.homeworkSubject);
-            renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
-            if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
+                    renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
+                    if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
                         elevenPlusSubjects = data.eleven_plus;
                         const selectedSubject = elevenGuideState.answers.subject;
                         if (selectedSubject && !elevenPlusSubjects.includes(selectedSubject)) {
@@ -1128,7 +1286,7 @@ let currentHomework = [];
                     }
 
                     const reviewSelect = document.getElementById('review-subject');
-                    reviewSelect.innerHTML = ''; // Clear existing options
+                    reviewSelect.innerHTML = '';
                     const allSubjects = [...new Set([...data.primary, ...data.eleven_plus])].sort();
                     allSubjects.forEach(subject => {
                         const option = document.createElement('option');
@@ -1194,6 +1352,11 @@ let currentHomework = [];
         }
 
         function showLoading() {
+            stopSpeechPlayback();
+            if (sttSupported && isListening && recognizer) {
+                try { recognizer.stop(); } catch (e) {}
+                isListening = false;
+            }
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').style.display = 'none';
         }
@@ -1210,16 +1373,21 @@ let currentHomework = [];
         }
 
         function clearResults() {
+            stopSpeechPlayback();
+            if (sttSupported && isListening && recognizer) {
+                try { recognizer.stop(); } catch (e) {}
+                isListening = false;
+            }
             document.getElementById('results').style.display = 'none';
             currentHomework = [];
             isPracticeMode = false;
             currentPracticeContent = '';
-            currentHomeworkMode = 'homework'; // Reset mode
+            currentHomeworkMode = 'homework';
             currentQuestionIndex = 0;
             currentQuestionAnswers = {};
             activeReviewContext = null;
             resetHomeworkActionButtons();
-            document.getElementById('tutor-mode-buttons').style.display = 'none'; // Hide tutor buttons
+            document.getElementById('tutor-mode-buttons').style.display = 'none';
             clearSavedState();
         }
 
@@ -1460,10 +1628,15 @@ let currentHomework = [];
         async function generateCustomHomeworkEleven() {
             if (!isElevenGuideComplete()) {
                 alert('Please answer each short question first.');
+                elevenGuideState.showQuickStart = false;
                 elevenGuideState.stepIndex = 0;
                 renderElevenGuide();
                 return;
             }
+
+            saveLearningChoices();
+            elevenGuideState.showQuickStart = true;
+            renderElevenGuide();
 
             if (!await requireSubscription('Guided 11+ Practice', false, 'elevenplus_monthly')) return;
 
@@ -2762,23 +2935,128 @@ let currentHomework = [];
             }).catch(() => {}); // never surface a logging failure to the child
         }
 
-        // Text to speech: read the current question aloud
+        // Split long feedback into short phrases. Chrome and Safari can silently
+        // fail or stop early when one SpeechSynthesisUtterance is too long.
+        function splitSpeechText(text, maxLength = 220) {
+            const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+            const chunks = [];
+            let current = '';
+
+            sentences.forEach(sentence => {
+                const words = sentence.trim().split(/\s+/).filter(Boolean);
+                words.forEach(word => {
+                    const candidate = current ? `${current} ${word}` : word;
+                    if (candidate.length <= maxLength) {
+                        current = candidate;
+                    } else {
+                        if (current) chunks.push(current);
+                        current = word;
+                    }
+                });
+            });
+            if (current) chunks.push(current);
+            return chunks;
+        }
+
+        // Centralised text-to-speech handler with toggle, UI feedback, and
+        // retained utterances to prevent browser garbage collection.
+        function speakText(text, btn = null) {
+            if (!ttsSupported || !window.speechSynthesis) return;
+
+            const shouldStop = Boolean(btn && btn.classList.contains('speaking'));
+            stopSpeechPlayback();
+            if (shouldStop) return;
+
+            const plainText = String(text || '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/[#*_`~]/g, '')
+                .replace(/^\d+\.\s*/gm, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!plainText) return;
+
+            const chunks = splitSpeechText(plainText);
+            if (!chunks.length) return;
+
+            const playbackId = speechPlaybackId;
+            if (btn) {
+                if (!btn.dataset.originalText) {
+                    btn.dataset.originalText = btn.textContent;
+                }
+                activeSpeechButton = btn;
+                btn.classList.add('speaking');
+                btn.textContent = '⏹ Stop reading';
+            }
+
+            function finishPlayback() {
+                if (playbackId !== speechPlaybackId) return;
+                activeSpeechUtterance = null;
+                resetSpeechButtons();
+            }
+
+            function speakChunk(index) {
+                if (playbackId !== speechPlaybackId) return;
+                if (index >= chunks.length) {
+                    finishPlayback();
+                    return;
+                }
+
+                try {
+                    if (window.speechSynthesis.paused) {
+                        window.speechSynthesis.resume();
+                    }
+
+                    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+                    activeSpeechUtterance = utterance;
+                    utterance.lang = 'en-GB';
+                    utterance.rate = 0.85;
+
+                    try {
+                        const femaleVoice = getFemaleVoice();
+                        if (femaleVoice) utterance.voice = femaleVoice;
+                    } catch (e) {
+                        console.warn('Voice selection fallback:', e);
+                    }
+
+                    utterance.onend = () => speakChunk(index + 1);
+                    utterance.onerror = (event) => {
+                        if (playbackId !== speechPlaybackId) return;
+                        if (event.error !== 'canceled' && event.error !== 'interrupted') {
+                            console.error('Speech synthesis utterance error:', event);
+                        }
+                        finishPlayback();
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+
+                    if (window.speechSynthesis.paused) {
+                        window.speechSynthesis.resume();
+                    }
+                } catch (err) {
+                    console.error('Failed to initiate speech synthesis:', err);
+                    finishPlayback();
+                }
+            }
+
+            // Let cancel() finish before the first queued utterance is started.
+            setTimeout(() => speakChunk(0), 75);
+        }
+
+        // Text to speech: read the current question aloud in Tutor mode
         function speakQuestion() {
-            if (!ttsSupported) return;
-            logVoiceUsage('tts_used');
-            window.speechSynthesis.cancel(); // stop any previous utterance
-            const hw = currentHomework[currentQuestionIndex];
-
-            // Strip markdown/numbering noise so it reads naturally
-            const plainText = hw.content
-                .replace(/[#*_`]/g, '')
-                .replace(/^\d+\.\s*/gm, '');
-
-            const utterance = new SpeechSynthesisUtterance(plainText);
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.8; // slightly slower for a young reader
-            utterance.voice = getFemaleVoice();
-            window.speechSynthesis.speak(utterance);
+            if (!ttsSupported || !window.speechSynthesis) return;
+            const btn = document.getElementById('speak-question-btn');
+            const card = document.querySelector('#homework-results .single-question-card');
+            const textEl = card ? card.querySelector('.single-question-text') : null;
+            let textToSpeak = '';
+            if (textEl) {
+                textToSpeak = textEl.innerText || textEl.textContent || '';
+            } else if (currentHomework[currentQuestionIndex]) {
+                const hw = currentHomework[currentQuestionIndex];
+                textToSpeak = hw.content || hw.question || '';
+            }
+            speakText(textToSpeak, btn);
         }
 
         // Speech to text: dictate the answer into the textarea
@@ -2825,50 +3103,23 @@ let currentHomework = [];
             recognizer.start();
         }
 
-        // 朗读指定文本（标准作业模式下每道题的语音按钮复用）
-        function speakText(text) {
-            if (!ttsSupported) return;
-            logVoiceUsage('tts_used');
-            window.speechSynthesis.cancel();
-            const plainText = String(text || '')
-                .replace(/[#*_`]/g, '')
-                .replace(/^\d+\.\s*/gm, '');
-            const utterance = new SpeechSynthesisUtterance(plainText);
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.8;
-            utterance.voice = getFemaleVoice();
-            window.speechSynthesis.speak(utterance);
-        }
-
         // 标准作业模式：从按钮所在的问题卡片读取题目文本并朗读
         function speakQuestionFromCard(btn) {
-            if (!ttsSupported) return;
-            const card = btn.closest('.single-question-card');
+            if (!ttsSupported || !window.speechSynthesis) return;
+            const card = btn ? btn.closest('.single-question-card') : null;
             const textEl = card ? card.querySelector('.single-question-text') : null;
-            if (!textEl) return;
-            speakText(textEl.innerText);
+            if (textEl) {
+                speakText(textEl.innerText || textEl.textContent || '', btn);
+            }
         }
 
-        // 朗读评审/反馈/解释文本（tutor模式下评审结果和深度解释的语音朗读）
+        // 朗读评审/反馈/解释文本
         function speakReviewFeedback() {
-            if (!ttsSupported) return;
+            if (!ttsSupported || !window.speechSynthesis) return;
             const reviewEl = document.querySelector('#review-result .review-output');
             if (!reviewEl) return;
             const btn = document.getElementById('speak-review-btn');
-            logVoiceUsage('tts_used');
-            window.speechSynthesis.cancel();
-            const plainText = String(reviewEl.innerText || '')
-                .replace(/[#*_`]/g, '')
-                .replace(/^\d+\.\s*/gm, '');
-            const utterance = new SpeechSynthesisUtterance(plainText);
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.8;
-            utterance.voice = getFemaleVoice();
-            if (btn) {
-                utterance.onstart = () => { btn.classList.add('listening'); };
-                utterance.onend = () => { btn.classList.remove('listening'); };
-            }
-            window.speechSynthesis.speak(utterance);
+            speakText(reviewEl.innerText || reviewEl.textContent || '', btn);
         }
 
         // 标准作业模式：将语音识别结果填入指定输入框
