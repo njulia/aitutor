@@ -184,12 +184,12 @@ _SQLitePasswordResetStore = PasswordResetStore
 
 class _SQLPasswordResetStore:
     def __init__(self, database_url: str) -> None:
-        from sqlalchemy import Column, DateTime, MetaData, String, Table, and_, create_engine, delete, func, insert, select, update
-        from .db import engine_options, normalise_database_url
+        from sqlalchemy import Column, DateTime, MetaData, String, Table, and_, delete, func, insert, select, update
+        from .db import get_engine, normalise_database_url
 
         self._sa = {"and_": and_, "delete": delete, "func": func, "insert": insert, "select": select, "update": update}
         self.database_url = normalise_database_url(database_url)
-        self.engine = create_engine(self.database_url, **engine_options(self.database_url))
+        self.engine = get_engine(self.database_url)
         metadata = MetaData()
         self.tokens = Table(
             "password_reset_tokens", metadata,

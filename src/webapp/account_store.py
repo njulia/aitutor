@@ -23,20 +23,17 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
-    UniqueConstraint,
     and_,
-    create_engine,
     func,
     delete,
     insert,
-    or_,
     select,
     update,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
-from .db import engine_options, normalise_database_url
+from .db import get_engine, normalise_database_url
 
 DB_PATH = os.getenv(
     "ACCOUNT_DB_PATH",
@@ -115,10 +112,9 @@ def _engine() -> Engine:
     with _INIT_LOCK:
         if _ENGINE is not None and _ENGINE_URL == url:
             return _ENGINE
-        kwargs: Dict[str, Any] = engine_options(url)
         if url.startswith("sqlite"):
             Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-        _ENGINE = create_engine(url, **kwargs)
+        _ENGINE = get_engine(url)
         _ENGINE_URL = url
         _metadata.create_all(_ENGINE)
         _INITIALISED_PATH = DB_PATH

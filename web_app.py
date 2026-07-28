@@ -32,7 +32,7 @@ from src.webapp.runtime import (
     production_configuration_issues, validate_production_configuration,
 )
 from src.webapp.session_store import TutorSessionStore
-from src.webapp.upload_utils import stream_upload_to_temp
+from src.webapp.upload_utils import normalised_extension, stream_upload_to_temp
 from src.webapp.message_routes import create_message_router
 from src.webapp.account_routes import build_account_router
 from src.webapp.memory_routes import build_memory_router
@@ -322,28 +322,29 @@ def process_uploaded_file(file_path: str):
     filename = os.path.basename(file_path)
     file_ext = os.path.splitext(filename)[1].lower().lstrip(".")
 
-    content = ""
-    is_image = False
-
-    if file_ext in ALLOWED_IMAGE_EXTENSIONS:
-        logger.info("[File Upload] Processing image: %s", filename)
-        content = extract_text_from_image(file_path)
-        is_image = True
-    elif file_ext in ALLOWED_TEXT_EXTENSIONS:
-        logger.info("[File Upload] Processing text file: %s", filename)
-        content = read_text_file(file_path)
-    elif file_ext in ALLOWED_PDF_EXTENSION:
-        logger.info("[File Upload] Processing PDF: %s", filename)
-        content = read_pdf_file(file_path)
-    else:
-        raise ValueError(f"Unsupported file type: {file_ext}")
-
     try:
-        os.remove(file_path)
-    except OSError:
-        pass
+        content = ""
+        is_image = False
+        if file_ext in ALLOWED_IMAGE_EXTENSIONS:
+            logger.info("[File Upload] Processing image: %s", filename)
+            content = extract_text_from_image(file_path)
+            is_image = True
+        elif file_ext in ALLOWED_TEXT_EXTENSIONS:
+            logger.info("[File Upload] Processing text file: %s", filename)
+            content = read_text_file(file_path)
+        elif file_ext in ALLOWED_PDF_EXTENSION:
+            logger.info("[File Upload] Processing PDF: %s", filename)
+            content = read_pdf_file(file_path)
+        else:
+            raise ValueError(f"Unsupported file type: {file_ext}")
+        return content, is_image
+    finally:
+        # Failed OCR/PDF parsing must not leave child uploads on ephemeral disk.
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
 
-    return content, is_image
 
 
 def process_base64_image(data_url: str) -> str:
@@ -585,6 +586,22 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
     return new_anon_session_id, None, new_anon_session_id
 
 
+async def _resolve_request_identity(
+    req: Request,
+) -> tuple[str, Optional[str], Optional[str]]:
+    """Resolve account/learner data without blocking the FastAPI event loop."""
+    # Import the runtime helper here so broad route-level test patches do not
+    # accidentally replace identity resolution with an unrelated fake result.
+    from src.webapp import runtime as web_runtime
+
+    return await web_runtime.run_blocking(
+        _get_user_or_anonymous_id,
+        req,
+        timeout=10,
+        limit_concurrency=False,
+    )
+
+
 # Parent/guardian support messages and the protected administrator inbox.
 app.include_router(create_message_router(
     resolve_identity=_get_user_or_anonymous_id,
@@ -633,6 +650,7 @@ def review_homework(
     profile=None,
     *,
     quick_review: bool = False,
+    uploaded_work: bool = False,
     is_tutor_mode: bool = False,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
@@ -644,6 +662,7 @@ def review_homework(
         subject,
         profile,
         quick_review=quick_review,
+        uploaded_work=uploaded_work,
         is_tutor_mode=is_tutor_mode,
         homework_doc_id=homework_doc_id,
         is_eleven_plus=is_eleven_plus,
@@ -788,12 +807,13 @@ class TopicMasteryPracticeRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    homework: str
-    answers: str
-    subject: str = "Maths"
+    homework: str = Field(min_length=1, max_length=20_000)
+    answers: str = Field(min_length=1, max_length=12_000)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    session_id: Optional[str] = None
+    session_id: Optional[str] = Field(default=None, max_length=100)
     quick_review: bool = False
+    uploaded_work: bool = False
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
@@ -1179,7 +1199,7 @@ async def readiness():
 @app.get("/api/client-id")
 async def get_client_id(request: Request):
     """Return the cookie-backed anonymous ID without collecting or exposing an IP."""
-    resolved_id, _username, new_anon_id = _get_user_or_anonymous_id(request)
+    resolved_id, _username, new_anon_id = await _resolve_request_identity(request)
     response = JSONResponse({"client_id": resolved_id})
     if new_anon_id:
         response.set_cookie(
@@ -1389,7 +1409,7 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
             }],
         }
     )
-    _resolved_id, _username, new_anon_session_id = _get_user_or_anonymous_id(req)
+    _resolved_id, _username, new_anon_session_id = await _resolve_request_identity(req)
     _set_anon_cookie(response, new_anon_session_id, req)
     return response
 
@@ -1398,7 +1418,7 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
 async def api_generate(req: Request, request: ProfileRequest):
     try:
         initialize()
-        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
 
         request.student_id = resolved_student_id
         request.profile = dict(request.profile or {})
@@ -1620,7 +1640,7 @@ async def api_generate(req: Request, request: ProfileRequest):
 async def api_review(req: Request, request_body: ReviewRequest):
     try:
         initialize()
-        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
 
@@ -1643,12 +1663,13 @@ async def api_review(req: Request, request_body: ReviewRequest):
             and not is_year_round_review
         )
         uses_detail_model = not uses_quick_model
+        requires_premium_review = bool(request_body.uploaded_work or uses_detail_model)
         free_rag_tutor_review = bool(
             request_body.is_tutor_mode
             and request_body.from_rag
             and request_body.homework_doc_id
         )
-        if uses_detail_model and not free_rag_tutor_review:
+        if requires_premium_review and not free_rag_tutor_review:
             required_plan = _required_premium_plan(
                 is_eleven_plus=bool(request_body.is_eleven_plus),
                 profile=profile,
@@ -1666,6 +1687,8 @@ async def api_review(req: Request, request_body: ReviewRequest):
             if not has_sub:
                 if request_body.is_tutor_mode:
                     feature = "Review Question"
+                elif request_body.uploaded_work:
+                    feature = "Mark uploaded homework"
                 elif is_year_round_review:
                     feature = "11+ year-round review"
                 else:
@@ -1679,6 +1702,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
             request_body.subject,
             profile,
             quick_review=bool(request_body.quick_review),
+            uploaded_work=bool(request_body.uploaded_work),
             is_tutor_mode=bool(request_body.is_tutor_mode),
             homework_doc_id=request_body.homework_doc_id,
             is_eleven_plus=bool(request_body.is_eleven_plus),
@@ -1702,7 +1726,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
 async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
     try:
         initialize()
-        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
 
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
@@ -1753,7 +1777,7 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
 async def api_improve_practice(req: Request, request_body: ImprovePracticeRequest):
     try:
         initialize()
-        resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
         required_plan = _required_premium_plan(
@@ -1823,7 +1847,7 @@ async def api_get_progress(
     Both routes use the same account-ownership and subscription checks.
     """
     try:
-        resolved_student_id, logged_in_username, _ = _get_user_or_anonymous_id(req)
+        resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
 
         if logged_in_username is None:
             return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
@@ -1932,14 +1956,14 @@ async def get_quick_profile(year: int):
     return {"success": True, "profile": profile}
 
 
-def _request_session_owner(request: Request) -> tuple[str, Optional[str]]:
-    resolved_id, username, new_anon_id = _get_user_or_anonymous_id(request)
+async def _request_session_owner(request: Request) -> tuple[str, Optional[str]]:
+    resolved_id, username, new_anon_id = await _resolve_request_identity(request)
     return owner_key(username or resolved_id), new_anon_id
 
 
 @app.post("/api/sessions")
 async def create_session(request: Request):
-    session_owner, new_anon_id = _request_session_owner(request)
+    session_owner, new_anon_id = await _request_session_owner(request)
     payload = {
         "homework": [],
         "profile": {},
@@ -1960,7 +1984,7 @@ async def create_session(request: Request):
 
 @app.get("/api/sessions/{session_id}")
 async def get_session(request: Request, session_id: str):
-    session_owner, _ = _request_session_owner(request)
+    session_owner, _ = await _request_session_owner(request)
     session = await asyncio.to_thread(tutor_session_store.get, session_id, session_owner)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1969,7 +1993,7 @@ async def get_session(request: Request, session_id: str):
 
 @app.put("/api/sessions/{session_id}")
 async def update_session(request: Request, session_id: str, body: SessionUpdateRequest):
-    session_owner, _ = _request_session_owner(request)
+    session_owner, _ = await _request_session_owner(request)
     updates = body.model_dump(exclude_unset=True)
     try:
         session = await asyncio.to_thread(
@@ -1984,7 +2008,7 @@ async def update_session(request: Request, session_id: str, body: SessionUpdateR
 
 @app.delete("/api/sessions/{session_id}")
 async def delete_session(request: Request, session_id: str):
-    session_owner, _ = _request_session_owner(request)
+    session_owner, _ = await _request_session_owner(request)
     deleted = await asyncio.to_thread(tutor_session_store.delete, session_id, session_owner)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2032,7 +2056,7 @@ async def create_subscription(req: Request, request: SubscriptionRequest):
 
 @app.get("/api/check-subscription")
 async def check_subscription_api(req: Request, plan: Optional[str] = None):
-    resolved_student_id, logged_in_username, new_anon_session_id = _get_user_or_anonymous_id(req)
+    resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
     required_plan = plan if plan in PREMIUM_PLAN_NAMES else None
     has_sub = await run_blocking(
         user_has_subscription,
@@ -2178,7 +2202,23 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
             max_bytes=MAX_UPLOAD_BYTES,
             directory=UPLOAD_FOLDER,
         )
-        content, is_image = await asyncio.to_thread(process_uploaded_file, filepath)
+        is_image_upload = normalised_extension(file.filename) in ALLOWED_IMAGE_EXTENSIONS
+        try:
+            content, is_image = await run_blocking(
+                process_uploaded_file,
+                filepath,
+                timeout=90 if is_image_upload else 30,
+                limit_concurrency=is_image_upload,
+            )
+        except HTTPException as exc:
+            # A 503 occurs before the worker starts, so it still owns no file.
+            # On a 504 the worker continues safely and removes the file itself.
+            if exc.status_code == 503:
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
+            raise
         return {"success": True, "content": content, "is_image": is_image}
     except HTTPException:
         raise

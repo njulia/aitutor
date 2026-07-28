@@ -12,11 +12,11 @@ import os
 from datetime import UTC, datetime
 from typing import Any, Dict, Iterable, List, Optional
 
-from sqlalchemy import JSON, Column, DateTime, String, create_engine, delete, func, select, text
+from sqlalchemy import JSON, Column, DateTime, String, delete, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from src.webapp.db import engine_options, normalise_database_url
+from src.webapp.db import get_engine, normalise_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class PGVectorStore:
         if self.is_postgres and _PGVector is None:
             raise RuntimeError("PostgreSQL RAG requires the 'pgvector' Python package")
 
-        self.engine = create_engine(self.db_url, **engine_options(self.db_url))
+        self.engine = get_engine(self.db_url)
         self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._prepare_db()
         logger.info(

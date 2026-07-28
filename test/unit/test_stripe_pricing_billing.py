@@ -240,13 +240,20 @@ def test_change_and_cancel_open_explicit_stripe_portal_flows():
     )
 
 
-def test_pricing_page_contains_only_public_stripe_identifiers():
+def test_pricing_page_uses_the_supplied_stripe_pricing_table_without_secrets():
     project_page = Path(__file__).resolve().parents[2] / "static" / "pricing.html"
     page_path = project_page if project_page.is_file() else Path(__file__).with_name("pricing.html")
     page = page_path.read_text(encoding="utf-8")
 
-    assert billing.DEFAULT_PRICING_TABLE_ID in page
-    assert billing.DEFAULT_PUBLISHABLE_KEY in page
+    assert "/api/billing/status" in page
+    assert "/api/billing/pricing-table-session" in page
+    assert "/api/billing/checkout" in page  # Retained only for the one-off pass.
+    assert "JSON.stringify({plan: 'trial_5day'})" in page
+    assert "JSON.stringify({plan})" not in page
+    assert 'src="https://js.stripe.com/v3/pricing-table.js"' in page
+    assert "<stripe-pricing-table" in page
+    assert 'pricing-table-id="prctbl_1TvlP9A7C4P8kXJMSS8t4VRT"' in page
+    assert 'publishable-key="pk_live_fYeIDSqsqYC6MDKau5eFsI0U"' in page
     assert "customer-session-client-secret" in page
     assert "client-reference-id" in page
     assert "sk_live_" not in page

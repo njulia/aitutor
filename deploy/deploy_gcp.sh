@@ -8,7 +8,16 @@ GCP_REPOSITORY="${GCP_REPOSITORY:-aitutor-repo}"
 GCP_SQL_INSTANCE="${GCP_SQL_INSTANCE:-aitutor-prod-pg}"
 GCP_SERVICE_ACCOUNT="${GCP_SERVICE_ACCOUNT:-aitutor-run@${GCP_PROJECT_ID}.iam.gserviceaccount.com}"
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-deploy/cloud-run.env.yaml}"
-SECRET_BINDINGS="${SECRET_BINDINGS:-DATABASE_URL=aitutor-database-url:latest,SESSION_OWNER_SECRET=aitutor-session-owner-secret:latest,DEEPSEEK_API_KEY=aitutor-deepseek-api-key:latest,SMTP_PASSWORD=aitutor-smtp-password:latest}"
+STRIPE_SECRET_KEY_SECRET="${STRIPE_SECRET_KEY_SECRET:-homeworkmagic-stripe-secret-key}"
+STRIPE_WEBHOOK_SECRET_SECRET="${STRIPE_WEBHOOK_SECRET_SECRET:-homeworkmagic-stripe-webhook-secret}"
+DEFAULT_SECRET_BINDINGS="DATABASE_URL=aitutor-database-url:latest,SESSION_OWNER_SECRET=aitutor-session-owner-secret:latest,DEEPSEEK_API_KEY=aitutor-deepseek-api-key:latest,SMTP_PASSWORD=aitutor-smtp-password:latest,STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_SECRET}:latest,STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_SECRET}:latest"
+SECRET_BINDINGS="${SECRET_BINDINGS:-${DEFAULT_SECRET_BINDINGS}}"
+CLOUD_RUN_CONCURRENCY="${CLOUD_RUN_CONCURRENCY:-25}"
+CLOUD_RUN_MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES:-2}"
+CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-60}"
+CLOUD_RUN_CPU="${CLOUD_RUN_CPU:-2}"
+CLOUD_RUN_MEMORY="${CLOUD_RUN_MEMORY:-4Gi}"
+BILLING_HEALTH_URL="${BILLING_HEALTH_URL:-https://homeworkmagic.co.uk/api/billing/plans}"
 
 if [[ ! -f "${DEPLOY_ENV_FILE}" ]]; then
   echo "Create ${DEPLOY_ENV_FILE} from deploy/cloud-run.env.yaml.example first." >&2
@@ -19,7 +28,30 @@ if grep -q "REPLACE_" "${DEPLOY_ENV_FILE}"; then
   exit 2
 fi
 
+required_billing_settings=(
+  STRIPE_BILLING_ENABLED
+  STRIPE_EXPECTED_LIVEMODE
+  STRIPE_PRICE_TRIAL_5DAY
+  STRIPE_PRICE_HOMEWORK_MONTHLY
+  STRIPE_PRICE_ELEVENPLUS_MONTHLY
+)
+for setting in "${required_billing_settings[@]}"; do
+  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE}"; then
+    echo "${DEPLOY_ENV_FILE} must contain a non-empty ${setting} value." >&2
+    exit 2
+  fi
+done
+
 gcloud config set project "${GCP_PROJECT_ID}"
+for stripe_secret in "${STRIPE_SECRET_KEY_SECRET}" "${STRIPE_WEBHOOK_SECRET_SECRET}"; do
+  if ! gcloud secrets describe "${stripe_secret}" \
+    --project "${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+    echo "Secret Manager secret ${stripe_secret} does not exist or is not accessible." >&2
+    echo "Create it before deploying, or override its *_SECRET variable." >&2
+    exit 2
+  fi
+done
+
 gcloud artifacts repositories describe "${GCP_REPOSITORY}" \
   --location "${GCP_REGION}" >/dev/null 2>&1 \
   || gcloud artifacts repositories create "${GCP_REPOSITORY}" \
@@ -37,14 +69,43 @@ gcloud run deploy "${GCP_SERVICE}" \
   --service-account "${GCP_SERVICE_ACCOUNT}" \
   --add-cloudsql-instances "${GCP_PROJECT_ID}:${GCP_REGION}:${GCP_SQL_INSTANCE}" \
   --env-vars-file "${DEPLOY_ENV_FILE}" \
-  --set-secrets "${SECRET_BINDINGS}" \
+  --update-secrets "${SECRET_BINDINGS}" \
   --allow-unauthenticated \
   --port 8080 \
-  --cpu 2 \
-  --memory 4Gi \
-  --concurrency 8 \
-  --min-instances 0 \
-  --max-instances 10 \
+  --cpu "${CLOUD_RUN_CPU}" \
+  --memory "${CLOUD_RUN_MEMORY}" \
+  --concurrency "${CLOUD_RUN_CONCURRENCY}" \
+  --min-instances "${CLOUD_RUN_MIN_INSTANCES}" \
+  --max-instances "${CLOUD_RUN_MAX_INSTANCES}" \
+  --execution-environment gen2 \
+  --timeout 180 \
   --cpu-boost
 
 echo "Deployed ${IMAGE}"
+echo "Configured request capacity: $((CLOUD_RUN_CONCURRENCY * CLOUD_RUN_MAX_INSTANCES)) concurrent requests"
+
+if command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  if ! curl --fail --silent --show-error --max-time 30 "${BILLING_HEALTH_URL}" \
+    | python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+availability = payload.get("plan_availability") or {}
+required = ("trial_5day", "homework_monthly", "elevenplus_monthly")
+missing = [plan for plan in required if availability.get(plan) is not True]
+if payload.get("enabled") is not True or missing:
+    print(
+        "Stripe checkout is not ready for: " + ", ".join(missing or required),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+print("Stripe checkout configuration is ready for all public plans.")
+'; then
+    echo "Deployment succeeded, but Stripe checkout is not ready." >&2
+    echo "Run deploy/repair_stripe_checkout_gcp.sh after checking the live Price IDs." >&2
+    exit 3
+  fi
+else
+  echo "Verify ${BILLING_HEALTH_URL} after deployment (curl and python3 were not both available)."
+fi

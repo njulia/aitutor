@@ -10,17 +10,20 @@ import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from sqlalchemy import Column, DateTime, MetaData, String, Table, and_, create_engine, delete, insert, select, update
+from sqlalchemy import Column, DateTime, MetaData, String, Table, and_, delete, insert, select, update
 
-from src.webapp.db import engine_options, normalise_database_url
+from src.webapp.db import get_engine, normalise_database_url
 
 _DEFAULT = Path(__file__).resolve().parents[1] / "data" / "auth_sessions.db"
 _MAX_AGE = max(900, min(int(os.getenv("SESSION_MAX_AGE", str(12 * 60 * 60))), 7 * 24 * 60 * 60))
+_TOUCH_INTERVAL = max(
+    30,
+    min(int(os.getenv("SESSION_TOUCH_INTERVAL_SECONDS", "300")), 3_600),
+)
 _URL = normalise_database_url(os.getenv("AUTH_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{_DEFAULT}")
-_kwargs: Dict[str, Any] = engine_options(_URL)
-_engine = create_engine(_URL, **_kwargs)
+_engine = get_engine(_URL)
 _metadata = MetaData()
 _sessions = Table(
     "auth_sessions",
@@ -81,9 +84,16 @@ def verify_token(token: str) -> Optional[str]:
         ).first()
         if not row:
             return None
-        conn.execute(
-            update(_sessions).where(_sessions.c.token_hash == digest).values(last_seen_at=now)
-        )
+        # Avoid turning every authenticated page/API read into a database write.
+        # Session activity is still refreshed often enough for retention and
+        # audit purposes, while reducing lock and connection pressure sharply.
+        last_seen = row._mapping["last_seen_at"]
+        if last_seen is not None and last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=UTC)
+        if last_seen is None or last_seen <= now - timedelta(seconds=_TOUCH_INTERVAL):
+            conn.execute(
+                update(_sessions).where(_sessions.c.token_hash == digest).values(last_seen_at=now)
+            )
     return str(row._mapping["username"])
 
 

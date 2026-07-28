@@ -16,9 +16,12 @@ import hashlib
 import logging
 import os
 import secrets
+import threading
 import time
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Awaitable, Callable, Iterable, Optional, TypeVar
 from urllib.parse import urlparse
 
@@ -59,6 +62,8 @@ class AppSettings:
     dev_mode: bool
     cors_origins: tuple[str, ...]
     max_ai_concurrency: int
+    max_upload_concurrency: int
+    max_blocking_workers: int
     ai_queue_timeout_seconds: int
     request_timeout_seconds: int
     max_request_bytes: int
@@ -82,8 +87,10 @@ class AppSettings:
         return cls(
             dev_mode=dev,
             cors_origins=origins,
-            max_ai_concurrency=_env_int("MAX_AI_CONCURRENCY", 8, 1, 64),
-            ai_queue_timeout_seconds=_env_int("AI_QUEUE_TIMEOUT_SECONDS", 4, 1, 30),
+            max_ai_concurrency=_env_int("MAX_AI_CONCURRENCY", 16, 1, 64),
+            max_upload_concurrency=_env_int("MAX_UPLOAD_CONCURRENCY", 12, 1, 64),
+            max_blocking_workers=_env_int("MAX_BLOCKING_WORKERS", 32, 4, 128),
+            ai_queue_timeout_seconds=_env_int("AI_QUEUE_TIMEOUT_SECONDS", 10, 1, 30),
             request_timeout_seconds=_env_int("AI_REQUEST_TIMEOUT_SECONDS", 90, 5, 300),
             max_request_bytes=_env_int("MAX_REQUEST_BYTES", 18 * 1024 * 1024, 1024, 64 * 1024 * 1024),
             trust_proxy_headers=_env_bool("TRUST_PROXY_HEADERS", False),
@@ -211,6 +218,9 @@ def validate_production_configuration() -> None:
 
 settings = AppSettings.from_env()
 _blocking_semaphore: Optional[asyncio.Semaphore] = None
+_executor_lock = threading.Lock()
+_ai_worker_executor: Optional[ThreadPoolExecutor] = None
+_general_worker_executor: Optional[ThreadPoolExecutor] = None
 
 
 def _blocking_limit() -> asyncio.Semaphore:
@@ -218,6 +228,27 @@ def _blocking_limit() -> asyncio.Semaphore:
     if _blocking_semaphore is None:
         _blocking_semaphore = asyncio.Semaphore(settings.max_ai_concurrency)
     return _blocking_semaphore
+
+
+def _worker_executor(*, ai_work: bool) -> ThreadPoolExecutor:
+    global _ai_worker_executor, _general_worker_executor
+    selected = _ai_worker_executor if ai_work else _general_worker_executor
+    if selected is not None:
+        return selected
+    with _executor_lock:
+        if ai_work:
+            if _ai_worker_executor is None:
+                _ai_worker_executor = ThreadPoolExecutor(
+                    max_workers=settings.max_ai_concurrency,
+                    thread_name_prefix="ai-request",
+                )
+            return _ai_worker_executor
+        if _general_worker_executor is None:
+            _general_worker_executor = ThreadPoolExecutor(
+                max_workers=settings.max_blocking_workers,
+                thread_name_prefix="blocking-io",
+            )
+        return _general_worker_executor
 
 
 async def run_blocking(
@@ -236,11 +267,35 @@ async def run_blocking(
     """
 
     async def invoke() -> T:
-        return await asyncio.to_thread(func, *args, **kwargs)
+        loop = asyncio.get_running_loop()
+        call = partial(func, *args, **kwargs)
+        return await loop.run_in_executor(
+            _worker_executor(ai_work=limit_concurrency),
+            call,
+        )
+
+    def consume_background_result(task: asyncio.Task[Any]) -> None:
+        try:
+            task.exception()
+        except (asyncio.CancelledError, Exception):
+            # The caller has already received a timeout/cancellation response.
+            # The original exception is intentionally consumed here.
+            pass
 
     deadline = timeout or settings.request_timeout_seconds
     if not limit_concurrency:
-        return await asyncio.wait_for(invoke(), timeout=deadline)
+        task = asyncio.create_task(invoke())
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout=deadline)
+        except TimeoutError as exc:
+            task.add_done_callback(consume_background_result)
+            raise HTTPException(
+                status_code=504,
+                detail="That took too long. Please try a shorter question or try again.",
+            ) from exc
+        except asyncio.CancelledError:
+            task.add_done_callback(consume_background_result)
+            raise
 
     semaphore = _blocking_limit()
     try:
@@ -251,15 +306,32 @@ async def run_blocking(
             detail="The tutor is busy helping other learners. Please try again in a moment.",
         ) from exc
 
+    task = asyncio.create_task(invoke())
+    release_deferred = False
+
+    def release_after_background_work(done: asyncio.Task[Any]) -> None:
+        consume_background_result(done)
+        semaphore.release()
+
     try:
-        return await asyncio.wait_for(invoke(), timeout=deadline)
+        return await asyncio.wait_for(asyncio.shield(task), timeout=deadline)
     except TimeoutError as exc:
+        # A Python thread cannot be killed safely. Keep this permit occupied
+        # until the provider call really exits so timed-out calls cannot build
+        # an unbounded queue of still-running work.
+        release_deferred = True
+        task.add_done_callback(release_after_background_work)
         raise HTTPException(
             status_code=504,
             detail="That took too long. Please try a shorter question or try again.",
         ) from exc
+    except asyncio.CancelledError:
+        release_deferred = True
+        task.add_done_callback(release_after_background_work)
+        raise
     finally:
-        semaphore.release()
+        if not release_deferred:
+            semaphore.release()
 
 
 def public_error(exc: BaseException, message: str = "Something went wrong. Please try again.") -> str:
@@ -307,8 +379,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy-Report-Only",
             "default-src 'self'; img-src 'self' data: blob:; "
-            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+            "connect-src 'self' https://api.stripe.com https://*.stripe.com; "
+            "frame-src https://js.stripe.com https://hooks.stripe.com; "
+            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         )
         sensitive_prefixes = (
             "/api/account", "/api/students", "/api/memory", "/api/progress",
@@ -442,24 +517,31 @@ class SameOriginWriteMiddleware(BaseHTTPMiddleware):
 
 
 class ExpensiveRouteBulkheadMiddleware(BaseHTTPMiddleware):
-    EXPENSIVE_PATHS = {
+    AI_PATHS = {
         "/api/generate",
         "/api/review",
         "/api/explain-deep",
         "/api/improve-practice",
         "/api/upload-photo",
+    }
+    UPLOAD_PATHS = {
         "/api/upload-file",
     }
 
     def __init__(self, app: Any):
         super().__init__(app)
-        self.semaphore = asyncio.Semaphore(settings.max_ai_concurrency)
+        self.ai_semaphore = asyncio.Semaphore(settings.max_ai_concurrency)
+        self.upload_semaphore = asyncio.Semaphore(settings.max_upload_concurrency)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if request.url.path not in self.EXPENSIVE_PATHS:
+        if request.url.path in self.AI_PATHS:
+            semaphore = self.ai_semaphore
+        elif request.url.path in self.UPLOAD_PATHS:
+            semaphore = self.upload_semaphore
+        else:
             return await call_next(request)
         try:
-            await asyncio.wait_for(self.semaphore.acquire(), timeout=settings.ai_queue_timeout_seconds)
+            await asyncio.wait_for(semaphore.acquire(), timeout=settings.ai_queue_timeout_seconds)
         except TimeoutError:
             return JSONResponse(
                 status_code=503,
@@ -472,7 +554,7 @@ class ExpensiveRouteBulkheadMiddleware(BaseHTTPMiddleware):
         try:
             return await call_next(request)
         finally:
-            self.semaphore.release()
+            semaphore.release()
 
 
 class SensitiveRouteRateLimitMiddleware(BaseHTTPMiddleware):

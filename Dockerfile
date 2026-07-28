@@ -32,4 +32,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health" || exit 1
 
-CMD ["sh", "-c", "exec uvicorn web_app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*' --workers ${WEB_CONCURRENCY:-1} --timeout-keep-alive 5"]
+CMD ["sh", "-c", "exec uvicorn web_app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*' --workers ${WEB_CONCURRENCY:-1} --backlog 2048 --timeout-keep-alive 10 --timeout-graceful-shutdown 30"]

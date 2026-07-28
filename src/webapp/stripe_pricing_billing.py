@@ -29,7 +29,6 @@ from sqlalchemy import (
     String,
     Table,
     and_,
-    create_engine,
     insert,
     select,
     update,
@@ -37,6 +36,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
+from .db import get_engine
 
 logger = logging.getLogger(__name__)
 
@@ -121,11 +121,9 @@ def _engine() -> Engine:
     with _engine_lock:
         if _billing_engine is not None and _billing_engine_url == url:
             return _billing_engine
-        options: Dict[str, Any] = {"pool_pre_ping": True}
         if url.startswith("sqlite"):
             Path(url.split("///", 1)[-1]).parent.mkdir(parents=True, exist_ok=True)
-            options["connect_args"] = {"check_same_thread": False}
-        _billing_engine = create_engine(url, **options)
+        _billing_engine = get_engine(url)
         _billing_engine_url = url
         _metadata.create_all(_billing_engine)
         return _billing_engine

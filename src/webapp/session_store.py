@@ -8,10 +8,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, and_, create_engine, delete, insert, select, update
+from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, and_, delete, insert, select, update
 from sqlalchemy.engine import Engine
 
-from .db import engine_options, normalise_database_url
+from .db import get_engine, normalise_database_url
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "tutor_sessions.db"
 
@@ -40,8 +40,7 @@ class TutorSessionStore:
             )
         self.ttl_seconds = ttl_seconds or int(os.getenv("SESSION_TTL_SECONDS", "43200"))
         self.max_payload_bytes = max_payload_bytes
-        kwargs: Dict[str, Any] = engine_options(self.database_url)
-        self.engine: Engine = create_engine(self.database_url, **kwargs)
+        self.engine: Engine = get_engine(self.database_url)
         self.metadata = MetaData()
         self.table = Table(
             "tutor_sessions",

@@ -6,6 +6,7 @@ let currentHomework = [];
         let currentFileData = null;
         let extractedContent = '';
         let fileUploadPromise = null;
+        let photoUploadPromise = null;
         let activeReviewContext = null;
         // 练习模式状态
         let isPracticeMode = false;
@@ -1213,7 +1214,7 @@ let currentHomework = [];
                 document.getElementById('photo-preview').style.display = 'block';
                 document.querySelector('#input-photo .upload-placeholder').style.display = 'none';
 
-                processPhoto(currentPhotoData);
+                photoUploadPromise = processPhoto(currentPhotoData);
             };
             reader.readAsDataURL(file);
         }
@@ -1221,6 +1222,7 @@ let currentHomework = [];
         function clearPhoto() {
             currentPhotoData = null;
             extractedContent = '';
+            photoUploadPromise = null;
             document.getElementById('photo-preview').style.display = 'none';
             document.querySelector('#input-photo .upload-placeholder').style.display = 'block';
             document.getElementById('photo-input').value = '';
@@ -1247,10 +1249,14 @@ let currentHomework = [];
                 if (!extractedContent) {
                     throw new Error('The photo did not contain any readable text.');
                 }
+                return true;
             } catch (error) {
                 console.error('Photo processing failed:', error);
+                extractedContent = '';
                 alert(error.message || 'We could not read that photo.');
+                return false;
             } finally {
+                photoUploadPromise = null;
                 hideLoading();
             }
         }
@@ -2419,9 +2425,12 @@ let currentHomework = [];
                 answersText = document.getElementById('review-answers').value.trim();
                 const subjectSelect = document.getElementById('review-subject');
                 subject = subjectSelect ? subjectSelect.value : 'General Homework';
-            } else if (currentInputMethod === 'file') {
-                if (fileUploadPromise) {
-                    const uploadSucceeded = await fileUploadPromise;
+            } else if (currentInputMethod === 'file' || currentInputMethod === 'photo') {
+                const pendingUpload = currentInputMethod === 'file'
+                    ? fileUploadPromise
+                    : photoUploadPromise;
+                if (pendingUpload) {
+                    const uploadSucceeded = await pendingUpload;
                     if (!uploadSucceeded) return;
                 }
 
@@ -2452,7 +2461,7 @@ let currentHomework = [];
                 return;
             }
 
-            const submittedWork = currentInputMethod === 'file' ? {
+            const submittedWork = (currentInputMethod === 'file' || currentInputMethod === 'photo') ? {
                 content: uploadedTextForDisplay
             } : null;
 
@@ -2468,7 +2477,8 @@ let currentHomework = [];
                     homework: homework,
                     answers: answers,
                     subject: subject,
-                    profile: getLearnerReviewProfile()
+                    profile: getLearnerReviewProfile(),
+                    uploaded_work: Boolean(submittedWork)
                 };
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;

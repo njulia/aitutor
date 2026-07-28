@@ -30,11 +30,12 @@ env/
 .env.*
 *env*
 !.env.example
+!deploy/cloud-run.env.yaml.example
 .env.local
 .env.*.local
 prod-env.yaml
 prod-secrets.env
-cloud-run.env.yaml.exmaple
+deploy/cloud-run.env.yaml
 STRIPE_LIVE_SETUP.md
 
 # 系统文件

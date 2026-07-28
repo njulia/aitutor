@@ -384,16 +384,16 @@ class _SQLMessageStore:
     def __init__(self, database_url: str) -> None:
         from sqlalchemy import (
             Boolean, Column, DateTime, ForeignKey, MetaData, String, Table, Text,
-            and_, case, create_engine, delete, func, insert, or_, select, update,
+            and_, case, delete, func, insert, or_, select, update,
         )
-        from .db import engine_options, normalise_database_url
+        from .db import get_engine, normalise_database_url
 
         self._sa = {
             "and_": and_, "case": case, "delete": delete, "func": func,
             "insert": insert, "or_": or_, "select": select, "update": update,
         }
         self.database_url = normalise_database_url(database_url)
-        self.engine = create_engine(self.database_url, **engine_options(self.database_url))
+        self.engine = get_engine(self.database_url)
         metadata = MetaData()
         self.messages = Table(
             "support_messages", metadata,

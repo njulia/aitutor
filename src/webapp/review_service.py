@@ -672,6 +672,7 @@ def review_homework(
     profile: Optional[dict] = None,
     *,
     quick_review: bool = False,
+    uploaded_work: bool = False,
     is_tutor_mode: bool = False,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
@@ -686,6 +687,7 @@ def review_homework(
         REVIEW_DETAIL_WITHOUT_RAG_PROMPT,
         REVIEW_QUICK_WITH_RAG_PROMPT,
         REVIEW_QUICK_WITHOUT_RAG_PROMPT,
+        REVIEW_UPLOADED_HOMEWORK_PROMPT,
     )
 
     if llm_client is None:
@@ -697,17 +699,25 @@ def review_homework(
     student_id = raw_profile.get("student_id", "anonymous")
     profile = _normalise_profile(raw_profile)
     budget = budget_review_inputs(homework_content, student_answers, profile)
-    # Only the explicit Quick Review action may use the quick model. Tutor and
-    # year-round paths remain detailed even if a client sends a conflicting flag.
+    # Uploaded marking asks for concise/basic feedback and uses its dedicated
+    # prompt. Tutor and year-round paths remain detailed even if a client sends
+    # a conflicting quick-review flag.
     use_quick_model = bool(
-        quick_review
-        and not is_tutor_mode
-        and not budget["profile"].get("plan_week")
+        uploaded_work
+        or (
+            quick_review
+            and not is_tutor_mode
+            and not budget["profile"].get("plan_week")
+        )
     )
     use_detail_model = not use_quick_model
     selected_model = DETAIL_REVIEW_MODEL if use_detail_model else QUICK_REVIEW_MODEL
     cache_key = stable_cache_key(
-        "review_detail_v6" if use_detail_model else "review_quick_v6",
+        (
+            "review_uploaded_v1"
+            if uploaded_work
+            else ("review_detail_v6" if use_detail_model else "review_quick_v6")
+        ),
         selected_model,
         subject,
         budget,
@@ -722,7 +732,7 @@ def review_homework(
         return {"success": True, "review": str(cached), "from_cache": True}
 
     rows: List[Dict[str, Any]] = []
-    if homework_doc_id:
+    if homework_doc_id and not uploaded_work:
         try:
             raw_answers = _load_rag_answers(homework_doc_id, is_eleven_plus)
             pairs = _pair_rag_answers(
@@ -737,12 +747,21 @@ def review_homework(
             logger.exception("RAG answer lookup failed for %s", homework_doc_id)
 
     year_group = int(profile.get("year_group", 3))
-    method_questions = _method_questions(budget["homework_content"], rows)
-    initial_methods, available_methods, missing_methods = (
-        _prepare_solution_methods(
-            method_questions, rows, subject, year_group
+    if uploaded_work:
+        # Basic uploaded-file marking does not need the detailed solution-method
+        # persistence path. Skipping those extra database reads removes a common
+        # source of latency and failure before the provider request.
+        method_questions: List[str] = []
+        initial_methods: Dict[str, str] = {}
+        available_methods: Dict[str, str] = {}
+        missing_methods: List[Dict[str, str]] = []
+    else:
+        method_questions = _method_questions(budget["homework_content"], rows)
+        initial_methods, available_methods, missing_methods = (
+            _prepare_solution_methods(
+                method_questions, rows, subject, year_group
+            )
         )
-    )
 
     correct_count = sum(1 for row in rows if row["is_correct"])
     attempted = len(rows)
@@ -750,7 +769,35 @@ def review_homework(
     max_score: Optional[int] = attempted if rows else None
     model_used: Optional[str] = None
 
-    if rows:
+    if uploaded_work:
+        submitted_work = (
+            "Homework questions and extracted writing:\n"
+            f"{budget['homework_content']}\n\n"
+            "Pupil answers:\n"
+            f"{budget['student_answers']}"
+        )
+        prompt = format_prompt(
+            REVIEW_UPLOADED_HOMEWORK_PROMPT,
+            student_profile=str(_prompt_profile(budget["profile"])),
+            subject=compact_text(subject_display_name(subject), 80),
+            homework=submitted_work,
+            correct_answers_section=(
+                "No separate trusted answer key was supplied. Work out only "
+                "answers that can be checked confidently."
+            ),
+        )
+        raw_feedback = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=selected_model,
+            temperature=0.1,
+            max_tokens=_token_limit(
+                "UPLOADED_REVIEW_MAX_TOKENS", 1_600, maximum=4_000
+            ),
+            operation="uploaded_homework_review",
+        )
+        model_used = _resolved_model(llm_client, selected_model)
+    elif rows:
         rag_context = _rag_prompt_context(rows)
         prompt = format_prompt(
             REVIEW_DETAIL_WITH_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITH_RAG_PROMPT,
@@ -798,17 +845,23 @@ def review_homework(
             ),
         )
         model_used = _resolved_model(llm_client, selected_model)
+    if not str(raw_feedback or "").strip():
+        raise RuntimeError("The AI provider returned an empty homework review")
     feedback, returned_methods = _parse_review_response(
         raw_feedback, missing_methods
     )
-    solution_methods = _finish_solution_methods(
-        method_questions,
-        subject,
-        year_group,
-        initial_methods,
-        available_methods,
-        missing_methods,
-        returned_methods,
+    solution_methods = (
+        []
+        if uploaded_work
+        else _finish_solution_methods(
+            method_questions,
+            subject,
+            year_group,
+            initial_methods,
+            available_methods,
+            missing_methods,
+            returned_methods,
+        )
     )
     rendered_methods = _render_solution_methods(solution_methods)
     if rows:

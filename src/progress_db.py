@@ -14,7 +14,6 @@ from urllib.parse import quote_plus
 import binascii
 import hashlib
 import hmac
-import os
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
@@ -33,22 +32,19 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     and_,
-    create_engine,
     delete,
     func,
     insert,
-    or_,
     select,
     update,
 )
 from sqlalchemy.exc import IntegrityError
 
-from src.webapp.db import engine_options, normalise_database_url
+from src.webapp.db import get_engine, normalise_database_url
 
 _DEFAULT = Path(__file__).resolve().parents[1] / "data" / "aitutor.db"
 _URL = normalise_database_url(os.getenv("PROGRESS_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{_DEFAULT}")
-_kwargs: Dict[str, Any] = engine_options(_URL)
-_engine = create_engine(_URL, **_kwargs)
+_engine = get_engine(_URL)
 metadata = MetaData()
 
 progress_students = Table(
@@ -433,7 +429,9 @@ def is_user_test(username: str) -> bool:
 
 
 def create_local_subscription(customer_email: str, customer_name: str, product_name: str, duration_days: int) -> Dict[str, Any]:
-    now = _now(); expires = now + timedelta(days=duration_days); sub_id=f"dev_{uuid.uuid4().hex[:12]}"
+    now = _now()
+    expires = now + timedelta(days=duration_days)
+    sub_id = f"dev_{uuid.uuid4().hex[:12]}"
     with _engine.begin() as conn:
         conn.execute(insert(legacy_subscriptions).values(id=sub_id, customer_email=customer_email.strip().lower(), customer_name=customer_name[:80], status="active", product_name=product_name[:80], duration_days=duration_days, created_at=now, expires_at=expires, is_dev=True))
     return {"subscription_id":sub_id,"customer_email":customer_email,"customer_name":customer_name,"status":"active","product_name":product_name,"duration_days":duration_days,"created_at":now.isoformat(),"expires_at":expires.isoformat(),"is_dev":True}

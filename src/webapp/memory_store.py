@@ -12,7 +12,7 @@ import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import (
     JSON,
@@ -25,12 +25,9 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
-    Text,
     UniqueConstraint,
     and_,
-    create_engine,
     delete,
-    func,
     insert,
     select,
     update,
@@ -38,7 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
-from .db import engine_options, normalise_database_url
+from .db import get_engine, normalise_database_url
 
 _DEFAULT_SQLITE = Path(__file__).resolve().parents[2] / "data" / "learning_memory.db"
 _ALLOWED_STYLES = {"short_steps", "worked_example", "gentle_hints", "visual_words"}
@@ -55,7 +52,7 @@ def _database_url() -> str:
 
 
 def _engine(url: str) -> Engine:
-    return create_engine(url, **engine_options(url))
+    return get_engine(url)
 
 
 def normalise_topic(value: Optional[str], subject: str = "General") -> str:

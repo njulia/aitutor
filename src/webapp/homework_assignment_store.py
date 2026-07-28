@@ -12,7 +12,7 @@ import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from sqlalchemy import (
     Column,
@@ -22,8 +22,6 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
-    and_,
-    create_engine,
     delete,
     insert,
     select,
@@ -31,7 +29,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine import Engine
 
-from .db import engine_options, normalise_database_url
+from .db import get_engine, normalise_database_url
 
 _DEFAULT = Path(__file__).resolve().parents[2] / "data" / "homework_assignments.db"
 
@@ -46,8 +44,7 @@ class HomeworkAssignmentStore:
             or os.getenv("DATABASE_URL")
             or f"sqlite+pysqlite:///{_DEFAULT}"
         )
-        kwargs: Dict[str, Any] = engine_options(self.database_url)
-        self.engine: Engine = create_engine(self.database_url, **kwargs)
+        self.engine: Engine = get_engine(self.database_url)
         self.metadata = MetaData()
         self.table = Table(
             "homework_assignments",

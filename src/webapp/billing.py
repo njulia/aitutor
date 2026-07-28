@@ -14,11 +14,12 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import Column, DateTime, MetaData, String, Table, create_engine, insert, select, update
+from sqlalchemy import Column, DateTime, MetaData, String, Table, insert, update
 from sqlalchemy.exc import IntegrityError
 
-from .db import engine_options, normalise_database_url
+from .db import get_engine, normalise_database_url
 from .account_store import (
     account_has_used_plan,
     ensure_account,
@@ -33,6 +34,8 @@ from .runtime import run_blocking
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_STRIPE_PRICING_TABLE_ID = "prctbl_1TvlP9A7C4P8kXJMSS8t4VRT"
+DEFAULT_STRIPE_PUBLISHABLE_KEY = "pk_live_fYeIDSqsqYC6MDKau5eFsI0U"
 TRIAL_PLAN = "trial_5day"
 TRIAL_DURATION_DAYS = 5
 PLAN_ENV_VARS = {
@@ -101,6 +104,20 @@ def _plans() -> Dict[str, str]:
     return {name: price for name, price in candidates.items() if price}
 
 
+def _pricing_table_id() -> str:
+    return os.getenv(
+        "STRIPE_PRICING_TABLE_ID",
+        DEFAULT_STRIPE_PRICING_TABLE_ID,
+    ).strip()
+
+
+def _publishable_key() -> str:
+    return os.getenv(
+        "STRIPE_PUBLISHABLE_KEY",
+        DEFAULT_STRIPE_PUBLISHABLE_KEY,
+    ).strip()
+
+
 def billing_configuration_issues(plan: Optional[str] = None) -> list[str]:
     """Return checkout blockers without ever exposing credential values."""
     if not _billing_enabled():
@@ -120,16 +137,6 @@ def billing_configuration_issues(plan: Optional[str] = None) -> list[str]:
     if not webhook_secret.startswith("whsec_"):
         issues.append("STRIPE_WEBHOOK_SECRET is not configured")
 
-    public_business_fields = {
-        "DATA_CONTROLLER_NAME": "Homework Magic",
-        "PRIVACY_POSTAL_ADDRESS": "Homework Magic",
-        "BUSINESS_CONTACT_EMAIL": "contact@homeworkmagic.co.uk",
-    }
-    for variable, description in public_business_fields.items():
-        value = os.getenv(variable, "").strip()
-        if not value or value.casefold() in {"todo", "tbd", "..."} or value.startswith("["):
-            issues.append(f"{variable} must contain {description} before billing is enabled")
-
     requested_plans = (plan,) if plan else REQUIRED_PUBLIC_PLANS
     plans = _plans()
     for plan_name in requested_plans:
@@ -148,6 +155,32 @@ def billing_configuration_issues(plan: Optional[str] = None) -> list[str]:
         _base_url()
     except RuntimeError as exc:
         issues.append(str(exc))
+    return issues
+
+
+def pricing_table_configuration_issues() -> list[str]:
+    """Return blockers for the authenticated Stripe Pricing Table."""
+    issues: list[str] = []
+    for plan in ("homework_monthly", "elevenplus_monthly"):
+        for issue in billing_configuration_issues(plan):
+            if issue not in issues:
+                issues.append(issue)
+    monthly_prices = [
+        _plans().get("homework_monthly"),
+        _plans().get("elevenplus_monthly"),
+    ]
+    if all(monthly_prices) and len(set(monthly_prices)) != len(monthly_prices):
+        issues.append("The monthly plans must use different Stripe Price IDs")
+    pricing_table_id = _pricing_table_id()
+    publishable_key = _publishable_key()
+    expected_prefix = "pk_live_" if _expected_livemode() else "pk_test_"
+
+    if not pricing_table_id.startswith("prctbl_"):
+        issues.append("STRIPE_PRICING_TABLE_ID is not configured")
+    if not publishable_key.startswith(expected_prefix):
+        issues.append(
+            "STRIPE_PUBLISHABLE_KEY does not match the configured Stripe mode"
+        )
     return issues
 
 
@@ -284,6 +317,46 @@ def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
     return {"checkout_url": session.url, "checkout_session_id": session.id}
 
 
+def create_pricing_table_session(account: Dict[str, Any]) -> Dict[str, str]:
+    """Create a short-lived Customer Session for Stripe's embedded table."""
+    issues = pricing_table_configuration_issues()
+    if issues:
+        raise RuntimeError("; ".join(issues))
+    if get_active_subscription(account["id"]):
+        raise ValueError(
+            "This account already has an active subscription. "
+            "Manage it in the billing portal."
+        )
+
+    stripe = _stripe()
+    customer_id = account.get("stripe_customer_id")
+    if not customer_id:
+        customer = stripe.Customer.create(
+            email=account["email"],
+            name=account.get("display_name") or None,
+            metadata={"account_id": account["id"]},
+            idempotency_key=f"customer-{account['id']}",
+        )
+        customer_id = str(_object_value(customer, "id", ""))
+        if not customer_id.startswith("cus_"):
+            raise RuntimeError("Stripe did not return a valid Customer ID")
+        set_stripe_customer(account["id"], customer_id)
+
+    customer_session = stripe.CustomerSession.create(
+        customer=customer_id,
+        components={"pricing_table": {"enabled": True}},
+    )
+    client_secret = str(_object_value(customer_session, "client_secret", ""))
+    if not client_secret:
+        raise RuntimeError("Stripe did not return a Customer Session secret")
+    return {
+        "client_secret": client_secret,
+        "client_reference_id": account["id"],
+        "pricing_table_id": _pricing_table_id(),
+        "publishable_key": _publishable_key(),
+    }
+
+
 def create_portal(account: Dict[str, Any]) -> Dict[str, str]:
     issues = billing_configuration_issues()
     if issues:
@@ -369,8 +442,7 @@ def sync_trial_checkout(session: Any) -> Dict[str, Any]:
 class WebhookLedger:
     def __init__(self) -> None:
         url = normalise_database_url(os.getenv("BILLING_DATABASE_URL") or os.getenv("DATABASE_URL") or "sqlite+pysqlite:///data/billing.db")
-        kwargs: Dict[str, Any] = engine_options(url)
-        self.engine = create_engine(url, **kwargs)
+        self.engine = get_engine(url)
         self.metadata = MetaData()
         self.events = Table(
             "stripe_webhook_events", self.metadata,
@@ -514,6 +586,47 @@ def build_billing_router(resolve_username):
     async def plans():
         return {"success": True, **public_billing_status()}
 
+    @router.get("/status")
+    async def status(request: Request):
+        """Return the signed-in parent's local, webhook-verified entitlement."""
+        account = await current_account(request)
+        subscription = await run_blocking(
+            get_active_subscription,
+            account["id"],
+            limit_concurrency=False,
+        )
+        public_subscription = None
+        if subscription:
+            period_end = subscription.get("current_period_end")
+            public_subscription = {
+                "plan": subscription.get("plan"),
+                "status": subscription.get("status"),
+                "current_period_end": (
+                    period_end.isoformat()
+                    if isinstance(period_end, datetime)
+                    else period_end
+                ),
+                "cancel_at_period_end": bool(
+                    subscription.get("cancel_at_period_end")
+                ),
+            }
+        plan = str(subscription.get("plan") or "") if subscription else ""
+        is_monthly = plan.endswith("_monthly")
+        return JSONResponse(
+            {
+                "success": True,
+                "has_subscription": bool(subscription),
+                "subscription": public_subscription,
+                "management": {
+                    "can_change": is_monthly,
+                    "can_cancel": is_monthly
+                    and not bool(subscription.get("cancel_at_period_end")),
+                },
+                **public_billing_status(),
+            },
+            headers={"Cache-Control": "no-store, private"},
+        )
+
     @router.post("/checkout")
     async def checkout(body: CheckoutRequest, request: Request):
         account = await current_account(request)
@@ -531,8 +644,35 @@ def build_billing_router(resolve_username):
             ) from exc
         return {"success": True, **result}
 
-    @router.post("/portal")
-    async def portal(request: Request):
+    @router.post("/pricing-table-session")
+    async def pricing_table_session(request: Request):
+        account = await current_account(request)
+        try:
+            result = await run_blocking(
+                create_pricing_table_session,
+                account,
+                limit_concurrency=False,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error("Stripe Pricing Table is not ready: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Secure checkout is temporarily unavailable.",
+            ) from exc
+        except Exception as exc:
+            logger.exception("Stripe Customer Session creation failed")
+            raise HTTPException(
+                status_code=502,
+                detail="Stripe checkout is temporarily unavailable. Please try again.",
+            ) from exc
+        return JSONResponse(
+            {"success": True, **result},
+            headers={"Cache-Control": "no-store, private"},
+        )
+
+    async def portal_response(request: Request, action: str):
         account = await current_account(request)
         try:
             result = await run_blocking(create_portal, account, limit_concurrency=False)
@@ -546,6 +686,18 @@ def build_billing_router(resolve_username):
                 status_code=502,
                 detail="The Stripe billing portal is temporarily unavailable. Please try again.",
             ) from exc
-        return {"success": True, **result}
+        return {"success": True, "action": action, **result}
+
+    @router.post("/portal")
+    async def portal(request: Request):
+        return await portal_response(request, "manage")
+
+    @router.post("/portal/change")
+    async def change_plan(request: Request):
+        return await portal_response(request, "change")
+
+    @router.post("/portal/cancel")
+    async def cancel_plan(request: Request):
+        return await portal_response(request, "cancel")
 
     return router

@@ -34,6 +34,120 @@ def test_required_plan_names_are_clear(app_module) -> None:
     assert b"11+ Premium" in eleven_response.body
 
 
+def test_billing_status_route_is_registered_and_requires_parent_login(client) -> None:
+    response = client.get("/api/billing/status")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "A parent or guardian must sign in."
+
+
+def test_signed_in_parent_can_read_checkout_status(
+    authenticated_client, monkeypatch
+) -> None:
+    monkeypatch.setattr(billing, "get_active_subscription", lambda _account_id: None)
+    monkeypatch.setattr(
+        billing,
+        "public_billing_status",
+        lambda: {
+            "enabled": True,
+            "live_mode": False,
+            "plans": ["trial_5day", "homework_monthly", "elevenplus_monthly"],
+            "plan_availability": {
+                "trial_5day": True,
+                "homework_monthly": True,
+                "elevenplus_monthly": True,
+            },
+            "checkout_ready": True,
+        },
+    )
+
+    response = authenticated_client.get("/api/billing/status")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, private"
+    assert response.json()["has_subscription"] is False
+    assert response.json()["plan_availability"]["homework_monthly"] is True
+
+
+def test_pricing_page_portal_actions_are_registered(
+    authenticated_client, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        billing,
+        "create_portal",
+        lambda _account: {"portal_url": "https://billing.stripe.com/test"},
+    )
+
+    for action in ("change", "cancel"):
+        response = authenticated_client.post(f"/api/billing/portal/{action}")
+        assert response.status_code == 200
+        assert response.json()["action"] == action
+        assert response.json()["portal_url"].startswith("https://billing.stripe.com/")
+
+
+def test_pricing_table_customer_session_links_the_parent_account(monkeypatch) -> None:
+    captured = {}
+
+    class FakeCustomerSession:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(client_secret="cuss_test_short_lived")
+
+    _configure_test_billing(
+        monkeypatch,
+        STRIPE_PRICE_HOMEWORK_MONTHLY="price_homework",
+        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_elevenplus",
+    )
+    monkeypatch.setenv("STRIPE_PRICING_TABLE_ID", "prctbl_test_unit")
+    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "pk_test_unit")
+    monkeypatch.setattr(
+        billing,
+        "_stripe",
+        lambda: SimpleNamespace(CustomerSession=FakeCustomerSession),
+    )
+    monkeypatch.setattr(billing, "get_active_subscription", lambda _account_id: None)
+
+    result = billing.create_pricing_table_session({
+        "id": "acct_1",
+        "email": "parent@example.com",
+        "display_name": "Parent",
+        "stripe_customer_id": "cus_1",
+    })
+
+    assert captured == {
+        "customer": "cus_1",
+        "components": {"pricing_table": {"enabled": True}},
+    }
+    assert result == {
+        "client_secret": "cuss_test_short_lived",
+        "client_reference_id": "acct_1",
+        "pricing_table_id": "prctbl_test_unit",
+        "publishable_key": "pk_test_unit",
+    }
+
+
+def test_pricing_table_session_route_is_registered(
+    authenticated_client, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        billing,
+        "create_pricing_table_session",
+        lambda account: {
+            "client_secret": "cuss_test_short_lived",
+            "client_reference_id": account["id"],
+            "pricing_table_id": "prctbl_test_unit",
+            "publishable_key": "pk_test_unit",
+        },
+    )
+
+    response = authenticated_client.post("/api/billing/pricing-table-session")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, private"
+    assert response.json()["client_secret"] == "cuss_test_short_lived"
+
+
 def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
     monkeypatch.setattr(account_store, "get_account_by_email", lambda _email: {"id": "acct_1"})
 
@@ -104,7 +218,7 @@ def test_trial_can_only_be_started_once(monkeypatch) -> None:
         )
 
 
-def test_checkout_is_blocked_until_public_merchant_identity_is_configured(monkeypatch) -> None:
+def test_checkout_is_not_blocked_by_optional_public_merchant_fields(monkeypatch) -> None:
     _configure_test_billing(monkeypatch, STRIPE_PRICE_TRIAL_5DAY="price_trial")
     monkeypatch.delenv("DATA_CONTROLLER_NAME")
     monkeypatch.delenv("PRIVACY_POSTAL_ADDRESS")
@@ -112,9 +226,7 @@ def test_checkout_is_blocked_until_public_merchant_identity_is_configured(monkey
 
     issues = billing.billing_configuration_issues(billing.TRIAL_PLAN)
 
-    assert any("DATA_CONTROLLER_NAME" in issue for issue in issues)
-    assert any("PRIVACY_POSTAL_ADDRESS" in issue for issue in issues)
-    assert any("BUSINESS_CONTACT_EMAIL" in issue for issue in issues)
+    assert issues == []
 
 
 def test_paid_trial_webhook_grants_five_days(monkeypatch) -> None:
