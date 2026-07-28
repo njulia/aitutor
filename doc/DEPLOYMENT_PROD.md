@@ -479,9 +479,9 @@ COOKIE_SECURE: "true"
 TRUST_PROXY_HEADERS: "true"
 ENFORCE_PRODUCTION_CONFIG: "true"
 
-DATA_CONTROLLER_NAME: "Your legal name or registered business name"
+DATA_CONTROLLER_NAME: "Homework Magic"
 PRIVACY_CONTACT_EMAIL: "privacy@homeworkmagic.co.uk"
-PRIVACY_POSTAL_ADDRESS: "Your business correspondence address"
+PRIVACY_POSTAL_ADDRESS: "contact@homeworkmagic.co.uk"
 ADMIN_EMAILS: "admin@homeworkmagic.co.uk"
 
 LLM_PROVIDER: "api"
@@ -1211,3 +1211,11 @@ For each release:
 - ICO Children's Code: <https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/>
 - ICO DPIA guidance for children's services: <https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/2-data-protection-impact-assessments/>
 - ICO breach response: <https://ico.org.uk/for-organisations/advice-for-small-organisations/personal-data-breaches/72-hours-how-to-respond-to-a-personal-data-breach/>
+
+gcloud run services update "$SERVICE" \
+  --project="$PROJECT_ID" \
+  --region="$REGION" \
+  --image="$FAILED_IMAGE" \
+  --update-env-vars="DATA_CONTROLLER_NAME=Homework Magic" \
+  --no-traffic \
+  --tag=staging
