@@ -1,195 +1,145 @@
-# 🎓 Homework Magic - 11+ Articles Expansion Pack
+# Homework Magic
 
-## ✅ What You're Getting
+Homework Magic is a FastAPI web application for UK primary-school homework,
+guided 11+ practice, marking and parent-managed learner progress.
 
-**new-11plus-articles.zip** (30 KB) contains **22 brand new files**:
+The request path is RAG-first: it searches the PostgreSQL/pgvector homework
+library by exact year and subject before it can call an LLM. A genuine library
+miss may create one new worksheet and private answer key, then stores that set
+for future reuse. Retrieved answer keys are used for deterministic marking;
+saved teaching methods are rendered locally and are never copied into a later
+model prompt.
 
-- ✏️ **1 Updated Index** - `articles.html` (now with 27 article links)
-- 📚 **21 New Article Pages** - Complete 11+ preparation guides
+## Main improvements in this version
 
----
+- Guided primary and 11+ profile fields are validated, bounded and stripped of
+  direct identifiers.
+- Requested session length now controls the number of returned questions.
+- Guided 11+ access is checked before any expensive generation.
+- RAG methods are first-write-wins and reused under opaque hashes.
+- Static pages use short public caches, assets use revalidation caches, and
+  responses larger than 1 KB are compressed.
+- `robots.txt`, the canonical sitemap, permanent legacy redirects and article
+  metadata have automated SEO contracts.
+- Production settings fail closed when database, legal, email or provider
+  configuration is unsafe.
+- The container runs as an unprivileged user on Python 3.12.
 
-## 📋 Complete File List
+## Local setup
 
-### Updated Index
-1. **articles.html** - Main articles directory with all 27 linked articles
+Python 3.12 is the supported runtime.
 
-### English Language (5 articles)
-2. **english-comprehension-strategies.html** - Comprehension techniques & strategies
-3. **verbal-reasoning-tips.html** - Analogies, cloze passages, word classification  
-4. **essay-writing-guide.html** - Structure, vocabulary, pitfalls
-5. **comprehension-question-types.html** - Literal, inferential, vocabulary questions
-6. **spelling-punctuation-grammar.html** - Common errors & corrections
-
-### Mathematics (5 articles)
-7. **maths-topics-checklist.html** - All 11+ maths topics covered
-8. **problem-solving-techniques.html** - Multi-step & complex problems
-9. **fractions-decimals-percentages.html** - Key conversions & calculations
-10. **geometry-algebra-fundamentals.html** - Shapes, angles, area, algebra
-11. **exam-day-preparation.html** - Day-of exam checklist
-
-### Non-Verbal Reasoning (2 articles)
-12. **non-verbal-reasoning-guide.html** - Pattern, 3D shapes, matrices
-13. **spatial-awareness-practice.html** - Mental rotation & visualization
-
-### Exam Skills (4 articles)
-14. **stress-management-techniques.html** - Anxiety reduction & motivation
-15. **mock-exam-strategy.html** - Analyzing & learning from mocks
-16. **11plus-exam-formats.html** - GL Assessment, CEM, ISEB formats
-
-### Planning & Preparation (2 articles)
-17. **11plus-preparation-timeline.html** - 12-month structured plan
-18. **selective-schools-admission.html** - Application process & dates
-
-### Parent & Tutor Support (4 articles)
-19. **supporting-child-preparation.html** - How parents can help
-20. **tutoring-vs-self-study.html** - Comparing learning approaches
-21. **revision-techniques.html** - Spaced repetition, active recall, etc.
-22. **managing-test-anxiety.html** - Strategies for stress reduction
-
----
-
-## 🚀 Quick Start
-
-### 1. Extract
 ```bash
-unzip new-11plus-articles.zip
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env
+uvicorn web_app:app --host 127.0.0.1 --port 5000 --reload
 ```
 
-### 2. Deploy
-Copy all 22 files to your website:
-- Replace existing `articles.html` 
-- Add all new `.html` files to your `/elevenplus/` directory
+The local template uses SQLite and Ollama. Start Ollama separately, or change
+the provider settings in `.env`. Do not commit `.env` or any credentials.
 
-### 3. Update Your Web Server
-Map URLs to files:
-```
-/elevenplus/articles → articles.html
-/elevenplus/english-comprehension-strategies → english-comprehension-strategies.html
-... (and so on for each article)
-```
+Open:
 
-### 4. Test
-- Visit `/elevenplus/articles`
-- Verify all 27 article links work
-- Check mobile responsiveness
+- Website: `http://127.0.0.1:5000/`
+- Tutor: `http://127.0.0.1:5000/app`
+- Health: `http://127.0.0.1:5000/api/health`
+- Readiness: `http://127.0.0.1:5000/api/ready`
 
----
+## RAG-first request flow
 
-## ✨ Key Features
+1. Canonicalise the requested year and subject.
+2. Read the learner's assigned document IDs.
+3. query exact metadata in the homework or 11+ collection, excluding assigned
+   sets where rotation is required.
+4. Claim one unseen document atomically and return it.
+5. Only after a true miss, call the configured provider once, split the public
+   worksheet from its private answer key, and write it to RAG.
 
-✅ **SEO-Optimized** - Proper meta tags, canonical URLs, structured data  
-✅ **Mobile-Responsive** - Works on all devices  
-✅ **Brand-Consistent** - Matches Homework Magic styling (Google Sans, blue/green)  
-✅ **Call-to-Action** - Links to homework practice app  
-✅ **Well-Structured** - Clear sections with practical tips  
-✅ **No Dependencies** - Pure HTML, no frameworks or databases needed  
-✅ **Production-Ready** - Tested and ready for immediate deployment  
+Selected year-round weeks are stable and may be reopened. General practice
+rotates through unseen library items. A RAG outage is logged and can fall back
+to generation so a child is not left without a response.
 
----
+## Tests
 
-## 📊 Article Coverage
-
-| Category | Count | Topics |
-|----------|-------|--------|
-| English | 5 | Comprehension, essays, grammar, vocabulary |
-| Maths | 5 | Topics, problem-solving, fundamentals |
-| Reasoning | 2 | Non-verbal, spatial awareness |
-| Exam Skills | 4 | Stress management, mocks, formats |
-| Planning | 2 | Timeline, admissions |
-| Parent Support | 4 | Support, tutoring, revision, anxiety |
-| **TOTAL** | **22** | **Comprehensive 11+ preparation** |
-
----
-
-## 💡 Article Highlights
-
-### Most Comprehensive
-- **english-comprehension-strategies.html** (5.8 KB) - Deep dive into comprehension techniques
-
-### Most Practical
-- **11plus-preparation-timeline.html** - Month-by-month 12-month plan
-- **supporting-child-preparation.html** - Actionable parental guidance
-
-### Most Important
-- **articles.html** - The updated index linking all 27 articles
-
----
-
-## 📝 Implementation Notes
-
-### File Structure
-```
-/elevenplus/
-  ├── articles.html (main index)
-  ├── english-comprehension-strategies.html
-  ├── verbal-reasoning-tips.html
-  ├── essay-writing-guide.html
-  ├── ... (and 18 more files)
+```bash
+python -m compileall web_app.py src scripts
+node --check static/js/app.js
+pytest test/unit test/api test/integration
 ```
 
-### No Additional Setup Needed
-- ❌ No database changes
-- ❌ No backend modifications
-- ❌ No new dependencies
-- ✅ Just drop files and go!
+For browser tests:
 
-### Responsive Design
-All articles work on:
-- ✓ Desktop (1200px+)
-- ✓ Tablet (768px-1199px)
-- ✓ Mobile (320px-767px)
+```bash
+python -m playwright install chromium
+RUN_E2E=1 pytest test/e2e --browser chromium
+```
 
----
+See [doc/TESTING.md](doc/TESTING.md) and
+[doc/END_TO_END_TESTING.md](doc/END_TO_END_TESTING.md).
 
-## 🎯 Next Steps
+## Google Cloud Run
 
-1. **Extract** the ZIP file
-2. **Review** the NEW_FILES_MANIFEST.md for detailed info
-3. **Deploy** files to `/elevenplus/` directory
-4. **Test** article links from main articles page
-5. **Go live** - ready for production!
+The production defaults target:
 
----
+- Project: `aitutor-502921`
+- Region: `europe-west2`
+- Service: `aitutor-prod`
+- Service account: `aitutor-run`
+- Cloud SQL instance: `aitutor-prod-pg`
+- Artifact Registry repository: `aitutor-repo`
 
-## 📦 Files Included
+Prepare the non-secret settings:
 
-**new-11plus-articles.zip** (30 KB)
-- 22 HTML files
-- All self-contained (no external dependencies)
-- Ready for immediate deployment
+```bash
+cp deploy/cloud-run.env.yaml.example deploy/cloud-run.env.yaml
+```
 
-**NEW_FILES_MANIFEST.md**
-- Detailed file-by-file breakdown
-- Deployment instructions
-- Coverage summary
-- URL mapping guide
+Replace every `REPLACE_` value. Create the Secret Manager entries named by
+`deploy/deploy_gcp.sh`, grant the Cloud Run service account access to them, and
+then run:
 
----
+```bash
+bash deploy/deploy_gcp.sh
+```
 
-## ✅ Quality Assurance
+The deploy script refuses placeholder configuration, creates the Artifact
+Registry repository if needed, builds with Cloud Build, attaches Cloud SQL and
+deploys a bounded-concurrency Cloud Run revision. Database and API credentials
+are injected from Secret Manager rather than stored in the source archive.
 
-All files have been:
-- ✓ Validated for HTML5 compliance
-- ✓ Tested for mobile responsiveness
-- ✓ Checked for SEO meta tags
-- ✓ Reviewed for brand consistency
-- ✓ Verified for internal linking
+After the first database is available:
 
----
+```bash
+python scripts/gcp_utils.py
+```
 
-## 🎉 Summary
+Run that command from an environment with the same Cloud SQL connection and
+secret configuration. It creates the relational and pgvector schema without
+printing the connection string.
 
-You now have **21 new high-quality 11+ preparation articles** ready to:
-- Increase your SEO coverage
-- Provide more value to visitors
-- Support comprehensive exam preparation
-- Serve both students and parents
+## Project layout
 
-**Everything is ready to deploy!**
+- `web_app.py` — FastAPI routes and browser response contracts
+- `src/homework_generator.py` — RAG-first assignment and miss generation
+- `src/homework_rag.py` / `src/elevenplus_rag.py` — vector-library contracts
+- `src/webapp/` — account, billing, safety, review and runtime services
+- `static/` — public pages and dependency-free learner interface
+- `scripts/` — original/open-curriculum question generators and maintenance
+- `test/` — unit, API, integration and browser coverage
+- `deploy/` — reviewed Cloud Run environment and deployment templates
+- `doc/` — test, release and privacy guidance
 
----
+## Privacy and safety
 
-Created: July 25, 2026  
-Package: new-11plus-articles.zip (30 KB)  
-Files: 22 total (1 updated + 21 new)
+Parent notes are minimised before use and are not persisted in browser
+preferences. Clear emails, phone numbers, postcodes, URLs, names and school
+disclosures are removed from prompt inputs. Raw learner and AI content storage
+is off by default. Production startup validates public operator details,
+transactional email, secure cookies, exact CORS origins, PostgreSQL and provider
+credentials.
+
+Parents and guardians should still avoid entering a child's full name, school,
+address, phone number, email, exact birthday or password.

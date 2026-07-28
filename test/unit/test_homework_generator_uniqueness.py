@@ -3,28 +3,12 @@ from __future__ import annotations
 
 import json
 import re
-import sys
-import types
 import unittest
 from pathlib import Path
 
 
-GENERATOR_DIR = Path(__file__).resolve().parent
-
-# The uploaded bundle contains the generator directory only.  Provide the same
-# package names it has in the full application without requiring a database.
-src = types.ModuleType("src")
-src.__path__ = []  # type: ignore[attr-defined]
-homework_rag = types.ModuleType("src.homework_rag")
-homework_rag.get_homework_rag_store = lambda: None
-scripts = types.ModuleType("scripts")
-scripts.__path__ = [str(GENERATOR_DIR.parent)]  # type: ignore[attr-defined]
-generator_package = types.ModuleType("scripts.homework_generator")
-generator_package.__path__ = [str(GENERATOR_DIR)]  # type: ignore[attr-defined]
-sys.modules.setdefault("src", src)
-sys.modules.setdefault("src.homework_rag", homework_rag)
-sys.modules.setdefault("scripts", scripts)
-sys.modules.setdefault("scripts.homework_generator", generator_package)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+GENERATOR_DIR = PROJECT_ROOT / "scripts" / "homework_generator"
 
 from scripts.homework_generator.homework_generator_utils import (  # noqa: E402
     PUBLIC_FREE_RESOURCE_POLICY,

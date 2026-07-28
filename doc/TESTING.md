@@ -1,34 +1,25 @@
 # Testing
 
-## Local prerequisites
-
-Use Python 3.12+ and install the locked application and test dependencies in an isolated virtual environment. Use test credentials and a temporary database only.
-
-## Fast release suite
+Use Python 3.12 and install both requirement files.
 
 ```bash
-python -m compileall -q web_app.py src scripts test
-pytest -q test/unit test/api test/integration
+python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m compileall web_app.py src scripts
+node --check static/js/app.js
+pytest test/unit test/api test/integration
 ```
 
-Focused public-site and billing checks:
+The test fixtures use isolated databases and set `TESTING=true`. Unit tests
+must not replace top-level `src` or `scripts` modules during collection.
+
+Useful focused commands:
 
 ```bash
-pytest -q \
-  test/unit/test_public_seo.py \
-  test/unit/test_stripe_website_requirements.py \
-  test/unit/test_subscription_plan_access.py \
-  test/unit/test_static_asset_security.py
+pytest test/unit/test_rag_first_assignment.py
+pytest test/unit/test_solution_method_reuse.py
+pytest test/unit/test_public_seo.py
+pytest test/api/test_generation_contract.py
 ```
 
-## Test isolation
-
-`test/conftest.py` sets development/testing mode before importing the application and directs relational stores to a temporary SQLite database. Production continues to require managed PostgreSQL. Tests must not call live AI, email, payment or production database services.
-
-## Before sharing a build
-
-1. Run compile checks.
-2. Run unit, API and integration tests.
-3. Run browser tests for user-interface changes.
-4. Confirm no `.env`, credentials, database files, uploads or test artefacts are in the archive.
-5. Review changed public claims, prices and privacy text against the production configuration.
+Before release, run the complete suite and the browser tests described in
+`END_TO_END_TESTING.md`.

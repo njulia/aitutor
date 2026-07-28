@@ -351,7 +351,7 @@ a { -webkit-tap-highlight-color: transparent; }
 .hm-section { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 92px 0; }
 .hm-section-soft { width: 100%; background: linear-gradient(180deg, #f5f2ff, #fbfaff); }
 .hm-section-soft > .hm-section { padding-block: 88px; }
-.hm-section-heading { max-width: 710px; margin-bottom: 36px; }
+.hm-section-heading { max-width: 800px; margin-bottom: 36px; }
 .hm-kicker { margin: 0 0 8px; color: var(--hm-purple-dark); font-weight: 900; letter-spacing: .055em; text-transform: uppercase; font-size: .8rem; }
 .hm-section h2 { margin: 0; font-size: clamp(2rem, 4.4vw, 3.5rem); line-height: 1.08; letter-spacing: -.035em; }
 .hm-section-heading > p:last-child { margin: 16px 0 0; color: var(--hm-muted); font-size: 1.08rem; }

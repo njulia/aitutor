@@ -15,11 +15,13 @@ def complete_homework_guide(
     subject: str = "Maths",
     minutes: int = 10,
     difficulty: str = "Gentle",
+    mode: str = "All together",
 ) -> None:
     page.get_by_role("button", name=f"Year {year}", exact=True).click()
     page.get_by_role("button", name=subject, exact=True).click()
     page.get_by_role("button", name=re.compile(rf"^{minutes} minutes")).click()
     page.get_by_role("button", name=re.compile(difficulty, re.I)).click()
+    page.get_by_role("button", name=re.compile(mode, re.I)).click()
 
 
 def test_last_primary_year_and_subject_are_restored(
@@ -92,6 +94,7 @@ def test_legacy_descriptions_are_removed_and_parent_notes_are_not_saved(
     assert "homeworkPrompt" not in saved
     assert "elevenPrompt" not in saved
 
+    page.get_by_text("Parent settings (optional)", exact=True).click()
     page.locator("#homework-parent-notes").fill("Fractions are tricky.")
     page.get_by_role("button", name=re.compile(r"11\+ practice", re.I)).click()
     page.get_by_role("button", name="Year 4").click()

@@ -1,9 +1,6 @@
-
-import json
 import logging
-from typing import Dict, Any, List
+
 from src import homework_generator
-from src.llm_client import LLMClient
 from src.homework_rag import get_homework_rag_store, store_homework
 
 # Mock LLM Client

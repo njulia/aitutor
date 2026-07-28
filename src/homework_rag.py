@@ -18,9 +18,11 @@ Reliability improvements:
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 import random
+import re
 import threading
 import time
 import uuid
@@ -59,9 +61,15 @@ def _create_embedding_function():
             from sentence_transformers import SentenceTransformer
 
             model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
-            _embedding_function = lambda texts: model.encode(
-                texts, normalize_embeddings=True, show_progress_bar=False
-            ).tolist()
+
+            def local_embedding(texts: List[str]) -> List[List[float]]:
+                return model.encode(
+                    texts,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                ).tolist()
+
+            _embedding_function = local_embedding
         elif EMBEDDING_PROVIDER == "api":
             if not DEFAULT_API_KEY:
                 raise ValueError("EMBEDDING_PROVIDER=api requires DEFAULT_API_KEY")
@@ -546,6 +554,8 @@ class HomeworkRAGStore:
 
 _store: Optional[HomeworkRAGStore] = None
 _store_lock = threading.Lock()
+_solution_method_store: Optional[PGVectorStore] = None
+_solution_method_store_lock = threading.Lock()
 
 
 def get_homework_rag_store() -> HomeworkRAGStore:
@@ -555,6 +565,95 @@ def get_homework_rag_store() -> HomeworkRAGStore:
             if _store is None:
                 _store = HomeworkRAGStore()
     return _store
+
+
+def _get_solution_method_store() -> PGVectorStore:
+    global _solution_method_store
+    if _solution_method_store is None:
+        with _solution_method_store_lock:
+            if _solution_method_store is None:
+                _solution_method_store = PGVectorStore(
+                    collection_name="solution_method_collection"
+                )
+    return _solution_method_store
+
+
+def _normalise_method_question(question: Any) -> str:
+    value = re.sub(
+        r"^\s*(?:question\s*)?\d+\s*[.):-]\s*",
+        "",
+        str(question or ""),
+        flags=re.I,
+    )
+    return " ".join(value.casefold().split())
+
+
+def solution_method_key(question: Any, subject: Any, year_group: Any) -> str:
+    """Return a stable opaque key without storing the question itself."""
+    try:
+        year = int(year_group)
+    except (TypeError, ValueError):
+        year = 3
+    raw = (
+        f"{str(subject or '').strip().casefold()}|{year}|"
+        f"{_normalise_method_question(question)}"
+    )
+    return "method_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def load_solution_methods(
+    questions: Iterable[Any], subject: str, year_group: int
+) -> Dict[str, str]:
+    """Load the first saved method for each requested question."""
+    method_ids = [
+        solution_method_key(question, subject, year_group)
+        for question in questions
+        if str(question or "").strip()
+    ]
+    if not method_ids:
+        return {}
+    rows = _get_solution_method_store().get_by_ids(method_ids)
+    return {
+        str(row["doc_id"]): str(row.get("content") or "").strip()
+        for row in rows
+        if str(row.get("content") or "").strip()
+    }
+
+
+def save_solution_methods(
+    records: Iterable[Dict[str, Any]], subject: str, year_group: int
+) -> Dict[str, str]:
+    """Persist methods once so later attempts reuse the original explanation."""
+    materialised = list(records or [])
+    clean_records = []
+    for record in materialised:
+        question = str(record.get("question") or "").strip()
+        method = str(record.get("method") or "").strip()
+        if not question or not method:
+            continue
+        clean_records.append(
+            (solution_method_key(question, subject, year_group), method)
+        )
+    if not clean_records:
+        return {}
+
+    store = _get_solution_method_store()
+    embedding_dimension = int(getattr(store, "embedding_dimension", 384))
+    fixed_embedding = [1.0] + [0.0] * (embedding_dimension - 1)
+    store.add_documents_if_absent(
+        texts=[method for _, method in clean_records],
+        metadatas=[
+            {"kind": "solution_method", "schema_version": 1}
+            for _ in clean_records
+        ],
+        ids=[method_id for method_id, _ in clean_records],
+        embeddings=[list(fixed_embedding) for _ in clean_records],
+    )
+    return load_solution_methods(
+        [record.get("question") for record in materialised],
+        subject,
+        year_group,
+    )
 
 
 def store_homework(

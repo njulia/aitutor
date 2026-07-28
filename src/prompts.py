@@ -139,8 +139,8 @@ Rules:
 #
 # 为满足“详细解释所有答案”，正确题也必须提供紧凑资料。
 # 推荐输入：
-# - correct_answer_items: 题号、简短题目、学生答案、正确答案、RAG 中的简短方法
-# - wrong_answer_items: 题目、学生答案、正确答案、RAG 解释
+# - correct_answer_items: 题号、简短题目、学生答案、正确答案
+# - wrong_answer_items: 题目、学生答案、正确答案
 # 错题可保留更多上下文；正确题应尽量压缩。
 # ============================================================
 
@@ -157,6 +157,9 @@ Score summary: {score_summary}
 
 Correct-work summary:
 {correct_work_summary}
+
+Correct answers:
+{correct_answer_items}
 
 Wrong answers:
 {wrong_answer_items}
@@ -198,7 +201,7 @@ For open-ended question:
 Rules:
 - Use UK English suitable for the pupil's year group.
 - Explain every answer, but avoid repeating the full question when a short label is enough.
-- Use the supplied RAG method/explanation where present.
+- Create an age-appropriate explanation from the trusted answer data supplied.
 - Do not add unrelated practice questions or external links.
 - Do not mention RAG, models, prompts, or answer-key retrieval.
 """

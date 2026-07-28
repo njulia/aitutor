@@ -19,6 +19,7 @@ data_archive
 test
 tests
 .pytest_cache
+.ruff_cache
 .DS_Store
 *.md
 *.zip
@@ -27,6 +28,10 @@ pytest-of-root
 .coverage
 coverage.xml
 pytest-of-root/
+test-results/
+playwright-report/
+deploy/cloud-run.env.yaml
 migrations/
 scripts/elevenplus/*.md
 scripts/elevenplus/*.json
+STRIPE_LIVE_SETUP.md

@@ -13,7 +13,6 @@ def test_math_year_group_respects_profile(monkeypatch, mock_assignment_store):
     # Mock search_homework_by_metadata to capture calls
     mock_search = MagicMock(return_value=[])
     monkeypatch.setattr(generator, "search_homework_by_metadata", mock_search)
-    monkeypatch.setattr(generator, "get_student_previous_topics", lambda *_: [])
     
     llm = MagicMock()
     llm.complete.return_value = "Mocked Homework"
@@ -33,7 +32,6 @@ def test_math_year_group_forces_6_for_11plus(monkeypatch, mock_assignment_store)
     # Mock elevenplus_search_homework_by_metadata to capture calls
     mock_search = MagicMock(return_value=[])
     monkeypatch.setattr(generator, "elevenplus_search_homework_by_metadata", mock_search)
-    monkeypatch.setattr(generator, "elevenplus_get_student_previous_topics", lambda *_: [])
     
     llm = MagicMock()
     llm.complete.return_value = "Mocked 11+ Homework"

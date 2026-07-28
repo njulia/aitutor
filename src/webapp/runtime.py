@@ -26,6 +26,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
@@ -408,7 +409,7 @@ class AdminPathGuardMiddleware(BaseHTTPMiddleware):
                 result = self.require_admin(request)
                 if isinstance(result, Awaitable):
                     await result
-            except HTTPException as exc:
+            except HTTPException:
                 # Do not reveal whether an administrator account exists or is
                 # logged in. Admin paths consistently fail closed with 403.
                 return JSONResponse(status_code=403, content={"detail": "Admin access denied"})
@@ -538,6 +539,7 @@ def configure_cors(app: FastAPI) -> None:
 
 def install_hardening(app: FastAPI, require_admin: Callable[[Request], Any]) -> None:
     """Install middleware. Call once after creating the FastAPI app."""
+    app.add_middleware(GZipMiddleware, minimum_size=1_000, compresslevel=5)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestSizeMiddleware)
     app.add_middleware(ExpensiveRouteBulkheadMiddleware)

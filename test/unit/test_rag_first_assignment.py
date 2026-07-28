@@ -38,7 +38,6 @@ def test_generator_uses_unseen_rag_before_llm(monkeypatch, tmp_path) -> None:
     ]
     monkeypatch.setattr(generator, "get_assignment_store", lambda: store)
     monkeypatch.setattr(generator, "search_homework_by_metadata", lambda **_: candidates)
-    monkeypatch.setattr(generator, "get_student_previous_topics", lambda *_: [])
 
     llm = MagicMock()
     llm.complete.side_effect = AssertionError("LLM must not run while unseen RAG homework exists")

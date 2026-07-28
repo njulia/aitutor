@@ -1,24 +1,20 @@
-# CI/CD safeguards
+# CI and deployment
 
-The repository workflow should run on pull requests and protected-branch pushes.
+GitHub Actions uses Python 3.12, PostgreSQL 16 and Chromium. It compiles the
+application, runs unit/API/integration tests with coverage, starts Uvicorn, and
+then runs the browser suite. Browser traces and screenshots are retained only
+when a job fails.
 
-## Continuous integration
+Production is deployed by `deploy/deploy_gcp.sh`:
 
-1. Check out the exact revision.
-2. Install dependencies from the lock file.
-3. Run `python -m compileall -q web_app.py src scripts test`.
-4. Run `pytest -q test/unit test/api test/integration`.
-5. Run browser tests when UI dependencies are available.
-6. Build the container without production secrets.
-7. Scan the change and image for committed credentials and vulnerable dependencies.
+1. Verify the non-secret environment file has no placeholders.
+2. Create or reuse the regional Artifact Registry repository.
+3. Submit the image build to Cloud Build.
+4. Deploy one Cloud Run revision with the production service account.
+5. Attach the regional Cloud SQL instance.
+6. Inject credentials from Secret Manager.
 
-## Deployment
-
-- Deploy an immutable image by digest.
-- Inject secrets through Google Secret Manager and public configuration through controlled environment values.
-- Keep `DEV_MODE=false`, raw learner/AI content storage disabled and secure cookies enabled.
-- Run readiness checks before shifting traffic.
-- Preserve the previous healthy revision for rollback.
-- Verify the canonical domain, public policy pages, support email, payment mode and webhook health after deployment.
-
-Do not automatically enable live billing merely because a deployment succeeded. Live payment keys, price IDs, webhook secret and public legal details must all belong to the reviewed production account.
+Do not place secret values in `deploy/cloud-run.env.yaml`. Roll back in Cloud
+Run by directing traffic to the previous healthy revision. Check `/api/health`
+for process health and `/api/ready` for dependency readiness before increasing
+traffic.

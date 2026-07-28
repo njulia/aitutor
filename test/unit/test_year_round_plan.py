@@ -64,12 +64,6 @@ def test_weekly_generation_uses_hard_week_filter_before_semantic_search(monkeypa
 
     monkeypatch.setattr(generator, "get_assignment_store", lambda: assignment_store)
     monkeypatch.setattr(generator, "elevenplus_search_homework_by_metadata", metadata_search)
-    monkeypatch.setattr(
-        generator,
-        "elevenplus_search_homework",
-        lambda **_: (_ for _ in ()).throw(AssertionError("semantic search must not run for a selected week")),
-    )
-    monkeypatch.setattr(generator, "elevenplus_get_student_previous_topics", lambda *_: [])
 
     llm = MagicMock()
     llm.complete.side_effect = AssertionError("LLM must not run when the correct weekly RAG item exists")

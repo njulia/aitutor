@@ -1,26 +1,22 @@
-# Privacy and safety testing for children under 12
+# Privacy and safety testing
 
-Homework Magic is parent-managed and designed for UK primary learners. Testing must follow data minimisation and use fictional identities and homework.
+The service is designed for parent-managed UK primary learners.
 
-## Automated checks
+Required checks:
 
-- Parent ownership is required for learner, progress, memory and billing records.
-- Learner profiles reject or minimise unnecessary identifying details.
-- Raw learner and AI content storage remains off by default.
-- Password-reset tokens are short-lived, single-use and stored safely.
-- Support messages cannot be read by another parent or anonymous session.
-- Child profiles, answers and progress are not sent in payment metadata.
-- Model prompts and rendered model output preserve safety boundaries.
-- Explicit safeguarding concerns return trusted-adult, emergency and Childline guidance.
-- Public privacy text identifies the controller, purposes, lawful bases, processors, retention, rights and contact routes.
+- Emails, labelled phone numbers, postcodes, URLs, explicit names and school
+  disclosures are removed before prompt construction.
+- Guided client responses omit learner IDs, notes and weak-area text.
+- Parent notes are not written to local browser preferences.
+- Learner-facing homework never contains answer, explanation or tip sections.
+- Retrieved solution methods are rendered locally and are not sent back to an
+  LLM on later attempts.
+- Raw learner and model text storage remains disabled by default.
+- Explicit first-person safeguarding concerns stop normal tutoring and return
+  the approved child-friendly intervention.
+- Story, history and curriculum text does not trigger a false intervention.
+- Account, message, memory and progress responses are private and `no-store`.
 
-## Manual review
-
-- Use age-appropriate words and short instructions in learner journeys.
-- Keep purchase prompts and payment details in parent/guardian areas.
-- Never ask a child for a full name, school, address, phone number, exact date of birth or password.
-- Confirm optional learning memory can be reviewed and controlled by the parent.
-- Check that deletion and privacy-request routes are understandable and reachable.
-- Review third-party AI, email, hosting, monitoring and payment configurations before introducing a new processor or transfer location.
-
-Any test artefact containing real child or parent data must be stopped, reported and handled under the incident process; it must not be copied into bug trackers, screenshots or model prompts.
+Use synthetic examples only. Never place a real child's name, account, school,
+answer history or contact details in fixtures, screenshots, traces or issue
+reports.

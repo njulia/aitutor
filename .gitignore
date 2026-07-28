@@ -28,11 +28,14 @@ env/
 # 环境变量
 .env
 .env.*
+*env*
 !.env.example
 .env.local
 .env.*.local
 prod-env.yaml
 prod-secrets.env
+cloud-run.env.yaml.exmaple
+STRIPE_LIVE_SETUP.md
 
 # 系统文件
 .DS_Store

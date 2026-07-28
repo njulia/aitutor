@@ -89,5 +89,5 @@ def test_guided_frontend_replaces_long_child_profile_and_does_not_send_school() 
     assert "setup_source: 'guided_11plus'" in function_body
     save_choices_body = javascript.split(
         "function saveLearningChoices()", 1
-    )[1].split("function restoreLearningPrompts", 1)[0]
+    )[1].split("function restoreLearningChoices()", 1)[0]
     assert "eleven-parent-notes" not in save_choices_body

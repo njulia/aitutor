@@ -1,8 +1,7 @@
-import os
 import sqlite3
-import pytest
-from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
 from src.webapp.message_store import MessageStore, _iso
 
 def test_migration_and_legacy_column(tmp_path: Path):

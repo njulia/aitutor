@@ -1,29 +1,18 @@
-# Risk-based test plan
+# Test plan
 
-## Release gates
+Release priority follows learner impact.
 
-A release is ready only when:
-
-- Python compilation succeeds;
-- unit, API and integration suites pass;
-- affected browser journeys pass;
-- no high-severity security, privacy, billing or child-safety defect remains open;
-- public prices, product descriptions and policy pages match the configured payment products;
-- database and webhook migrations have a rollback or forward-fix plan.
-
-## Priority areas
-
-| Priority | Area | Main evidence |
+| Area | Main risk | Required evidence |
 |---|---|---|
-| Critical | Parent authentication and account ownership | API and browser tests |
-| Critical | Payment webhook verification and entitlements | Billing unit/API tests |
-| Critical | Child privacy, content minimisation and safeguarding | Privacy/safety tests |
-| High | Homework generation, review and model routing | Contract and routing tests |
-| High | Progress, memory and retention | Store/API tests |
-| High | Public SEO, legal identity and refund disclosures | Public-site contract tests |
-| Medium | Accessibility and responsive presentation | Browser tests and manual review |
-| Medium | Performance under concurrent AI requests | Timeouts, bulkhead tests and staging load checks |
+| RAG assignment | Paid generation before library lookup or repeated sets | RAG-first and concurrency unit tests |
+| Marking | Answers or saved methods leak to pupils/prompts | Review, question-renderer and method-reuse tests |
+| Guided setup | Unbounded fields or identifiers are retained | Guided profile and API contract tests |
+| Subscription | Expensive premium work runs before entitlement | Plan-access and generation API tests |
+| Accounts | Cross-account learner access | API and family-journey tests |
+| Safety/privacy | Child identifiers or crisis content are mishandled | Minimisation and safeguarding tests |
+| SEO | Duplicate URLs or missing canonical discovery files | Public SEO contract tests |
+| Deployment | Runtime mismatch or unsafe production settings | Compile, readiness and configuration tests |
 
-## Regression selection
-
-Changes to shared middleware, accounts, databases, billing, prompts or learner rendering require the full non-browser suite. HTML-only public-site changes require the focused SEO/legal tests plus browser smoke checks. Payment changes require test-mode Checkout, portal and signed webhook verification before any controlled live test.
+A release requires successful unit, API, integration and browser suites. Any
+change to prompt inputs must include a regression assertion showing that direct
+identifiers and locally saved solution methods are absent.

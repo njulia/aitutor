@@ -17,26 +17,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Tuple
 
 from src.llm_client import LLMClient, format_prompt, build_messages
-from src.cache import homework_cache, subject_extraction_cache, make_cache_key
+from src.cache import subject_extraction_cache, make_cache_key
 from src.models import (
     UK_PRIMARY_SUBJECTS, KEY_STAGES, get_homework_time_by_age,
     YEAR_GROUP_AGE, is_eleven_plus_subject as is_known_eleven_plus_subject,
     subject_display_name,
 )
 from src.homework_rag import (
-    store_homework, search_homework, search_homework_by_metadata,
-    get_student_previous_topics, get_homework_rag_store,
+    store_homework, search_homework_by_metadata,
 )
 from src.elevenplus_rag import (
     store_homework as elevenplus_store_homework,
-    search_homework as elevenplus_search_homework,
     search_homework_by_metadata as elevenplus_search_homework_by_metadata,
-    get_student_previous_topics as elevenplus_get_student_previous_topics,
     get_homework_questions as elevenplus_get_homework_questions,
     format_questions_only as elevenplus_format_questions_only,
 )
 from src.prompts import (
-    HOMEWORK_PROMPT, SUBJECT_EXTRACTION_PROMPT, HOMEWORK_PROMPT_11PLUS,
+    HOMEWORK_PROMPT, SUBJECT_EXTRACTION_PROMPT,
     RAG_PROMPT_11PLUS,
 )
 from src.webapp.homework_assignment_store import get_assignment_store
@@ -344,17 +341,12 @@ def generate_homework_for_subject(
             if is_eleven_plus:
                 logger.info("[RAG] No unseen exact candidate for %s Year %d", subject, year_group)
             else:
-                total_exact = get_homework_rag_store().store.count_by_metadata(
-                    {"year_group": year_group, "subject": subject}
-                )
                 logger.info(
                     "[RAG] No unseen exact candidate for %s Year %d "
-                    "(exact_in_database=%d, already_seen=%d, database=%s)",
+                    "(already_seen=%d)",
                     subject,
                     year_group,
-                    total_exact,
                     len(seen_ids),
-                    get_homework_rag_store().store.database_target,
                 )
     except Exception:
         logger.exception("[RAG] Homework lookup failed for %s Year %d", subject, year_group)

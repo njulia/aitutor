@@ -11,23 +11,21 @@ except ImportError:
 
 import asyncio
 import logging
-import base64
+import copy
 import re  # Ensure re is imported for regex operations
-import json # Added: Import the json module
 import html
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
 from typing import Any, Dict, Optional, List
 
-from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Request, status  # Added Request and status
+from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
-from src.progress_db import set_user_test_flag, is_user_test, get_user_by_username
+from src.progress_db import is_user_test, get_user_by_username
 
 from src.webapp.runtime import (
     configure_cors, install_hardening, owner_key, run_blocking,
@@ -48,13 +46,13 @@ from src.webapp.question_utils import (
 )
 from src.webapp.review_service import (
     DETAIL_REVIEW_MODEL,
-    QUICK_REVIEW_MODEL,
     review_homework as service_review_homework,
     explain_deep as service_explain_deep,
     improve_practice as service_improve_practice,
 )
 from src.webapp.upload_utils import decode_base64_image_to_temp
 from src.webapp.child_safety import detect_safeguarding_concern
+from src.webapp.prompt_budget import compact_text, minimise_personal_data
 from src.models import (
     ELEVEN_PLUS_SUBJECTS,
     ELEVEN_PLUS_TOPIC_MASTERY_SUBJECTS,
@@ -399,6 +397,164 @@ def resolve_profile(
     return profile
 
 
+def _bounded_year(value: Any, *, minimum: int, maximum: int, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
+
+
+def normalise_guided_homework_profile(raw_profile: dict, student_id: str) -> dict:
+    """Build the small, non-identifying profile used by guided primary homework."""
+    source = dict(raw_profile or {})
+    year_group = _bounded_year(
+        source.get("year_group"), minimum=1, maximum=6, default=3
+    )
+    subject = canonical_primary_subject(source.get("subject")) or "Maths"
+    try:
+        requested_minutes = int(source.get("session_minutes"))
+    except (TypeError, ValueError):
+        requested_minutes = 15
+    session_minutes = requested_minutes if requested_minutes in {10, 15, 20} else 15
+    difficulty = str(source.get("difficulty") or "").strip().casefold()
+    if difficulty not in {"gentle", "just_right", "challenge"}:
+        difficulty = "just_right"
+
+    profile = {
+        "setup_source": "guided_homework",
+        "year_group": year_group,
+        "age": year_group + 5,
+        "subject": subject,
+        "preferred_session_minutes": session_minutes,
+        "question_count": {10: 5, 15: 8, 20: 10}[session_minutes],
+        "difficulty": difficulty,
+        "student_id": student_id,
+    }
+    notes = compact_text(
+        minimise_personal_data(source.get("learning_notes")), 500
+    )
+    if notes:
+        profile["learning_needs"] = notes
+    return profile
+
+
+def guided_homework_client_profile(profile: dict) -> dict:
+    """Return only profile fields that are useful to the browser."""
+    allowed = {
+        "year_group",
+        "age",
+        "subject",
+        "preferred_session_minutes",
+        "question_count",
+        "difficulty",
+    }
+    return {key: profile[key] for key in allowed if key in profile}
+
+
+def normalise_guided_eleven_profile(raw_profile: dict, student_id: str) -> dict:
+    """Build a bounded 11+ setup profile without school or learner identifiers."""
+    source = dict(raw_profile or {})
+    year_group = _bounded_year(
+        source.get("year_group"), minimum=3, maximum=6, default=5
+    )
+    compact_subject = "".join(
+        char for char in str(source.get("subject") or "").casefold()
+        if char.isalnum()
+    )
+    subject = {
+        "maths": "Maths",
+        "mathematics": "Maths",
+        "english": "English",
+        "verbalreasoning": "Verbal Reasoning",
+        "nonverbalreasoning": "Non-Verbal Reasoning",
+    }.get(compact_subject, "Maths")
+    confidence = str(source.get("confidence") or "").strip().casefold()
+    if confidence not in {"confident", "sometimes_tricky", "needs_help"}:
+        confidence = "sometimes_tricky"
+    try:
+        requested_count = int(source.get("question_count"))
+    except (TypeError, ValueError):
+        requested_count = 8
+    question_count = requested_count if requested_count in {5, 8} else 8
+
+    profile = {
+        "setup_source": "guided_11plus",
+        "year_group": year_group,
+        "age": year_group + 5,
+        "subject": subject,
+        "confidence": confidence,
+        "question_count": question_count,
+        "student_id": student_id,
+    }
+    exam_format = str(source.get("exam_format") or "").strip()
+    if exam_format in {"GL Assessment", "CEM", "ISEB", "Not sure"}:
+        profile["exam_format"] = exam_format
+    exam_date = str(source.get("exam_date") or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", exam_date):
+        try:
+            profile["exam_month"] = datetime.strptime(
+                exam_date, "%Y-%m-%d"
+            ).strftime("%B %Y")
+        except ValueError:
+            pass
+    notes = compact_text(
+        minimise_personal_data(source.get("learning_notes")), 500
+    )
+    if notes:
+        profile["learning_needs"] = notes
+    return profile
+
+
+def guided_eleven_client_profile(profile: dict) -> dict:
+    """Return the answer-free, non-identifying 11+ setup state."""
+    allowed = {
+        "year_group",
+        "age",
+        "subject",
+        "confidence",
+        "question_count",
+        "exam_format",
+        "exam_month",
+    }
+    return {key: profile[key] for key in allowed if key in profile}
+
+
+def _format_public_questions(questions: List[Dict[str, Any]]) -> str:
+    lines = ["QUESTIONS"]
+    for index, item in enumerate(questions, start=1):
+        number = int(item.get("number") or index)
+        lines.append(f"{number}. {str(item.get('question') or '').strip()}")
+        for option_index, option in enumerate(item.get("options") or []):
+            if isinstance(option, dict):
+                label = str(
+                    option.get("label") or chr(65 + option_index)
+                ).strip().upper()
+                text = str(option.get("text") or "").strip()
+            else:
+                label = chr(65 + option_index)
+                text = str(option or "").strip()
+            if text:
+                lines.append(f"{label}) {text}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def limit_homework_question_count(
+    homework_results: List[Dict[str, Any]], question_count: int
+) -> List[Dict[str, Any]]:
+    """Return a copy containing at most the requested learner-safe questions."""
+    limit = max(1, min(int(question_count or 1), 20))
+    limited = copy.deepcopy(list(homework_results or []))
+    for result in limited:
+        questions = list(result.get("questions") or [])[:limit]
+        for index, question in enumerate(questions, start=1):
+            question["number"] = index
+        result["questions"] = questions
+        result["content"] = _format_public_questions(questions)
+    return limited
+
+
 def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optional[str]]:
     """
     Determines the student_id and username for the current request.
@@ -548,16 +704,14 @@ def improve_practice(
 # reading passages and answer-free learner content.
 _split_homework_into_questions = split_public_homework
 
-def _static_page(*parts: str) -> FileResponse:
+def _static_page(
+    *parts: str,
+    cache_control: str = "public, max-age=300, stale-while-revalidate=3600",
+) -> FileResponse:
     path = os.path.join(project_root, *parts)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Page not found")
-    # 禁用缓存，确保开发时总是获取最新文件
-    return FileResponse(path, headers={
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
-    })
+    return FileResponse(path, headers={"Cache-Control": cache_control})
 
 
 def _public_legal_page(filename: str) -> HTMLResponse:
@@ -586,6 +740,33 @@ def _public_legal_page(filename: str) -> HTMLResponse:
     }
     for marker, value in replacements.items():
         content = content.replace(marker, html.escape(str(value), quote=True))
+    optional_lines = {
+        "{{BUSINESS_SUPPORT_PHONE_LINE}}": (
+            "<br>Telephone: <strong>"
+            + html.escape(os.getenv("BUSINESS_SUPPORT_PHONE", ""), quote=True)
+            + "</strong>"
+            if os.getenv("BUSINESS_SUPPORT_PHONE", "").strip()
+            else ""
+        ),
+        "{{BUSINESS_REGISTRATION_LINE}}": (
+            "<br>Registration number: <strong>"
+            + html.escape(
+                os.getenv("BUSINESS_REGISTRATION_NUMBER", ""), quote=True
+            )
+            + "</strong>"
+            if os.getenv("BUSINESS_REGISTRATION_NUMBER", "").strip()
+            else ""
+        ),
+        "{{BUSINESS_VAT_STATUS_LINE}}": (
+            "<br>VAT status: <strong>"
+            + html.escape(os.getenv("BUSINESS_VAT_STATUS", ""), quote=True)
+            + "</strong>"
+            if os.getenv("BUSINESS_VAT_STATUS", "").strip()
+            else ""
+        ),
+    }
+    for marker, rendered_line in optional_lines.items():
+        content = content.replace(marker, rendered_line)
     return HTMLResponse(content, headers={"Cache-Control": "public, max-age=300"})
 
 
@@ -597,6 +778,7 @@ class ProfileRequest(BaseModel):
     student_id: Optional[str] = None
     is_eleven_plus: bool = False
     mode: Optional[str] = "homework"  # Added mode field
+    question_count: Optional[int] = Field(default=None, ge=1, le=20)
 
 
 class TopicMasteryPracticeRequest(BaseModel):
@@ -741,17 +923,17 @@ async def check_homework():
 
 @app.get("/register")
 async def register_page():
-    return _static_page("static", "register.html")
+    return _static_page("static", "register.html", cache_control="no-store, private")
 
 
 @app.get("/login")
 async def login_page():
-    return _static_page("static", "login.html")
+    return _static_page("static", "login.html", cache_control="no-store, private")
 
 
 @app.get("/pricing")
 async def pricing_page():
-    return _static_page("static", "pricing.html")
+    return _public_legal_page("pricing.html")
 
 
 @app.get("/privacy")
@@ -776,17 +958,17 @@ async def safety_page():
 
 @app.get("/progress")
 async def progress_page():
-    return _static_page("static", "progress.html")
+    return _static_page("static", "progress.html", cache_control="no-store, private")
 
 
 @app.get("/memory")
 async def memory_page():
-    return _static_page("static", "memory.html")
+    return _static_page("static", "memory.html", cache_control="no-store, private")
 
 
 @app.get("/app")
 async def app_page():
-    return _static_page("static", "app.html")
+    return _static_page("static", "app.html", cache_control="no-store, private")
 
 
 @app.get("/year-{year}-homework")
@@ -803,10 +985,56 @@ async def year_homework_page(year: int):
 
 @app.get("/sitemap.xml")
 async def sitemap():
-    seo_sitemap = os.path.join(project_root, "static", "--seo", "sitemap.xml")
+    seo_sitemap = os.path.join(project_root, "static", "sitemap.xml")
     if os.path.isfile(seo_sitemap):
-        return FileResponse(seo_sitemap, media_type="application/xml")
+        return FileResponse(
+            seo_sitemap,
+            media_type="application/xml",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
     raise HTTPException(status_code=404, detail="Sitemap not found")
+
+
+@app.get("/robots.txt")
+async def robots():
+    robots_path = os.path.join(project_root, "static", "robots.txt")
+    if os.path.isfile(robots_path):
+        return FileResponse(
+            robots_path,
+            media_type="text/plain",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    raise HTTPException(status_code=404, detail="Robots file not found")
+
+
+@app.get("/contact-me", include_in_schema=False)
+async def legacy_contact_page():
+    return RedirectResponse("/messages", status_code=308)
+
+
+@app.get(
+    "/elevenplus/11plus_acceptance_rates_gcse", include_in_schema=False
+)
+async def legacy_acceptance_rates_page():
+    return RedirectResponse(
+        "/elevenplus/11plus-acceptance-rates-gcse", status_code=308
+    )
+
+
+@app.get(
+    "/elevenplus/11plus_maths_common_mistakes", include_in_schema=False
+)
+async def legacy_maths_mistakes_page():
+    return RedirectResponse(
+        "/elevenplus/11plus-maths-common-mistake", status_code=308
+    )
+
+
+@app.get("/elevenplus/11plus_time_management", include_in_schema=False)
+async def legacy_time_management_page():
+    return RedirectResponse(
+        "/elevenplus/11plus-time-management", status_code=308
+    )
 
 
 @app.get("/elevenplus/articles")
@@ -1175,6 +1403,18 @@ async def api_generate(req: Request, request: ProfileRequest):
         request.student_id = resolved_student_id
         request.profile = dict(request.profile or {})
         request.profile["student_id"] = resolved_student_id
+        setup_source = str(request.profile.get("setup_source") or "").strip()
+        if request.question_count is not None:
+            request.profile["question_count"] = request.question_count
+        if setup_source == "guided_homework":
+            request.profile = normalise_guided_homework_profile(
+                request.profile, resolved_student_id
+            )
+        elif setup_source == "guided_11plus":
+            request.profile = normalise_guided_eleven_profile(
+                request.profile, resolved_student_id
+            )
+
         description_for_safety = str(request.profile.get("description") or "").strip()
         concern = detect_safeguarding_concern(description_for_safety)
         if concern is not None:
@@ -1206,6 +1446,8 @@ async def api_generate(req: Request, request: ProfileRequest):
         )
 
         subjects = list(request.subjects or [])
+        if setup_source in {"guided_homework", "guided_11plus"}:
+            subjects = [profile["subject"]]
         if not subjects:
             description = str(request.profile.get("description") or profile.get("description") or "").strip()
             if description:
@@ -1263,7 +1505,7 @@ async def api_generate(req: Request, request: ProfileRequest):
             _is_eleven_plus_year_round(profile)
             or any(_is_eleven_plus_year_round(subject=subject) for subject in subjects)
         )
-        if is_year_round:
+        if is_year_round or setup_source == "guided_11plus":
             required_plan = ELEVENPLUS_PREMIUM_PLAN
             has_sub = await run_blocking(
                 user_has_subscription,
@@ -1276,7 +1518,13 @@ async def api_generate(req: Request, request: ProfileRequest):
             )
             if not has_sub:
                 return _subscription_required_response(
-                    "11+ year-round practice", required_plan, logged_in_username
+                    (
+                        "11+ guided practice"
+                        if setup_source == "guided_11plus"
+                        else "11+ year-round practice"
+                    ),
+                    required_plan,
+                    logged_in_username,
                 )
 
         generated = await run_blocking(
@@ -1287,6 +1535,16 @@ async def api_generate(req: Request, request: ProfileRequest):
             timeout=120,
         )
         all_homework_results = _public_homework_results(generated, is_eleven_plus=request.is_eleven_plus)
+        if setup_source in {"guided_homework", "guided_11plus"}:
+            all_homework_results = limit_homework_question_count(
+                all_homework_results, profile["question_count"]
+            )
+        if setup_source == "guided_homework":
+            response_profile = guided_homework_client_profile(profile)
+        elif setup_source == "guided_11plus":
+            response_profile = guided_eleven_client_profile(profile)
+        else:
+            response_profile = profile
 
         if request.mode == "tutor":
             individual_questions: List[Dict[str, Any]] = []
@@ -1321,7 +1579,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                     response = JSONResponse({
                         "success": True,
                         "homework": rag_only,
-                        "profile": profile,
+                        "profile": response_profile,
                         "mode": "tutor",
                         "note": "Library questions are available. A subscription is needed for newly generated tutor questions.",
                     })
@@ -1334,7 +1592,7 @@ async def api_generate(req: Request, request: ProfileRequest):
             response = JSONResponse({
                 "success": True,
                 "homework": individual_questions,
-                "profile": profile,
+                "profile": response_profile,
                 "mode": "tutor",
             })
             _set_anon_cookie(response, new_anon_session_id, req)
@@ -1343,7 +1601,7 @@ async def api_generate(req: Request, request: ProfileRequest):
         response = JSONResponse({
             "success": True,
             "homework": all_homework_results,
-            "profile": profile,
+            "profile": response_profile,
             "mode": "homework",
         })
         _set_anon_cookie(response, new_anon_session_id, req)
@@ -1985,11 +2243,10 @@ async def admin_access_status(req: Request):
 @app.get("/api/admin/overview")
 async def admin_overview():
     """管理后台概览数据"""
-    from src.admin import get_ai_metrics, get_subscription_overview, _check_langfuse
-    from src.progress_db import list_all_students, get_all_sessions_summary
+    from src.admin import get_ai_metrics, _check_langfuse
+    from src.progress_db import list_all_students
 
     metrics = get_ai_metrics()
-    students = list_all_students(limit=1)  # 只取数量
     return {
         "sessions": metrics["sessions"],
         "total_students": len(list_all_students(limit=10000)),

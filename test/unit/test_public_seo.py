@@ -38,6 +38,27 @@ PUBLIC_PAGES = {
     "/elevenplus/11plus-maths-common-mistake": "elevenplus/11plus_maths_common_mistakes.html",
     "/elevenplus/11plus-school-guide": "elevenplus/11plus_school_guide.html",
     "/elevenplus/11plus-time-management": "elevenplus/11plus_time_management.html",
+    "/elevenplus/11plus-exam-formats": "elevenplus/11plus-exam-formats.html",
+    "/elevenplus/11plus-preparation-timeline": "elevenplus/11plus-preparation-timeline.html",
+    "/elevenplus/comprehension-question-types": "elevenplus/comprehension-question-types.html",
+    "/elevenplus/english-comprehension-strategies": "elevenplus/english-comprehension-strategies.html",
+    "/elevenplus/essay-writing-guide": "elevenplus/essay-writing-guide.html",
+    "/elevenplus/exam-day-preparation": "elevenplus/exam-day-preparation.html",
+    "/elevenplus/fractions-decimals-percentages": "elevenplus/fractions-decimals-percentages.html",
+    "/elevenplus/geometry-algebra-fundamentals": "elevenplus/geometry-algebra-fundamentals.html",
+    "/elevenplus/managing-test-anxiety": "elevenplus/managing-test-anxiety.html",
+    "/elevenplus/maths-topics-checklist": "elevenplus/maths-topics-checklist.html",
+    "/elevenplus/mock-exam-strategy": "elevenplus/mock-exam-strategy.html",
+    "/elevenplus/non-verbal-reasoning-guide": "elevenplus/non-verbal-reasoning-guide.html",
+    "/elevenplus/problem-solving-techniques": "elevenplus/problem-solving-techniques.html",
+    "/elevenplus/revision-techniques": "elevenplus/revision-techniques.html",
+    "/elevenplus/selective-schools-admission": "elevenplus/selective-schools-admission.html",
+    "/elevenplus/spatial-awareness-practice": "elevenplus/spatial-awareness-practice.html",
+    "/elevenplus/spelling-punctuation-grammar": "elevenplus/spelling-punctuation-grammar.html",
+    "/elevenplus/stress-management-techniques": "elevenplus/stress-management-techniques.html",
+    "/elevenplus/supporting-child-preparation": "elevenplus/supporting-child-preparation.html",
+    "/elevenplus/tutoring-vs-self-study": "elevenplus/tutoring-vs-self-study.html",
+    "/elevenplus/verbal-reasoning-tips": "elevenplus/verbal-reasoning-tips.html",
 }
 
 
@@ -111,9 +132,9 @@ def test_sitemap_endpoint_serves_the_current_static_sitemap(client) -> None:
 @pytest.mark.parametrize(
     ("legacy", "canonical"),
     [
-        ("/elevenplus/11plus-acceptance-rates-gcse", "/elevenplus/11plus-acceptance-rates-gcse"),
-        ("/elevenplus/11plus-maths-common-mistake", "/elevenplus/11plus-maths-common-mistake"),
-        ("/elevenplus/11plus-time-management", "/elevenplus/11plus-time-management"),
+        ("/elevenplus/11plus_acceptance_rates_gcse", "/elevenplus/11plus-acceptance-rates-gcse"),
+        ("/elevenplus/11plus_maths_common_mistakes", "/elevenplus/11plus-maths-common-mistake"),
+        ("/elevenplus/11plus_time_management", "/elevenplus/11plus-time-management"),
         ("/contact-me", "/messages"),
     ],
 )

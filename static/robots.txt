@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /admin-messages/
+Disallow: /uploads/
+Disallow: /api/
+Disallow: /app
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /progress
+Disallow: /memory
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+Sitemap: https://homeworkmagic.co.uk/sitemap.xml

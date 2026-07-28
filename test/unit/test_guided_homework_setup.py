@@ -66,7 +66,9 @@ def test_guided_frontend_replaces_learner_textbox_and_keeps_notes_ephemeral() ->
     javascript = Path("static/js/app.js").read_text(encoding="utf-8")
 
     assert 'id="homework-profile"' not in html
-    assert 'id="homework-year"' not in html
+    # Quick Start deliberately keeps a compact year selector alongside the
+    # guided setup.
+    assert 'id="homework-year"' in html
     assert 'id="homework-guide-question"' in html
     assert 'id="homework-quick-start"' in html
     assert "Make today’s homework with me" in html
@@ -86,4 +88,3 @@ def test_guided_frontend_replaces_learner_textbox_and_keeps_notes_ephemeral() ->
     )[1].split("function restoreLearningChoices()", 1)[0]
     assert "homework-parent-notes" not in save_choices_body
     assert "homeworkPrompt:" not in save_choices_body
-

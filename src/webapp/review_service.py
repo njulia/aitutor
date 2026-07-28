@@ -154,7 +154,9 @@ def _complete_review(
     # Ollama model names. Keep the model already loaded by a local client.
     selected_model = _resolved_model(llm_client, model)
 
-    safe_max_tokens = _bounded_int(max_tokens, default=5000, minimum=2000, maximum=8000)
+    safe_max_tokens = _bounded_int(
+        max_tokens, default=max_tokens, minimum=128, maximum=8000
+    )
     logger.info(
         "[Review] operation=%s provider=%s model=%s max_tokens=%s",
         operation,
@@ -408,8 +410,6 @@ def _rag_prompt_context(rows: List[Dict[str, Any]]) -> Dict[str, str]:
         question = compact_text(_clean_question_text(row.get("question", "")), 260)
         pupil_answer = compact_text(row.get("student_answer", ""), 140)
         correct_answer = compact_text(row.get("correct_answer", ""), 140)
-        explanation = compact_text(row.get("explanation", ""), 420) or "No stored method supplied."
-        tip = compact_text(row.get("tip", ""), 180)
         correct_letter = compact_text(row.get("correct_letter", ""), 12)
         answer_label = (
             f"Option {correct_letter} — {correct_answer}"
@@ -420,18 +420,14 @@ def _rag_prompt_context(rows: List[Dict[str, Any]]) -> Dict[str, str]:
             correct_items.append(
                 f"Question {index}: {question}\n"
                 f"Pupil answer: {pupil_answer}\n"
-                f"Correct answer: {answer_label}\n"
-                f"Stored method: {explanation}"
+                f"Correct answer: {answer_label}"
             )
         else:
             item = (
                 f"Question {index}: {question}\n"
                 f"Pupil answer: {pupil_answer}\n"
-                f"Correct answer: {answer_label}\n"
-                f"Stored method: {explanation}"
+                f"Correct answer: {answer_label}"
             )
-            if tip:
-                item += f"\nStored tip: {tip}"
             wrong_items.append(item)
     return {
         "score_summary": _score_summary(rows),
@@ -439,6 +435,224 @@ def _rag_prompt_context(rows: List[Dict[str, Any]]) -> Dict[str, str]:
         "correct_answer_items": "\n\n".join(correct_items) or "No correct answers this time.",
         "wrong_answer_items": "\n\n".join(wrong_items) or "No incorrect answers.",
     }
+
+
+_SOLUTION_METHOD_SECTION_RE = re.compile(
+    r"(?ims)^\s*##\s+A Helpful Way to Solve This Question\s*\n"
+    r".*?(?=^\s*##\s+|\Z)"
+)
+
+
+def _without_rendered_solution_methods(value: Any) -> str:
+    """Remove locally rendered methods before a follow-up model call."""
+    return _SOLUTION_METHOD_SECTION_RE.sub("", str(value or "")).strip()
+
+
+def _method_questions(
+    homework_content: str, rows: List[Dict[str, Any]]
+) -> List[str]:
+    if rows:
+        return [
+            compact_text(row.get("question"), 600)
+            for row in rows
+            if compact_text(row.get("question"), 600)
+        ]
+    parsed = parse_public_questions(homework_content)
+    questions = [
+        compact_text(item.get("question"), 600)
+        for item in parsed
+        if compact_text(item.get("question"), 600)
+    ]
+    if questions:
+        return questions[:20]
+    split = _split_homework_into_questions(homework_content)
+    return [
+        compact_text(item.get("content") or item.get("full_content"), 600)
+        for item in split[:20]
+        if compact_text(item.get("content") or item.get("full_content"), 600)
+    ]
+
+
+def _prepare_solution_methods(
+    questions: List[str],
+    rows: List[Dict[str, Any]],
+    subject: str,
+    year_group: int,
+) -> tuple[Dict[str, str], Dict[str, str], List[Dict[str, str]]]:
+    """Load cached methods and promote RAG methods without prompting an LLM."""
+    from src import homework_rag
+
+    initial: Dict[str, str] = {}
+    available: Dict[str, str] = {}
+    try:
+        initial = homework_rag.load_solution_methods(
+            questions, subject, year_group
+        )
+        available.update(initial)
+    except Exception:
+        logger.exception("Could not load saved solution methods")
+
+    rag_records: List[Dict[str, str]] = []
+    for index, question in enumerate(questions):
+        method_id = homework_rag.solution_method_key(
+            question, subject, year_group
+        )
+        if method_id in available or index >= len(rows):
+            continue
+        method = compact_text(rows[index].get("explanation"), 2_000)
+        if method:
+            rag_records.append({"question": question, "method": method})
+            available[method_id] = method
+    if rag_records:
+        try:
+            available.update(
+                homework_rag.save_solution_methods(
+                    rag_records, subject, year_group
+                )
+            )
+        except Exception:
+            logger.exception("Could not save RAG solution methods")
+
+    missing = []
+    for index, question in enumerate(questions, start=1):
+        method_id = homework_rag.solution_method_key(
+            question, subject, year_group
+        )
+        if method_id not in available:
+            missing.append(
+                {
+                    "id": f"q{index}",
+                    "question": question,
+                    "method_id": method_id,
+                }
+            )
+    return initial, available, missing
+
+
+def _solution_method_prompt(missing: List[Dict[str, str]]) -> str:
+    public_missing = [
+        {"id": item["id"], "question": item["question"]}
+        for item in missing
+    ]
+    status = (
+        "Create one concise, age-appropriate method for each missing item."
+        if public_missing
+        else "No method is missing."
+    )
+    return (
+        "\n\nSOLUTION METHOD OUTPUT\n"
+        "Previously saved methods are rendered locally and are not present in "
+        "this prompt. Do not invent or repeat a method unless it appears in "
+        "MISSING_METHODS.\n"
+        f"{status}\n"
+        "MISSING_METHODS:\n"
+        f"{json.dumps(public_missing, ensure_ascii=False)}\n"
+        "Return JSON with feedback_markdown and solution_methods. Each solution "
+        "method must use the supplied id and method_markdown. If there are no "
+        "missing methods, solution_methods must be an empty list."
+    )
+
+
+def _parse_review_response(
+    raw_response: str, missing: List[Dict[str, str]]
+) -> tuple[str, List[Dict[str, str]]]:
+    text = str(raw_response or "").strip()
+    candidate = re.sub(
+        r"^\s*```(?:json)?\s*|\s*```\s*$", "", text, flags=re.I
+    ).strip()
+    try:
+        parsed = json.loads(candidate)
+    except (TypeError, json.JSONDecodeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        feedback = str(
+            parsed.get("feedback_markdown")
+            or parsed.get("feedback")
+            or ""
+        ).strip()
+        methods: List[Dict[str, str]] = []
+        for item in parsed.get("solution_methods") or []:
+            if not isinstance(item, dict):
+                continue
+            method_id = str(item.get("id") or "").strip()
+            method = compact_text(
+                item.get("method_markdown") or item.get("method"), 2_000
+            )
+            if method_id and method:
+                methods.append({"id": method_id, "method": method})
+        return feedback, methods
+
+    section = _SOLUTION_METHOD_SECTION_RE.search(text)
+    methods = []
+    if section and missing:
+        method = re.sub(
+            r"(?ims)^\s*##\s+A Helpful Way to Solve This Question\s*\n",
+            "",
+            section.group(0),
+        ).strip()
+        if method:
+            methods.append({"id": missing[0]["id"], "method": method})
+    return _without_rendered_solution_methods(text), methods
+
+
+def _finish_solution_methods(
+    questions: List[str],
+    subject: str,
+    year_group: int,
+    initial: Dict[str, str],
+    available: Dict[str, str],
+    missing: List[Dict[str, str]],
+    returned: List[Dict[str, str]],
+) -> List[Dict[str, Any]]:
+    from src import homework_rag
+
+    missing_by_id = {item["id"]: item for item in missing}
+    new_records: List[Dict[str, str]] = []
+    for item in returned:
+        descriptor = missing_by_id.get(item.get("id"))
+        method = compact_text(item.get("method"), 2_000)
+        if descriptor and method:
+            new_records.append(
+                {"question": descriptor["question"], "method": method}
+            )
+            available[descriptor["method_id"]] = method
+    if new_records:
+        try:
+            available.update(
+                homework_rag.save_solution_methods(
+                    new_records, subject, year_group
+                )
+            )
+        except Exception:
+            logger.exception("Could not save new solution methods")
+
+    result = []
+    for index, question in enumerate(questions, start=1):
+        method_id = homework_rag.solution_method_key(
+            question, subject, year_group
+        )
+        method = available.get(method_id)
+        if method:
+            result.append(
+                {
+                    "id": f"q{index}",
+                    "method": method,
+                    "from_cache": method_id in initial,
+                }
+            )
+    return result
+
+
+def _render_solution_methods(methods: List[Dict[str, Any]]) -> str:
+    if not methods:
+        return ""
+    sections = ["\n\n## A Helpful Way to Solve This Question\n"]
+    for index, item in enumerate(methods, start=1):
+        if len(methods) > 1:
+            sections.append(f"\n### Question {index}\n")
+        sections.append(str(item.get("method") or "").strip())
+        sections.append("\n")
+    return "".join(sections).strip()
 
 
 def _extract_score(text: str) -> tuple[Optional[float], Optional[int]]:
@@ -493,7 +707,7 @@ def review_homework(
     use_detail_model = not use_quick_model
     selected_model = DETAIL_REVIEW_MODEL if use_detail_model else QUICK_REVIEW_MODEL
     cache_key = stable_cache_key(
-        "review_detail_v5" if use_detail_model else "review_quick_v5",
+        "review_detail_v6" if use_detail_model else "review_quick_v6",
         selected_model,
         subject,
         budget,
@@ -522,6 +736,14 @@ def review_homework(
         except Exception:
             logger.exception("RAG answer lookup failed for %s", homework_doc_id)
 
+    year_group = int(profile.get("year_group", 3))
+    method_questions = _method_questions(budget["homework_content"], rows)
+    initial_methods, available_methods, missing_methods = (
+        _prepare_solution_methods(
+            method_questions, rows, subject, year_group
+        )
+    )
+
     correct_count = sum(1 for row in rows if row["is_correct"])
     attempted = len(rows)
     score: Optional[float] = float(correct_count) if rows else None
@@ -536,7 +758,8 @@ def review_homework(
             subject=compact_text(subject_display_name(subject), 80),
             **rag_context,
         )
-        feedback = _complete_review(
+        prompt += _solution_method_prompt(missing_methods)
+        raw_feedback = _complete_review(
             llm_client,
             build_messages(prompt),
             model=selected_model,
@@ -548,7 +771,6 @@ def review_homework(
             ),
             operation= "detail_review_with_rag" if use_detail_model else "quick_review_with_rag",
         )
-        review = _table(rows) + f"**Score: {correct_count}/{attempted}**\n\n" + feedback
         model_used = _resolved_model(llm_client, selected_model)
     else:
         prompt = format_prompt(
@@ -558,7 +780,8 @@ def review_homework(
             homework_content=budget["homework_content"],
             student_answer=budget["student_answers"],
         )
-        review = _complete_review(
+        prompt += _solution_method_prompt(missing_methods)
+        raw_feedback = _complete_review(
             llm_client,
             build_messages(prompt),
             model=selected_model,
@@ -575,11 +798,36 @@ def review_homework(
             ),
         )
         model_used = _resolved_model(llm_client, selected_model)
-        score, max_score = _extract_score(review)
+    feedback, returned_methods = _parse_review_response(
+        raw_feedback, missing_methods
+    )
+    solution_methods = _finish_solution_methods(
+        method_questions,
+        subject,
+        year_group,
+        initial_methods,
+        available_methods,
+        missing_methods,
+        returned_methods,
+    )
+    rendered_methods = _render_solution_methods(solution_methods)
+    if rows:
+        review = (
+            _table(rows)
+            + f"**Score: {correct_count}/{attempted}**\n\n"
+            + feedback
+        )
+    else:
+        review = feedback
+        score, max_score = _extract_score(feedback)
+    if rendered_methods:
+        review = f"{review.rstrip()}\n\n{rendered_methods}".strip()
 
     result = {
         "success": True,
         "review": review,
+        "llm_response": feedback,
+        "solution_methods": solution_methods,
         "from_rag_answers": bool(rows),
         "score": score,
         "max_score": max_score,
@@ -637,9 +885,14 @@ def explain_deep(
         return intervention
     raw_profile = dict(profile or {})
     profile = _normalise_profile(raw_profile)
-    budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
+    budget = budget_review_inputs(
+        homework_content,
+        student_answers,
+        profile,
+        _without_rendered_solution_methods(review_feedback),
+    )
     cache_key = stable_cache_key(
-        "review_detail_v5",
+        "review_detail_v6",
         DETAIL_REVIEW_MODEL,
         subject,
         budget,
@@ -690,7 +943,25 @@ def explain_deep(
             max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
             operation="detail_explanation_with_rag",
         )
-        explanation = _table(rows) + f"**Score: {correct_count}/{len(rows)}**\n\n" + ai_explanation
+        local_methods = [
+            {
+                "id": f"q{index}",
+                "method": compact_text(row.get("explanation"), 2_000),
+                "from_cache": True,
+            }
+            for index, row in enumerate(rows, start=1)
+            if compact_text(row.get("explanation"), 2_000)
+        ]
+        explanation = (
+            _table(rows)
+            + f"**Score: {correct_count}/{len(rows)}**\n\n"
+            + ai_explanation
+        )
+        rendered_methods = _render_solution_methods(local_methods)
+        if rendered_methods:
+            explanation = (
+                f"{explanation.rstrip()}\n\n{rendered_methods}"
+            )
         score = float(correct_count)
         max_score = len(rows)
     else:
@@ -746,9 +1017,14 @@ def improve_practice(
     if intervention is not None:
         return intervention
     profile = _normalise_profile(dict(profile or {}))
-    budget = budget_review_inputs(homework_content, student_answers, profile, review_feedback)
+    budget = budget_review_inputs(
+        homework_content,
+        student_answers,
+        profile,
+        _without_rendered_solution_methods(review_feedback),
+    )
     cache_key = stable_cache_key(
-        "practice_v2",
+        "practice_v3",
         subject,
         budget,
         homework_doc_id,
@@ -778,12 +1054,11 @@ def improve_practice(
             )
             rows = _mark_rows(pairs, budget["student_answers"], subject)
             if rows:
-                correct_answers_section = "## Authoritative Correct Answers and Explanations\n"
+                correct_answers_section = "## Authoritative Correct Answers\n"
                 for i, r in enumerate(rows, 1):
                     correct_answers_section += (
                         f"Question {i}: {r['question']}\n"
                         f"Correct Answer: {r['correct_answer']}\n"
-                        f"Authoritative Explanation: {r.get('explanation') or 'N/A'}\n"
                     )
         except Exception:
             logger.exception("RAG answer lookup failed in improve_practice for %s", homework_doc_id)

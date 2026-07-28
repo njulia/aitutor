@@ -229,6 +229,39 @@ class PGVectorStore:
         with self.Session.begin() as session:
             session.execute(statement)
 
+    def add_documents_if_absent(
+        self,
+        texts: List[str],
+        metadatas: List[Dict[str, Any]],
+        ids: List[str],
+        embeddings: List[List[float]],
+    ) -> None:
+        """Insert immutable records without replacing an earlier value."""
+        self._validate_lengths(texts, metadatas, ids, embeddings)
+        if not texts:
+            return
+        rows = [
+            {
+                "id": str(ids[index]),
+                "collection_name": self.collection_name,
+                "content": str(texts[index]),
+                "metadata_json": dict(metadatas[index] or {}),
+                "embedding": self._validate_embedding(embeddings[index]),
+                "created_at": datetime.now(UTC),
+            }
+            for index in range(len(texts))
+        ]
+        if self.is_postgres:
+            from sqlalchemy.dialects.postgresql import insert as dialect_insert
+        else:
+            from sqlalchemy.dialects.sqlite import insert as dialect_insert
+        statement = dialect_insert(VectorDocument).values(rows)
+        statement = statement.on_conflict_do_nothing(
+            index_elements=[VectorDocument.id]
+        )
+        with self.Session.begin() as session:
+            session.execute(statement)
+
     def search(
         self,
         query_embedding: List[float],

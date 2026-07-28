@@ -11,43 +11,12 @@ import json
 import os
 import re
 import sys
-import types
 import unittest
 from pathlib import Path
 
 
-GENERATOR_DIR = Path(__file__).resolve().parent
-
-# The uploaded archive contains the generator directory rather than the whole
-# application.  Provide the package names used in production without requiring
-# a database connection.
-src = types.ModuleType("src")
-src.__path__ = []  # type: ignore[attr-defined]
-elevenplus_rag_stub = types.ModuleType("src.elevenplus_rag")
-elevenplus_rag_stub.get_elevenplus_rag_store = lambda: None
-elevenplus_rag_stub.count_homework_by_metadata = lambda *args, **kwargs: 0
-
-scripts = types.ModuleType("scripts")
-scripts.__path__ = []  # type: ignore[attr-defined]
-elevenplus_package = types.ModuleType("scripts.elevenplus")
-elevenplus_package.__path__ = [str(GENERATOR_DIR)]  # type: ignore[attr-defined]
-homework_package = types.ModuleType("scripts.homework_generator")
-homework_package.__path__ = []  # type: ignore[attr-defined]
-homework_utils_stub = types.ModuleType(
-    "scripts.homework_generator.homework_generator_utils"
-)
-homework_utils_stub.add_homework_in_batches = lambda *args, **kwargs: None
-homework_utils_stub.get_rag_stats = lambda *args, **kwargs: {}
-
-sys.modules.setdefault("src", src)
-sys.modules.setdefault("src.elevenplus_rag", elevenplus_rag_stub)
-sys.modules.setdefault("scripts", scripts)
-sys.modules.setdefault("scripts.elevenplus", elevenplus_package)
-sys.modules.setdefault("scripts.homework_generator", homework_package)
-sys.modules.setdefault(
-    "scripts.homework_generator.homework_generator_utils",
-    homework_utils_stub,
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+GENERATOR_DIR = PROJECT_ROOT / "scripts" / "elevenplus"
 
 from scripts.elevenplus.elevenplus_generator_utils import (  # noqa: E402
     PUBLIC_FREE_RESOURCE_POLICY,
@@ -280,10 +249,6 @@ class ElevenPlusGeneratorUniquenessTests(unittest.TestCase):
         rag_path = _rag_contract_path()
         if rag_path is None:
             self.skipTest("elevenplus_rag.py is not present in this archive")
-
-        pgvector_stub = types.ModuleType("src.pgvector_store")
-        pgvector_stub.PGVectorStore = object
-        sys.modules["src.pgvector_store"] = pgvector_stub
 
         spec = importlib.util.spec_from_file_location(
             "src._elevenplus_rag_contract_fixture",

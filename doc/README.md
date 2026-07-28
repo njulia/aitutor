@@ -1,12 +1,11 @@
-# Homework Magic technical documents
+# Documentation
 
-This directory contains the operational test and release guidance expected by the project layout checks.
+This directory contains the release and verification notes for Homework Magic.
 
-- `TESTING.md` — local unit, API and integration test commands.
-- `END_TO_END_TESTING.md` — browser test setup and smoke journeys.
-- `TEST_PLAN.md` — risk-based scope and release gates.
-- `CI_CD.md` — continuous integration and deployment safeguards.
-- `PRIVACY_SAFETY_TESTING.md` — tests for a service used by children under 12.
-- `../SEO_STRIPE_LAUNCH_CHECKLIST.md` — public SEO, legal disclosure and Stripe activation checks.
+- `TESTING.md` — fast local and CI test commands
+- `END_TO_END_TESTING.md` — browser setup and journeys
+- `TEST_PLAN.md` — risk-based coverage
+- `CI_CD.md` — GitHub Actions and Cloud Run release flow
+- `PRIVACY_SAFETY_TESTING.md` — child-data and safeguarding checks
 
-Production secrets, learner data, screenshots containing personal data and real payment details must never be added to these documents or committed to the repository.
+Application setup and architecture are in the repository `README.md`.

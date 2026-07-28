@@ -12,6 +12,8 @@ stripe>=11
 # PostgreSQL / persistence
 SQLAlchemy>=2.0
 psycopg[binary]>=3.2
+redis>=5.0
+passlib[bcrypt]>=1.7
 
 # RAG and provider clients
 pgvector>=0.3

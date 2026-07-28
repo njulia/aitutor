@@ -13,7 +13,6 @@
     
     <!-- Local, allow-listed rendering for learner-facing AI output -->
     <script src="/static/js/marked-lite.js" defer></script>
-    <script src="/static/js/safe_markdown.js"></script>
     <script src="/static/js/safe_markdown.js" defer></script>
     <link rel="stylesheet" href="/static/css/multiple-choice.css">
     
@@ -482,6 +481,17 @@
             border-radius: 10px;
             margin-top: 20px;
             line-height: 1.8;
+        }
+
+        .solution-methods-output {
+            background: #f6f2ff;
+            border-left-color: #764ba2;
+        }
+
+        .solution-method-card + .solution-method-card {
+            border-top: 1px solid #ddd3f5;
+            margin-top: 16px;
+            padding-top: 16px;
         }
 
         .submitted-work-section {
@@ -1118,7 +1128,7 @@
                         <p>Your Magic Teacher will ask one short question at a time. Just tap your answers—no long typing.</p>
                     </div>
 
-                    <div class="guide-step-label" id="homework-guide-step-label" aria-live="polite">Step 1 of 4</div>
+                    <div class="guide-step-label" id="homework-guide-step-label" aria-live="polite">Step 1 of 5</div>
                     <div class="guide-progress" aria-hidden="true">
                         <div class="guide-progress-bar" id="homework-guide-progress"></div>
                     </div>
@@ -1578,7 +1588,7 @@
         <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
     </div>
 
-    <script src="/static/js/app.js?v=20260727-homework-quick-mode" defer></script>
+    <script src="/static/js/app.js?v=20260727-rag-first-review" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

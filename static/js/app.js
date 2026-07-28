@@ -689,10 +689,11 @@ let currentHomework = [];
                 value.homeworkYear = yearGroup;
             }
             const homeworkGridSubject = getSelectedSubjects('homework-subjects')[0];
-            if (homeworkGridSubject) {
-                value.homeworkSubject = homeworkGridSubject;
-            } else if (typeof answers.subject === 'string' && answers.subject) {
+            if (typeof answers.subject === 'string' && answers.subject) {
                 value.homeworkSubject = answers.subject;
+            }
+            if (homeworkGridSubject) {
+                value.homeworkQuickSubject = homeworkGridSubject;
             }
             if (Object.prototype.hasOwnProperty.call(HOMEWORK_SESSION_QUESTIONS, sessionMinutes)) {
                 value.homeworkMinutes = sessionMinutes;
@@ -784,6 +785,18 @@ let currentHomework = [];
                 homeworkGuideState.answers.mode = saved.homeworkMode;
                 const questionStyle = document.getElementById('homework-question-style');
                 if (questionStyle) questionStyle.value = saved.homeworkMode;
+            } else if (
+                Number.isInteger(yearGroup)
+                && typeof saved.homeworkSubject === 'string'
+                && Object.prototype.hasOwnProperty.call(
+                    HOMEWORK_SESSION_QUESTIONS, sessionMinutes
+                )
+                && Object.prototype.hasOwnProperty.call(
+                    HOMEWORK_DIFFICULTY_LABELS, saved.homeworkDifficulty
+                )
+            ) {
+                // Existing saved plans predate the display-style choice.
+                homeworkGuideState.answers.mode = 'homework';
             }
             homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
 
@@ -1392,7 +1405,11 @@ let currentHomework = [];
                         homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
                         renderHomeworkGuide();
                     }
-                    renderSubjects('homework-subjects', data.primary, saved.homeworkSubject);
+                    renderSubjects(
+                        'homework-subjects',
+                        data.primary,
+                        saved.homeworkQuickSubject || saved.homeworkSubject
+                    );
                     renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
                     if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
                         elevenPlusSubjects = data.eleven_plus;
@@ -2205,7 +2222,7 @@ let currentHomework = [];
                 }
 
                 if (data.success) {
-                    displayReview(data.review, {
+                    displayReview(data.llm_response || data.review, {
                         homework: homeworkContent,
                         answers: studentAnswer,
                         subject: subject || 'Maths',
@@ -2214,7 +2231,7 @@ let currentHomework = [];
                         is_eleven_plus: Boolean(hw.is_eleven_plus),
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index : currentQuestionIndex
-                    });
+                    }, data.solution_methods || []);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -2490,7 +2507,8 @@ let currentHomework = [];
                     : answers;
 
                 displayReview(
-                    data.review || 'The homework was checked, but no feedback was returned.',
+                    data.llm_response || data.review ||
+                        'The homework was checked, but no feedback was returned.',
                     {
                         homework: homework,
                         answers: followUpAnswers,
@@ -2498,7 +2516,8 @@ let currentHomework = [];
                         from_rag: Boolean(homeworkDocId),
                         homework_doc_id: homeworkDocId || null,
                         is_eleven_plus: Boolean(requestBody.is_eleven_plus)
-                    }
+                    },
+                    data.solution_methods || []
                 );
             } catch (error) {
                 console.error('Homework review failed:', error);
@@ -2536,7 +2555,25 @@ let currentHomework = [];
             return buildGeneratedReviewContext();
         }
 
-        function displayReview(review, reviewContext = null) {
+        function renderSolutionMethods(solutionMethods) {
+            if (!Array.isArray(solutionMethods) || solutionMethods.length === 0) {
+                return '';
+            }
+            const cards = solutionMethods.map((item, index) => {
+                const label = solutionMethods.length > 1
+                    ? `<h4>Question ${index + 1}</h4>`
+                    : '';
+                return `<div class="solution-method-card">${label}${renderSafeMarkdown(item.method || '')}</div>`;
+            }).join('');
+            return `
+                <section class="review-output solution-methods-output" aria-labelledby="solution-methods-title">
+                    <h3 id="solution-methods-title">A helpful way to solve this question</h3>
+                    ${cards}
+                </section>
+            `;
+        }
+
+        function displayReview(review, reviewContext = null, solutionMethods = []) {
             activeReviewContext = reviewContext || buildGeneratedReviewContext();
 
             const container = document.getElementById('review-result');
@@ -2545,7 +2582,8 @@ let currentHomework = [];
                     <h3 class="teacher-feedback-heading">Teacher Feedback</h3>
                     ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read feedback aloud">\uD83D\uDD0A Read it to me</button>` : ''}
                 </div>
-                <div class="review-output">${renderSafeMarkdown(review)}</div>
+                <div class="review-output teacher-feedback-output">${renderSafeMarkdown(review)}</div>
+                ${renderSolutionMethods(solutionMethods)}
             `;
 
             document.getElementById('results').style.display = 'block';
@@ -2579,7 +2617,7 @@ let currentHomework = [];
                 return;
             }
 
-            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewEl = document.querySelector('#review-result .teacher-feedback-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
             showLoading();
@@ -2679,7 +2717,7 @@ let currentHomework = [];
                 return;
             }
 
-            const reviewEl = document.querySelector('#review-result .review-output');
+            const reviewEl = document.querySelector('#review-result .teacher-feedback-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
             const oldMessage = document.getElementById('practice-generation-message');
