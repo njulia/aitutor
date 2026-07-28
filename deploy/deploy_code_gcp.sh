@@ -15,6 +15,7 @@ SERVICE="${SERVICE:-aitutor-prod}"
 REPOSITORY="${REPOSITORY:-aitutor-repo}"
 SQL_INSTANCE="${SQL_INSTANCE:-aitutor-prod-pg}"
 SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-aitutor-run@${PROJECT_ID}.iam.gserviceaccount.com}"
+REWARD_DELIVERY_SECRET_SECRET="${REWARD_DELIVERY_SECRET_SECRET:-homeworkmagic-reward-delivery-secret}"
 BUSINESS_CONTACT_EMAIL="${BUSINESS_CONTACT_EMAIL:-contact@homeworkmagic.co.uk}"
 PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
 RELEASE="${RELEASE:-}"
@@ -135,6 +136,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONNECTION_NAME="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}"
 PRODUCTION_URL="${PRODUCTION_URL%/}"
+REWARD_SECRET_HELPER="${SCRIPT_DIR}/ensure_reward_delivery_secret.sh"
 
 require_command gcloud
 require_command curl
@@ -142,6 +144,11 @@ require_command python3
 
 [ -f "${PROJECT_ROOT}/Dockerfile" ] || die "Dockerfile not found in ${PROJECT_ROOT}"
 [ -f "${PROJECT_ROOT}/web_app.py" ] || die "web_app.py not found in ${PROJECT_ROOT}"
+[ -f "${REWARD_SECRET_HELPER}" ] ||
+  die "Reward delivery helper not found: ${REWARD_SECRET_HELPER}"
+
+# shellcheck source=deploy/ensure_reward_delivery_secret.sh
+source "${REWARD_SECRET_HELPER}"
 
 DEPLOY_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/homeworkmagic-code-deploy.XXXXXX")"
 cleanup() {
@@ -377,6 +384,12 @@ gcloud iam service-accounts describe "${SERVICE_ACCOUNT_EMAIL}" \
   --project="${PROJECT_ID}" \
   --format="value(email)" >/dev/null
 
+log "Checking encrypted reward delivery"
+ensure_reward_delivery_secret \
+  "${PROJECT_ID}" \
+  "${REWARD_DELIVERY_SECRET_SECRET}" \
+  "${SERVICE_ACCOUNT_EMAIL}"
+
 OLD_REVISION="$(extract_live_revision)"
 if [ -z "${OLD_REVISION}" ]; then
   gcloud run services describe "${SERVICE}" \
@@ -444,6 +457,7 @@ gcloud run services update "${SERVICE}" \
   --max-instances=10 \
   --cpu-boost \
   --update-env-vars="BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}" \
+  --update-secrets="REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \
   --quiet

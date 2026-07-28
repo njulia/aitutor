@@ -133,6 +133,11 @@ def production_configuration_issues() -> list[str]:
         issues.append("BUSINESS_CONTACT_EMAIL must be configured for customer support")
     if len(os.getenv("SESSION_OWNER_SECRET", "")) < 32:
         issues.append("SESSION_OWNER_SECRET must contain at least 32 characters")
+    if len(os.getenv("REWARD_DELIVERY_SECRET", "")) < 32:
+        issues.append(
+            "REWARD_DELIVERY_SECRET must contain at least 32 characters "
+            "before physical gift delivery is enabled"
+        )
     if (os.getenv("COOKIE_SECURE") or "").strip().lower() in {"0", "false", "no", "off"}:
         issues.append("COOKIE_SECURE cannot be disabled in production")
     if _env_bool("STORE_RAW_LEARNER_CONTENT", False):
@@ -379,15 +384,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy-Report-Only",
             "default-src 'self'; img-src 'self' data: blob:; "
-            "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
-            "connect-src 'self' https://api.stripe.com https://*.stripe.com; "
-            "frame-src https://js.stripe.com https://hooks.stripe.com; "
-            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         )
         sensitive_prefixes = (
             "/api/account", "/api/students", "/api/memory", "/api/progress",
-            "/api/messages", "/api/login", "/api/register", "/api/check-subscription",
+            "/api/rewards", "/rewards/certificate", "/api/messages", "/api/login",
+            "/api/register", "/api/check-subscription", "/api/admin",
         )
         if request.url.path.startswith(sensitive_prefixes):
             response.headers["Cache-Control"] = "no-store, private"
@@ -588,6 +591,13 @@ class SensitiveRouteRateLimitMiddleware(BaseHTTPMiddleware):
         if _env_bool("TESTING", False):
             return await call_next(request)
         limit = self.LIMITS.get(request.url.path)
+        if request.url.path == "/api/rewards/redemptions":
+            limit = (10, 10 * 60)
+        elif (
+            request.url.path.startswith("/api/rewards/redemptions/")
+            and request.url.path.endswith("/decision")
+        ):
+            limit = (15, 10 * 60)
         if request.method != "POST" or not limit:
             return await call_next(request)
         maximum, window = limit

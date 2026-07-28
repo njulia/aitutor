@@ -36,7 +36,8 @@ _SECRET_KEYS = {
 }
 _PII_KEYS = {
     "email", "name", "username", "student_name", "parent_name", "address",
-    "phone", "photo", "image", "file", "document", "homework", "answers",
+    "postcode", "town_city", "city", "phone", "photo", "image", "file",
+    "document", "homework", "answers",
     "answer", "content", "prompt", "messages", "description", "review",
     "explanation", "practice", "input", "output", "query", "question",
     "student",

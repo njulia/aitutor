@@ -88,3 +88,27 @@ def test_guided_frontend_replaces_learner_textbox_and_keeps_notes_ephemeral() ->
     )[1].split("function restoreLearningChoices()", 1)[0]
     assert "homework-parent-notes" not in save_choices_body
     assert "homeworkPrompt:" not in save_choices_body
+
+
+def test_subject_buttons_support_older_ipad_safari() -> None:
+    html = Path("static/app.html").read_text(encoding="utf-8")
+    javascript = Path("static/js/app.js").read_text(encoding="utf-8")
+
+    # Safari 12 cannot parse either operator, so one occurrence prevents the
+    # entire app file from running and leaves dynamically rendered buttons blank.
+    assert "?." not in javascript
+    assert "??" not in javascript
+
+    compatibility = javascript.index("installLegacySafariCompatibility")
+    first_replace_children = javascript.index(".replaceChildren(")
+    assert compatibility < first_replace_children
+    assert "defineMethod(Element.prototype, 'replaceChildren'" in javascript
+    assert "renderDefaultSubjectButtons();" in javascript
+    assert javascript.index("renderDefaultSubjectButtons();") < javascript.index(
+        "loadSubjects();"
+    )
+
+    # Change the URL whenever compatibility code changes so old Safari does not
+    # reuse the previously broken script from its cache.
+    assert "app.js?v=20260728-old-ipad-fix" in html
+    assert "[hidden] { display: none !important; }" in html

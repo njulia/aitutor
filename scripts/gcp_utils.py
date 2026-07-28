@@ -54,17 +54,19 @@ def initialise_database() -> int:
         return 2
 
     from src import auth_tokens, progress_db  # noqa: F401
+    from src.elevenplus_rag import get_elevenplus_rag_store
+    from src.homework_rag import get_homework_rag_store
     from src.webapp.account_store import init_account_db
     from src.webapp.billing import ledger
     from src.webapp.memory_store import get_memory_store
     from src.webapp.message_routes import create_message_router
+    from src.webapp.reward_store import get_reward_store
     from src.webapp.session_store import TutorSessionStore
-    from src.homework_rag import get_homework_rag_store
-    from src.elevenplus_rag import get_elevenplus_rag_store
 
     init_account_db()
     get_memory_store()
     TutorSessionStore().initialise()
+    get_reward_store().initialise()
     ledger()
     create_message_router(
             resolve_identity=lambda _request: ("schema-init", None, None),

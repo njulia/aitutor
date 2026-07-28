@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Gift Orders | Homework Magic Admin</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #25304a;
+      background: #f3f5fa;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px max(24px, calc((100vw - 1180px) / 2));
+      color: white;
+      background: linear-gradient(135deg, #5c4bc5, #783eaa);
+    }
+    header h1 { margin: 0; font-size: 1.35rem; }
+    header a { color: white; font-weight: 750; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 28px auto 60px; }
+    .toolbar,
+    .panel {
+      padding: 20px;
+      background: white;
+      border: 1px solid #e0e4ed;
+      border-radius: 16px;
+      box-shadow: 0 6px 22px #28304d12;
+    }
+    .toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    label { display: grid; gap: 6px; font-weight: 700; }
+    select, button {
+      min-height: 42px;
+      padding: 9px 14px;
+      border: 1px solid #cfd5e2;
+      border-radius: 9px;
+      font: inherit;
+    }
+    button {
+      color: white;
+      background: #5c4bc5;
+      border-color: transparent;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    button.secondary { color: #49399a; background: #eeeafd; }
+    button.danger { background: #a3314b; }
+    button:disabled { color: #72798a; background: #dfe2e9; cursor: not-allowed; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 13px 12px; text-align: left; border-bottom: 1px solid #edf0f5; }
+    th { color: #667087; background: #f8f9fc; font-size: .78rem; text-transform: uppercase; }
+    td { font-size: .92rem; }
+    .status {
+      display: inline-block;
+      padding: 4px 9px;
+      background: #e7ebf2;
+      border-radius: 999px;
+      font-size: .78rem;
+      font-weight: 800;
+      text-transform: capitalize;
+    }
+    .status.approved { color: #176646; background: #dff5e9; }
+    .status.dispatched { color: #31588f; background: #e4efff; }
+    .actions { display: flex; gap: 7px; flex-wrap: wrap; }
+    .actions button { min-height: 34px; padding: 6px 10px; font-size: .8rem; }
+    .message { min-height: 24px; margin: 0 0 12px; font-weight: 700; }
+    .message.error { color: #a12642; }
+    .message.success { color: #19744e; }
+    .empty { padding: 40px 12px; color: #68728a; text-align: center; }
+    .address-panel { margin-top: 18px; }
+    .address-panel h2 { margin-top: 0; }
+    .address-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    address {
+      padding: 16px;
+      background: #f7f5ff;
+      border-left: 5px solid #6c55c8;
+      border-radius: 10px;
+      font-style: normal;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+    .privacy-note { color: #647088; line-height: 1.5; }
+    @media (max-width: 760px) {
+      header, .toolbar { align-items: flex-start; flex-direction: column; }
+      .address-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Homework Magic gift orders</h1>
+    <a href="/admin">← Back to admin dashboard</a>
+  </header>
+  <main>
+    <p id="order-message" class="message" role="status" aria-live="polite"></p>
+    <section class="toolbar" aria-label="Order filters">
+      <label>
+        Show orders
+        <select id="order-status">
+          <option value="">Shipping queue</option>
+          <option value="approved">Approved</option>
+          <option value="dispatched">Dispatched</option>
+          <option value="pending">Waiting for parent</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="declined">Declined</option>
+        </select>
+      </label>
+      <button id="refresh-orders" type="button">Refresh orders</button>
+    </section>
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Gift</th>
+              <th>Gift Points</th>
+              <th>Requested</th>
+              <th>Status</th>
+              <th>Delivery</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="order-rows"></tbody>
+        </table>
+      </div>
+      <p id="empty-orders" class="empty" hidden>No gift orders in this view.</p>
+    </section>
+
+    <section id="address-panel" class="panel address-panel" hidden>
+      <div class="address-grid">
+        <div>
+          <h2>Adult delivery recipient</h2>
+          <address id="delivery-address"></address>
+        </div>
+        <div>
+          <h2>Use only for this parcel</h2>
+          <p class="privacy-note">
+            The address is decrypted only for authorised fulfilment. Do not copy it into notes,
+            email, analytics or support messages. Mark the gift as dispatched after posting; the
+            encrypted address is then scheduled for deletion after 30 days.
+          </p>
+          <button id="close-address" class="secondary" type="button">Hide address</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/js/admin-reward-orders.js?v=20260728" defer></script>
+</body>
+</html>

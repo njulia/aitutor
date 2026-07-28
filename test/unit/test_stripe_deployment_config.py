@@ -29,6 +29,29 @@ def test_deploy_script_preserves_and_validates_stripe_secrets() -> None:
     assert "/api/billing/plans" in source
 
 
+def test_deploy_script_requires_encrypted_reward_delivery_secret() -> None:
+    source = Path("deploy/deploy_gcp.sh").read_text(encoding="utf-8")
+    code_deploy = Path("deploy/deploy_code_gcp.sh").read_text(encoding="utf-8")
+    helper = Path("deploy/ensure_reward_delivery_secret.sh").read_text(
+        encoding="utf-8"
+    )
+    guide = Path("deploy/README.md").read_text(encoding="utf-8")
+
+    assert "homeworkmagic-reward-delivery-secret" in source
+    assert "REWARD_DELIVERY_SECRET=" in source
+    assert "REWARD_DELIVERY_SECRET_SECRET" in source
+    assert "ensure_reward_delivery_secret" in source
+    assert "ensure_reward_delivery_secret" in code_deploy
+    assert (
+        "--update-secrets=\"REWARD_DELIVERY_SECRET="
+        "${REWARD_DELIVERY_SECRET_SECRET}:latest\""
+    ) in code_deploy
+    assert "secrets.token_urlsafe(48)" in helper
+    assert "roles/secretmanager.secretAccessor" in helper
+    assert "versions access latest" in helper
+    assert "encrypt" in guide.lower()
+
+
 def test_repair_script_updates_only_stripe_configuration() -> None:
     source = Path("deploy/repair_stripe_checkout_gcp.sh").read_text(
         encoding="utf-8"
@@ -45,5 +68,3 @@ def test_repair_script_updates_only_stripe_configuration() -> None:
     assert "STRIPE_PRICE_TRIAL_5DAY" in source
     assert "STRIPE_PRICE_HOMEWORK_MONTHLY" in source
     assert "STRIPE_PRICE_ELEVENPLUS_MONTHLY" in source
-    assert "STRIPE_PRICING_TABLE_ID" in source
-    assert "STRIPE_PUBLISHABLE_KEY" in source

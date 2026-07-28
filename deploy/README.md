@@ -10,7 +10,7 @@ Create the `aitutor-run@aitutor-502921.iam.gserviceaccount.com` service account
 and grant it:
 
 - Cloud SQL Client
-- Secret Manager Secret Accessor for the four secrets listed below
+- Secret Manager Secret Accessor for the secrets listed below
 - Vertex AI User
 
 Create the PostgreSQL database and enable the `vector` extension before
@@ -35,6 +35,7 @@ Create these Secret Manager secrets:
 - `aitutor-smtp-password`
 - `homeworkmagic-stripe-secret-key`
 - `homeworkmagic-stripe-webhook-secret`
+- `homeworkmagic-reward-delivery-secret`
 
 The database secret should contain a SQLAlchemy URL using the Cloud SQL Unix
 socket. URL-encode the password:
@@ -49,6 +50,44 @@ secret values in `cloud-run.env.yaml`. The Stripe secrets must contain the live
 `https://homeworkmagic.co.uk/api/billing/stripe/webhook`. Override
 `STRIPE_SECRET_KEY_SECRET` or `STRIPE_WEBHOOK_SECRET_SECRET` when your Secret
 Manager entries use different names.
+
+The reward-delivery secret encrypts adult postal addresses for branded gift
+orders. The deployment scripts now create a strong value when the secret is
+missing, validate that it contains at least 32 characters without printing it,
+grant the runtime service account access, and preserve the same value across
+later revisions.
+
+To repair an existing service that reports
+`REWARD_DELIVERY_SECRET must contain at least 32 characters`, run:
+
+```bash
+bash deploy/ensure_reward_delivery_secret.sh
+./deploy/deploy_code_gcp.sh
+```
+
+You can also create the value manually. Generate it once, keep it stable across
+revisions, and never print or commit it:
+
+```bash
+openssl rand -base64 48 \
+  | gcloud secrets create homeworkmagic-reward-delivery-secret \
+      --project="aitutor-502921" \
+      --replication-policy="automatic" \
+      --data-file=-
+```
+
+If that secret already exists, add a version instead of creating it again:
+
+```bash
+openssl rand -base64 48 \
+  | gcloud secrets versions add homeworkmagic-reward-delivery-secret \
+      --project="aitutor-502921" \
+      --data-file=-
+```
+
+Changing this value later prevents old unfulfilled delivery addresses from
+being decrypted, so rotate it only with a planned data migration. Override
+`REWARD_DELIVERY_SECRET_SECRET` if a different Secret Manager name is used.
 
 ## 3. Configure non-secret values
 
@@ -83,9 +122,7 @@ the Stripe values before building and retains existing secret mappings with
 
 If the pricing page says secure checkout is temporarily unavailable after an
 older deployment, export the three live Price IDs and run the repair script.
-The supplied live Pricing Table ID and publishable key are built into the
-script as non-secret defaults. It updates only the Stripe settings on the
-current `aitutor-prod` service:
+It updates only the Stripe settings on the current `aitutor-prod` service:
 
 ```bash
 export STRIPE_PRICE_TRIAL_5DAY="price_..."

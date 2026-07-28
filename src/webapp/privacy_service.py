@@ -7,22 +7,25 @@ an active subscription must be cancelled through the billing portal first.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
+from src.ai_monitor import delete_student_records
 from src.auth_tokens import revoke_all_for_user
 from src.progress_db import delete_student as delete_progress_student
 from src.progress_db import delete_user_account
-from src.ai_monitor import delete_student_records
 
 from .account_store import (
     delete_account,
-    delete_student as delete_account_student,
     get_active_subscription,
     list_students,
 )
-from .memory_store import get_memory_store
+from .account_store import (
+    delete_student as delete_account_student,
+)
 from .homework_assignment_store import get_assignment_store
+from .memory_store import get_memory_store
 from .message_routes import delete_messages_for_owners
+from .reward_store import get_reward_store
 from .runtime import owner_key
 from .session_store import TutorSessionStore
 
@@ -33,7 +36,7 @@ def erase_learner(
     student_id: str,
     account_email: str,
     session_store: TutorSessionStore,
-) -> Dict[str, int | bool]:
+) -> dict[str, Any]:
     """Erase one learner's structured and operational data."""
     memory_events = get_memory_store().delete_all(
         student_id, account_id, include_preferences=True
@@ -42,6 +45,10 @@ def erase_learner(
     telemetry_deleted = delete_student_records(student_id)
     support_deleted = delete_messages_for_owners([student_id])
     assignments_deleted = get_assignment_store().delete_learner(student_id)
+    rewards_deleted = get_reward_store().delete_learner(
+        account_id=account_id,
+        student_id=student_id,
+    )
     # Older releases wrote learner IDs directly into RAG metadata. Remove
     # those compatibility records; current shared-library documents are not
     # learner-owned and are therefore left intact.
@@ -65,6 +72,7 @@ def erase_learner(
         "telemetry_deleted": telemetry_deleted,
         "support_messages_deleted": support_deleted,
         "homework_assignments_deleted": assignments_deleted,
+        "rewards_deleted": rewards_deleted,
         "legacy_primary_rag_deleted": primary_rag_deleted,
         "legacy_elevenplus_rag_deleted": eleven_rag_deleted,
         "temporary_sessions_deleted": sessions_deleted,
@@ -76,11 +84,12 @@ def erase_account(
     account_id: str,
     account_email: str,
     session_store: TutorSessionStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Erase local parent and child data after billing has ended."""
     if get_active_subscription(account_id):
         raise ValueError(
-            "Please cancel the active subscription in the billing portal before deleting the account."
+            "Please cancel the active subscription in the billing portal "
+            "before deleting the account."
         )
 
     learners = list_students(account_id)
@@ -96,6 +105,7 @@ def erase_account(
         )
 
     account_support_deleted = delete_messages_for_owners([account_email, account_id])
+    residual_rewards_deleted = get_reward_store().delete_account(account_id)
     revoked_sessions = revoke_all_for_user(account_email)
     account_deleted = delete_account(account_id)
     login_deleted = delete_user_account(account_email)
@@ -104,6 +114,7 @@ def erase_account(
         "login_deleted": login_deleted,
         "login_sessions_revoked": revoked_sessions,
         "account_support_messages_deleted": account_support_deleted,
+        "residual_rewards_deleted": residual_rewards_deleted,
         "learners_erased": len(learner_results),
         "learner_results": learner_results,
     }

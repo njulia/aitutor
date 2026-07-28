@@ -38,6 +38,7 @@ from src.webapp.account_routes import build_account_router
 from src.webapp.memory_routes import build_memory_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
+from src.webapp.reward_routes import build_reward_router
 from src.webapp.email_service import send_registration_confirmation_email
 from src.webapp.question_utils import (
     _split_homework_into_questions as split_public_homework,
@@ -617,6 +618,13 @@ app.include_router(build_account_router(
 app.include_router(build_memory_router(_resolve_username))
 app.include_router(create_password_reset_router(project_root=project_root, dev_mode=_dev_mode))
 app.include_router(build_billing_router(_resolve_username))
+app.include_router(
+    build_reward_router(
+        _resolve_username,
+        require_admin=_require_admin,
+        project_root=project_root,
+    )
+)
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
@@ -979,6 +987,11 @@ async def safety_page():
 @app.get("/progress")
 async def progress_page():
     return _static_page("static", "progress.html", cache_control="no-store, private")
+
+
+@app.get("/rewards")
+async def rewards_page():
+    return _static_page("static", "rewards.html", cache_control="no-store, private")
 
 
 @app.get("/memory")
@@ -1709,6 +1722,58 @@ async def api_review(req: Request, request_body: ReviewRequest):
             question_index=request_body.question_index,
             timeout=120,
         )
+        if (
+            logged_in_username
+            and result.get("success")
+            and not result.get("safety_intervention")
+        ):
+            try:
+                from src.webapp.account_store import (
+                    ensure_account,
+                    student_belongs_to_account,
+                )
+                from src.webapp.reward_store import (
+                    get_reward_store,
+                    review_fingerprint,
+                )
+
+                account = await run_blocking(
+                    ensure_account,
+                    logged_in_username,
+                    timeout=10,
+                    limit_concurrency=False,
+                )
+                owns_learner = await run_blocking(
+                    student_belongs_to_account,
+                    resolved_student_id,
+                    account["id"],
+                    timeout=10,
+                    limit_concurrency=False,
+                )
+                if owns_learner:
+                    fingerprint = review_fingerprint(
+                        homework=request_body.homework,
+                        answers=request_body.answers,
+                        subject=request_body.subject,
+                        homework_doc_id=request_body.homework_doc_id,
+                        question_index=request_body.question_index,
+                        session_id=request_body.session_id,
+                    )
+                    reward_update = await run_blocking(
+                        get_reward_store().award_checked_activity,
+                        account_id=account["id"],
+                        student_id=resolved_student_id,
+                        fingerprint=fingerprint,
+                        subject=request_body.subject,
+                        is_tutor_mode=bool(request_body.is_tutor_mode),
+                        timeout=10,
+                        limit_concurrency=False,
+                    )
+                    result = {**result, "reward_update": reward_update}
+            except Exception:
+                # Reward persistence must never turn successful homework marking
+                # into an error for a child.
+                logger.exception("Could not award homework quest XP")
         response = JSONResponse(content=result)
         _set_anon_cookie(response, new_anon_session_id, req)
         return response

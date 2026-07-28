@@ -10,7 +10,8 @@ GCP_SERVICE_ACCOUNT="${GCP_SERVICE_ACCOUNT:-aitutor-run@${GCP_PROJECT_ID}.iam.gs
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-deploy/cloud-run.env.yaml}"
 STRIPE_SECRET_KEY_SECRET="${STRIPE_SECRET_KEY_SECRET:-homeworkmagic-stripe-secret-key}"
 STRIPE_WEBHOOK_SECRET_SECRET="${STRIPE_WEBHOOK_SECRET_SECRET:-homeworkmagic-stripe-webhook-secret}"
-DEFAULT_SECRET_BINDINGS="DATABASE_URL=aitutor-database-url:latest,SESSION_OWNER_SECRET=aitutor-session-owner-secret:latest,DEEPSEEK_API_KEY=aitutor-deepseek-api-key:latest,SMTP_PASSWORD=aitutor-smtp-password:latest,STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_SECRET}:latest,STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_SECRET}:latest"
+REWARD_DELIVERY_SECRET_SECRET="${REWARD_DELIVERY_SECRET_SECRET:-homeworkmagic-reward-delivery-secret}"
+DEFAULT_SECRET_BINDINGS="DATABASE_URL=aitutor-database-url:latest,SESSION_OWNER_SECRET=aitutor-session-owner-secret:latest,DEEPSEEK_API_KEY=aitutor-deepseek-api-key:latest,SMTP_PASSWORD=aitutor-smtp-password:latest,STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_SECRET}:latest,STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest"
 SECRET_BINDINGS="${SECRET_BINDINGS:-${DEFAULT_SECRET_BINDINGS}}"
 CLOUD_RUN_CONCURRENCY="${CLOUD_RUN_CONCURRENCY:-25}"
 CLOUD_RUN_MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES:-2}"
@@ -18,6 +19,15 @@ CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-60}"
 CLOUD_RUN_CPU="${CLOUD_RUN_CPU:-2}"
 CLOUD_RUN_MEMORY="${CLOUD_RUN_MEMORY:-4Gi}"
 BILLING_HEALTH_URL="${BILLING_HEALTH_URL:-https://homeworkmagic.co.uk/api/billing/plans}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REWARD_SECRET_HELPER="${SCRIPT_DIR}/ensure_reward_delivery_secret.sh"
+
+if [[ ! -f "${REWARD_SECRET_HELPER}" ]]; then
+  echo "Reward delivery helper not found: ${REWARD_SECRET_HELPER}" >&2
+  exit 2
+fi
+# shellcheck source=deploy/ensure_reward_delivery_secret.sh
+source "${REWARD_SECRET_HELPER}"
 
 if [[ ! -f "${DEPLOY_ENV_FILE}" ]]; then
   echo "Create ${DEPLOY_ENV_FILE} from deploy/cloud-run.env.yaml.example first." >&2
@@ -43,14 +53,21 @@ for setting in "${required_billing_settings[@]}"; do
 done
 
 gcloud config set project "${GCP_PROJECT_ID}"
-for stripe_secret in "${STRIPE_SECRET_KEY_SECRET}" "${STRIPE_WEBHOOK_SECRET_SECRET}"; do
-  if ! gcloud secrets describe "${stripe_secret}" \
+for required_secret in \
+  "${STRIPE_SECRET_KEY_SECRET}" \
+  "${STRIPE_WEBHOOK_SECRET_SECRET}"; do
+  if ! gcloud secrets describe "${required_secret}" \
     --project "${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-    echo "Secret Manager secret ${stripe_secret} does not exist or is not accessible." >&2
+    echo "Secret Manager secret ${required_secret} does not exist or is not accessible." >&2
     echo "Create it before deploying, or override its *_SECRET variable." >&2
     exit 2
   fi
 done
+
+ensure_reward_delivery_secret \
+  "${GCP_PROJECT_ID}" \
+  "${REWARD_DELIVERY_SECRET_SECRET}" \
+  "${GCP_SERVICE_ACCOUNT}"
 
 gcloud artifacts repositories describe "${GCP_REPOSITORY}" \
   --location "${GCP_REGION}" >/dev/null 2>&1 \

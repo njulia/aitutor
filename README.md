@@ -14,6 +14,9 @@ model prompt.
 
 - Guided primary and 11+ profile fields are validated, bounded and stripped of
   direct identifiers.
+- Successful checked activities now feed an effort-first reward system with
+  daily and weekly quests, permanent XP, separate Gift Points, printable
+  certificates and parent-approved Homework Magic branded gifts.
 - Requested session length now controls the number of returned questions.
 - Guided 11+ access is checked before any expensive generation.
 - RAG methods are first-write-wins and reused under opaque hashes.
@@ -126,6 +129,8 @@ printing the connection string.
 - `src/homework_generator.py` — RAG-first assignment and miss generation
 - `src/homework_rag.py` / `src/elevenplus_rag.py` — vector-library contracts
 - `src/webapp/` — account, billing, safety, review and runtime services
+- `src/webapp/reward_store.py` / `reward_routes.py` — quests, XP, certificates
+  and parent-controlled branded gift orders
 - `static/` — public pages and dependency-free learner interface
 - `scripts/` — original/open-curriculum question generators and maintenance
 - `test/` — unit, API, integration and browser coverage
@@ -143,3 +148,10 @@ credentials.
 
 Parents and guardians should still avoid entering a child's full name, school,
 address, phone number, email, exact birthday or password.
+
+Reward records contain pseudonymous learner/account IDs and fixed event labels,
+not homework answers or marks. XP is permanent and never deducted. A separate
+Gift Points balance is used for branded gift orders. Only a signed-in parent or
+guardian can approve an order and enter an adult recipient's UK address. The
+address is encrypted, excluded from learner-facing responses, removed after
+cancellation, and scheduled for deletion 30 days after dispatch.

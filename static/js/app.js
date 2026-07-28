@@ -1,4 +1,66 @@
-let currentHomework = [];
+        // Compatibility for older iPads that are limited to Safari 12.
+        // Keep this block in ES5 syntax so it runs before the app uses newer
+        // DOM convenience methods.
+        (function installLegacySafariCompatibility() {
+            function defineMethod(prototype, name, implementation) {
+                if (!prototype || prototype[name]) return;
+                try {
+                    Object.defineProperty(prototype, name, {
+                        configurable: true,
+                        writable: true,
+                        value: implementation
+                    });
+                } catch (error) {
+                    prototype[name] = implementation;
+                }
+            }
+
+            if (typeof NodeList !== 'undefined') {
+                defineMethod(NodeList.prototype, 'forEach', function(callback, thisArg) {
+                    return Array.prototype.forEach.call(this, callback, thisArg);
+                });
+            }
+
+            defineMethod(Array.prototype, 'flatMap', function(callback, thisArg) {
+                return Array.prototype.concat.apply([], this.map(callback, thisArg));
+            });
+
+            if (typeof Element !== 'undefined') {
+                defineMethod(Element.prototype, 'replaceChildren', function() {
+                    while (this.firstChild) {
+                        this.removeChild(this.firstChild);
+                    }
+                    for (var index = 0; index < arguments.length; index += 1) {
+                        var child = arguments[index];
+                        this.appendChild(
+                            child && typeof child.nodeType === 'number'
+                                ? child
+                                : document.createTextNode(String(child))
+                        );
+                    }
+                });
+            }
+
+            if (typeof Promise !== 'undefined') {
+                defineMethod(Promise.prototype, 'finally', function(callback) {
+                    var PromiseConstructor = this.constructor || Promise;
+                    return this.then(
+                        function(value) {
+                            return PromiseConstructor.resolve(callback()).then(function() {
+                                return value;
+                            });
+                        },
+                        function(reason) {
+                            return PromiseConstructor.resolve(callback()).then(function() {
+                                throw reason;
+                            });
+                        }
+                    );
+                });
+            }
+        })();
+
+        let currentHomework = [];
         let currentSubject = 'Maths';
         let currentProfile = null;
         let currentInputMethod = 'text';
@@ -90,6 +152,68 @@ let currentHomework = [];
             just_right: '👍 Just right',
             challenge: '🚀 Challenge me'
         };
+
+        function combineRewardUpdates(updates) {
+            const valid = (updates || []).filter(update => update && Number(update.awarded_xp) > 0);
+            if (!valid.length) return null;
+            const uniqueBy = (items, key) => Array.from(
+                new Map(items.filter(Boolean).map(item => [
+                    item[key] || item.label || JSON.stringify(item), item
+                ])).values()
+            );
+            return {
+                awarded_xp: valid.reduce(
+                    (total, update) => total + Number(update.awarded_xp || 0), 0
+                ),
+                quest_completions: uniqueBy(
+                    valid.flatMap(update => update.quest_completions || []), 'label'
+                ),
+                new_certificates: uniqueBy(
+                    valid.flatMap(update => update.new_certificates || []), 'code'
+                )
+            };
+        }
+
+        function showRewardCelebration(update) {
+            if (!update || Number(update.awarded_xp || 0) <= 0) return;
+            let toast = document.getElementById('xp-celebration');
+            if (!toast) {
+                toast = document.createElement('aside');
+                toast.id = 'xp-celebration';
+                toast.className = 'xp-celebration';
+                toast.setAttribute('role', 'status');
+                toast.setAttribute('aria-live', 'polite');
+                document.body.appendChild(toast);
+            }
+            toast.textContent = '';
+            const title = document.createElement('strong');
+            title.textContent = `✨ +${Number(update.awarded_xp)} XP for your effort!`;
+            toast.appendChild(title);
+            const questNames = (update.quest_completions || [])
+                .map(item => item.label).filter(Boolean);
+            if (questNames.length) {
+                const quest = document.createElement('span');
+                quest.textContent = ` Quest complete: ${questNames.join(', ')}.`;
+                toast.appendChild(quest);
+            }
+            const certificates = (update.new_certificates || [])
+                .map(item => item.title).filter(Boolean);
+            if (certificates.length) {
+                const certificate = document.createElement('span');
+                certificate.textContent = ` New certificate: ${certificates.join(', ')}!`;
+                toast.appendChild(certificate);
+            }
+            const link = document.createElement('a');
+            link.href = '/rewards';
+            link.textContent = 'See my quests';
+            toast.appendChild(link);
+            toast.hidden = false;
+            window.clearTimeout(showRewardCelebration.timer);
+            showRewardCelebration.timer = window.setTimeout(() => {
+                toast.hidden = true;
+            }, 7000);
+        }
+
         const homeworkGuideState = {
             stepIndex: 0,
             answers: {},
@@ -185,8 +309,15 @@ let currentHomework = [];
             appendHomeworkSummaryItem(list, 'Time', `${answers.session_minutes} minutes`);
             appendHomeworkSummaryItem(list, 'Level', HOMEWORK_DIFFICULTY_LABELS[answers.difficulty]);
             const modeStep = getHomeworkGuideSteps().find(step => step.key === 'mode');
-            const modeOption = modeStep?.options.find(option => option.value === answers.mode);
-            appendHomeworkSummaryItem(list, 'Style', modeOption?.label || answers.mode);
+            const modeOptions = modeStep && Array.isArray(modeStep.options)
+                ? modeStep.options
+                : [];
+            const modeOption = modeOptions.find(option => option.value === answers.mode);
+            appendHomeworkSummaryItem(
+                list,
+                'Style',
+                modeOption && modeOption.label ? modeOption.label : answers.mode
+            );
             summary.appendChild(list);
         }
 
@@ -402,9 +533,12 @@ let currentHomework = [];
             appendElevenSummaryItem(list, 'Practice', findElevenGuideLabel(steps[3], elevenGuideState.answers.question_count));
             appendElevenSummaryItem(list, 'Style', findElevenGuideLabel(steps[4], elevenGuideState.answers.mode));
 
-            const examBoard = document.getElementById('eleven-exam-board')?.value;
-            const examDate = document.getElementById('eleven-exam-date')?.value;
-            const targetSchool = document.getElementById('eleven-target-school')?.value.trim();
+            const examBoardInput = document.getElementById('eleven-exam-board');
+            const examDateInput = document.getElementById('eleven-exam-date');
+            const targetSchoolInput = document.getElementById('eleven-target-school');
+            const examBoard = examBoardInput ? examBoardInput.value : '';
+            const examDate = examDateInput ? examDateInput.value : '';
+            const targetSchool = targetSchoolInput ? targetSchoolInput.value.trim() : '';
             if (examBoard && examBoard !== 'Not sure') appendElevenSummaryItem(list, 'Exam format', examBoard);
             if (examDate) appendElevenSummaryItem(list, 'Exam date', examDate);
             if (targetSchool) appendElevenSummaryItem(list, 'Target school', targetSchool);
@@ -702,12 +836,14 @@ let currentHomework = [];
             if (Object.prototype.hasOwnProperty.call(HOMEWORK_DIFFICULTY_LABELS, answers.difficulty)) {
                 value.homeworkDifficulty = answers.difficulty;
             }
+            const homeworkQuestionStyle = document.getElementById('homework-question-style');
             const homeworkMode = answers.mode
-                || document.getElementById('homework-question-style')?.value;
+                || (homeworkQuestionStyle ? homeworkQuestionStyle.value : '');
             if (homeworkMode === 'homework' || homeworkMode === 'tutor') {
                 value.homeworkMode = homeworkMode;
             }
-            const homeworkQuickYear = Number(document.getElementById('homework-year')?.value);
+            const homeworkYearInput = document.getElementById('homework-year');
+            const homeworkQuickYear = Number(homeworkYearInput ? homeworkYearInput.value : NaN);
             const homeworkQuickMode = getSelectedMode('homework-quick-mode');
             if (Number.isInteger(homeworkQuickYear) && homeworkQuickYear >= 1 && homeworkQuickYear <= 6) {
                 value.homeworkQuickYear = homeworkQuickYear;
@@ -734,7 +870,8 @@ let currentHomework = [];
             if (elevenAnswers.mode === 'homework' || elevenAnswers.mode === 'tutor') {
                 value.elevenMode = elevenAnswers.mode;
             }
-            const elevenQuickYear = Number(document.getElementById('eleven-year')?.value);
+            const elevenYearInput = document.getElementById('eleven-year');
+            const elevenQuickYear = Number(elevenYearInput ? elevenYearInput.value : NaN);
             const elevenQuickMode = getSelectedMode('eleven-quick-mode');
             if ([3, 4, 5, 6].includes(elevenQuickYear)) {
                 value.elevenQuickYear = elevenQuickYear;
@@ -1081,6 +1218,9 @@ let currentHomework = [];
             hideLegacyHomeworkQuestionStyle();
             renderHomeworkGuide();
             renderElevenGuide();
+            // The API can add more subjects later, but the selectors should
+            // never start empty while an older or slower device is waiting.
+            renderDefaultSubjectButtons();
             loadSubjects();
             const homeworkQuestionStyle = document.getElementById('homework-question-style');
             if (homeworkQuestionStyle) {
@@ -1291,7 +1431,11 @@ let currentHomework = [];
         function getApiErrorMessage(data, fallbackMessage) {
             if (!data) return fallbackMessage;
 
-            const detail = data.error ?? data.detail ?? data.message;
+            const detail = data.error !== null && data.error !== undefined
+                ? data.error
+                : (data.detail !== null && data.detail !== undefined
+                    ? data.detail
+                    : data.message);
             if (typeof detail === 'string' && detail.trim()) {
                 return detail.trim();
             }
@@ -1399,8 +1543,15 @@ let currentHomework = [];
                 .then(response => response.json())
                 .then(data => {
                     const saved = loadLearningChoices();
-                    if (Array.isArray(data.primary) && data.primary.length > 0) {
-                        primarySubjects = data.primary;
+                    const loadedPrimarySubjects = Array.isArray(data.primary) && data.primary.length > 0
+                        ? data.primary
+                        : primarySubjects;
+                    const loadedElevenPlusSubjects = Array.isArray(data.eleven_plus)
+                        && data.eleven_plus.length > 0
+                        ? data.eleven_plus
+                        : elevenPlusSubjects;
+                    if (loadedPrimarySubjects.length > 0) {
+                        primarySubjects = loadedPrimarySubjects;
                         const selectedSubject = homeworkGuideState.answers.subject;
                         if (selectedSubject && !primarySubjects.includes(selectedSubject)) {
                             delete homeworkGuideState.answers.subject;
@@ -1413,12 +1564,16 @@ let currentHomework = [];
                     }
                     renderSubjects(
                         'homework-subjects',
-                        data.primary,
+                        loadedPrimarySubjects,
                         saved.homeworkQuickSubject || saved.homeworkSubject
                     );
-                    renderSubjects('eleven-subjects', data.eleven_plus, saved.elevenSubject);
-                    if (Array.isArray(data.eleven_plus) && data.eleven_plus.length > 0) {
-                        elevenPlusSubjects = data.eleven_plus;
+                    renderSubjects(
+                        'eleven-subjects',
+                        loadedElevenPlusSubjects,
+                        saved.elevenSubject
+                    );
+                    if (loadedElevenPlusSubjects.length > 0) {
+                        elevenPlusSubjects = loadedElevenPlusSubjects;
                         const selectedSubject = elevenGuideState.answers.subject;
                         if (selectedSubject && !elevenPlusSubjects.includes(selectedSubject)) {
                             delete elevenGuideState.answers.subject;
@@ -1427,16 +1582,33 @@ let currentHomework = [];
                     }
 
                     const reviewSelect = document.getElementById('review-subject');
-                    reviewSelect.innerHTML = '';
-                    const allSubjects = [...new Set([...data.primary, ...data.eleven_plus])].sort();
-                    allSubjects.forEach(subject => {
-                        const option = document.createElement('option');
-                        option.value = subject;
-                        option.textContent = subject;
-                        reviewSelect.appendChild(option);
-                    });
+                    if (reviewSelect) {
+                        reviewSelect.innerHTML = '';
+                        const allSubjects = [
+                            ...new Set([
+                                ...loadedPrimarySubjects,
+                                ...loadedElevenPlusSubjects
+                            ])
+                        ].sort();
+                        allSubjects.forEach(subject => {
+                            const option = document.createElement('option');
+                            option.value = subject;
+                            option.textContent = subject;
+                            reviewSelect.appendChild(option);
+                        });
+                    }
                 })
                 .catch(error => console.error('Error loading subjects:', error));
+        }
+
+        function renderDefaultSubjectButtons() {
+            const saved = loadLearningChoices();
+            renderSubjects(
+                'homework-subjects',
+                primarySubjects,
+                saved.homeworkQuickSubject || saved.homeworkSubject
+            );
+            renderSubjects('eleven-subjects', elevenPlusSubjects, saved.elevenSubject);
         }
 
         function renderSubjects(containerId, subjects, savedSubject = null) {
@@ -1545,7 +1717,10 @@ let currentHomework = [];
             const sessionMinutes = Number(answers.session_minutes);
             const questionCount = HOMEWORK_SESSION_QUESTIONS[sessionMinutes];
             const mode = answers.mode === 'tutor' ? 'tutor' : 'homework';
-            const learningNotes = document.getElementById('homework-parent-notes')?.value.trim() || null;
+            const learningNotesInput = document.getElementById('homework-parent-notes');
+            const learningNotes = learningNotesInput
+                ? learningNotesInput.value.trim() || null
+                : null;
             const studentId = await getEffectiveStudentId();
             const profile = {
                 setup_source: 'guided_homework',
@@ -1625,7 +1800,8 @@ let currentHomework = [];
             const year = parseInt(document.getElementById('homework-year').value);
             const subjects = getSelectedSubjects('homework-subjects');
             const mode = getSelectedMode('homework-quick-mode');
-            const profileText = document.getElementById('homework-parent-notes')?.value.trim() || '';
+            const profileInput = document.getElementById('homework-parent-notes');
+            const profileText = profileInput ? profileInput.value.trim() : '';
             saveLearningChoices();
 
             if (subjects.length === 0) {
@@ -1695,7 +1871,8 @@ let currentHomework = [];
 
         async function generateQuickHomeworkEleven() {
             const subjects = getSelectedSubjects('eleven-subjects');
-            const selectedYear = Number(document.getElementById('eleven-year')?.value);
+            const elevenYearInput = document.getElementById('eleven-year');
+            const selectedYear = Number(elevenYearInput ? elevenYearInput.value : NaN);
             const year = [3, 4, 5, 6].includes(selectedYear) ? selectedYear : 5;
             const mode = getSelectedMode('eleven-quick-mode') === 'tutor' ? 'tutor' : 'homework';
             const ageByYear = {3: 8, 4: 9, 5: 10, 6: 11};
@@ -1781,9 +1958,14 @@ let currentHomework = [];
             const answers = elevenGuideState.answers;
             const yearGroup = Number(answers.year_group);
             const ageByYear = {3: 8, 4: 9, 5: 10, 6: 11};
-            const examBoard = document.getElementById('eleven-exam-board')?.value || 'Not sure';
-            const examDate = document.getElementById('eleven-exam-date')?.value || null;
-            const parentNotes = document.getElementById('eleven-parent-notes')?.value.trim() || null;
+            const examBoardInput = document.getElementById('eleven-exam-board');
+            const examDateInput = document.getElementById('eleven-exam-date');
+            const parentNotesInput = document.getElementById('eleven-parent-notes');
+            const examBoard = examBoardInput ? examBoardInput.value || 'Not sure' : 'Not sure';
+            const examDate = examDateInput ? examDateInput.value || null : null;
+            const parentNotes = parentNotesInput
+                ? parentNotesInput.value.trim() || null
+                : null;
             const studentId = await getEffectiveStudentId();
             const subjects = [answers.subject];
             const mode = answers.mode;
@@ -2238,6 +2420,7 @@ let currentHomework = [];
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index : currentQuestionIndex
                     }, data.solution_methods || []);
+                    showRewardCelebration(data.reward_update);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -2376,9 +2559,12 @@ let currentHomework = [];
                     if (!response.ok || !data.success) {
                         throw new Error(data.error || 'We could not check that answer just now.');
                     }
-                    return `## ${homeworkItem.subject || `Homework ${index + 1}`}\n\n${data.review || ''}`;
+                    return {
+                        markdown: `## ${homeworkItem.subject || `Homework ${index + 1}`}\n\n${data.review || ''}`,
+                        rewardUpdate: data.reward_update || null
+                    };
                 }));
-                displayReview(results.join('\n\n---\n\n'), {
+                displayReview(results.map(item => item.markdown).join('\n\n---\n\n'), {
                     homework: reviewItems.map(item => item.homeworkItem.content || '').filter(Boolean).join('\n\n'),
                     answers: reviewItems.map(item => `--- ${item.homeworkItem.subject || 'Homework'} ---\n${item.answer}`).join('\n\n'),
                     subject: reviewItems[0].homeworkItem.subject || 'Maths',
@@ -2386,6 +2572,9 @@ let currentHomework = [];
                     homework_doc_id: reviewItems.length === 1 ? (reviewItems[0].homeworkItem.doc_id || null) : null,
                     is_eleven_plus: reviewItems.some(item => Boolean(item.homeworkItem.is_eleven_plus))
                 });
+                showRewardCelebration(
+                    combineRewardUpdates(results.map(item => item.rewardUpdate))
+                );
             } catch (error) {
                 console.error('Review failed:', error);
                 if (error.status === 401) redirectToLogin();
@@ -2529,6 +2718,7 @@ let currentHomework = [];
                     },
                     data.solution_methods || []
                 );
+                showRewardCelebration(data.reward_update);
             } catch (error) {
                 console.error('Homework review failed:', error);
                 alert(error.message || 'We could not mark that homework just now.');
@@ -2906,6 +3096,7 @@ let currentHomework = [];
                         <div class="review-output" style="border-left-color: #f57c00;">${renderSafeMarkdown(data.review)}</div>
                     `;
                     document.getElementById('results').style.display = 'block';
+                    showRewardCelebration(data.reward_update);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -3048,7 +3239,8 @@ let currentHomework = [];
 
         function logVoiceUsage(eventType) {
             const yearGroup = getYearGroupForLogging();
-            const subject = currentHomework[currentQuestionIndex]?.subject;
+            const homeworkItem = currentHomework[currentQuestionIndex];
+            const subject = homeworkItem ? homeworkItem.subject : null;
             if (!yearGroup || !subject) return;
 
             fetch('/api/log-voice-usage', {

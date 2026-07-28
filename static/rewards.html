@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Homework quests, permanent XP, certificates and Homework Magic branded gifts.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>My Reward Quest | Homework Magic</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/rewards.css?v=20260728-gifts">
+</head>
+<body class="hm-rewards">
+  <a class="hm-skip-link" href="#main-content">Skip to reward quests</a>
+  <header class="reward-header">
+    <a class="reward-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>
+    <nav class="reward-nav" aria-label="Main navigation">
+      <a href="/app">Homework</a>
+      <a href="/progress">Progress</a>
+      <a href="/memory">Memory</a>
+      <a href="/rewards" aria-current="page">Rewards</a>
+      <a href="/pricing">Plans &amp; billing</a>
+      <a href="#" id="reward-logout">Log out</a>
+    </nav>
+  </header>
+
+  <main id="main-content" class="reward-shell">
+    <section id="page-message" class="page-message" role="status" aria-live="polite">
+      Loading your reward quest…
+    </section>
+
+    <section id="login-card" class="login-card" hidden>
+      <div aria-hidden="true" class="login-icon">🔐</div>
+      <h1>A grown-up needs to sign in</h1>
+      <p>Reward quests belong to your family account, so your XP stays with you.</p>
+      <a class="reward-button primary" href="/login?next=/rewards">Grown-up sign in</a>
+    </section>
+
+    <div id="reward-content" hidden>
+      <section class="reward-welcome" aria-labelledby="reward-title">
+        <div>
+          <p class="eyebrow">Your learning adventure</p>
+          <h1 id="reward-title">Ready for a reward quest?</h1>
+          <p id="reward-cheer">Every try helps your brain grow. Marks do not decide your XP.</p>
+        </div>
+        <label class="learner-picker">
+          Learning as
+          <select id="learner-select" aria-label="Choose learner profile"></select>
+        </label>
+      </section>
+
+      <section class="wallet-grid" aria-label="XP wallet">
+        <article class="wallet-card lifetime">
+          <span class="wallet-icon" aria-hidden="true">✨</span>
+          <div>
+            <span class="wallet-label">Lifetime XP</span>
+            <strong id="lifetime-xp">0</strong>
+            <small>Unlocks levels and certificates—and never goes down</small>
+          </div>
+        </article>
+        <article class="wallet-card spendable">
+          <span class="wallet-icon" aria-hidden="true">🎁</span>
+          <div>
+            <span class="wallet-label">Gift Points</span>
+            <strong id="gift-points">0</strong>
+            <small>Used only when a grown-up approves a gift</small>
+          </div>
+        </article>
+        <article class="wallet-card level">
+          <span id="level-icon" class="wallet-icon" aria-hidden="true">✨</span>
+          <div class="level-copy">
+            <span class="wallet-label">Level <span id="level-number">1</span></span>
+            <strong id="level-name">Spark</strong>
+            <progress
+              class="level-track"
+              aria-label="Progress to the next level"
+              id="level-progress"
+              max="100"
+              value="0"
+            >0%</progress>
+            <small id="level-next">Your adventure starts here!</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="reward-section" aria-labelledby="quests-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Small steps, big adventure</p>
+            <h2 id="quests-title">Your quests</h2>
+          </div>
+          <a class="text-link" href="/app">Start an activity →</a>
+        </div>
+        <div id="quest-grid" class="quest-grid"></div>
+        <p class="gentle-note">
+          You earn permanent XP and matching Gift Points for finishing and checking your effort—not
+          for getting every answer right. Up to three checked activities earn points each day.
+        </p>
+      </section>
+
+      <section class="reward-section certificate-section" aria-labelledby="certificates-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Keep forever</p>
+            <h2 id="certificates-title">Certificates</h2>
+          </div>
+        </div>
+        <div id="certificate-grid" class="certificate-grid"></div>
+      </section>
+
+      <section class="reward-section" aria-labelledby="gift-shop-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Choose, ask, celebrate</p>
+            <h2 id="gift-shop-title">Homework Magic gift shop</h2>
+          </div>
+        </div>
+        <div class="grown-up-note">
+          <span aria-hidden="true">📦</span>
+          <p>
+            Choose a Homework Magic sticker pack, pen or notebook. Your XP is never deducted.
+            A parent or guardian must approve the request and enter an adult recipient's UK
+            delivery address before Gift Points are used.
+          </p>
+        </div>
+        <div id="catalog-grid" class="catalog-grid"></div>
+      </section>
+
+      <section class="two-column">
+        <article class="reward-section compact" aria-labelledby="recent-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Celebrate the journey</p>
+              <h2 id="recent-title">Recent XP</h2>
+            </div>
+          </div>
+          <div id="recent-activity" class="recent-list"></div>
+        </article>
+
+        <article class="reward-section compact family-summary" aria-labelledby="family-summary-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">This week</p>
+              <h2 id="family-summary-title">Family celebration</h2>
+            </div>
+          </div>
+          <div class="summary-grid">
+            <div><strong id="active-days">0</strong><span>active days</span></div>
+            <div><strong id="subjects-explored">0</strong><span>subjects explored</span></div>
+            <div><strong id="quests-completed">0</strong><span>quests completed</span></div>
+          </div>
+          <p>Try praising persistence: “I noticed you kept going when that felt tricky.”</p>
+        </article>
+      </section>
+
+      <section class="parent-zone" aria-labelledby="parent-zone-title">
+        <div class="parent-zone-heading">
+          <div aria-hidden="true" class="parent-lock">🔒</div>
+          <div>
+            <p class="eyebrow">Grown-ups only</p>
+            <h2 id="parent-zone-title">Parent reward controls</h2>
+            <p>Check the request and delivery details before approving a branded gift.</p>
+          </div>
+        </div>
+
+        <div class="parent-password-row">
+          <label>
+            Parent account password
+            <input
+              id="parent-password"
+              type="password"
+              autocomplete="current-password"
+              maxlength="256"
+              placeholder="Enter for each parent action"
+            >
+          </label>
+          <small>The reward system checks this password but does not save it.</small>
+        </div>
+
+        <div class="parent-columns">
+          <section aria-labelledby="requests-title">
+            <h3 id="requests-title">Reward requests</h3>
+            <div id="redemption-list" class="redemption-list"></div>
+          </section>
+
+          <section id="delivery-address-panel" aria-labelledby="delivery-address-title">
+            <h3 id="delivery-address-title">UK delivery details</h3>
+            <p class="parent-help">
+              Enter the parent or guardian receiving the parcel. Do not use the child's name.
+            </p>
+            <div id="delivery-address-form" class="delivery-address-form">
+              <label>
+                Adult recipient's name
+                <input
+                  id="delivery-recipient"
+                  name="recipient_name"
+                  type="text"
+                  autocomplete="shipping name"
+                  maxlength="80"
+                  placeholder="Parent or guardian"
+                >
+              </label>
+              <label>
+                Address line 1
+                <input
+                  id="delivery-line-1"
+                  name="address_line1"
+                  type="text"
+                  autocomplete="shipping address-line1"
+                  maxlength="100"
+                >
+              </label>
+              <label>
+                Address line 2 <span class="optional">(optional)</span>
+                <input
+                  id="delivery-line-2"
+                  name="address_line2"
+                  type="text"
+                  autocomplete="shipping address-line2"
+                  maxlength="100"
+                >
+              </label>
+              <div class="delivery-form-row">
+                <label>
+                  Town or city
+                  <input
+                    id="delivery-town"
+                    name="town_city"
+                    type="text"
+                    autocomplete="shipping address-level2"
+                    maxlength="80"
+                  >
+                </label>
+                <label>
+                  UK postcode
+                  <input
+                    id="delivery-postcode"
+                    name="postcode"
+                    type="text"
+                    autocomplete="shipping postal-code"
+                    maxlength="10"
+                    inputmode="text"
+                  >
+                </label>
+              </div>
+              <label>
+                Country
+                <input
+                  id="delivery-country"
+                  name="country"
+                  type="text"
+                  autocomplete="shipping country-name"
+                  value="United Kingdom"
+                  readonly
+                >
+              </label>
+              <label class="adult-confirmation">
+                <input id="adult-recipient-confirmed" type="checkbox">
+                <span>I am the parent or guardian, and the named recipient is an adult.</span>
+              </label>
+            </div>
+            <p class="privacy-hint">
+              Delivery details are encrypted and are not shown in the child's reward view. They are
+              removed after cancellation or 30 days after dispatch. No phone number or child details
+              are needed.
+            </p>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="reward-toast" class="reward-toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/js/rewards.js?v=20260728-gifts" defer></script>
+</body>
+</html>
