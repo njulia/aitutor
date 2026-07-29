@@ -177,17 +177,21 @@
             </div>
             <div class="table-container">
                 <div class="table-header">
-                    <h3>Active Subscriptions</h3>
-                    <button class="btn btn-primary" onclick="openAddSubModal()">+ Add Subscription</button>
+                    <h3>Subscriptions</h3>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-primary" onclick="loadSubscriptions(true)">Sync Stripe</button>
+                        <button class="btn" onclick="openAddSubModal()">+ Add Test Subscription</button>
+                    </div>
                 </div>
                 <table>
                     <thead>
                         <tr>
                             <th>Subscription ID</th>
-                            <th>Customer</th>
+                            <th>Parent account</th>
+                            <th>Plan</th>
                             <th>Status</th>
                             <th>Created</th>
-                            <th>Expires</th>
+                            <th>Renews / ends</th>
                         </tr>
                     </thead>
                     <tbody id="subsTable"></tbody>
@@ -493,6 +497,23 @@
             return resp.json();
         }
 
+        function escapeHtml(value) {
+            const replacements = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(value ?? '').replace(/[&<>"']/g, character => replacements[character]);
+        }
+
+        function formatAdminDate(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
+        }
+
         // Overview
         async function loadOverview() {
             try {
@@ -620,28 +641,56 @@
         }
 
         // Subscriptions
-        async function loadSubscriptions() {
+        async function loadSubscriptions(refreshStripe = true) {
             try {
-                const data = await api('/subscriptions');
+                const data = await api(`/subscriptions?refresh=${refreshStripe ? 'true' : 'false'}`);
+                const stripeSync = data.stripe_sync || {};
+                const syncLabel = !stripeSync.attempted
+                    ? 'Local records'
+                    : (stripeSync.succeeded ? 'Stripe synced' : 'Stripe unavailable');
+                const syncDetail = stripeSync.succeeded
+                    ? `${stripeSync.synced || 0} record(s) checked`
+                    : 'Showing saved records';
+                const elevenPlusCount = (
+                    data.active_by_plan
+                    && data.active_by_plan.elevenplus_monthly
+                ) || 0;
                 document.getElementById('subStats').innerHTML = `
                     <div class="stat-card"><div class="label">Active Subscriptions</div><div class="value">${data.active_subscriptions || 0}</div></div>
-                    <div class="stat-card"><div class="label">Est. Revenue</div><div class="value">&pound;${data.estimated_revenue_gbp || 0}</div><div class="sub">GBP</div></div>
+                    <div class="stat-card"><div class="label">11+ Premium</div><div class="value">${elevenPlusCount}</div><div class="sub">active</div></div>
+                    <div class="stat-card"><div class="label">Est. Monthly Revenue</div><div class="value">&pound;${Number(data.estimated_revenue_gbp || 0).toFixed(2)}</div><div class="sub">GBP</div></div>
+                    <div class="stat-card"><div class="label">${syncLabel}</div><div class="value" style="font-size:18px">${syncDetail}</div></div>
                 `;
                 const subs = data.subscriptions || [];
                 document.getElementById('subsTable').innerHTML = subs.length ? subs.map(s => {
                     const expires = s.expires_at || s.trial_end || s.current_period_end;
-                    const customer = s.customer || s.customer_name || s.customer_email || '-';
+                    const customerName = escapeHtml(s.customer_name || '');
+                    const customerEmail = escapeHtml(s.customer_email || s.customer || '');
+                    const customer = customerName && customerEmail && customerName !== customerEmail
+                        ? `${customerName}<br><small>${customerEmail}</small>`
+                        : (customerEmail || customerName || '-');
+                    const planLabels = {
+                        homework_monthly: 'Homework Premium',
+                        elevenplus_monthly: '11+ Premium',
+                        family_monthly: 'Family Premium',
+                        trial_5day: 'Five-day pass',
+                        beta_year3: 'Parent beta'
+                    };
+                    const plan = planLabels[s.plan] || s.plan || '-';
+                    const status = String(s.status || 'unknown');
+                    const activeStatus = ['active', 'trialing'].includes(status.toLowerCase());
                     return `
                     <tr>
-                        <td><code>${s.id || s.subscription_id}</code></td>
+                        <td><code>${escapeHtml(s.id || s.subscription_id || '-')}</code></td>
                         <td>${customer}</td>
-                        <td><span class="badge badge-green">${s.status}</span></td>
-                        <td>${s.created ? new Date(s.created).toLocaleDateString() : (s.created_at ? new Date(s.created_at).toLocaleDateString() : '-')}</td>
-                        <td>${expires ? new Date(expires).toLocaleDateString() : '-'}</td>
+                        <td>${escapeHtml(plan)}</td>
+                        <td><span class="badge ${activeStatus ? 'badge-green' : 'badge-red'}">${escapeHtml(status)}</span></td>
+                        <td>${formatAdminDate(s.created || s.created_at)}</td>
+                        <td>${formatAdminDate(expires)}</td>
                     </tr>
-                `;}).join('') : '<tr><td colspan="5" style="text-align:center;color:#888">No subscriptions found</td></tr>';
+                `;}).join('') : '<tr><td colspan="6" style="text-align:center;color:#888">No subscriptions found</td></tr>';
             } catch(e) {
-                document.getElementById('subStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
+                document.getElementById('subStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${escapeHtml(e.message)}</div></div>`;
             }
         }
 

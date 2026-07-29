@@ -2528,7 +2528,11 @@ async def api_feedback(request: FeedbackRequest):
 
 @app.get("/admin")
 async def admin_page():
-    return _static_page("static", "admin.html")
+    return _static_page(
+        "static",
+        "admin.html",
+        cache_control="no-store, private",
+    )
 
 
 @app.get("/api/admin/access-status")
@@ -2619,10 +2623,36 @@ async def admin_delete_user(student_id: str):
 
 
 @app.get("/api/admin/subscriptions")
-async def admin_subscriptions():
-    """获取订阅概览"""
+async def admin_subscriptions(refresh: bool = True):
+    """Return the subscription overview after an optional Stripe repair pass."""
+    stripe_sync: Dict[str, Any] = {
+        "attempted": False,
+        "succeeded": True,
+    }
+    if refresh:
+        from src.webapp.billing import refresh_stripe_subscription_catalog
+        try:
+            stripe_sync = await run_blocking(
+                refresh_stripe_subscription_catalog,
+                100,
+                timeout=15,
+                limit_concurrency=False,
+            )
+        except Exception:
+            stripe_sync = {
+                "attempted": True,
+                "succeeded": False,
+            }
+            logger.exception(
+                "Admin subscription refresh could not reconcile Stripe"
+            )
     from src.admin import get_subscription_overview
-    return get_subscription_overview()
+    overview = await run_blocking(
+        get_subscription_overview,
+        timeout=10,
+        limit_concurrency=False,
+    )
+    return {**overview, "stripe_sync": stripe_sync}
 
 
 @app.post("/api/admin/subscriptions")

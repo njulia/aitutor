@@ -99,6 +99,8 @@ function renderGiftAccess(giftAccess) {
   const note = document.getElementById('gift-access-note');
   const copy = note.querySelector('p');
   const parentPlanCopy = document.getElementById('parent-plan-copy');
+  const legacyPlanLink = document.getElementById('gift-access-plan-link');
+  if (legacyPlanLink) legacyPlanLink.remove();
   clearNode(copy);
   const heading = element('strong', '', 'Everyone can earn XP. ');
   copy.append(heading);

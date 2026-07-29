@@ -683,32 +683,66 @@ def get_account_by_stripe_customer_id(customer_id: str) -> Optional[Dict[str, An
 
 
 def list_subscriptions(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-    """List locally materialised Stripe entitlements for the admin dashboard."""
+    """List locally materialised entitlements with their parent account."""
     with _engine().begin() as conn:
         rows = conn.execute(
-            select(subscriptions)
+            select(
+                subscriptions,
+                accounts.c.email.label("customer_email"),
+                accounts.c.display_name.label("customer_name"),
+            )
+            .select_from(
+                subscriptions.outerjoin(
+                    accounts,
+                    subscriptions.c.account_id == accounts.c.id,
+                )
+            )
             .order_by(subscriptions.c.created_at.desc())
             .limit(max(1, min(int(limit), 1000)))
             .offset(max(0, int(offset)))
         ).all()
-    return [_dict(row) or {} for row in rows]
+    items = [_dict(row) or {} for row in rows]
+    for item in items:
+        item["customer"] = item.get("customer_email") or item.get("customer_name")
+    return items
 
 
 def get_subscription_stats() -> Dict[str, Any]:
     """Return entitlement counts from PostgreSQL, not a live Stripe list call."""
     now = _now()
+    monthly_prices = {
+        "homework_monthly": 4.99,
+        "elevenplus_monthly": 9.99,
+    }
     with _engine().begin() as conn:
+        active_filter = and_(
+            subscriptions.c.status.in_(["active", "trialing"]),
+            subscriptions.c.current_period_end > now,
+        )
         active = conn.execute(
-            select(func.count()).select_from(subscriptions).where(
-                and_(
-                    subscriptions.c.status.in_(["active", "trialing"]),
-                    subscriptions.c.current_period_end > now,
-                )
-            )
+            select(func.count()).select_from(subscriptions).where(active_filter)
         ).scalar_one()
+        plan_rows = conn.execute(
+            select(subscriptions.c.plan, func.count())
+            .where(active_filter)
+            .group_by(subscriptions.c.plan)
+        ).all()
         total = conn.execute(select(func.count()).select_from(subscriptions)).scalar_one()
+    active_by_plan = {
+        str(row[0]): int(row[1] or 0)
+        for row in plan_rows
+    }
+    estimated_revenue = round(
+        sum(
+            monthly_prices.get(plan, 0) * count
+            for plan, count in active_by_plan.items()
+        ),
+        2,
+    )
     return {
         "active_subscriptions": int(active or 0),
+        "active_by_plan": active_by_plan,
+        "estimated_revenue_gbp": estimated_revenue,
         "total_subscription_records": int(total or 0),
         "subscriptions": list_subscriptions(limit=100),
         "source": "local_webhook_materialisation",

@@ -26,6 +26,9 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert "gift_access.eligible" in script
     assert "button.textContent = 'Ask a grown-up'" in script
     assert "A grown-up manages Gift Points, gifts and plans" in script
+    assert "/static/js/rewards.js?v=20260729-reward-dom-sync" in page
+    assert "if (legacyPlanLink) legacyPlanLink.remove();" in script
+    assert "planLink.hidden" not in script
     assert "wallet.spendable_xp" not in script
     assert "textContent" in script
     assert "https://" not in script

@@ -442,6 +442,65 @@ def refresh_stripe_subscriptions(account: Dict[str, Any]) -> Optional[Dict[str, 
     return get_active_subscription(account["id"])
 
 
+def refresh_stripe_subscription_catalog(limit: int = 100) -> Dict[str, Any]:
+    """Reconcile a bounded Stripe subscription page for the admin dashboard.
+
+    The signed webhook remains the normal update path. This repair pass lets an
+    administrator recover a delayed or missed webhook without making ordinary
+    learner requests wait for Stripe.
+    """
+    bounded_limit = max(1, min(int(limit), 100))
+    if not _billing_enabled():
+        return {
+            "attempted": False,
+            "succeeded": True,
+            "received": 0,
+            "synced": 0,
+            "skipped": 0,
+            "has_more": False,
+        }
+
+    stripe = _stripe()
+    response = stripe.Subscription.list(
+        status="all",
+        limit=bounded_limit,
+    )
+    stripe_subscriptions = list(
+        _object_value(response, "data", []) or []
+    )[:bounded_limit]
+    synced = 0
+    skipped = 0
+    for stripe_subscription in stripe_subscriptions:
+        try:
+            subscription_id = str(
+                _object_value(stripe_subscription, "id") or ""
+            )
+            previous = (
+                get_subscription_by_stripe_id(subscription_id)
+                if subscription_id
+                else None
+            )
+            saved = sync_subscription(stripe_subscription)
+            _record_subscription_transition(previous, saved)
+            synced += 1
+        except ValueError:
+            # Ignore unrelated Stripe products or records that cannot be linked
+            # to an authenticated Homework Magic parent account.
+            skipped += 1
+            logger.warning(
+                "Skipped an unrecognised or unlinked Stripe subscription "
+                "during the admin refresh"
+            )
+    return {
+        "attempted": True,
+        "succeeded": True,
+        "received": len(stripe_subscriptions),
+        "synced": synced,
+        "skipped": skipped,
+        "has_more": bool(_object_value(response, "has_more", False)),
+    }
+
+
 def _cancellation_portal_configuration(stripe: Any) -> str:
     """Return an app-owned Stripe Portal configuration with cancellation on."""
     global _cancellation_portal_configuration_id
