@@ -98,7 +98,20 @@
     }
     #account-actions { text-align: center; }
     #account-actions .button { margin: .3rem; }
-    #subscription-summary { margin: 0 0 .8rem; font-weight: 700; }
+    #subscription-summary { margin: .25rem 0 .45rem; }
+    #subscription-detail { margin: 0 auto 1rem; color: #52606d; }
+    .account-plan-card {
+      max-width: 760px;
+      margin: 1.5rem auto;
+      border: 2px solid #3c8b60;
+      background: #f8fffb;
+    }
+    .button.cancel-entry { background: #8d3140; }
+    #existing-billing-actions {
+      max-width: 760px;
+      margin: 1.5rem auto;
+      text-align: center;
+    }
     .billing-help { margin: .8rem auto 0; max-width: 680px; color: #52606d; font-size: .94rem; }
     .button[aria-disabled="true"] { cursor: wait; opacity: .65; pointer-events: none; }
     .stripe-checkout-card { margin: 1.5rem 0; text-align: center; }
@@ -115,8 +128,10 @@
       <a href="/app">Learning app</a>
       <a href="/memory">Learning memory</a>
       <a href="/rewards">Reward quests</a>
-      <a href="/login">Parent sign in</a>
-      <a class="hm-nav-cta" href="/register">Create account</a>
+      <a href="/login?next=/pricing" id="pricing-nav-login">Parent sign in</a>
+      <a href="/app" id="pricing-nav-learning" hidden>My learning</a>
+      <a href="#" id="pricing-nav-logout" hidden>Log out</a>
+      <a class="hm-nav-cta" href="/register" id="pricing-nav-register">Create account</a>
     </nav>
   </div>
 </header>
@@ -140,7 +155,7 @@
       <article class="card featured">
         <p class="hm-kicker">Try everything</p>
         <h2>Five-day access</h2>
-        <p class="price">£0.99 GBP / 5 days <span class="discount">(50% off)</span></p>
+        <p class="price">£0.99 GBP / 5 days</p>
         <ul>
           <li>Years 1–6 homework support</li>
           <li>11+ practice and study plan</li>
@@ -154,7 +169,7 @@
       <article class="card">
         <p class="hm-kicker">Years 1–6</p>
         <h2>Homework Premium</h2>
-        <p class="price">£4.99 GBP / month <span class="discount">(50% off)</span></p>
+        <p class="price">£4.99 GBP / month</p>
         <ul>
           <li>Tutor mode</li>
           <li>Detailed explanations</li>
@@ -167,7 +182,7 @@
       <article class="card">
         <p class="hm-kicker">11+ preparation</p>
         <h2>11+ Premium</h2>
-        <p class="price">£9.99 GBP / month <span class="discount">(50% off)</span></p>
+        <p class="price">£9.99 GBP / month</p>
         <ul>
           <li>Maths and English practice</li>
           <li>Verbal and non-verbal reasoning</li>
@@ -193,15 +208,24 @@
     </section>
   </section>
 
-  <p id="status" role="status" aria-live="polite"></p>
-  <div id="account-actions" hidden>
-    <p id="subscription-summary"></p>
+  <p id="status" role="status" aria-live="polite">Checking your parent account…</p>
+  <section class="card account-plan-card" id="account-actions" aria-labelledby="subscription-summary" hidden>
+    <p class="hm-kicker">Your current subscription</p>
+    <h2 id="subscription-summary"></h2>
+    <p id="subscription-detail"></p>
     <a class="button" href="/app">Continue learning</a>
     <button class="button secondary" type="button" id="change-plan-button">Change plan</button>
-    <button class="button secondary" type="button" id="cancel-plan-button">Cancel subscription</button>
+    <button class="button cancel-entry" type="button" id="cancel-plan-button">Manage or cancel subscription</button>
     <button class="button secondary" type="button" id="portal-button">Payment details &amp; invoices</button>
     <p class="billing-help">Changes and cancellation are completed on Stripe’s secure billing page. Cancelling a monthly plan stops its next renewal; access continues to the end of the paid month.</p>
-  </div>
+  </section>
+
+  <section class="card" id="existing-billing-actions" hidden>
+    <p class="hm-kicker">Existing Stripe account</p>
+    <h2>Already subscribed?</h2>
+    <p>Open Stripe to view your plan, invoices, payment details or cancellation options.</p>
+    <button class="button secondary" type="button" id="existing-portal-button">Manage an existing subscription</button>
+  </section>
 
   <section class="card privacy">
     <p class="hm-kicker">Parent controls</p>
@@ -220,10 +244,10 @@
     <p>By purchasing, you agree to the <a href="/terms">Terms of Service</a> and acknowledge the <a href="/refund-policy">refund and cancellation policy</a>. Your statutory consumer rights are not affected.</p>
   </section>
 
-<!--  <section class="card" aria-labelledby="business-information">-->
-<!--    <h2 id="business-information">Business information</h2>-->
-<!--    <p>Service operator: <strong>{{DATA_CONTROLLER_NAME}}</strong><br>Business and service address: <strong>{{PRIVACY_POSTAL_ADDRESS}}</strong>{{BUSINESS_SUPPORT_PHONE_LINE}}{{BUSINESS_REGISTRATION_LINE}}{{BUSINESS_VAT_STATUS_LINE}}<br>Customer support: <a href="mailto:{{BUSINESS_CONTACT_EMAIL}}">{{BUSINESS_CONTACT_EMAIL}}</a></p>-->
-<!--  </section>-->
+  <section class="card" aria-labelledby="business-information">
+    <h2 id="business-information">Business information</h2>
+    <p>Service operator: Homework Magic<br>Customer support: <a href="mailto:{{BUSINESS_CONTACT_EMAIL}}">{{BUSINESS_CONTACT_EMAIL}}</a></p>
+  </section>
 
   <p class="legal-links"><a href="/terms">Terms of Service</a> · <a href="/refund-policy">Refunds &amp; cancellation</a> · <a href="/privacy">Privacy</a> · <a href="/messages">Contact</a></p>
 </main>
@@ -238,10 +262,18 @@ const pricingTableTemplate = document.getElementById('stripe-pricing-table-templ
 const trialCheckoutButton = document.getElementById('trial-checkout-button');
 const accountActions = document.getElementById('account-actions');
 const subscriptionSummary = document.getElementById('subscription-summary');
+const subscriptionDetail = document.getElementById('subscription-detail');
 const changePlanButton = document.getElementById('change-plan-button');
 const cancelPlanButton = document.getElementById('cancel-plan-button');
 const portalButton = document.getElementById('portal-button');
+const existingBillingActions = document.getElementById('existing-billing-actions');
+const existingPortalButton = document.getElementById('existing-portal-button');
+const navLogin = document.getElementById('pricing-nav-login');
+const navLearning = document.getElementById('pricing-nav-learning');
+const navLogout = document.getElementById('pricing-nav-logout');
+const navRegister = document.getElementById('pricing-nav-register');
 const billingButtons = [changePlanButton, cancelPlanButton, portalButton];
+const billingHelp = accountActions.querySelector('.billing-help');
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -258,9 +290,20 @@ async function readJson(response) {
   return data;
 }
 
-async function billingStatus() {
-  const response = await fetch('/api/billing/status', {
+function renderSignedInNavigation(signedIn) {
+  navLogin.hidden = signedIn;
+  navRegister.hidden = signedIn;
+  navLearning.hidden = !signedIn;
+  navLogout.hidden = !signedIn;
+}
+
+async function billingStatus(refresh = false) {
+  const endpoint = refresh
+    ? '/api/billing/status?refresh=true'
+    : '/api/billing/status';
+  const response = await fetch(endpoint, {
     credentials: 'same-origin',
+    cache: 'no-store',
     headers: { 'Accept': 'application/json' }
   });
   return readJson(response);
@@ -269,24 +312,40 @@ async function billingStatus() {
 function showActiveSubscription(data) {
   planSummary.hidden = true;
   accountActions.hidden = false;
+  billingButtons.forEach(button => {
+    button.hidden = false;
+  });
+  billingHelp.hidden = false;
   const planNames = {
     homework_monthly: 'Homework Premium',
     elevenplus_monthly: '11+ Premium',
     family_monthly: 'Family Premium',
-    trial_5day: 'Five-day access'
+    trial_5day: 'Five-day access',
+    beta_year3: 'Free Year 3 parent beta'
   };
   const subscription = data.subscription || {};
   const management = data.management || {};
   const planName = planNames[subscription.plan] || 'Homework Magic';
   const end = subscription.current_period_end;
   const endDate = end ? new Date(end).toLocaleDateString('en-GB') : '';
-  subscriptionSummary.textContent = `Current plan: ${planName}`;
-  changePlanButton.disabled = management.can_change === false;
+  subscriptionSummary.textContent = planName;
+  existingBillingActions.hidden = true;
+  const cancellationScheduled = subscription.cancel_at_period_end === true;
+  subscriptionDetail.textContent = cancellationScheduled
+    ? `Cancellation scheduled${endDate ? ` · access continues until ${endDate}` : ''}`
+    : `Active${endDate ? ` · current paid month runs to ${endDate}` : ''}`;
+  changePlanButton.hidden = management.can_change !== true;
+  changePlanButton.disabled = false;
   changePlanButton.title = changePlanButton.disabled
     ? 'Plan changes are temporarily unavailable. Please contact support.' : '';
-  const cancellationScheduled = subscription.cancel_at_period_end === true;
-  cancelPlanButton.disabled = cancellationScheduled || management.can_cancel === false;
-  cancelPlanButton.textContent = cancellationScheduled ? 'Cancellation scheduled' : 'Cancel subscription';
+  cancelPlanButton.hidden = !(
+    management.can_cancel === true || cancellationScheduled
+  );
+  cancelPlanButton.disabled = cancellationScheduled;
+  cancelPlanButton.textContent = cancellationScheduled
+    ? 'Cancellation scheduled'
+    : 'Manage or cancel subscription';
+  portalButton.hidden = management.can_manage !== true;
   if (cancellationScheduled) {
     const until = endDate ? ` Access continues until ${endDate}.` : '';
     setStatus(`Your ${planName} plan will not renew.${until}`);
@@ -294,6 +353,20 @@ function showActiveSubscription(data) {
   }
   const endText = endDate ? ` Your current paid month runs to ${endDate}.` : '';
   setStatus(`Your ${planName} plan is active.${endText}`);
+}
+
+function showBetaAccess(data) {
+  const subscription = data.subscription || {};
+  const end = subscription.current_period_end;
+  const endDate = end ? new Date(end).toLocaleDateString('en-GB') : '';
+  accountActions.hidden = false;
+  subscriptionSummary.textContent = 'Free Year 3 parent beta';
+  subscriptionDetail.textContent = `Active${endDate ? ` until ${endDate}` : ''} · no payment and no renewal`;
+  billingButtons.forEach(button => {
+    button.hidden = true;
+  });
+  billingHelp.hidden = true;
+  trialCheckoutButton.hidden = true;
 }
 
 async function loadPricingTable() {
@@ -371,15 +444,32 @@ async function startTrialCheckout() {
 
 async function initialiseBilling() {
   try {
-    const data = await billingStatus();
+    const data = await billingStatus(true);
+    renderSignedInNavigation(true);
     if (data.has_subscription) {
+      if (data.management && data.management.is_beta) {
+        showBetaAccess(data);
+        await loadPricingTable();
+        const end = data.subscription && data.subscription.current_period_end;
+        const endDate = end ? new Date(end).toLocaleDateString('en-GB') : '';
+        setStatus(`Your free beta access is active${endDate ? ` until ${endDate}` : ''} and will not renew. A monthly plan is optional.`);
+        return;
+      }
       showActiveSubscription(data);
       return;
     }
+    accountActions.hidden = true;
+    existingBillingActions.hidden = !(
+      data.management && data.management.can_manage === true
+    );
     configureTrialCheckout(data);
     await loadPricingTable();
+    if (data.refresh && data.refresh.attempted && !data.refresh.succeeded) {
+      setStatus('We could not refresh Stripe just now. If you already subscribe, use the management button above; otherwise you can choose a plan below.', true);
+    }
   } catch (error) {
     if (error.status === 401) {
+      renderSignedInNavigation(false);
       setStatus('A parent or guardian needs to sign in before choosing a plan.');
       return;
     }
@@ -401,8 +491,9 @@ trialCheckoutButton.addEventListener('click', event => {
 async function pollForAccess() {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
-      const data = await billingStatus();
+      const data = await billingStatus(attempt === 2 || attempt === 5);
       if (data.has_subscription) {
+        renderSignedInNavigation(true);
         showActiveSubscription(data);
         return;
       }
@@ -443,6 +534,28 @@ async function openPortal(action = 'manage') {
 changePlanButton.addEventListener('click', () => openPortal('change'));
 cancelPlanButton.addEventListener('click', () => openPortal('cancel'));
 portalButton.addEventListener('click', () => openPortal('manage'));
+existingPortalButton.addEventListener('click', () => openPortal('manage'));
+navLogout.addEventListener('click', async event => {
+  event.preventDefault();
+  navLogout.textContent = 'Logging out…';
+  navLogout.setAttribute('aria-disabled', 'true');
+  try {
+    const response = await fetch('/api/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Logout failed.');
+    localStorage.removeItem('auth_state');
+    localStorage.removeItem('student_id');
+    localStorage.removeItem('student_email');
+    window.location.assign('/');
+  } catch (_) {
+    navLogout.textContent = 'Log out';
+    navLogout.removeAttribute('aria-disabled');
+    setStatus('We could not log you out just now. Please try again.', true);
+  }
+});
 const params = new URLSearchParams(window.location.search);
 if (params.get('checkout') === 'success') {
   setStatus('Thank you. Stripe is confirming your plan…');

@@ -37,6 +37,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     and_,
+    case,
     delete,
     func,
     insert,
@@ -792,9 +793,34 @@ class RewardStore:
         source_key = f"checked:{local_day}:{digest}"
         awarded_events: list[dict[str, Any]] = []
         already_awarded = False
+        family_activity_count_before = 0
+        family_active_days_before = 0
+        family_activity_today_before = 0
 
         with self.engine.begin() as conn:
             self._ensure_wallet(conn, account, learner, lock=True)
+            family_before = conn.execute(
+                select(
+                    func.count(),
+                    func.count(func.distinct(self.events.c.local_day)),
+                    func.sum(
+                        case(
+                            (self.events.c.local_day == local_day, 1),
+                            else_=0,
+                        )
+                    ),
+                )
+                .select_from(self.events)
+                .where(
+                    and_(
+                        self.events.c.account_id == account,
+                        self.events.c.event_type == "checked_activity",
+                    )
+                )
+            ).one()
+            family_activity_count_before = int(family_before[0] or 0)
+            family_active_days_before = int(family_before[1] or 0)
+            family_activity_today_before = int(family_before[2] or 0)
             if self._event_exists(conn, learner, source_key):
                 already_awarded = True
             else:
@@ -899,13 +925,14 @@ class RewardStore:
         quest_completions = [
             item for item in awarded_events if item["event_type"] == "quest_bonus"
         ]
+        activity_awarded = any(
+            item["event_type"] == "checked_activity" for item in awarded_events
+        )
         return {
             "awarded_xp": awarded_xp,
             "awarded_gift_points": awarded_gift_points,
             "gift_points_eligible": bool(gift_points_eligible),
-            "activity_xp": activity_xp if any(
-                item["event_type"] == "checked_activity" for item in awarded_events
-            ) else 0,
+            "activity_xp": activity_xp if activity_awarded else 0,
             "already_awarded": already_awarded,
             "daily_cap_reached": day_count >= daily_cap,
             "daily_reward_limit": daily_cap,
@@ -914,6 +941,16 @@ class RewardStore:
             "level": _level_status(int(wallet.get("lifetime_xp") or 0)),
             "quest_completions": quest_completions,
             "new_certificates": new_certificates,
+            # These booleans let the application increment aggregate-only
+            # funnel counters without creating a separate user-level tracker.
+            "is_first_family_activity": bool(
+                activity_awarded and family_activity_count_before == 0
+            ),
+            "is_first_family_return_day": bool(
+                activity_awarded
+                and family_active_days_before == 1
+                and family_activity_today_before == 0
+            ),
         }
 
     def _quest_cards(

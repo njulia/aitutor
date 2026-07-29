@@ -75,7 +75,9 @@ def test_pricing_page_portal_actions_are_registered(
     monkeypatch.setattr(
         billing,
         "create_portal",
-        lambda _account: {"portal_url": "https://billing.stripe.com/test"},
+        lambda _account, _action: {
+            "portal_url": "https://billing.stripe.com/test"
+        },
     )
 
     for action in ("change", "cancel"):
@@ -83,6 +85,115 @@ def test_pricing_page_portal_actions_are_registered(
         assert response.status_code == 200
         assert response.json()["action"] == action
         assert response.json()["portal_url"].startswith("https://billing.stripe.com/")
+
+
+def test_active_elevenplus_parent_sees_plan_and_cancellation_entry(
+    authenticated_client, monkeypatch
+) -> None:
+    period_end = datetime.now(UTC) + timedelta(days=30)
+    monkeypatch.setattr(
+        billing,
+        "get_active_subscription",
+        lambda _account_id: {
+            "plan": "elevenplus_monthly",
+            "status": "active",
+            "current_period_end": period_end,
+            "cancel_at_period_end": False,
+            "stripe_subscription_id": "sub_elevenplus",
+        },
+    )
+
+    response = authenticated_client.get("/api/billing/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_subscription"] is True
+    assert body["subscription"]["plan"] == "elevenplus_monthly"
+    assert body["management"]["can_cancel"] is True
+
+
+def test_pricing_status_can_repair_a_delayed_webhook(
+    authenticated_client, unique_email, monkeypatch
+) -> None:
+    account = account_store.ensure_account(unique_email)
+    account_store.set_stripe_customer(account["id"], "cus_parent")
+    refreshed = {
+        "plan": "elevenplus_monthly",
+        "status": "active",
+        "current_period_end": datetime.now(UTC) + timedelta(days=30),
+        "cancel_at_period_end": False,
+        "stripe_subscription_id": "sub_parent",
+    }
+    monkeypatch.setattr(
+        billing,
+        "refresh_stripe_subscriptions",
+        lambda _account: refreshed,
+    )
+
+    response = authenticated_client.get("/api/billing/status?refresh=true")
+
+    assert response.status_code == 200
+    assert response.json()["subscription"]["plan"] == "elevenplus_monthly"
+    assert response.json()["management"]["can_manage"] is True
+    assert response.json()["refresh"] == {
+        "attempted": True,
+        "succeeded": True,
+    }
+
+
+def test_cancel_entry_opens_a_direct_stripe_cancellation_flow(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    class FakePortalSession:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                url="https://billing.stripe.com/p/session/test_cancel"
+            )
+
+    _configure_test_billing(monkeypatch)
+    monkeypatch.setattr(
+        billing,
+        "_stripe",
+        lambda: SimpleNamespace(
+            billing_portal=SimpleNamespace(Session=FakePortalSession)
+        ),
+    )
+    monkeypatch.setattr(
+        billing,
+        "get_active_subscription",
+        lambda _account_id: {
+            "stripe_subscription_id": "sub_elevenplus",
+            "plan": "elevenplus_monthly",
+        },
+    )
+    monkeypatch.setattr(
+        billing,
+        "_cancellation_portal_configuration",
+        lambda _stripe: "bpc_cancel",
+    )
+
+    result = billing.create_portal(
+        {
+            "id": "acct_parent",
+            "stripe_customer_id": "cus_parent",
+        },
+        "cancel",
+    )
+
+    assert result["portal_url"].startswith("https://billing.stripe.com/")
+    assert captured["customer"] == "cus_parent"
+    assert captured["configuration"] == "bpc_cancel"
+    assert captured["flow_data"]["type"] == "subscription_cancel"
+    assert captured["flow_data"]["subscription_cancel"] == {
+        "subscription": "sub_elevenplus"
+    }
+    assert captured["flow_data"]["after_completion"]["redirect"][
+        "return_url"
+    ].endswith("/pricing?billing=cancelled")
 
 
 def test_pricing_table_customer_session_links_the_parent_account(monkeypatch) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from src.webapp.account_store import create_subscription
 from src.webapp.reward_store import get_reward_store, review_fingerprint
 
@@ -14,20 +16,34 @@ DELIVERY_ADDRESS = {
 }
 
 
-def _award_three_activities(account_id: str, student_id: str) -> None:
+def _award_sticker_points(account_id: str, student_id: str) -> None:
     store = get_reward_store()
-    for index, subject in enumerate(("Maths", "English", "Science"), start=1):
-        store.award_checked_activity(
-            account_id=account_id,
-            student_id=student_id,
-            fingerprint=review_fingerprint(
-                homework=f"API worksheet {index}",
-                answers=f"API answer {index}",
+    now = datetime.now(UTC).replace(
+        hour=12,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    for day_offset in range(5):
+        awarded_at = now - timedelta(days=day_offset)
+        for index, subject in enumerate(
+            ("Maths", "English", "Science"),
+            start=1,
+        ):
+            store.award_checked_activity(
+                account_id=account_id,
+                student_id=student_id,
+                fingerprint=review_fingerprint(
+                    homework=(
+                        f"API worksheet {day_offset}-{index}"
+                    ),
+                    answers=f"API answer {day_offset}-{index}",
+                    subject=subject,
+                ),
                 subject=subject,
-            ),
-            subject=subject,
-            gift_points_eligible=True,
-        )
+                gift_points_eligible=True,
+                awarded_at=awarded_at,
+            )
 
 
 def _activate_reward_subscription(account_id: str) -> None:
@@ -54,14 +70,16 @@ def test_reward_request_parent_approval_and_certificate(
     account = account_body["account"]
     learner = account_body["students"][0]
     _activate_reward_subscription(account["id"])
-    _award_three_activities(account["id"], learner["id"])
+    _award_sticker_points(account["id"], learner["id"])
 
     dashboard = authenticated_client.get(
         f"/api/rewards?student_id={learner['id']}"
     )
     assert dashboard.status_code == 200, dashboard.text
     data = dashboard.json()
-    assert data["wallet"]["lifetime_xp"] >= 130
+    assert data["wallet"]["lifetime_xp"] >= 500
+    gift_points_before = data["wallet"]["gift_points"]
+    lifetime_xp_before = data["wallet"]["lifetime_xp"]
     assert any(item["unlocked"] for item in data["certificates"])
 
     request = authenticated_client.post(
@@ -97,8 +115,11 @@ def test_reward_request_parent_approval_and_certificate(
     )
     assert approved.status_code == 200, approved.text
     assert approved.json()["redemption"]["status"] == "approved"
-    assert approved.json()["wallet"]["lifetime_xp"] >= 130
-    assert approved.json()["wallet"]["gift_points"] < 130
+    assert approved.json()["wallet"]["lifetime_xp"] == lifetime_xp_before
+    assert (
+        approved.json()["wallet"]["gift_points"]
+        == gift_points_before - 500
+    )
     assert "Alex Parent" not in approved.text
     assert "SW1A 1AA" not in approved.text
 
@@ -118,7 +139,7 @@ def test_admin_can_dispatch_without_exposing_address_to_child(
     account = account_body["account"]
     learner = account_body["students"][0]
     _activate_reward_subscription(account["id"])
-    _award_three_activities(account["id"], learner["id"])
+    _award_sticker_points(account["id"], learner["id"])
     requested = authenticated_client.post(
         "/api/rewards/redemptions",
         json={

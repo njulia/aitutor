@@ -28,9 +28,12 @@ from .reward_store import get_reward_store
 
 
 logger = logging.getLogger(__name__)
-GIFT_SUBSCRIPTION_NOTE = (
-    "Everyone can earn XP. An active monthly Homework Magic subscription "
-    "is needed to earn Gift Points and claim gifts."
+GIFT_ACCESS_NOTE = (
+    "Everyone can earn XP. A grown-up manages Gift Points, gifts and plans."
+)
+PARENT_GIFT_PLAN_NOTE = (
+    "Gift Points and gift approvals require an eligible monthly plan. "
+    "The five-day pass and free beta access do not include physical gifts."
 )
 
 
@@ -121,8 +124,7 @@ def build_reward_router(
             "gift_access": {
                 "eligible": eligible,
                 "requires_active_subscription": True,
-                "note": GIFT_SUBSCRIPTION_NOTE,
-                "plans_url": "/pricing",
+                "note": GIFT_ACCESS_NOTE,
             },
             **dashboard,
         }
@@ -132,7 +134,7 @@ def build_reward_router(
         account, learner = await learner_context(request, body.student_id)
         eligible = await gift_points_eligible(account)
         if not eligible:
-            raise HTTPException(status_code=403, detail=GIFT_SUBSCRIPTION_NOTE)
+            raise HTTPException(status_code=403, detail=GIFT_ACCESS_NOTE)
         try:
             redemption = await asyncio.to_thread(
                 get_reward_store().request_redemption,
@@ -163,7 +165,7 @@ def build_reward_router(
         account = await account_context(request)
         eligible = await gift_points_eligible(account)
         if body.decision == "approve" and not eligible:
-            raise HTTPException(status_code=403, detail=GIFT_SUBSCRIPTION_NOTE)
+            raise HTTPException(status_code=403, detail=PARENT_GIFT_PLAN_NOTE)
         await confirm_parent(account, body.parent_password.get_secret_value())
         if body.decision == "approve" and body.delivery_address is None:
             raise HTTPException(
@@ -208,7 +210,7 @@ def build_reward_router(
             "gift_points_name": "Gift Points",
             "gift_points_eligible": eligible,
             "gift_points_requires_active_subscription": True,
-            "gift_subscription_note": GIFT_SUBSCRIPTION_NOTE,
+            "gift_subscription_note": PARENT_GIFT_PLAN_NOTE,
             "delivery_country": "GB",
             "requires_parent_delivery_address": True,
             "xp_never_deducted": True,

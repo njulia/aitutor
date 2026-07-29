@@ -12,7 +12,15 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 VALID_STATUSES = {"open", "pending", "replied", "closed"}
-VALID_CATEGORIES = {"general", "homework", "account", "billing", "privacy", "technical"}
+VALID_CATEGORIES = {
+    "general",
+    "homework",
+    "account",
+    "billing",
+    "privacy",
+    "technical",
+    "beta_feedback",
+}
 
 
 def _now() -> datetime:

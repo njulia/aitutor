@@ -11,8 +11,12 @@ DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-deploy/cloud-run.env.yaml}"
 STRIPE_SECRET_KEY_SECRET="${STRIPE_SECRET_KEY_SECRET:-homeworkmagic-stripe-secret-key}"
 STRIPE_WEBHOOK_SECRET_SECRET="${STRIPE_WEBHOOK_SECRET_SECRET:-homeworkmagic-stripe-webhook-secret}"
 REWARD_DELIVERY_SECRET_SECRET="${REWARD_DELIVERY_SECRET_SECRET:-homeworkmagic-reward-delivery-secret}"
+BETA_ACCESS_CODE_SECRET="${BETA_ACCESS_CODE_SECRET:-}"
 DEFAULT_SECRET_BINDINGS="DATABASE_URL=aitutor-database-url:latest,SESSION_OWNER_SECRET=aitutor-session-owner-secret:latest,DEEPSEEK_API_KEY=aitutor-deepseek-api-key:latest,SMTP_PASSWORD=aitutor-smtp-password:latest,STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_SECRET}:latest,STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest"
 SECRET_BINDINGS="${SECRET_BINDINGS:-${DEFAULT_SECRET_BINDINGS}}"
+if [[ -n "${BETA_ACCESS_CODE_SECRET}" && ",${SECRET_BINDINGS}," != *",BETA_ACCESS_CODE="* ]]; then
+  SECRET_BINDINGS="${SECRET_BINDINGS},BETA_ACCESS_CODE=${BETA_ACCESS_CODE_SECRET}:latest"
+fi
 CLOUD_RUN_CONCURRENCY="${CLOUD_RUN_CONCURRENCY:-25}"
 CLOUD_RUN_MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES:-2}"
 CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-60}"
@@ -33,10 +37,26 @@ if [[ ! -f "${DEPLOY_ENV_FILE}" ]]; then
   echo "Create ${DEPLOY_ENV_FILE} from deploy/cloud-run.env.yaml.example first." >&2
   exit 2
 fi
-if grep -q "REPLACE_" "${DEPLOY_ENV_FILE}"; then
-  echo "${DEPLOY_ENV_FILE} still contains REPLACE_ placeholders." >&2
+if grep -Eq ':[[:space:]]*["'"'"']?REPLACE_' "${DEPLOY_ENV_FILE}"; then
+  echo "${DEPLOY_ENV_FILE} still contains placeholder values." >&2
   exit 2
 fi
+
+required_public_settings=(
+  APP_BASE_URL
+  CORS_ORIGINS
+  ADMIN_EMAILS
+  DATA_CONTROLLER_NAME
+  PRIVACY_CONTACT_EMAIL
+  PRIVACY_POSTAL_ADDRESS
+  BUSINESS_CONTACT_EMAIL
+)
+for setting in "${required_public_settings[@]}"; do
+  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE}"; then
+    echo "${DEPLOY_ENV_FILE} must contain a non-empty ${setting} value." >&2
+    exit 2
+  fi
+done
 
 required_billing_settings=(
   STRIPE_BILLING_ENABLED
@@ -52,6 +72,14 @@ for setting in "${required_billing_settings[@]}"; do
   fi
 done
 
+if grep -Eq '^BETA_ACCESS_ENABLED:[[:space:]]*["'"'"']?(true|1|yes|on)["'"'"']?[[:space:]]*$' "${DEPLOY_ENV_FILE}"; then
+  if [[ ",${SECRET_BINDINGS}," != *",BETA_ACCESS_CODE="* ]]; then
+    echo "BETA_ACCESS_ENABLED is true, but SECRET_BINDINGS does not bind BETA_ACCESS_CODE." >&2
+    echo "Store the invite code in Secret Manager and add BETA_ACCESS_CODE=SECRET_NAME:latest." >&2
+    exit 2
+  fi
+fi
+
 gcloud config set project "${GCP_PROJECT_ID}"
 for required_secret in \
   "${STRIPE_SECRET_KEY_SECRET}" \
@@ -63,6 +91,12 @@ for required_secret in \
     exit 2
   fi
 done
+if [[ -n "${BETA_ACCESS_CODE_SECRET}" ]] && ! gcloud secrets describe \
+  "${BETA_ACCESS_CODE_SECRET}" \
+  --project "${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  echo "Secret Manager secret ${BETA_ACCESS_CODE_SECRET} does not exist or is not accessible." >&2
+  exit 2
+fi
 
 ensure_reward_delivery_secret \
   "${GCP_PROJECT_ID}" \

@@ -12,7 +12,9 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert "Gift Points" in page
     assert "never goes down" in page
     assert "Everyone can earn XP" in page
-    assert "active monthly Homework Magic subscription" in page
+    assert "A grown-up manages Gift Points, gifts and plans" in page
+    assert 'id="gift-access-plan-link"' not in page
+    assert "free beta access do not include physical gifts" in page
     assert "Parent account password" in page
     assert "Homework Magic sticker pack, pen or notebook" in page
     assert "Adult recipient's name" in page
@@ -22,7 +24,8 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert "delivery_address" in script
     assert "wallet.gift_points" in script
     assert "gift_access.eligible" in script
-    assert "Active plan needed" in script
+    assert "button.textContent = 'Ask a grown-up'" in script
+    assert "A grown-up manages Gift Points, gifts and plans" in script
     assert "wallet.spendable_xp" not in script
     assert "textContent" in script
     assert "https://" not in script

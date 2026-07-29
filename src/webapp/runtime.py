@@ -144,6 +144,17 @@ def production_configuration_issues() -> list[str]:
         issues.append("STORE_RAW_LEARNER_CONTENT should remain false for child privacy")
     if _env_bool("STORE_RAW_AI_CONTENT", False):
         issues.append("STORE_RAW_AI_CONTENT should remain false for child privacy")
+    if _env_bool("BETA_ACCESS_ENABLED", False):
+        if len(os.getenv("BETA_ACCESS_CODE", "")) < 16:
+            issues.append(
+                "BETA_ACCESS_CODE must contain at least 16 characters when the parent beta is enabled"
+            )
+        try:
+            beta_limit = int(os.getenv("BETA_ACCESS_MAX_FAMILIES", "15"))
+        except ValueError:
+            beta_limit = 0
+        if beta_limit < 1 or beta_limit > 15:
+            issues.append("BETA_ACCESS_MAX_FAMILIES must be between 1 and 15")
 
     from .email_service import password_reset_email_configuration_issues
     issues.extend(password_reset_email_configuration_issues())

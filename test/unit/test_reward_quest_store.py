@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,6 +24,42 @@ def _fingerprint(seed: str) -> str:
         answers=f"Answer {seed}",
         subject="Maths",
     )
+
+
+def _award_sticker_points(
+    store: RewardStore,
+    *,
+    account_id: str = "acct_family",
+    student_id: str = "stu_learner",
+    prefix: str,
+) -> dict:
+    """Earn at least the catalogue's 500-point sticker threshold."""
+    now = datetime.now(UTC).replace(
+        hour=12,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    for day_offset in range(5):
+        awarded_at = now - timedelta(days=day_offset)
+        for index, subject in enumerate(
+            ("Maths", "English", "Science"),
+            start=1,
+        ):
+            store.award_checked_activity(
+                account_id=account_id,
+                student_id=student_id,
+                fingerprint=_fingerprint(
+                    f"{prefix}-{day_offset}-{index}"
+                ),
+                subject=subject,
+                gift_points_eligible=True,
+                awarded_at=awarded_at,
+            )
+    return store.dashboard(
+        account_id=account_id,
+        student_id=student_id,
+    )["wallet"]
 
 
 def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
@@ -142,16 +178,7 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
         f"sqlite+pysqlite:///{tmp_path / 'spend.db'}",
         delivery_secret=DELIVERY_SECRET,
     )
-    now = datetime.now(UTC).replace(microsecond=0)
-    for index, subject in enumerate(("Maths", "English", "Science"), start=1):
-        store.award_checked_activity(
-            account_id="acct_family",
-            student_id="stu_learner",
-            fingerprint=_fingerprint(str(index)),
-            subject=subject,
-            gift_points_eligible=True,
-            awarded_at=now,
-        )
+    before = _award_sticker_points(store, prefix="spend")
 
     requested = store.request_redemption(
         account_id="acct_family",
@@ -160,10 +187,7 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
         gift_points_eligible=True,
     )
     assert requested["status"] == "pending"
-    before = store.dashboard(
-        account_id="acct_family", student_id="stu_learner"
-    )["wallet"]
-    assert before["gift_points"] == 130
+    assert before["gift_points"] >= 500
 
     with pytest.raises(PermissionError, match="active Homework Magic subscription"):
         store.decide_redemption(
@@ -181,8 +205,8 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
         gift_points_eligible=True,
     )
     assert approved["redemption"]["status"] == "approved"
-    assert approved["wallet"]["gift_points"] == 30
-    assert approved["wallet"]["lifetime_xp"] == 130
+    assert approved["wallet"]["gift_points"] == before["gift_points"] - 500
+    assert approved["wallet"]["lifetime_xp"] == before["lifetime_xp"]
     assert approved["redemption"]["delivery_address_supplied"] is True
     assert "recipient_name" not in str(approved)
 
@@ -197,8 +221,8 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
         decision="cancel",
     )
     assert cancelled["redemption"]["status"] == "cancelled"
-    assert cancelled["wallet"]["gift_points"] == 130
-    assert cancelled["wallet"]["lifetime_xp"] == 130
+    assert cancelled["wallet"]["gift_points"] == before["gift_points"]
+    assert cancelled["wallet"]["lifetime_xp"] == before["lifetime_xp"]
     assert store.get_reward_order(redemption_id=requested["id"])[
         "delivery_address"
     ] is None
@@ -209,16 +233,7 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
         f"sqlite+pysqlite:///{tmp_path / 'delivery.db'}",
         delivery_secret=DELIVERY_SECRET,
     )
-    now = datetime.now(UTC).replace(microsecond=0)
-    for index, subject in enumerate(("Maths", "English", "Science"), start=1):
-        store.award_checked_activity(
-            account_id="acct_family",
-            student_id="stu_learner",
-            fingerprint=_fingerprint(f"delivery-{index}"),
-            subject=subject,
-            gift_points_eligible=True,
-            awarded_at=now,
-        )
+    before = _award_sticker_points(store, prefix="delivery")
 
     dashboard = store.dashboard(account_id="acct_family", student_id="stu_learner")
     assert {item["code"] for item in dashboard["catalog"]} == {
@@ -260,7 +275,7 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
         decision="dispatch",
     )
     assert dispatched["redemption"]["status"] == "dispatched"
-    assert dispatched["wallet"]["lifetime_xp"] == 130
+    assert dispatched["wallet"]["lifetime_xp"] == before["lifetime_xp"]
 
 
 def test_review_fingerprint_never_contains_raw_homework_or_answers() -> None:

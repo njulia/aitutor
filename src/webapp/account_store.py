@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import threading
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -45,6 +46,7 @@ _ENGINE: Optional[Engine] = None
 _ENGINE_URL: Optional[str] = None
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _metadata = MetaData()
+BETA_PLAN = "beta_year3"
 
 accounts = Table(
     "accounts",
@@ -89,6 +91,30 @@ subscriptions = Table(
     Column("stripe_customer_id", String(100), nullable=True, index=True),
     Column("stripe_subscription_id", String(100), nullable=True, unique=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+beta_access_grants = Table(
+    "beta_access_grants",
+    _metadata,
+    Column("id", String(100), primary_key=True),
+    Column(
+        "account_id",
+        String(80),
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    ),
+    Column("granted_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+
+beta_access_capacity = Table(
+    "beta_access_capacity",
+    _metadata,
+    Column("cohort", String(40), primary_key=True),
+    Column("redeemed_count", Integer, nullable=False, default=0),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -424,7 +450,182 @@ def account_has_active_reward_subscription(account_id: str) -> bool:
     if not subscription:
         return False
     plan = str(subscription.get("plan") or "").strip().lower()
-    return bool(plan and plan != "trial_5day")
+    return bool(
+        plan
+        and plan not in {"trial_5day", BETA_PLAN}
+        and plan.endswith("_monthly")
+    )
+
+
+def beta_access_enabled() -> bool:
+    return os.getenv("BETA_ACCESS_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _bounded_beta_setting(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+def redeem_beta_access(account_id: str, invite_code: str) -> Dict[str, Any]:
+    """Grant invite-only, non-renewing Year 1–6 beta access.
+
+    A shared invite secret is suitable for the deliberately small parent
+    research cohort because this transaction enforces a hard maximum of 15
+    family accounts. The code is compared in constant time and is never stored
+    in the database or logs.
+    """
+    if not beta_access_enabled():
+        raise ValueError("The parent beta is not accepting invitations right now.")
+    configured_code = os.getenv("BETA_ACCESS_CODE", "")
+    if len(configured_code) < 16:
+        raise RuntimeError("BETA_ACCESS_CODE is not configured safely")
+    supplied_code = str(invite_code or "").strip()
+    if not secrets.compare_digest(supplied_code, configured_code):
+        raise PermissionError("That beta invitation code is not recognised.")
+
+    maximum_families = _bounded_beta_setting(
+        "BETA_ACCESS_MAX_FAMILIES", 15, 1, 15
+    )
+    duration_days = _bounded_beta_setting(
+        "BETA_ACCESS_DURATION_DAYS", 14, 1, 31
+    )
+    engine = _engine()
+    now = _now()
+
+    try:
+        with engine.begin() as conn:
+            capacity = conn.execute(
+                select(beta_access_capacity.c.cohort).where(
+                    beta_access_capacity.c.cohort == "parent_beta"
+                )
+            ).first()
+            if not capacity:
+                existing_count = int(
+                    conn.execute(
+                        select(func.count()).select_from(beta_access_grants)
+                    ).scalar_one()
+                    or 0
+                )
+                conn.execute(
+                    insert(beta_access_capacity).values(
+                        cohort="parent_beta",
+                        redeemed_count=existing_count,
+                        updated_at=now,
+                    )
+                )
+    except IntegrityError:
+        # Another worker created the singleton capacity row.
+        pass
+
+    with engine.begin() as conn:
+        if not conn.execute(
+            select(accounts.c.id).where(accounts.c.id == account_id)
+        ).first():
+            raise ValueError("Parent account not found")
+
+        active_paid = conn.execute(
+            select(subscriptions.c.plan)
+            .where(
+                and_(
+                    subscriptions.c.account_id == account_id,
+                    subscriptions.c.status.in_(["active", "trialing"]),
+                    subscriptions.c.current_period_end > now,
+                    subscriptions.c.plan != BETA_PLAN,
+                )
+            )
+            .limit(1)
+        ).first()
+        if active_paid:
+            raise ValueError(
+                "This family already has active Homework Magic access."
+            )
+
+        existing_grant = conn.execute(
+            select(beta_access_grants).where(
+                beta_access_grants.c.account_id == account_id
+            )
+        ).first()
+        if existing_grant:
+            grant = dict(existing_grant._mapping)
+            beta_subscription_id = f"beta_{grant['id']}"
+            existing_subscription = conn.execute(
+                select(subscriptions).where(
+                    subscriptions.c.stripe_subscription_id
+                    == beta_subscription_id
+                )
+            ).first()
+            if not existing_subscription:
+                raise RuntimeError("The existing beta grant could not be read")
+            return {
+                "subscription": _dict(existing_subscription) or {},
+                "already_redeemed": True,
+                "maximum_families": maximum_families,
+            }
+
+        capacity_update = conn.execute(
+            update(beta_access_capacity)
+            .where(
+                and_(
+                    beta_access_capacity.c.cohort == "parent_beta",
+                    beta_access_capacity.c.redeemed_count
+                    < maximum_families,
+                )
+            )
+            .values(
+                redeemed_count=beta_access_capacity.c.redeemed_count + 1,
+                updated_at=now,
+            )
+        )
+        if not capacity_update.rowcount:
+            raise ValueError("The parent beta cohort is now full.")
+
+        grant_id = f"grant_{uuid.uuid4().hex}"
+        subscription_id = f"subrec_{uuid.uuid4().hex}"
+        beta_subscription_id = f"beta_{grant_id}"
+        expires_at = now + timedelta(days=duration_days)
+        conn.execute(
+            insert(beta_access_grants).values(
+                id=grant_id,
+                account_id=account_id,
+                granted_at=now,
+                expires_at=expires_at,
+            )
+        )
+        conn.execute(
+            insert(subscriptions).values(
+                id=subscription_id,
+                account_id=account_id,
+                plan=BETA_PLAN,
+                price_id=None,
+                status="active",
+                starts_at=now,
+                current_period_end=expires_at,
+                expires_at=expires_at,
+                cancel_at_period_end=True,
+                stripe_customer_id=None,
+                stripe_subscription_id=beta_subscription_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        saved = conn.execute(
+            select(subscriptions).where(
+                subscriptions.c.id == subscription_id
+            )
+        ).first()
+    return {
+        "subscription": _dict(saved) or {},
+        "already_redeemed": False,
+        "maximum_families": maximum_families,
+    }
 
 
 def account_has_used_plan(account_id: str, plan: str) -> bool:
@@ -455,6 +656,8 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
         effective_required = set(required_plans)
         if sub.get("plan") in {"family_monthly", "trial_5day"}:
             return True
+        if sub.get("plan") == BETA_PLAN:
+            return "homework_monthly" in effective_required
         return sub.get("plan") in effective_required
     return True
 
@@ -519,6 +722,11 @@ def delete_account(account_id: str) -> bool:
     behave like PostgreSQL's ON DELETE CASCADE.
     """
     with _engine().begin() as conn:
+        conn.execute(
+            delete(beta_access_grants).where(
+                beta_access_grants.c.account_id == account_id
+            )
+        )
         conn.execute(delete(subscriptions).where(subscriptions.c.account_id == account_id))
         conn.execute(delete(students).where(students.c.account_id == account_id))
         result = conn.execute(delete(accounts).where(accounts.c.id == account_id))

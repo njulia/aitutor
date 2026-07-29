@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Free Year 3 Parent Beta | Homework Magic</title>
+  <meta name="description" content="Invite-only, free Year 3 usability test for parents and guardians. No payment card and no automatic renewal.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/beta.css">
+</head>
+<body class="hm-page">
+  <a class="hm-skip-link" href="#main-content">Skip to main content</a>
+  <header class="hm-site-header">
+    <div class="hm-nav-wrap">
+      <a class="hm-brand" href="/">✨ Homework Magic</a>
+      <nav class="hm-main-nav" aria-label="Parent beta navigation">
+        <a href="/app">Learning app</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/login?next=/beta">Parent sign in</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="beta-shell">
+    <section class="beta-hero">
+      <p class="beta-kicker">Parent research · invitation only</p>
+      <h1>Help us make Year 3 practice calmer.</h1>
+      <p>Try one short activity on three different days, then tell us what felt useful or confusing.</p>
+      <ul class="beta-list">
+        <li>Free, time-limited access for one small parent cohort.</li>
+        <li>No payment card, charge or automatic renewal.</li>
+        <li>Year 1–6 learning features only; physical gifts are not included.</li>
+        <li>A parent or guardian creates and manages the family account.</li>
+      </ul>
+    </section>
+
+    <section class="beta-card" aria-labelledby="beta-code-title">
+      <h2 id="beta-code-title">Use your parent invitation</h2>
+      <div class="beta-notice">
+        Please use a learner nickname. Do not enter a child’s full name, school, address, phone
+        number or exact date of birth anywhere in the learning prompts or feedback.
+      </div>
+      <form id="beta-form" class="beta-form">
+        <label for="beta-code">
+          Invitation code
+          <input id="beta-code" name="invite_code" type="password" autocomplete="off" maxlength="128" required>
+        </label>
+        <button id="beta-submit" class="hm-button hm-button-primary" type="submit">Start free beta access</button>
+      </form>
+      <p id="beta-status" class="beta-status" role="status" aria-live="polite"></p>
+      <div id="beta-success-actions" class="beta-actions" hidden>
+        <a class="hm-button hm-button-primary" href="/app?tab=homework&amp;year=3&amp;subject=Maths">Try a Year 3 activity</a>
+        <a class="hm-button" href="/beta-feedback">Give parent feedback</a>
+      </div>
+      <p class="beta-small">By joining, you agree to the <a href="/terms">Terms</a> and acknowledge the <a href="/privacy">Privacy Notice</a>.</p>
+    </section>
+  </main>
+  <script src="/static/js/beta.js" defer></script>
+</body>
+</html>

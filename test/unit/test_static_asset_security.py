@@ -39,6 +39,11 @@ class _ScriptSourceParser(HTMLParser):
         "terms.html",
         "refund-policy.html",
         "safety.html",
+        "beta.html",
+        "beta-feedback.html",
+        "year-3-maths-practice.html",
+        "year-3-english-reading-practice.html",
+        "calm-eleven-plus-practice.html",
     ],
 )
 def test_learner_and_account_pages_do_not_load_remote_scripts(relative_path: str) -> None:

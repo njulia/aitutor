@@ -7,6 +7,18 @@ from src.webapp.homework_assignment_store import HomeworkAssignmentStore
 def mock_assignment_store(monkeypatch, tmp_path):
     store = HomeworkAssignmentStore(f"sqlite+pysqlite:///{tmp_path / 'test_assignments.db'}")
     monkeypatch.setattr(generator, "get_assignment_store", lambda: store)
+    # These tests verify routing and year-group arguments, not embeddings or
+    # PostgreSQL RAG persistence. Keep them deterministic and lightweight.
+    monkeypatch.setattr(
+        generator,
+        "store_homework",
+        lambda **_kwargs: "hw_test",
+    )
+    monkeypatch.setattr(
+        generator,
+        "elevenplus_store_homework",
+        lambda **_kwargs: "11plus_test",
+    )
     return store
 
 def test_math_year_group_respects_profile(monkeypatch, mock_assignment_store):

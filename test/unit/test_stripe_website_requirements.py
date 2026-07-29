@@ -33,6 +33,14 @@ def test_pricing_discloses_currency_renewal_delivery_and_policies() -> None:
     assert 'href="/terms"' in pricing
     assert 'href="/refund-policy"' in pricing
     assert "contact@homeworkmagic.co.uk" in pricing
+    assert "50% off" not in pricing
+    assert "Service operator:" in pricing
+    assert "Business and service address:" in pricing
+    assert "Your current subscription" in pricing
+    assert "Manage or cancel subscription" in pricing
+    assert "/api/billing/status?refresh=true" in pricing
+    assert 'id="pricing-nav-login"' in pricing
+    assert 'id="pricing-nav-logout"' in pricing
 
 
 def test_homepage_and_contact_page_expose_direct_support_and_legal_links() -> None:
@@ -60,6 +68,8 @@ def test_legal_routes_render_configured_operator_details(client, monkeypatch, ro
     visible = _visible_text(response.text)
 
     assert response.status_code == 200
+    if route == "/pricing":
+        assert response.headers["cache-control"] == "no-store, private"
     assert "{{" not in response.text
     assert "Example Operator & Co" in visible
     assert "1 Example Road, London" in visible
@@ -68,7 +78,10 @@ def test_legal_routes_render_configured_operator_details(client, monkeypatch, ro
     assert "Not VAT registered" in visible
 
 
-@pytest.mark.parametrize("filename", ["terms.html", "refund-policy.html", "privacy.html"])
+@pytest.mark.parametrize(
+    "filename",
+    ["terms.html", "refund-policy.html", "privacy.html", "pricing.html"],
+)
 def test_required_operator_details_are_not_hidden_in_html_comments(filename: str) -> None:
     comments = " ".join(re.findall(r"<!--(.*?)-->", _page(filename), flags=re.DOTALL))
 

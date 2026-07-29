@@ -81,8 +81,8 @@ function renderWallet(data) {
   document.getElementById('gift-points').textContent = String(wallet.gift_points);
   const giftPointsNote = document.querySelector('.wallet-card.spendable small');
   giftPointsNote.textContent = giftAccess.eligible
-    ? 'Your active plan earns Gift Points for checked learning'
-    : 'Locked: an active monthly subscription is needed';
+    ? 'Gift Points are switched on by your grown-up'
+    : 'A grown-up manages Gift Points and gifts';
   document.getElementById('level-icon').textContent = level.icon;
   document.getElementById('level-number').textContent = String(level.number);
   document.getElementById('level-name').textContent = level.name;
@@ -98,17 +98,17 @@ function renderGiftAccess(giftAccess) {
   const eligible = Boolean(giftAccess && giftAccess.eligible);
   const note = document.getElementById('gift-access-note');
   const copy = note.querySelector('p');
-  const planLink = document.getElementById('gift-access-plan-link');
+  const parentPlanCopy = document.getElementById('parent-plan-copy');
   clearNode(copy);
   const heading = element('strong', '', 'Everyone can earn XP. ');
   copy.append(heading);
-  copy.append(document.createTextNode(
-    eligible
-      ? 'Your active monthly plan also earns Gift Points and unlocks gift claims.'
-      : 'Gift Points and gifts are available only with an active monthly Homework Magic subscription.',
-  ));
+  copy.append(document.createTextNode('A grown-up manages Gift Points, gifts and plans.'));
   note.classList.toggle('eligible', eligible);
-  planLink.hidden = eligible;
+  if (parentPlanCopy) {
+    parentPlanCopy.textContent = eligible
+      ? 'This family’s eligible monthly plan earns Gift Points and allows parent-approved gift requests. '
+      : 'Gift Points and gift approvals require an eligible monthly plan. The five-day pass and free beta access do not include physical gifts. ';
+  }
 }
 
 function renderQuests(quests) {
@@ -226,7 +226,7 @@ function renderCatalog(data) {
     button.type = 'button';
     const shortfall = Math.max(0, item.points_cost - data.wallet.gift_points);
     if (!giftAccessEligible) {
-      button.textContent = 'Active plan needed';
+      button.textContent = 'Ask a grown-up';
       button.disabled = true;
     } else if (pendingCodes.has(item.code)) {
       button.textContent = 'Request in progress';

@@ -16,8 +16,9 @@ import re  # Ensure re is imported for regex operations
 import html
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from typing import Any, Dict, Optional, List
+from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +41,12 @@ from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
 from src.webapp.email_service import send_registration_confirmation_email
+from src.webapp.privacy_metrics import (
+    marketing_summary,
+    record_marketing_event,
+    record_voice_event,
+    voice_summary,
+)
 from src.webapp.question_utils import (
     _split_homework_into_questions as split_public_homework,
     parse_public_questions,
@@ -759,7 +766,75 @@ def _static_page(
     return FileResponse(path, headers={"Cache-Control": cache_control})
 
 
-def _public_legal_page(filename: str) -> HTMLResponse:
+def _marketing_source(request: Request) -> str:
+    """Return one coarse allow-listed source without retaining a URL or ID."""
+    raw_source = str(request.query_params.get("utm_source") or "").strip().lower()
+    aliases = {
+        "whatsapp": "whatsapp",
+        "school_whatsapp": "whatsapp",
+        "facebook": "facebook",
+        "fb": "facebook",
+        "google": "organic",
+        "google_ads": "google_ads",
+        "googleads": "google_ads",
+        "email": "email",
+        "community": "community",
+        "referral": "referral",
+    }
+    if raw_source in aliases:
+        return aliases[raw_source]
+    if request.query_params.get("gclid"):
+        return "google_ads"
+    referrer = request.headers.get("referer", "")
+    if not referrer:
+        return "direct"
+    try:
+        host = (urlparse(referrer).hostname or "").lower()
+    except ValueError:
+        return "unknown"
+    if not host:
+        return "unknown"
+    if host.endswith(("google.com", "google.co.uk", "bing.com")):
+        return "organic"
+    if host.endswith(("facebook.com", "m.facebook.com")):
+        return "facebook"
+    if host.endswith(("homeworkmagic.co.uk", "www.homeworkmagic.co.uk")):
+        return "direct"
+    return "referral"
+
+
+def _count_landing_visit(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    page: str,
+) -> None:
+    background_tasks.add_task(
+        record_marketing_event,
+        "landing_page_visit",
+        source=_marketing_source(request),
+        page=page,
+    )
+
+
+def _within_first_seven_days(created_at: Any) -> bool:
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    if not isinstance(created_at, datetime):
+        return False
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    age = datetime.now(UTC) - created_at.astimezone(UTC)
+    return timedelta(0) <= age <= timedelta(days=7)
+
+
+def _public_legal_page(
+    filename: str,
+    *,
+    cache_control: str = "public, max-age=300",
+) -> HTMLResponse:
     """Render public legal details from production-validated environment values."""
     path = os.path.join(project_root, "static", filename)
     if not os.path.isfile(path):
@@ -771,17 +846,33 @@ def _public_legal_page(filename: str) -> HTMLResponse:
         or os.getenv("PRIVACY_CONTACT_EMAIL")
         or "contact@homeworkmagic.co.uk"
     )
+    configured = {
+        "DATA_CONTROLLER_NAME": os.getenv("DATA_CONTROLLER_NAME", "").strip(),
+        "PRIVACY_CONTACT_EMAIL": os.getenv("PRIVACY_CONTACT_EMAIL", "").strip(),
+        "PRIVACY_POSTAL_ADDRESS": os.getenv(
+            "PRIVACY_POSTAL_ADDRESS", ""
+        ).strip(),
+    }
+    missing = [name for name, value in configured.items() if not value]
+    is_non_production = _dev_mode or os.getenv(
+        "TESTING", ""
+    ).strip().lower() in {"1", "true", "yes"}
+    if missing and not is_non_production:
+        logger.error(
+            "Public legal page blocked because required operator settings are missing"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="The legal information page is temporarily unavailable.",
+        )
     replacements = {
-        "{{DATA_CONTROLLER_NAME}}": os.getenv(
-            "DATA_CONTROLLER_NAME", "[Add the legal operator name before launch]"
-        ),
+        "{{DATA_CONTROLLER_NAME}}": configured["DATA_CONTROLLER_NAME"]
+        or "Homework Magic development operator",
         "{{BUSINESS_CONTACT_EMAIL}}": contact_email,
-        "{{PRIVACY_CONTACT_EMAIL}}": os.getenv(
-            "PRIVACY_CONTACT_EMAIL", "[Add a privacy contact email before launch]"
-        ),
-        "{{PRIVACY_POSTAL_ADDRESS}}": os.getenv(
-            "PRIVACY_POSTAL_ADDRESS", "[Add a postal contact address before launch]"
-        ),
+        "{{PRIVACY_CONTACT_EMAIL}}": configured["PRIVACY_CONTACT_EMAIL"]
+        or contact_email,
+        "{{PRIVACY_POSTAL_ADDRESS}}": configured["PRIVACY_POSTAL_ADDRESS"]
+        or "Development environment (configure before public deployment)",
     }
     for marker, value in replacements.items():
         content = content.replace(marker, html.escape(str(value), quote=True))
@@ -812,7 +903,7 @@ def _public_legal_page(filename: str) -> HTMLResponse:
     }
     for marker, rendered_line in optional_lines.items():
         content = content.replace(marker, rendered_line)
-    return HTMLResponse(content, headers={"Cache-Control": "public, max-age=300"})
+    return HTMLResponse(content, headers={"Cache-Control": cache_control})
 
 
 class ProfileRequest(BaseModel):
@@ -933,7 +1024,8 @@ class AuthRequest(BaseModel):
 
 
 @app.get("/")
-async def index():
+async def index(req: Request, background_tasks: BackgroundTasks):
+    _count_landing_visit(req, background_tasks, "home")
     return _static_page("static", "index.html")
 
 
@@ -968,7 +1060,8 @@ async def check_homework():
 
 
 @app.get("/register")
-async def register_page():
+async def register_page(req: Request, background_tasks: BackgroundTasks):
+    _count_landing_visit(req, background_tasks, "register")
     return _static_page("static", "register.html", cache_control="no-store, private")
 
 
@@ -978,8 +1071,12 @@ async def login_page():
 
 
 @app.get("/pricing")
-async def pricing_page():
-    return _public_legal_page("pricing.html")
+async def pricing_page(req: Request, background_tasks: BackgroundTasks):
+    _count_landing_visit(req, background_tasks, "pricing")
+    return _public_legal_page(
+        "pricing.html",
+        cache_control="no-store, private",
+    )
 
 
 @app.get("/privacy")
@@ -1000,6 +1097,52 @@ async def refund_policy_page():
 @app.get("/safety")
 async def safety_page():
     return _static_page("static", "safety.html")
+
+
+@app.get("/year-3-maths-practice")
+async def year_three_maths_landing(
+    req: Request,
+    background_tasks: BackgroundTasks,
+):
+    _count_landing_visit(req, background_tasks, "year3_maths")
+    return _static_page("static", "year-3-maths-practice.html")
+
+
+@app.get("/year-3-english-reading-practice")
+async def year_three_english_landing(
+    req: Request,
+    background_tasks: BackgroundTasks,
+):
+    _count_landing_visit(req, background_tasks, "year3_english")
+    return _static_page("static", "year-3-english-reading-practice.html")
+
+
+@app.get("/calm-eleven-plus-practice")
+async def calm_eleven_plus_landing(
+    req: Request,
+    background_tasks: BackgroundTasks,
+):
+    _count_landing_visit(req, background_tasks, "elevenplus_calm")
+    return _static_page("static", "calm-eleven-plus-practice.html")
+
+
+@app.get("/beta")
+async def beta_page(req: Request, background_tasks: BackgroundTasks):
+    _count_landing_visit(req, background_tasks, "beta")
+    return _static_page(
+        "static",
+        "beta.html",
+        cache_control="no-store, private",
+    )
+
+
+@app.get("/beta-feedback")
+async def beta_feedback_page():
+    return _static_page(
+        "static",
+        "beta-feedback.html",
+        cache_control="no-store, private",
+    )
 
 
 @app.get("/progress")
@@ -1668,7 +1811,11 @@ async def api_generate(req: Request, request: ProfileRequest):
 
 
 @app.post("/api/review")
-async def api_review(req: Request, request_body: ReviewRequest):
+async def api_review(
+    req: Request,
+    request_body: ReviewRequest,
+    background_tasks: BackgroundTasks,
+):
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
@@ -1792,6 +1939,23 @@ async def api_review(req: Request, request_body: ReviewRequest):
                         limit_concurrency=False,
                     )
                     result = {**result, "reward_update": reward_update}
+                    if reward_update.get("is_first_family_activity"):
+                        background_tasks.add_task(
+                            record_marketing_event,
+                            "first_activity_completed",
+                            source="unknown",
+                            page="learning_app",
+                        )
+                    if (
+                        reward_update.get("is_first_family_return_day")
+                        and _within_first_seven_days(account.get("created_at"))
+                    ):
+                        background_tasks.add_task(
+                            record_marketing_event,
+                            "return_within_7_days",
+                            source="unknown",
+                            page="learning_app",
+                        )
             except Exception:
                 # Reward persistence must never turn successful homework marking
                 # into an error for a child.
@@ -2219,6 +2383,12 @@ async def api_register(request_body: AuthRequest, req: Request, background_tasks
         await run_blocking(ensure_default_student, account["id"], timeout=10, limit_concurrency=False)
         token = await run_blocking(generate_token, username, timeout=10, limit_concurrency=False)
         background_tasks.add_task(send_registration_confirmation_email, to_email=username)
+        background_tasks.add_task(
+            record_marketing_event,
+            "parent_account_created",
+            source=_marketing_source(req),
+            page="register",
+        )
         response = JSONResponse({"success": True})
         response.set_cookie(
             "session", token, httponly=True, samesite="lax",
@@ -2380,6 +2550,17 @@ async def admin_overview():
         "langfuse_enabled": _check_langfuse(),
         "timestamp": datetime.now(UTC).isoformat(),
     }
+
+
+@app.get("/api/admin/marketing-summary")
+async def admin_marketing_summary(req: Request, days: int = 180):
+    _require_admin(req)
+    return await run_blocking(
+        marketing_summary,
+        days,
+        timeout=10,
+        limit_concurrency=False,
+    )
 
 
 @app.get("/api/admin/users")
@@ -2696,14 +2877,16 @@ Press Ctrl+C to stop
 
 @app.post("/api/log-voice-usage")
 async def log_voice_usage(request: Request):
-    """Log voice feature usage events (TTS or STT activation).
+    """Increment an aggregate voice-feature counter.
     
     POST body: {
         event_type: 'tts_used' | 'stt_used',
         year_group: int (1-6),
-        subject: str,
-        student_id: Optional[str]
+        subject: str
     }
+
+    Account, learner, cookie, IP and free-text values are not retained by the
+    application metric. No RAG, embedding or AI call is made.
     """
     try:
         data = await request.json()
@@ -2714,7 +2897,6 @@ async def log_voice_usage(request: Request):
     event_type = data.get("event_type")
     year_group = data.get("year_group")
     subject = data.get("subject")
-    student_id = data.get("student_id")
 
     if event_type not in ("tts_used", "stt_used") or year_group is None or not subject:
         return JSONResponse(
@@ -2723,12 +2905,13 @@ async def log_voice_usage(request: Request):
         )
 
     try:
-        from src.homework_rag import log_voice_event
-        log_voice_event(
-            event_type=event_type,
+        await run_blocking(
+            record_voice_event,
+            event_type,
             year_group=int(year_group),
-            subject=subject,
-            student_id=student_id
+            subject=str(subject),
+            timeout=5,
+            limit_concurrency=False,
         )
         return JSONResponse({"success": True})
     except Exception as e:
@@ -2745,9 +2928,14 @@ async def voice_usage_stats(request: Request):
     
     Access: admin/dev-mode only (gate via existing auth checks if applicable)
     """
+    _require_admin(request)
     try:
-        from src.homework_rag import get_voice_usage_stats
-        stats = get_voice_usage_stats()
+        stats = await run_blocking(
+            voice_summary,
+            180,
+            timeout=10,
+            limit_concurrency=False,
+        )
         return JSONResponse({"success": True, "stats": stats})
     except Exception as e:
         logger.error("[Voice] Failed to fetch stats: %s", e)

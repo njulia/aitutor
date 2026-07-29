@@ -278,6 +278,10 @@ PY
     app)
       grep -Eiq '<html([[:space:]>])' "${body_file}"
       ;;
+    legal)
+      grep -Eiq '<html([[:space:]>])' "${body_file}" &&
+        ! grep -Eq '\{\{|REPLACE_|configure before public deployment|50% off' "${body_file}"
+      ;;
     *)
       return 0
       ;;
@@ -327,7 +331,13 @@ check_application() {
     check_get "${base_url}" "/api/ready" ready &&
     check_get "${base_url}" "/robots.txt" robots &&
     check_get "${base_url}" "/sitemap.xml" sitemap &&
-    check_get "${base_url}" "/app" app
+    check_get "${base_url}" "/app" app &&
+    check_get "${base_url}" "/pricing" legal &&
+    check_get "${base_url}" "/terms" legal &&
+    check_get "${base_url}" "/privacy" legal &&
+    check_get "${base_url}" "/year-3-maths-practice" app &&
+    check_get "${base_url}" "/year-3-english-reading-practice" app &&
+    check_get "${base_url}" "/calm-eleven-plus-practice" app
 }
 
 log "Checking local source"
@@ -375,6 +385,41 @@ gcloud run services describe "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
   --format="value(metadata.name)" >/dev/null
+
+MISSING_PUBLIC_SETTINGS="$(
+  gcloud run services describe "${SERVICE}" \
+    --project="${PROJECT_ID}" \
+    --region="${REGION}" \
+    --format=json |
+  python3 -c '
+import json
+import sys
+
+required = {
+    "DATA_CONTROLLER_NAME",
+    "PRIVACY_CONTACT_EMAIL",
+    "PRIVACY_POSTAL_ADDRESS",
+    "BUSINESS_CONTACT_EMAIL",
+}
+service = json.load(sys.stdin)
+containers = (
+    service.get("spec", {})
+    .get("template", {})
+    .get("spec", {})
+    .get("containers", [])
+)
+configured = {
+    item.get("name")
+    for container in containers
+    for item in container.get("env", [])
+    if item.get("name") and (item.get("value") or item.get("valueFrom"))
+}
+print(",".join(sorted(required - configured)))
+'
+)"
+if [ -n "${MISSING_PUBLIC_SETTINGS}" ]; then
+  die "The Cloud Run service is missing required public business settings: ${MISSING_PUBLIC_SETTINGS}. Configure deploy/cloud-run.env.yaml and run deploy/deploy_gcp.sh first."
+fi
 
 gcloud sql instances describe "${SQL_INSTANCE}" \
   --project="${PROJECT_ID}" \

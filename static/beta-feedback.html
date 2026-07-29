@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Parent Beta Feedback | Homework Magic</title>
+  <meta name="description" content="Five-question parent feedback form for the Homework Magic Year 3 beta.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/beta.css">
+</head>
+<body class="hm-page">
+  <a class="hm-skip-link" href="#main-content">Skip to feedback form</a>
+  <header class="hm-site-header">
+    <div class="hm-nav-wrap">
+      <a class="hm-brand" href="/">✨ Homework Magic</a>
+      <nav class="hm-main-nav" aria-label="Feedback navigation">
+        <a href="/app">Learning app</a>
+        <a href="/beta">Parent beta</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="beta-shell">
+    <section class="beta-hero">
+      <p class="beta-kicker">Five short questions</p>
+      <h1>What should we improve?</h1>
+      <p>Honest parent feedback is more useful than a compliment. Please tell us where the experience was confusing, slow or unhelpful.</p>
+    </section>
+
+    <section class="beta-card">
+      <div class="beta-notice">
+        Please do not include a child’s name, school, birthday, address, answers, scores or other
+        private learning details. General observations are enough.
+      </div>
+      <form id="beta-feedback-form" class="beta-form">
+        <label for="feedback-email">
+          Parent or guardian email
+          <input id="feedback-email" type="email" autocomplete="email" maxlength="254" required>
+        </label>
+        <label for="feedback-start">
+          1. How easy was it to start the first activity?
+          <select id="feedback-start" required>
+            <option value="">Choose 1–5</option>
+            <option value="1">1 — Very difficult</option>
+            <option value="2">2 — Difficult</option>
+            <option value="3">3 — Okay</option>
+            <option value="4">4 — Easy</option>
+            <option value="5">5 — Very easy</option>
+          </select>
+        </label>
+        <label for="feedback-independence">
+          2. Could the learner understand what to do without lots of adult help?
+          <select id="feedback-independence" required>
+            <option value="">Choose 1–5</option>
+            <option value="1">1 — Not at all</option>
+            <option value="2">2 — Rarely</option>
+            <option value="3">3 — Sometimes</option>
+            <option value="4">4 — Mostly</option>
+            <option value="5">5 — Yes, clearly</option>
+          </select>
+        </label>
+        <label for="feedback-useful">
+          3. How useful did the questions and feedback feel?
+          <select id="feedback-useful" required>
+            <option value="">Choose 1–5</option>
+            <option value="1">1 — Not useful</option>
+            <option value="2">2 — Slightly useful</option>
+            <option value="3">3 — Fairly useful</option>
+            <option value="4">4 — Useful</option>
+            <option value="5">5 — Very useful</option>
+          </select>
+        </label>
+        <label for="feedback-confusing">
+          4. What was the most confusing or frustrating part?
+          <textarea id="feedback-confusing" maxlength="1000" required placeholder="Describe the screen or step, without personal child information."></textarea>
+        </label>
+        <label for="feedback-weekly">
+          5. Would your family choose to use a short activity each week?
+          <select id="feedback-weekly" required>
+            <option value="">Choose one</option>
+            <option value="yes">Yes</option>
+            <option value="maybe">Maybe</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <button id="feedback-submit" class="hm-button hm-button-primary" type="submit">Send parent feedback</button>
+      </form>
+      <p id="feedback-status" class="beta-status" role="status" aria-live="polite"></p>
+      <div id="feedback-success-actions" class="beta-actions" hidden>
+        <a class="hm-button hm-button-primary" href="/app">Continue learning</a>
+        <a class="hm-button" href="/">Back to homepage</a>
+      </div>
+    </section>
+  </main>
+  <script src="/static/js/beta-feedback.js" defer></script>
+</body>
+</html>

@@ -992,6 +992,52 @@
             }
         }
 
+        function applyLandingPagePreset() {
+            const params = new URLSearchParams(window.location.search);
+            const requestedYear = Number(params.get('year'));
+            const requestedSubject = String(params.get('subject') || '').trim();
+            const safeSubjects = ['Maths', 'English', 'Science'];
+            const hasYear = Number.isInteger(requestedYear)
+                && requestedYear >= 1
+                && requestedYear <= 6;
+            const hasSubject = safeSubjects.includes(requestedSubject);
+            if (!hasYear && !hasSubject) return;
+
+            const saved = loadLearningChoices();
+            if (hasYear) {
+                homeworkGuideState.answers.year_group = requestedYear;
+                saved.homeworkYear = requestedYear;
+                saved.homeworkQuickYear = requestedYear;
+                const quickYear = document.getElementById('homework-year');
+                if (quickYear) quickYear.value = String(requestedYear);
+            }
+            if (hasSubject) {
+                homeworkGuideState.answers.subject = requestedSubject;
+                homeworkGuideState.showAllSubjects = false;
+                saved.homeworkSubject = requestedSubject;
+                saved.homeworkQuickSubject = requestedSubject;
+            }
+            if (!homeworkGuideState.answers.session_minutes) {
+                homeworkGuideState.answers.session_minutes = 10;
+                saved.homeworkMinutes = 10;
+            }
+            if (!homeworkGuideState.answers.difficulty) {
+                homeworkGuideState.answers.difficulty = 'just_right';
+                saved.homeworkDifficulty = 'just_right';
+            }
+            if (!homeworkGuideState.answers.mode) {
+                homeworkGuideState.answers.mode = 'homework';
+                saved.homeworkMode = 'homework';
+                saved.homeworkQuickMode = 'homework';
+            }
+            homeworkGuideState.showQuickStart = isHomeworkGuideComplete();
+            try {
+                localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(saved));
+            } catch (error) {
+                console.warn('Could not save the landing-page practice choice:', error);
+            }
+        }
+
         function clearSavedLearningPrompts() {
             const saved = loadLearningChoices();
             delete saved.homeworkPrompt;
@@ -1215,6 +1261,7 @@
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
             restoreLearningChoices();
+            applyLandingPagePreset();
             hideLegacyHomeworkQuestionStyle();
             renderHomeworkGuide();
             renderElevenGuide();
@@ -3250,7 +3297,6 @@
                     event_type: eventType,
                     year_group: yearGroup,
                     subject: subject,
-                    student_id: currentStudentId || null,
                 })
             }).catch(() => {});
         }

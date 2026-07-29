@@ -100,6 +100,54 @@ Also copy the three live Stripe `price_...` identifiers into their matching
 `STRIPE_PRICE_...` fields. A Product ID (`prod_...`) or Pricing Table ID
 (`prctbl_...`) will not work. The real file is ignored by Git and Docker.
 
+`DATA_CONTROLLER_NAME` must be the real person or registered organisation
+operating Homework Magic. `PRIVACY_POSTAL_ADDRESS` must be an address at which
+the operator can be contacted; do not invent these values. The application
+will not start in production when either value is missing, and the staging
+release checks reject hidden placeholders or an unsupported “50% off” claim.
+
+The signed-in pricing page refreshes the linked Stripe customer before showing
+the current plan. This repairs a delayed or missed local webhook record without
+putting Stripe calls on learning-request paths. The prominent cancellation
+entry opens Stripe's hosted `subscription_cancel` flow. On first use, the
+application reuses or creates a Homework Magic portal configuration that
+enables end-of-period cancellation. If you manage that configuration manually,
+set its public `bpc_...` identifier as `STRIPE_PORTAL_CONFIGURATION_ID`.
+
+Keep the webhook endpoint subscribed to Checkout completion and customer
+subscription create, update and delete events. The refresh is a recovery path,
+not a replacement for normal webhook materialisation.
+
+## Optional parent beta
+
+The invite-only Year 3 parent beta is disabled by default. It needs no card,
+does not renew, unlocks Year 1–6 learning only, never earns Gift Points and is
+hard-capped in code at 15 family accounts.
+
+Generate one strong code, store it without printing or committing it, then add
+the secret binding when deploying:
+
+```bash
+openssl rand -base64 24 \
+  | gcloud secrets create homeworkmagic-beta-access-code \
+      --project="aitutor-502921" \
+      --replication-policy="automatic" \
+      --data-file=-
+
+export BETA_ACCESS_CODE_SECRET="homeworkmagic-beta-access-code"
+```
+
+Set `BETA_ACCESS_ENABLED: "true"` in the private
+`deploy/cloud-run.env.yaml` file only after the secret binding is ready. Share
+the code privately with invited parents; never put it in a public webpage,
+email campaign URL or source file. The beta page is `/beta` and the five
+question parent form is `/beta-feedback`.
+
+The optional first-party marketing counters are aggregate-only. The
+`/api/admin/marketing-summary` endpoint returns daily counts and does not store
+account, learner, email, cookie, IP, homework, answer, score, school or
+free-text fields.
+
 ## 4. Deploy
 
 Authenticate `gcloud`, select a deployer identity with permission to build and

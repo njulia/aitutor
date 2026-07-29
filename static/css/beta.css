@@ -1,0 +1,124 @@
+.beta-shell {
+  width: min(760px, calc(100% - 32px));
+  margin: 42px auto 72px;
+}
+
+.beta-hero,
+.beta-card {
+  background: #fff;
+  border: 1px solid #dedbea;
+  border-radius: 22px;
+  box-shadow: 0 14px 34px rgba(71, 54, 120, .1);
+  padding: clamp(22px, 5vw, 38px);
+}
+
+.beta-hero {
+  background: linear-gradient(145deg, #f2ecff, #fff8e8);
+  margin-bottom: 22px;
+}
+
+.beta-hero h1 {
+  margin: 8px 0 12px;
+  color: #352969;
+  font-size: clamp(2rem, 7vw, 3.1rem);
+  line-height: 1.05;
+}
+
+.beta-kicker {
+  color: #6751b5;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.beta-list {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+}
+
+.beta-notice {
+  background: #f5f2ff;
+  border-left: 5px solid #7660c9;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 18px 0;
+}
+
+.beta-form {
+  display: grid;
+  gap: 16px;
+}
+
+.beta-form label,
+.beta-form legend {
+  color: #352969;
+  font-weight: 800;
+}
+
+.beta-form input,
+.beta-form select,
+.beta-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 7px;
+  border: 2px solid #d8d1ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  color: #252238;
+  font: inherit;
+}
+
+.beta-form textarea {
+  min-height: 115px;
+  resize: vertical;
+}
+
+.beta-form input:focus,
+.beta-form select:focus,
+.beta-form textarea:focus {
+  border-color: #6751b5;
+  outline: 3px solid rgba(103, 81, 181, .18);
+}
+
+.beta-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.beta-status {
+  min-height: 1.5em;
+  margin-top: 16px;
+  font-weight: 800;
+  color: #245d3a;
+}
+
+.beta-status.error {
+  color: #a52b3a;
+}
+
+.beta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.beta-small {
+  color: #5d6880;
+  font-size: .92rem;
+}
+
+@media (max-width: 560px) {
+  .beta-shell {
+    width: min(100% - 20px, 760px);
+    margin-top: 20px;
+  }
+
+  .beta-actions .hm-button {
+    width: 100%;
+    text-align: center;
+  }
+}
