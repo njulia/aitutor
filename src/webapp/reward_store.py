@@ -347,12 +347,19 @@ def review_fingerprint(
     homework: str,
     answers: str,
     subject: str,
+    reward_activity_id: str | None = None,
     homework_doc_id: str | None = None,
     question_index: int | None = None,
     session_id: str | None = None,
 ) -> str:
     """Return a non-reversible source key without retaining learner content."""
-    if homework_doc_id:
+    if reward_activity_id:
+        source = (
+            f"activity:{_clean_id(reward_activity_id, maximum=100)}:"
+            f"q:{question_index if question_index is not None else 'all'}:"
+            f"{_clean_subject(subject)}"
+        )
+    elif homework_doc_id:
         source = (
             f"doc:{_clean_id(homework_doc_id, maximum=160)}:"
             f"q:{question_index if question_index is not None else 'all'}"
@@ -789,7 +796,13 @@ class RewardStore:
             if is_tutor_mode
             else _bounded_env_int("REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100)
         )
-        daily_cap = _bounded_env_int("REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10)
+        # Lifetime XP is an effort record for every authenticated learner and
+        # must never depend on a plan or stop after a small number of
+        # activities. Keep the configurable cap only for subscriber Gift
+        # Points, which can be exchanged for physical rewards.
+        daily_gift_activity_cap = _bounded_env_int(
+            "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
+        )
         source_key = f"checked:{local_day}:{digest}"
         awarded_events: list[dict[str, Any]] = []
         already_awarded = False
@@ -830,25 +843,29 @@ class RewardStore:
                     local_day=local_day,
                     week_start=week_start,
                 )
-                if day_count < daily_cap:
-                    event = self._add_event(
-                        conn,
-                        account_id=account,
-                        student_id=learner,
-                        source_key=source_key,
-                        event_type="checked_activity",
-                        label="Checked learning activity",
-                        lifetime_delta=activity_xp,
-                        spendable_delta=(
-                            activity_xp if gift_points_eligible else 0
-                        ),
-                        subject=subject,
-                        local_day=local_day,
-                        week_start=week_start,
-                        created_at=now,
-                    )
-                    if event:
-                        awarded_events.append(event)
+                event = self._add_event(
+                    conn,
+                    account_id=account,
+                    student_id=learner,
+                    source_key=source_key,
+                    event_type="checked_activity",
+                    label="Checked learning activity",
+                    lifetime_delta=activity_xp,
+                    spendable_delta=(
+                        activity_xp
+                        if (
+                            gift_points_eligible
+                            and day_count < daily_gift_activity_cap
+                        )
+                        else 0
+                    ),
+                    subject=subject,
+                    local_day=local_day,
+                    week_start=week_start,
+                    created_at=now,
+                )
+                if event:
+                    awarded_events.append(event)
 
             day_count, active_days, subject_count = self._quest_progress(
                 conn,
@@ -934,8 +951,14 @@ class RewardStore:
             "gift_points_eligible": bool(gift_points_eligible),
             "activity_xp": activity_xp if activity_awarded else 0,
             "already_awarded": already_awarded,
-            "daily_cap_reached": day_count >= daily_cap,
-            "daily_reward_limit": daily_cap,
+            # Keep the old response fields for deployed clients. They now
+            # describe the Gift Points activity cap; lifetime XP is uncapped.
+            "daily_cap_reached": day_count >= daily_gift_activity_cap,
+            "daily_reward_limit": daily_gift_activity_cap,
+            "daily_gift_activity_cap_reached": (
+                day_count >= daily_gift_activity_cap
+            ),
+            "xp_activity_cap": None,
             "lifetime_xp": wallet["lifetime_xp"],
             "gift_points": wallet["gift_points"],
             "level": _level_status(int(wallet.get("lifetime_xp") or 0)),
@@ -1154,6 +1177,10 @@ class RewardStore:
                 "daily_activity_cap": _bounded_env_int(
                     "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
                 ),
+                "daily_gift_point_activity_cap": _bounded_env_int(
+                    "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
+                ),
+                "xp_activity_cap": None,
                 "gift_provider": "homework_magic",
                 "delivery_country": "GB",
                 "xp_never_deducted": True,

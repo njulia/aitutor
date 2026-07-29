@@ -2438,6 +2438,7 @@
                         is_tutor_mode: true,
                         from_rag: hw.from_rag,
                         homework_doc_id: hw.doc_id,
+                        reward_activity_id: hw.reward_activity_id || null,
                         is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
@@ -2592,6 +2593,7 @@
                             quick_review: true,
                             from_rag: Boolean(homeworkItem.from_rag),
                             homework_doc_id: homeworkItem.doc_id || null,
+                            reward_activity_id: homeworkItem.reward_activity_id || null,
                             is_eleven_plus: Boolean(homeworkItem.is_eleven_plus),
                             question_index: Number.isInteger(homeworkItem.question_index)
                                 ? homeworkItem.question_index : null

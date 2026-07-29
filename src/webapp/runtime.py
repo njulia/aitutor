@@ -153,8 +153,8 @@ def production_configuration_issues() -> list[str]:
             beta_limit = int(os.getenv("BETA_ACCESS_MAX_FAMILIES", "15"))
         except ValueError:
             beta_limit = 0
-        if beta_limit < 1 or beta_limit > 15:
-            issues.append("BETA_ACCESS_MAX_FAMILIES must be between 1 and 15")
+        if beta_limit < 1 or beta_limit > 30:
+            issues.append("BETA_ACCESS_MAX_FAMILIES must be between 1 and 30")
 
     from .email_service import password_reset_email_configuration_issues
     issues.extend(password_reset_email_configuration_issues())

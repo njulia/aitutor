@@ -934,6 +934,7 @@ class ReviewRequest(BaseModel):
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
+    reward_activity_id: Optional[str] = Field(default=None, max_length=100)
     question_index: Optional[int] = Field(default=None, ge=0, le=500)
     is_eleven_plus: bool = False
 
@@ -1733,6 +1734,13 @@ async def api_generate(req: Request, request: ProfileRequest):
             all_homework_results = limit_homework_question_count(
                 all_homework_results, profile["question_count"]
             )
+        # A short server-issued activity ID lets the reward system distinguish
+        # a newly generated activity from a repeated submission of the same
+        # activity. This matters when RAG selects the same source document more
+        # than once. It contains no learner or homework data and is still
+        # protected by the daily XP cap.
+        for homework_block in all_homework_results:
+            homework_block["reward_activity_id"] = f"act_{uuid.uuid4().hex}"
         if setup_source == "guided_homework":
             response_profile = guided_homework_client_profile(profile)
         elif setup_source == "guided_11plus":
@@ -1751,6 +1759,9 @@ async def api_generate(req: Request, request: ProfileRequest):
                     question["from_rag"] = bool(hw_block.get("from_rag", False))
                     question["is_eleven_plus"] = bool(request.is_eleven_plus)
                     question["question_index"] = question_index
+                    question["reward_activity_id"] = hw_block.get(
+                        "reward_activity_id"
+                    )
                     question["plan_week"] = hw_block.get("plan_week") or profile.get("plan_week")
                     question["content_type"] = hw_block.get("content_type")
                 individual_questions.extend(split_questions)
@@ -1923,6 +1934,7 @@ async def api_review(
                         homework=request_body.homework,
                         answers=request_body.answers,
                         subject=request_body.subject,
+                        reward_activity_id=request_body.reward_activity_id,
                         homework_doc_id=request_body.homework_doc_id,
                         question_index=request_body.question_index,
                         session_id=request_body.session_id,

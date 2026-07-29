@@ -218,6 +218,8 @@
             position: relative;
             width: 100%;
             min-width: 0;
+            /* Safari 12 ignores clamp(), so keep a usable height first. */
+            height: 360px;
             height: clamp(300px, 46vw, 430px);
             overflow: hidden;
         }
@@ -652,6 +654,7 @@
             }
 
             .chart-container {
+                height: 340px;
                 height: clamp(280px, 82vw, 370px);
             }
 
@@ -870,12 +873,12 @@
         }
 
         function escapeHtml(value) {
-            return String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function plural(value, singular, pluralWord = `${singular}s`) {
@@ -925,14 +928,27 @@
         }
 
         function normaliseSubjects(summary, accuracyRate) {
-            const source = Array.isArray(summary?.by_subject) && summary.by_subject.length
+            const summarySubjects = summary && summary.by_subject;
+            const accuracySubjects = accuracyRate && accuracyRate.by_subject;
+            const source = Array.isArray(summarySubjects) && summarySubjects.length
                 ? summary.by_subject
-                : (Array.isArray(accuracyRate?.by_subject) ? accuracyRate.by_subject : []);
+                : (Array.isArray(accuracySubjects) ? accuracySubjects : []);
             return source.map(item => ({
                 subject: displaySubjectName(item.subject),
-                accuracy: percent(item.avg_accuracy ?? item.accuracy ?? item.avg_score),
-                sessions: Math.max(0, Math.round(safeNumber(item.total_sessions ?? item.count ?? item.graded_sessions)))
+                accuracy: percent(firstDefined(item.avg_accuracy, item.accuracy, item.avg_score)),
+                sessions: Math.max(0, Math.round(safeNumber(
+                    firstDefined(item.total_sessions, item.count, item.graded_sessions)
+                )))
             }));
+        }
+
+        function firstDefined() {
+            for (let index = 0; index < arguments.length; index += 1) {
+                if (arguments[index] !== null && arguments[index] !== undefined) {
+                    return arguments[index];
+                }
+            }
+            return undefined;
         }
 
         function overallAccuracy(data) {
@@ -1045,9 +1061,18 @@
 
         function renderStats(overall, streak, dailyGoal, accuracyRate, topicCount) {
             const statsContainer = document.getElementById('stats-container');
-            const accuracy = accuracyRate.overall_accuracy ?? accuracyRate.accuracy_rate ?? overall.avg_accuracy ?? 0;
-            const longestStreak = streak.best_streak ?? streak.longest_streak ?? 0;
-            const goalRate = dailyGoal.daily_goal_rate ?? 0;
+            const accuracy = firstDefined(
+                accuracyRate.overall_accuracy,
+                accuracyRate.accuracy_rate,
+                overall.avg_accuracy,
+                0
+            );
+            const longestStreak = firstDefined(
+                streak.best_streak,
+                streak.longest_streak,
+                0
+            );
+            const goalRate = firstDefined(dailyGoal.daily_goal_rate, 0);
 
             statsContainer.innerHTML = `
                 <div class="stat-card">

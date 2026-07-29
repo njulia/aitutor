@@ -43,13 +43,45 @@ def test_deploy_script_requires_encrypted_reward_delivery_secret() -> None:
     assert "ensure_reward_delivery_secret" in source
     assert "ensure_reward_delivery_secret" in code_deploy
     assert (
-        "--update-secrets=\"REWARD_DELIVERY_SECRET="
-        "${REWARD_DELIVERY_SECRET_SECRET}:latest\""
+        "REWARD_DELIVERY_SECRET="
+        "${REWARD_DELIVERY_SECRET_SECRET}:latest"
     ) in code_deploy
     assert "secrets.token_urlsafe(48)" in helper
     assert "roles/secretmanager.secretAccessor" in helper
     assert "versions access latest" in helper
     assert "encrypt" in guide.lower()
+
+
+def test_code_deploy_preflights_and_rebinds_provider_secrets() -> None:
+    source = Path("deploy/deploy_code_gcp.sh").read_text(encoding="utf-8")
+    guide = Path("deploy/README.md").read_text(encoding="utf-8")
+
+    expected = {
+        "DEEPSEEK_API_KEY": (
+            "aitutor-deepseek-api-key",
+            "DEEPSEEK_API_KEY_SECRET",
+            "--deepseek-secret",
+        ),
+        "SMTP_PASSWORD": (
+            "aitutor-smtp-password",
+            "SMTP_PASSWORD_SECRET",
+            "--smtp-password-secret",
+        ),
+    }
+    for env_name, (secret_name, variable, option) in expected.items():
+        assert secret_name in source
+        assert variable in source
+        assert option in source
+        assert f"{env_name}=${{{variable}}}:latest" in source
+        assert secret_name in guide
+        assert option in guide
+
+    assert "validate_runtime_secret" in source
+    assert '--filter="state=ENABLED"' in source
+    assert "roles/secretmanager.secretAccessor" in source
+    assert source.index('log "Checking required provider') < source.index(
+        'log "Building'
+    )
 
 
 def test_repair_script_updates_only_stripe_configuration() -> None:
@@ -70,3 +102,4 @@ def test_repair_script_updates_only_stripe_configuration() -> None:
     assert "STRIPE_PRICE_ELEVENPLUS_MONTHLY" in source
     assert "STRIPE_PRICING_TABLE_ID" in source
     assert "STRIPE_PUBLISHABLE_KEY" in source
+    assert "price_1Tvl" not in source

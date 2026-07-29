@@ -62,7 +62,9 @@ def _award_sticker_points(
     )["wallet"]
 
 
-def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
+def test_effort_xp_is_uncapped_but_gift_points_keep_daily_cap(
+    tmp_path,
+) -> None:
     store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'rewards.db'}")
     account_id = "acct_family"
     student_id = "stu_learner"
@@ -115,7 +117,7 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         "brilliant_beginner"
     }
 
-    capped = store.award_checked_activity(
+    after_gift_cap = store.award_checked_activity(
         account_id=account_id,
         student_id=student_id,
         fingerprint=_fingerprint("four"),
@@ -123,13 +125,18 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         gift_points_eligible=True,
         awarded_at=now,
     )
-    assert capped["awarded_xp"] == 0
-    assert capped["daily_cap_reached"] is True
-    assert capped["lifetime_xp"] == 130
+    assert after_gift_cap["awarded_xp"] == 20
+    assert after_gift_cap["awarded_gift_points"] == 0
+    assert after_gift_cap["daily_cap_reached"] is True
+    assert after_gift_cap["daily_gift_activity_cap_reached"] is True
+    assert after_gift_cap["xp_activity_cap"] is None
+    assert after_gift_cap["lifetime_xp"] == 150
 
     dashboard = store.dashboard(account_id=account_id, student_id=student_id)
-    assert dashboard["wallet"]["lifetime_xp"] == 130
+    assert dashboard["wallet"]["lifetime_xp"] == 150
     assert dashboard["wallet"]["gift_points"] == 130
+    assert dashboard["rules"]["xp_activity_cap"] is None
+    assert dashboard["rules"]["daily_gift_point_activity_cap"] == 3
     completed = {item["code"] for item in dashboard["quests"] if item["completed"]}
     assert {
         "ready_set_learn",

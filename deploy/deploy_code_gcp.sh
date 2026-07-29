@@ -15,6 +15,8 @@ SERVICE="${SERVICE:-aitutor-prod}"
 REPOSITORY="${REPOSITORY:-aitutor-repo}"
 SQL_INSTANCE="${SQL_INSTANCE:-aitutor-prod-pg}"
 SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-aitutor-run@${PROJECT_ID}.iam.gserviceaccount.com}"
+DEEPSEEK_API_KEY_SECRET="${DEEPSEEK_API_KEY_SECRET:-aitutor-deepseek-api-key}"
+SMTP_PASSWORD_SECRET="${SMTP_PASSWORD_SECRET:-aitutor-smtp-password}"
 REWARD_DELIVERY_SECRET_SECRET="${REWARD_DELIVERY_SECRET_SECRET:-homeworkmagic-reward-delivery-secret}"
 BUSINESS_CONTACT_EMAIL="${BUSINESS_CONTACT_EMAIL:-contact@homeworkmagic.co.uk}"
 PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
@@ -38,6 +40,9 @@ Options:
   --repository NAME        Artifact Registry repository (default: aitutor-repo)
   --sql-instance NAME      Cloud SQL instance (default: aitutor-prod-pg)
   --service-account EMAIL  Runtime service account
+  --deepseek-secret NAME   Secret Manager name for DEEPSEEK_API_KEY
+  --smtp-password-secret NAME
+                           Secret Manager name for SMTP_PASSWORD
   --production-url URL     Public URL checked after promotion
   --contact-email EMAIL    BUSINESS_CONTACT_EMAIL value
   --release TAG            Explicit image tag (default: UTC timestamp)
@@ -45,7 +50,8 @@ Options:
   --yes                    Promote without an interactive confirmation
   -h, --help               Show this help
 
-Environment variables with the uppercase option names are also supported.
+Environment variables are also supported, including DEEPSEEK_API_KEY_SECRET
+and SMTP_PASSWORD_SECRET for the two runtime credentials.
 
 Examples:
   ./deploy/deploy_code_gcp.sh
@@ -65,6 +71,53 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+RUNTIME_SECRET_ERRORS=()
+
+validate_runtime_secret() {
+  local runtime_env_name="$1"
+  local runtime_secret_name="$2"
+  local runtime_option="$3"
+  local runtime_enabled_version=""
+
+  if ! gcloud secrets describe "${runtime_secret_name}" \
+    --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    RUNTIME_SECRET_ERRORS+=(
+      "${runtime_env_name} -> ${runtime_secret_name}: secret not found or inaccessible; override with ${runtime_option}"
+    )
+    return 0
+  fi
+
+  if ! runtime_enabled_version="$(
+    gcloud secrets versions list "${runtime_secret_name}" \
+      --project="${PROJECT_ID}" \
+      --filter="state=ENABLED" \
+      --sort-by="~createTime" \
+      --limit=1 \
+      --format="value(name)" 2>/dev/null
+  )"; then
+    RUNTIME_SECRET_ERRORS+=(
+      "${runtime_env_name} -> ${runtime_secret_name}: versions could not be checked"
+    )
+    return 0
+  fi
+
+  if [ -z "${runtime_enabled_version}" ]; then
+    RUNTIME_SECRET_ERRORS+=(
+      "${runtime_env_name} -> ${runtime_secret_name}: no enabled secret version"
+    )
+  fi
+}
+
+grant_runtime_secret_access() {
+  local runtime_secret_name="$1"
+
+  gcloud secrets add-iam-policy-binding "${runtime_secret_name}" \
+    --project="${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --quiet >/dev/null
 }
 
 while [ "$#" -gt 0 ]; do
@@ -97,6 +150,16 @@ while [ "$#" -gt 0 ]; do
     --service-account)
       [ "$#" -ge 2 ] || die "--service-account requires a value"
       SERVICE_ACCOUNT_EMAIL="$2"
+      shift 2
+      ;;
+    --deepseek-secret)
+      [ "$#" -ge 2 ] || die "--deepseek-secret requires a value"
+      DEEPSEEK_API_KEY_SECRET="$2"
+      shift 2
+      ;;
+    --smtp-password-secret)
+      [ "$#" -ge 2 ] || die "--smtp-password-secret requires a value"
+      SMTP_PASSWORD_SECRET="$2"
       shift 2
       ;;
     --production-url)
@@ -429,6 +492,28 @@ gcloud iam service-accounts describe "${SERVICE_ACCOUNT_EMAIL}" \
   --project="${PROJECT_ID}" \
   --format="value(email)" >/dev/null
 
+log "Checking required provider and email secrets"
+validate_runtime_secret \
+  "DEEPSEEK_API_KEY" \
+  "${DEEPSEEK_API_KEY_SECRET}" \
+  "--deepseek-secret EXISTING_SECRET_NAME"
+validate_runtime_secret \
+  "SMTP_PASSWORD" \
+  "${SMTP_PASSWORD_SECRET}" \
+  "--smtp-password-secret EXISTING_SECRET_NAME"
+
+if [ "${#RUNTIME_SECRET_ERRORS[@]}" -gt 0 ]; then
+  printf 'The staging revision cannot be created because:\n' >&2
+  printf '  - %s\n' "${RUNTIME_SECRET_ERRORS[@]}" >&2
+  printf '\nRestore these Secret Manager values, or select existing secret names, before rerunning.\n' >&2
+  printf 'No image was built and production traffic was not changed.\n' >&2
+  exit 1
+fi
+
+grant_runtime_secret_access "${DEEPSEEK_API_KEY_SECRET}"
+grant_runtime_secret_access "${SMTP_PASSWORD_SECRET}"
+printf 'Provider and email secrets are ready for the Cloud Run service account.\n'
+
 log "Checking encrypted reward delivery"
 ensure_reward_delivery_secret \
   "${PROJECT_ID}" \
@@ -502,7 +587,7 @@ gcloud run services update "${SERVICE}" \
   --max-instances=10 \
   --cpu-boost \
   --update-env-vars="BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}" \
-  --update-secrets="REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
+  --update-secrets="DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \
   --quiet

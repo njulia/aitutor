@@ -49,7 +49,79 @@ secret values in `cloud-run.env.yaml`. The Stripe secrets must contain the live
 `sk_live_...` key and the `whsec_...` signing secret for
 `https://homeworkmagic.co.uk/api/billing/stripe/webhook`. Override
 `STRIPE_SECRET_KEY_SECRET` or `STRIPE_WEBHOOK_SECRET_SECRET` when your Secret
-Manager entries use different names.
+Manager entries use different names. For code-only deployments, override
+`DEEPSEEK_API_KEY_SECRET` or `SMTP_PASSWORD_SECRET`, or use
+`--deepseek-secret` and `--smtp-password-secret`, when those entries use
+different names.
+
+### Repair missing DeepSeek or SMTP secrets
+
+Cloud Run validates every referenced secret when it creates a revision. If
+either `aitutor-deepseek-api-key` or `aitutor-smtp-password` was deleted, first
+check whether the value already exists under a different name:
+
+```bash
+gcloud secrets list \
+  --project="aitutor-502921" \
+  --format="table(name)"
+```
+
+If both values exist under different names, rebind them without copying or
+printing their contents:
+
+```bash
+./deploy/deploy_code_gcp.sh --yes \
+  --deepseek-secret="EXISTING_DEEPSEEK_SECRET_NAME" \
+  --smtp-password-secret="EXISTING_SMTP_SECRET_NAME"
+```
+
+If they are genuinely missing, enter the real DeepSeek API key and Brevo SMTP
+password using hidden terminal prompts. This keeps both values out of shell
+history:
+
+```bash
+PROJECT_ID="aitutor-502921"
+
+read -r -s -p "DeepSeek API key: " DEEPSEEK_SECRET_VALUE
+printf '\n'
+if gcloud secrets describe aitutor-deepseek-api-key \
+  --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  printf '%s' "${DEEPSEEK_SECRET_VALUE}" |
+    gcloud secrets versions add aitutor-deepseek-api-key \
+      --project="${PROJECT_ID}" \
+      --data-file=-
+else
+  printf '%s' "${DEEPSEEK_SECRET_VALUE}" |
+    gcloud secrets create aitutor-deepseek-api-key \
+      --project="${PROJECT_ID}" \
+      --replication-policy=automatic \
+      --data-file=-
+fi
+unset DEEPSEEK_SECRET_VALUE
+
+read -r -s -p "Brevo SMTP password: " SMTP_SECRET_VALUE
+printf '\n'
+if gcloud secrets describe aitutor-smtp-password \
+  --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  printf '%s' "${SMTP_SECRET_VALUE}" |
+    gcloud secrets versions add aitutor-smtp-password \
+      --project="${PROJECT_ID}" \
+      --data-file=-
+else
+  printf '%s' "${SMTP_SECRET_VALUE}" |
+    gcloud secrets create aitutor-smtp-password \
+      --project="${PROJECT_ID}" \
+      --replication-policy=automatic \
+      --data-file=-
+fi
+unset SMTP_SECRET_VALUE
+
+./deploy/deploy_code_gcp.sh --yes
+```
+
+The code deployment now checks both secrets and their enabled versions before
+building, grants the runtime service account access, and reapplies their Cloud
+Run bindings. It never reads or prints either value.
 
 The reward-delivery secret encrypts adult postal addresses for branded gift
 orders. The deployment scripts now create a strong value when the secret is

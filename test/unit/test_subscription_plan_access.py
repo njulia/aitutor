@@ -141,6 +141,113 @@ def test_pricing_status_can_repair_a_delayed_webhook(
     }
 
 
+def test_parent_refresh_recovers_pricing_table_checkout_without_saved_customer(
+    monkeypatch,
+    unique_email,
+) -> None:
+    _configure_test_billing(
+        monkeypatch,
+        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_elevenplus_recovery",
+    )
+    account = account_store.ensure_account(unique_email)
+    assert account["stripe_customer_id"] is None
+    period_end = datetime.now(UTC) + timedelta(days=30)
+    stripe_subscription = SimpleNamespace(
+        id=f"sub_parent_{account['id'][-10:]}",
+        customer=f"cus_parent_{account['id'][-10:]}",
+        metadata={},
+        status="active",
+        cancel_at_period_end=False,
+        items=SimpleNamespace(
+            data=[
+                SimpleNamespace(
+                    price=SimpleNamespace(id="price_elevenplus_recovery"),
+                    current_period_end=int(period_end.timestamp()),
+                )
+            ]
+        ),
+    )
+    checkout_session = SimpleNamespace(
+        id="cs_parent_recovery",
+        status="complete",
+        client_reference_id=account["id"],
+        customer=stripe_subscription.customer,
+        subscription=stripe_subscription.id,
+    )
+    captured = {}
+
+    class FakeCheckoutSession:
+        @staticmethod
+        def list(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(data=[checkout_session], has_more=False)
+
+    class FakeSubscription:
+        @staticmethod
+        def retrieve(subscription_id):
+            assert subscription_id == stripe_subscription.id
+            return stripe_subscription
+
+    fake_stripe = SimpleNamespace(
+        Subscription=FakeSubscription,
+        checkout=SimpleNamespace(Session=FakeCheckoutSession),
+    )
+    monkeypatch.setattr(billing, "_stripe", lambda: fake_stripe)
+    monkeypatch.setattr(
+        billing,
+        "_record_subscription_transition",
+        lambda _previous, _current: None,
+    )
+
+    refreshed = billing.refresh_stripe_subscriptions(account)
+    linked_account = account_store.get_account(account["id"])
+
+    assert captured == {
+        "status": "complete",
+        "customer_details": {"email": unique_email},
+        "limit": 20,
+    }
+    assert refreshed is not None
+    assert refreshed["plan"] == "elevenplus_monthly"
+    assert linked_account["stripe_customer_id"] == stripe_subscription.customer
+
+
+def test_pricing_status_refreshes_even_before_customer_id_is_saved(
+    authenticated_client,
+    monkeypatch,
+) -> None:
+    refreshed = {
+        "plan": "elevenplus_monthly",
+        "status": "active",
+        "current_period_end": datetime.now(UTC) + timedelta(days=30),
+        "cancel_at_period_end": False,
+        "stripe_customer_id": "cus_recovered",
+        "stripe_subscription_id": "sub_recovered",
+    }
+    monkeypatch.setattr(
+        billing,
+        "refresh_stripe_subscriptions",
+        lambda account: refreshed
+        if not account.get("stripe_customer_id")
+        else pytest.fail("fixture account unexpectedly has a Stripe customer"),
+    )
+    monkeypatch.setattr(
+        billing,
+        "get_active_subscription",
+        lambda _account_id: None,
+    )
+
+    response = authenticated_client.get("/api/billing/status?refresh=true")
+
+    assert response.status_code == 200
+    assert response.json()["has_subscription"] is True
+    assert response.json()["management"]["can_manage"] is True
+    assert response.json()["refresh"] == {
+        "attempted": True,
+        "succeeded": True,
+    }
+
+
 def test_cancel_entry_opens_a_direct_stripe_cancellation_flow(
     monkeypatch,
 ) -> None:
@@ -516,6 +623,42 @@ def test_subscription_rejects_metadata_price_mismatch(monkeypatch) -> None:
             "metadata": {"account_id": "acct_1", "plan": "elevenplus_monthly"},
             "items": {"data": [{"price": {"id": "price_homework"}}]},
         })
+
+
+def test_subscription_accepts_typed_datetime_period_end(
+    monkeypatch,
+    unique_email,
+) -> None:
+    captured = {}
+    account = account_store.ensure_account(unique_email)
+    period_end = datetime.now(UTC) + timedelta(days=30)
+    _configure_test_billing(
+        monkeypatch,
+        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_typed_period",
+    )
+    monkeypatch.setattr(
+        billing,
+        "upsert_stripe_subscription",
+        lambda **kwargs: captured.update(kwargs) or kwargs,
+    )
+
+    billing.sync_subscription({
+        "id": "sub_typed_period",
+        "customer": "cus_typed_period",
+        "status": "active",
+        "metadata": {
+            "account_id": account["id"],
+            "plan": "elevenplus_monthly",
+        },
+        "items": {
+            "data": [{
+                "price": {"id": "price_typed_period"},
+                "current_period_end": period_end,
+            }]
+        },
+    })
+
+    assert captured["current_period_end"] == period_end
 
 
 def test_live_checkout_verifies_price_before_opening_session(monkeypatch) -> None:

@@ -24,6 +24,7 @@ class ReviewRequest(BaseModel):
     is_tutor_mode: Optional[bool] = False  # Added for tutor mode review
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None
+    reward_activity_id: Optional[str] = Field(default=None, max_length=100)
     question_index: Optional[int] = Field(default=None, ge=0)
     is_eleven_plus: bool = False
 

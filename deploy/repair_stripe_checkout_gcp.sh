@@ -7,8 +7,10 @@ export STRIPE_PRICE_TRIAL_5DAY="price_1TvlE7A7C4P8kXJMNZk8fCey"
 
 
 # Repair Stripe variables that an earlier --env-vars-file/--set-secrets deploy
-# removed. Price IDs are safe non-secret identifiers; key material remains in
-# Google Secret Manager.
+# removed. Export the Price IDs currently used by the live Pricing Table before
+# running this script. They are deliberately not hard-coded because editing a
+# Pricing Table can create new Price IDs while an old ID remains valid in
+# Stripe. Key material remains in Google Secret Manager.
 
 GCP_PROJECT_ID="${GCP_PROJECT_ID:-${PROJECT_ID:-aitutor-502921}}"
 GCP_REGION="${GCP_REGION:-${REGION:-europe-west2}}"

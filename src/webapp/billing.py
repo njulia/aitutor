@@ -59,6 +59,14 @@ _validated_prices: set[tuple[str, bool]] = set()
 _price_validation_lock = threading.Lock()
 _cancellation_portal_configuration_id: Optional[str] = None
 _cancellation_portal_lock = threading.Lock()
+_PLAN_PRODUCT_NAMES = {
+    "homework premium": "homework_monthly",
+    "homework magic premium": "homework_monthly",
+    "11+ premium": "elevenplus_monthly",
+    "11 plus premium": "elevenplus_monthly",
+    "eleven plus premium": "elevenplus_monthly",
+    "family premium": "family_monthly",
+}
 
 
 class CheckoutRequest(BaseModel):
@@ -103,10 +111,15 @@ def _stripe():
         import stripe
     except ImportError as exc:
         raise RuntimeError("Stripe SDK is not installed") from exc
-    key = os.getenv("STRIPE_SECRET_KEY", "")
+    key = os.getenv("STRIPE_SECRET_KEY", "").strip()
     if not key:
         raise RuntimeError("STRIPE_SECRET_KEY is not configured")
     stripe.api_key = key
+    try:
+        retry_count = int(os.getenv("STRIPE_MAX_NETWORK_RETRIES", "2"))
+    except (TypeError, ValueError):
+        retry_count = 2
+    stripe.max_network_retries = max(0, min(retry_count, 5))
     return stripe
 
 
@@ -249,13 +262,204 @@ def _base_url() -> str:
 def _configured_plan_for_price(price_id: Optional[str], declared_plan: Optional[str] = None) -> str:
     """Resolve an entitlement from its Price ID, rejecting metadata conflicts."""
     clean_price_id = str(price_id or "").strip()
-    matches = [name for name, configured_id in _plans().items() if configured_id == clean_price_id]
+    matches = [
+        name
+        for name, configured_id in _plans().items()
+        if configured_id == clean_price_id
+    ]
     if len(matches) != 1:
         raise ValueError("Stripe subscription uses an unknown or ambiguous Price ID")
     resolved = matches[0]
     if declared_plan and declared_plan != resolved:
         raise ValueError("Stripe subscription plan metadata does not match its Price ID")
     return resolved
+
+
+def _normalise_product_name(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _verified_plan_for_current_price(
+    stripe: Any,
+    price_id: Optional[str],
+    declared_plan: Optional[str] = None,
+) -> str:
+    """Recover a changed Price ID from an operator-controlled Stripe product.
+
+    A promotion code changes the amount paid, not the Price attached to the
+    subscription. If the Pricing Table was updated before Cloud Run's Price
+    environment variables, retrieve the authoritative Price and accept it only
+    when it is an active GBP monthly price attached to an explicitly recognised
+    Homework Magic product (or exact plan metadata/lookup key).
+    """
+    clean_price_id = str(price_id or "").strip()
+    if not clean_price_id.startswith("price_"):
+        raise ValueError("Stripe subscription has no valid Price ID")
+
+    price = stripe.Price.retrieve(clean_price_id, expand=["product"])
+    if _object_value(price, "active") is False:
+        raise ValueError("Stripe subscription uses an inactive Price")
+    livemode = _object_value(price, "livemode")
+    if livemode is not None and bool(livemode) != _expected_livemode():
+        raise ValueError("Stripe subscription Price is in the wrong mode")
+    currency = str(_object_value(price, "currency", "") or "").lower()
+    if currency and currency != "gbp":
+        raise ValueError("Stripe subscription Price must use GBP")
+    recurring = _object_value(price, "recurring", {}) or {}
+    if str(_object_value(recurring, "interval", "") or "") != "month":
+        raise ValueError("Stripe subscription Price is not monthly")
+
+    product = _object_value(price, "product")
+    if isinstance(product, str):
+        product = stripe.Product.retrieve(product)
+    price_metadata = _object_value(price, "metadata", {}) or {}
+    product_metadata = _object_value(product, "metadata", {}) or {}
+    candidates = {
+        str(value).strip()
+        for value in (
+            price_metadata.get("homework_magic_plan"),
+            price_metadata.get("plan"),
+            product_metadata.get("homework_magic_plan"),
+            product_metadata.get("plan"),
+            _object_value(price, "lookup_key"),
+            _PLAN_PRODUCT_NAMES.get(
+                _normalise_product_name(_object_value(product, "name"))
+            ),
+        )
+        if str(value or "").strip() in PLAN_ENV_VARS
+    }
+    candidates.discard(TRIAL_PLAN)
+    if len(candidates) != 1:
+        raise ValueError(
+            "Stripe Price is not attached to a recognised Homework Magic product"
+        )
+    resolved = candidates.pop()
+    if declared_plan and str(declared_plan) != resolved:
+        raise ValueError(
+            "Stripe subscription plan metadata does not match its product"
+        )
+    logger.warning(
+        "Accepted a current Stripe Price through verified product mapping; "
+        "update %s to this Price ID",
+        PLAN_ENV_VARS[resolved],
+    )
+    return resolved
+
+
+def _checkout_session_account_id(
+    stripe: Any,
+    subscription: Any,
+) -> Optional[str]:
+    """Resolve a Pricing Table subscription through its completed Checkout.
+
+    ``client_reference_id`` is the authenticated parent account ID supplied to
+    the Stripe Pricing Table. This is stronger than linking by email and repairs
+    subscriptions created before the local customer ID was saved.
+    """
+    subscription_id = str(_object_value(subscription, "id") or "")
+    if not subscription_id.startswith("sub_"):
+        return None
+    response = stripe.checkout.Session.list(
+        subscription=subscription_id,
+        status="complete",
+        limit=10,
+    )
+    subscription_customer_id = str(
+        _object_value(subscription, "customer") or ""
+    )
+    for session in _object_value(response, "data", []) or []:
+        account_id = str(
+            _object_value(session, "client_reference_id") or ""
+        )
+        account = get_account(account_id) if account_id else None
+        if not account:
+            continue
+        session_customer_id = str(_object_value(session, "customer") or "")
+        if (
+            subscription_customer_id
+            and session_customer_id
+            and subscription_customer_id != session_customer_id
+        ):
+            continue
+        customer_id = subscription_customer_id or session_customer_id
+        linked_account = (
+            get_account_by_stripe_customer_id(customer_id)
+            if customer_id
+            else None
+        )
+        if linked_account and linked_account["id"] != account_id:
+            continue
+        return account_id
+    return None
+
+
+def _subscription_from_checkout_session(stripe: Any, session: Any) -> Any:
+    subscription = _object_value(session, "subscription")
+    if not subscription:
+        return None
+    if not isinstance(subscription, str):
+        return subscription
+    return stripe.Subscription.retrieve(subscription)
+
+
+def _recover_account_checkout_subscriptions(
+    stripe: Any,
+    account: Dict[str, Any],
+    *,
+    limit: int = 20,
+) -> int:
+    """Recover completed Pricing Table checkouts for one signed-in parent."""
+    email = str(account.get("email") or "").strip().lower()
+    if not email:
+        return 0
+    response = stripe.checkout.Session.list(
+        status="complete",
+        customer_details={"email": email},
+        limit=max(1, min(int(limit), 100)),
+    )
+    recovered = 0
+    seen: set[str] = set()
+    for session in _object_value(response, "data", []) or []:
+        if str(_object_value(session, "client_reference_id") or "") != str(
+            account["id"]
+        ):
+            continue
+        subscription = _subscription_from_checkout_session(stripe, session)
+        subscription_id = str(_object_value(subscription, "id") or "")
+        if not subscription_id or subscription_id in seen:
+            continue
+        seen.add(subscription_id)
+        previous = get_subscription_by_stripe_id(subscription_id)
+        saved = sync_subscription(
+            subscription,
+            fallback_account_id=account["id"],
+            stripe_client=stripe,
+        )
+        _record_subscription_transition(previous, saved)
+        recovered += 1
+    return recovered
+
+
+def _subscriptions_from_completed_checkouts(
+    stripe: Any,
+    *,
+    limit: int,
+) -> tuple[list[Any], bool]:
+    """Fallback catalogue for SDK/key configurations where list fails."""
+    response = stripe.checkout.Session.list(
+        status="complete",
+        limit=max(1, min(int(limit), 100)),
+    )
+    subscriptions: list[Any] = []
+    seen: set[str] = set()
+    for session in _object_value(response, "data", []) or []:
+        subscription = _subscription_from_checkout_session(stripe, session)
+        subscription_id = str(_object_value(subscription, "id") or "")
+        if not subscription_id or subscription_id in seen:
+            continue
+        seen.add(subscription_id)
+        subscriptions.append(subscription)
+    return subscriptions, bool(_object_value(response, "has_more", False))
 
 
 def _validate_stripe_price(stripe: Any, plan: str, price_id: str) -> None:
@@ -406,40 +610,63 @@ def refresh_stripe_subscriptions(account: Dict[str, Any]) -> Optional[Dict[str, 
     missed or delayed webhook cannot make an existing subscriber look signed
     out or hide subscription management.
     """
-    customer_id = str(account.get("stripe_customer_id") or "")
-    if not customer_id.startswith("cus_"):
-        return get_active_subscription(account["id"])
     if not _billing_enabled():
         return get_active_subscription(account["id"])
 
     stripe = _stripe()
-    response = stripe.Subscription.list(
-        customer=customer_id,
-        status="all",
-        limit=10,
-    )
-    for stripe_subscription in _object_value(response, "data", []) or []:
+    customer_id = str(account.get("stripe_customer_id") or "")
+    list_error: Optional[Exception] = None
+    if customer_id.startswith("cus_"):
         try:
-            subscription_id = str(
-                _object_value(stripe_subscription, "id") or ""
+            response = stripe.Subscription.list(
+                customer=customer_id,
+                status="all",
+                limit=10,
             )
-            previous = (
-                get_subscription_by_stripe_id(subscription_id)
-                if subscription_id
-                else None
-            )
-            saved = sync_subscription(
-                stripe_subscription,
-                fallback_account_id=account["id"],
-            )
-            _record_subscription_transition(previous, saved)
-        except ValueError:
-            # A Stripe customer can contain an old or unrelated product. Only
-            # configured Homework Magic Price IDs may grant local access.
+            for stripe_subscription in _object_value(response, "data", []) or []:
+                try:
+                    subscription_id = str(
+                        _object_value(stripe_subscription, "id") or ""
+                    )
+                    previous = (
+                        get_subscription_by_stripe_id(subscription_id)
+                        if subscription_id
+                        else None
+                    )
+                    saved = sync_subscription(
+                        stripe_subscription,
+                        fallback_account_id=account["id"],
+                        stripe_client=stripe,
+                    )
+                    _record_subscription_transition(previous, saved)
+                except ValueError:
+                    logger.warning(
+                        "Skipped an unrecognised subscription while "
+                        "refreshing billing status"
+                    )
+        except Exception as exc:
+            list_error = exc
             logger.warning(
-                "Skipped an unrecognised subscription while refreshing billing status"
+                "Stripe subscription listing failed; trying completed "
+                "Checkout reconciliation",
+                exc_info=True,
             )
-    return get_active_subscription(account["id"])
+
+    active = get_active_subscription(account["id"])
+    if active:
+        return active
+
+    try:
+        _recover_account_checkout_subscriptions(stripe, account)
+    except Exception:
+        if list_error is not None:
+            raise list_error
+        raise
+
+    active = get_active_subscription(account["id"])
+    if active is None and list_error is not None:
+        raise list_error
+    return active
 
 
 def refresh_stripe_subscription_catalog(limit: int = 100) -> Dict[str, Any]:
@@ -461,15 +688,32 @@ def refresh_stripe_subscription_catalog(limit: int = 100) -> Dict[str, Any]:
         }
 
     stripe = _stripe()
-    response = stripe.Subscription.list(
-        status="all",
-        limit=bounded_limit,
-    )
-    stripe_subscriptions = list(
-        _object_value(response, "data", []) or []
-    )[:bounded_limit]
+    source = "subscriptions"
+    try:
+        response = stripe.Subscription.list(
+            status="all",
+            limit=bounded_limit,
+        )
+        stripe_subscriptions = list(
+            _object_value(response, "data", []) or []
+        )[:bounded_limit]
+        has_more = bool(_object_value(response, "has_more", False))
+    except Exception:
+        logger.warning(
+            "Stripe subscription listing failed; using completed Checkout "
+            "Sessions for the admin repair pass",
+            exc_info=True,
+        )
+        stripe_subscriptions, has_more = (
+            _subscriptions_from_completed_checkouts(
+                stripe,
+                limit=bounded_limit,
+            )
+        )
+        source = "checkout_sessions"
     synced = 0
     skipped = 0
+    failed = 0
     for stripe_subscription in stripe_subscriptions:
         try:
             subscription_id = str(
@@ -480,7 +724,10 @@ def refresh_stripe_subscription_catalog(limit: int = 100) -> Dict[str, Any]:
                 if subscription_id
                 else None
             )
-            saved = sync_subscription(stripe_subscription)
+            saved = sync_subscription(
+                stripe_subscription,
+                stripe_client=stripe,
+            )
             _record_subscription_transition(previous, saved)
             synced += 1
         except ValueError:
@@ -491,14 +738,25 @@ def refresh_stripe_subscription_catalog(limit: int = 100) -> Dict[str, Any]:
                 "Skipped an unrecognised or unlinked Stripe subscription "
                 "during the admin refresh"
             )
-    return {
+        except Exception:
+            failed += 1
+            logger.exception(
+                "Could not materialise one Stripe subscription during the "
+                "admin refresh"
+            )
+    result = {
         "attempted": True,
         "succeeded": True,
         "received": len(stripe_subscriptions),
         "synced": synced,
         "skipped": skipped,
-        "has_more": bool(_object_value(response, "has_more", False)),
+        "has_more": has_more,
     }
+    if failed:
+        result["failed"] = failed
+    if source != "subscriptions":
+        result["source"] = source
+    return result
 
 
 def _cancellation_portal_configuration(stripe: Any) -> str:
@@ -644,10 +902,18 @@ def create_portal(
 def _timestamp(value: Any) -> Optional[datetime]:
     if value in (None, ""):
         return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
     return datetime.fromtimestamp(int(value), tz=UTC)
 
 
-def sync_subscription(subscription: Any, fallback_account_id: Optional[str] = None) -> Dict[str, Any]:
+def sync_subscription(
+    subscription: Any,
+    fallback_account_id: Optional[str] = None,
+    stripe_client: Any = None,
+) -> Dict[str, Any]:
     metadata = _object_value(subscription, "metadata", {}) or {}
     metadata_account_id = metadata.get("account_id")
     if (
@@ -671,6 +937,11 @@ def sync_subscription(subscription: Any, fallback_account_id: Optional[str] = No
         raise ValueError("Stripe customer does not match the parent account")
     if not account_id and customer_account:
         account_id = customer_account["id"]
+    if not account_id and stripe_client is not None:
+        account_id = _checkout_session_account_id(
+            stripe_client,
+            subscription,
+        )
     if not account_id:
         raise ValueError("Stripe subscription is not linked to an account")
     items = _object_value(_object_value(subscription, "items", {}), "data", []) or []
@@ -678,15 +949,29 @@ def sync_subscription(subscription: Any, fallback_account_id: Optional[str] = No
     if items:
         price = _object_value(items[0], "price", {})
         price_id = _object_value(price, "id")
-    plan = _configured_plan_for_price(price_id, metadata.get("plan"))
+    try:
+        plan = _configured_plan_for_price(price_id, metadata.get("plan"))
+    except ValueError:
+        if stripe_client is None:
+            raise
+        plan = _verified_plan_for_current_price(
+            stripe_client,
+            price_id,
+            metadata.get("plan"),
+        )
     period_end = _object_value(subscription, "current_period_end")
-    if not period_end and items:
-        period_end = max(
-            (int(_object_value(item, "current_period_end", 0) or 0) for item in items),
-            default=0,
-        ) or None
-    status = str(_object_value(subscription, "status", "incomplete"))
     parsed_period_end = _timestamp(period_end)
+    if parsed_period_end is None and items:
+        item_period_ends = [
+            parsed
+            for parsed in (
+                _timestamp(_object_value(item, "current_period_end"))
+                for item in items
+            )
+            if parsed is not None
+        ]
+        parsed_period_end = max(item_period_ends, default=None)
+    status = str(_object_value(subscription, "status", "incomplete"))
     if status.lower() in {"active", "trialing"} and parsed_period_end is None:
         raise ValueError("Active Stripe subscription has no current period end")
     scheduled_cancellation = bool(
@@ -843,7 +1128,7 @@ def process_webhook(
     notifications: Optional[list[Dict[str, Any]]] = None,
 ) -> str:
     stripe = _stripe()
-    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
     if not secret:
         raise RuntimeError("STRIPE_WEBHOOK_SECRET is not configured")
     event = stripe.Webhook.construct_event(payload, signature, secret)
@@ -870,7 +1155,10 @@ def process_webhook(
                 if subscription_id
                 else None
             )
-            saved_subscription = sync_subscription(obj)
+            saved_subscription = sync_subscription(
+                obj,
+                stripe_client=stripe,
+            )
             _record_subscription_transition(previous, saved_subscription)
         elif event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
             metadata = _object_value(obj, "metadata", {}) or {}
@@ -890,7 +1178,11 @@ def process_webhook(
             if subscription_id:
                 previous = get_subscription_by_stripe_id(str(subscription_id))
                 subscription = stripe.Subscription.retrieve(subscription_id)
-                saved_subscription = sync_subscription(subscription, fallback_account_id=account_id)
+                saved_subscription = sync_subscription(
+                    subscription,
+                    fallback_account_id=account_id,
+                    stripe_client=stripe,
+                )
                 _record_subscription_transition(previous, saved_subscription)
                 _queue_subscription_confirmation(saved_subscription, notifications)
         ledger().finish(event_id, "processed")
@@ -950,7 +1242,7 @@ def build_billing_router(resolve_username):
             limit_concurrency=False,
         )
         refresh_failed = False
-        if refresh and account.get("stripe_customer_id"):
+        if refresh:
             try:
                 subscription = await run_blocking(
                     refresh_stripe_subscriptions,
@@ -981,7 +1273,13 @@ def build_billing_router(resolve_username):
         plan = str(subscription.get("plan") or "") if subscription else ""
         is_monthly = plan.endswith("_monthly")
         is_beta = plan == BETA_PLAN
-        has_stripe_customer = bool(account.get("stripe_customer_id"))
+        has_stripe_customer = bool(
+            account.get("stripe_customer_id")
+            or (
+                subscription
+                and subscription.get("stripe_customer_id")
+            )
+        )
         return JSONResponse(
             {
                 "success": True,
@@ -996,9 +1294,7 @@ def build_billing_router(resolve_username):
                     "is_beta": is_beta,
                 },
                 "refresh": {
-                    "attempted": bool(
-                        refresh and account.get("stripe_customer_id")
-                    ),
+                    "attempted": bool(refresh),
                     "succeeded": not refresh_failed,
                 },
                 **public_billing_status(),

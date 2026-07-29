@@ -645,11 +645,22 @@
             try {
                 const data = await api(`/subscriptions?refresh=${refreshStripe ? 'true' : 'false'}`);
                 const stripeSync = data.stripe_sync || {};
+                const failedSyncs = Number(stripeSync.failed || 0);
+                const skippedSyncs = Number(stripeSync.skipped || 0);
+                const recoveredFromCheckout = stripeSync.source === 'checkout_sessions';
                 const syncLabel = !stripeSync.attempted
                     ? 'Local records'
-                    : (stripeSync.succeeded ? 'Stripe synced' : 'Stripe unavailable');
+                    : (stripeSync.succeeded
+                        ? (failedSyncs || skippedSyncs
+                            ? 'Stripe partly synced'
+                            : 'Stripe synced')
+                        : 'Stripe unavailable');
                 const syncDetail = stripeSync.succeeded
-                    ? `${stripeSync.synced || 0} record(s) checked`
+                    ? `${stripeSync.synced || 0} saved`
+                        + (skippedSyncs || failedSyncs
+                            ? ` · ${skippedSyncs + failedSyncs} skipped`
+                            : '')
+                        + (recoveredFromCheckout ? ' · Checkout recovery' : '')
                     : 'Showing saved records';
                 const elevenPlusCount = (
                     data.active_by_plan
