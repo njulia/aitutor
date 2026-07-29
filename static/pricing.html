@@ -101,6 +101,9 @@
     #subscription-summary { margin: 0 0 .8rem; font-weight: 700; }
     .billing-help { margin: .8rem auto 0; max-width: 680px; color: #52606d; font-size: .94rem; }
     .button[aria-disabled="true"] { cursor: wait; opacity: .65; pointer-events: none; }
+    .stripe-checkout-card { margin: 1.5rem 0; text-align: center; }
+    #stripe-pricing-table-container { margin-top: 1rem; text-align: left; }
+    stripe-pricing-table { display: block; width: 100%; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -142,10 +145,11 @@
           <li>Years 1–6 homework support</li>
           <li>11+ practice and study plan</li>
           <li>Detailed explanations</li>
+          <li>XP, levels and certificates (Gift Points are not included)</li>
         </ul>
         <p class="billing-term">This is a one-off five-day pass and does not renew automatically. Check the live Stripe payment screen before paying.</p>
-        <a class="button plan-checkout-button" href="/login?next=/pricing"
-           data-plan="trial_5day" data-checkout-label="Choose five-day access">Parent sign in to choose</a>
+        <a class="button" id="trial-checkout-button" href="/login?next=/pricing"
+           data-checkout-label="Choose five-day access">Parent sign in to choose</a>
       </article>
       <article class="card">
         <p class="hm-kicker">Years 1–6</p>
@@ -156,10 +160,9 @@
           <li>Detailed explanations</li>
           <li>Targeted practice</li>
           <li>Progress and learning memory</li>
+          <li>Earn Gift Points and claim branded gifts</li>
         </ul>
         <p class="billing-term">£4.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
-        <a class="button plan-checkout-button" href="/login?next=/pricing"
-           data-plan="homework_monthly" data-checkout-label="Choose Homework Premium">Parent sign in to choose</a>
       </article>
       <article class="card">
         <p class="hm-kicker">11+ preparation</p>
@@ -170,12 +173,24 @@
           <li>Verbal and non-verbal reasoning</li>
           <li>Year-round study plan</li>
           <li>Progress and learning memory</li>
+          <li>Earn Gift Points and claim branded gifts</li>
         </ul>
         <p class="billing-term">£9.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
-        <a class="button plan-checkout-button" href="/login?next=/pricing"
-           data-plan="elevenplus_monthly" data-checkout-label="Choose 11+ Premium">Parent sign in to choose</a>
       </article>
     </div>
+    <section class="card stripe-checkout-card" aria-labelledby="stripe-checkout-title">
+      <h2 id="stripe-checkout-title">Choose your monthly plan securely</h2>
+      <p>Sign in as a parent or guardian, then choose Homework Premium or 11+ Premium in Stripe’s secure pricing table.</p>
+      <a class="button" id="pricing-login-button" href="/login?next=/pricing">Parent sign in to choose</a>
+      <div id="stripe-pricing-table-container" hidden></div>
+      <template id="stripe-pricing-table-template">
+        <stripe-pricing-table pricing-table-id="prctbl_1TvlP9A7C4P8kXJMSS8t4VRT"
+          publishable-key="pk_live_fYeIDSqsqYC6MDKau5eFsI0U">
+        </stripe-pricing-table>
+      </template>
+      <script async src="https://js.stripe.com/v3/pricing-table.js"></script>
+      <noscript>Please enable JavaScript to use Stripe’s secure checkout.</noscript>
+    </section>
   </section>
 
   <p id="status" role="status" aria-live="polite"></p>
@@ -197,7 +212,7 @@
   <section class="card" aria-labelledby="purchase-information">
     <h2 id="purchase-information">Before you purchase</h2>
     <div class="legal-grid">
-      <section><h3>Digital delivery</h3><p>There is nothing to ship. Access normally starts as soon as Stripe confirms successful payment.</p></section>
+      <section><h3>Digital access</h3><p>Subscription access normally starts as soon as Stripe confirms successful payment. There is nothing to ship when a plan starts. Optional branded reward gifts are claimed separately with Gift Points and need parent-approved UK delivery details.</p></section>
       <section><h3>Cancellation and refunds</h3><p>Monthly plans can be cancelled in the billing portal. Read the <a href="/refund-policy">refund and cancellation conditions</a>.</p></section>
       <section><h3>Secure payment</h3><p>Payment details are handled by Stripe-hosted Checkout. Available payment methods appear there.</p></section>
       <section><h3>Customer support</h3><p>Email <a href="mailto:contact@homeworkmagic.co.uk">contact@homeworkmagic.co.uk</a> or use the <a href="/messages">support form</a>.</p></section>
@@ -217,7 +232,10 @@
 'use strict';
 const statusEl = document.getElementById('status');
 const planSummary = document.getElementById('public-plan-summary');
-const planButtons = Array.from(document.querySelectorAll('.plan-checkout-button'));
+const pricingLoginButton = document.getElementById('pricing-login-button');
+const pricingTableContainer = document.getElementById('stripe-pricing-table-container');
+const pricingTableTemplate = document.getElementById('stripe-pricing-table-template');
+const trialCheckoutButton = document.getElementById('trial-checkout-button');
 const accountActions = document.getElementById('account-actions');
 const subscriptionSummary = document.getElementById('subscription-summary');
 const changePlanButton = document.getElementById('change-plan-button');
@@ -257,15 +275,17 @@ function showActiveSubscription(data) {
     family_monthly: 'Family Premium',
     trial_5day: 'Five-day access'
   };
-  const planName = planNames[data.subscription?.plan] || 'Homework Magic';
-  const end = data.subscription?.current_period_end;
+  const subscription = data.subscription || {};
+  const management = data.management || {};
+  const planName = planNames[subscription.plan] || 'Homework Magic';
+  const end = subscription.current_period_end;
   const endDate = end ? new Date(end).toLocaleDateString('en-GB') : '';
   subscriptionSummary.textContent = `Current plan: ${planName}`;
-  changePlanButton.disabled = data.management?.can_change === false;
+  changePlanButton.disabled = management.can_change === false;
   changePlanButton.title = changePlanButton.disabled
     ? 'Plan changes are temporarily unavailable. Please contact support.' : '';
-  const cancellationScheduled = data.subscription?.cancel_at_period_end === true;
-  cancelPlanButton.disabled = cancellationScheduled || data.management?.can_cancel === false;
+  const cancellationScheduled = subscription.cancel_at_period_end === true;
+  cancelPlanButton.disabled = cancellationScheduled || management.can_cancel === false;
   cancelPlanButton.textContent = cancellationScheduled ? 'Cancellation scheduled' : 'Cancel subscription';
   if (cancellationScheduled) {
     const until = endDate ? ` Access continues until ${endDate}.` : '';
@@ -276,44 +296,57 @@ function showActiveSubscription(data) {
   setStatus(`Your ${planName} plan is active.${endText}`);
 }
 
-function enablePlanCheckout(data) {
-  const availability = data.plan_availability || {};
-  let readyCount = 0;
-  planButtons.forEach(button => {
-    const ready = availability[button.dataset.plan] !== false;
-    button.dataset.checkoutReady = String(ready);
-    if (ready) {
-      readyCount += 1;
-      button.textContent = button.dataset.checkoutLabel;
-      button.href = '#';
-      button.removeAttribute('aria-disabled');
-    } else {
-      button.textContent = 'Temporarily unavailable';
-      button.removeAttribute('href');
-      button.setAttribute('aria-disabled', 'true');
-    }
+async function loadPricingTable() {
+  setStatus('Preparing Stripe’s secure pricing table…');
+  const response = await fetch('/api/billing/pricing-table-session', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Accept': 'application/json' }
   });
-  if (readyCount > 0) {
-    setStatus('You are signed in. Choose a plan to continue to Stripe’s secure payment page.');
-  } else {
-    setStatus('Secure checkout is temporarily unavailable. Please try again later.', true);
+  const data = await readJson(response);
+  const fragment = pricingTableTemplate.content.cloneNode(true);
+  const pricingTable = fragment.querySelector('stripe-pricing-table');
+  if (
+    !pricingTable
+    || !data.client_secret
+    || !data.client_reference_id
+    || !data.pricing_table_id
+    || !data.publishable_key
+  ) {
+    throw new Error('Stripe did not return a valid secure checkout session.');
   }
+  pricingTable.setAttribute('pricing-table-id', data.pricing_table_id);
+  pricingTable.setAttribute('publishable-key', data.publishable_key);
+  pricingTable.setAttribute('customer-session-client-secret', data.client_secret);
+  pricingTable.setAttribute('client-reference-id', data.client_reference_id);
+  while (pricingTableContainer.firstChild) {
+    pricingTableContainer.removeChild(pricingTableContainer.firstChild);
+  }
+  pricingTableContainer.appendChild(fragment);
+  pricingTableContainer.hidden = false;
+  pricingLoginButton.hidden = true;
+  setStatus('Choose a monthly plan below to open Stripe’s secure payment page.');
 }
 
-function setCheckoutBusy(isBusy) {
-  planButtons.forEach(button => {
-    if (button.dataset.checkoutReady === 'true') {
-      if (isBusy) button.setAttribute('aria-disabled', 'true');
-      else button.removeAttribute('aria-disabled');
-    }
-  });
+function configureTrialCheckout(data) {
+  const availability = data.plan_availability || {};
+  const ready = availability.trial_5day === true;
+  trialCheckoutButton.dataset.checkoutReady = String(ready);
+  if (ready) {
+    trialCheckoutButton.textContent = trialCheckoutButton.dataset.checkoutLabel;
+    trialCheckoutButton.href = '#';
+    trialCheckoutButton.removeAttribute('aria-disabled');
+    return;
+  }
+  trialCheckoutButton.textContent = 'Five-day access unavailable';
+  trialCheckoutButton.removeAttribute('href');
+  trialCheckoutButton.setAttribute('aria-disabled', 'true');
 }
 
-async function startCheckout(button) {
-  const plan = button.dataset.plan;
-  if (!plan || button.dataset.checkoutReady !== 'true') return;
-  setCheckoutBusy(true);
-  setStatus('Opening Stripe’s secure payment page…');
+async function startTrialCheckout() {
+  if (trialCheckoutButton.dataset.checkoutReady !== 'true') return;
+  trialCheckoutButton.setAttribute('aria-disabled', 'true');
+  setStatus('Opening Stripe’s secure five-day payment page…');
   try {
     const response = await fetch('/api/billing/checkout', {
       method: 'POST',
@@ -322,7 +355,7 @@ async function startCheckout(button) {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({plan})
+      body: JSON.stringify({plan: 'trial_5day'})
     });
     const data = await readJson(response);
     const checkoutUrl = new URL(data.checkout_url);
@@ -331,8 +364,8 @@ async function startCheckout(button) {
     }
     window.location.assign(checkoutUrl.href);
   } catch (error) {
-    setCheckoutBusy(false);
-    setStatus(error.message || 'Secure checkout is temporarily unavailable.', true);
+    trialCheckoutButton.removeAttribute('aria-disabled');
+    setStatus(error.message || 'The five-day checkout is temporarily unavailable.', true);
   }
 }
 
@@ -343,7 +376,8 @@ async function initialiseBilling() {
       showActiveSubscription(data);
       return;
     }
-    enablePlanCheckout(data);
+    configureTrialCheckout(data);
+    await loadPricingTable();
   } catch (error) {
     if (error.status === 401) {
       setStatus('A parent or guardian needs to sign in before choosing a plan.');
@@ -358,12 +392,10 @@ async function initialiseBilling() {
   }
 }
 
-planButtons.forEach(button => {
-  button.addEventListener('click', event => {
-    if (button.dataset.checkoutReady !== 'true') return;
-    event.preventDefault();
-    startCheckout(button);
-  });
+trialCheckoutButton.addEventListener('click', event => {
+  if (trialCheckoutButton.dataset.checkoutReady !== 'true') return;
+  event.preventDefault();
+  startTrialCheckout();
 });
 
 async function pollForAccess() {

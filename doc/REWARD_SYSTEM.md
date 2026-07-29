@@ -6,14 +6,15 @@ guardians. It rewards steady effort rather than high marks.
 ## Learning loop
 
 1. A signed-in learner finishes an activity and checks their work.
-2. The server awards permanent XP and matching Gift Points once for that
-   activity on that day.
-3. Daily and weekly quest bonuses are claimed automatically.
-4. Lifetime XP unlocks levels and printable certificates.
-5. Gift Points may be exchanged for a Homework Magic branded gift.
-6. A parent approves or declines the request using the parent account password.
-7. Approval requires an adult recipient's UK delivery address.
-8. An administrator posts the parcel and marks the order as dispatched.
+2. The server awards permanent XP once for that activity on that day.
+3. If the family has an active recurring subscription, the same event also
+   awards matching Gift Points.
+4. Daily and weekly quest bonuses are claimed automatically.
+5. Lifetime XP unlocks levels and printable certificates.
+6. Eligible Gift Points may be exchanged for a Homework Magic branded gift.
+7. A parent approves or declines the request using the parent account password.
+8. Approval requires an adult recipient's UK delivery address.
+9. An administrator posts the parcel and marks the order as dispatched.
 
 XP is never deducted. A gift approval spends only Gift Points, so a learner's
 XP total, level and certificates do not go backwards. Repeated submissions of
@@ -21,9 +22,25 @@ the same checked work do not award more points. Only the first three checked
 activities each day receive activity points. Quest bonuses are also one-time
 and enforced with database uniqueness constraints.
 
+## Subscription rule
+
+- Every signed-in learner can earn XP, complete quests, unlock levels and earn
+  certificates.
+- Gift Points are awarded only while the family has an active recurring
+  Homework Magic subscription.
+- The non-renewing five-day pass does not earn Gift Points or unlock gift
+  claims.
+- A learner cannot request a gift, and a parent cannot approve a pending gift,
+  without an active recurring subscription.
+- Existing Gift Points remain on the learner's balance if a plan ends, but no
+  new Gift Points are awarded and the balance cannot be used until an eligible
+  subscription becomes active again.
+- Gift Points are not awarded retrospectively for learning completed without an
+  eligible subscription.
+
 ## Default XP rules
 
-| Action | Permanent XP | Gift Points |
+| Action | Permanent XP for everyone | Gift Points with active subscription |
 | --- | ---: | ---: |
 | Complete and check a homework activity | 20 | 20 |
 | Complete and check a tutor question | 10 | 10 |
@@ -59,8 +76,9 @@ print or save an unlocked certificate from the browser.
 
 A child's request remains pending and uses no points. The parent must enter the
 account password and an adult recipient's UK address to approve it. Approval
-uses Gift Points but leaves XP unchanged. An approved order can be cancelled
-before dispatch, which returns the Gift Points. The protected administrator
+requires an active recurring subscription, uses Gift Points and leaves XP
+unchanged. An approved order can be cancelled before dispatch, which returns
+the Gift Points even if the plan has since ended. The protected administrator
 queue is available at `/admin/reward-orders`.
 
 ## Safety, privacy and reliability

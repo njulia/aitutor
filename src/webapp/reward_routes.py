@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from src.progress_db import verify_user_credentials
 
 from .account_store import (
+    account_has_active_reward_subscription,
     ensure_account,
     ensure_default_student,
     get_student,
@@ -23,6 +25,13 @@ from .reward_models import (
     RewardRequest,
 )
 from .reward_store import get_reward_store
+
+
+logger = logging.getLogger(__name__)
+GIFT_SUBSCRIPTION_NOTE = (
+    "Everyone can earn XP. An active monthly Homework Magic subscription "
+    "is needed to earn Gift Points and claim gifts."
+)
 
 
 def build_reward_router(
@@ -63,6 +72,20 @@ def build_reward_router(
             raise HTTPException(status_code=404, detail="Learner profile not found")
         return account, learner
 
+    async def gift_points_eligible(account: dict) -> bool:
+        try:
+            return bool(
+                await asyncio.to_thread(
+                    account_has_active_reward_subscription,
+                    account["id"],
+                )
+            )
+        except Exception:
+            # Subscription uncertainty must lock physical gifts without hiding
+            # XP, quests or certificates from the learner.
+            logger.exception("Could not check reward gift subscription")
+            return False
+
     async def confirm_parent(account: dict, password: str) -> None:
         valid = await asyncio.to_thread(
             verify_user_credentials, account["email"], password
@@ -79,10 +102,13 @@ def build_reward_router(
         student_id: str | None = Query(default=None, max_length=80),
     ):
         account, learner = await learner_context(request, student_id)
-        dashboard = await asyncio.to_thread(
-            get_reward_store().dashboard,
-            account_id=account["id"],
-            student_id=learner["id"],
+        dashboard, eligible = await asyncio.gather(
+            asyncio.to_thread(
+                get_reward_store().dashboard,
+                account_id=account["id"],
+                student_id=learner["id"],
+            ),
+            gift_points_eligible(account),
         )
         return {
             "success": True,
@@ -92,19 +118,31 @@ def build_reward_router(
                 "age": learner["age"],
                 "year_group": learner["year_group"],
             },
+            "gift_access": {
+                "eligible": eligible,
+                "requires_active_subscription": True,
+                "note": GIFT_SUBSCRIPTION_NOTE,
+                "plans_url": "/pricing",
+            },
             **dashboard,
         }
 
     @router.post("/api/rewards/redemptions")
     async def request_reward(request: Request, body: RewardRequest):
         account, learner = await learner_context(request, body.student_id)
+        eligible = await gift_points_eligible(account)
+        if not eligible:
+            raise HTTPException(status_code=403, detail=GIFT_SUBSCRIPTION_NOTE)
         try:
             redemption = await asyncio.to_thread(
                 get_reward_store().request_redemption,
                 account_id=account["id"],
                 student_id=learner["id"],
                 reward_code=body.reward_code,
+                gift_points_eligible=eligible,
             )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {
@@ -123,6 +161,9 @@ def build_reward_router(
         body: RewardDecisionRequest,
     ):
         account = await account_context(request)
+        eligible = await gift_points_eligible(account)
+        if body.decision == "approve" and not eligible:
+            raise HTTPException(status_code=403, detail=GIFT_SUBSCRIPTION_NOTE)
         await confirm_parent(account, body.parent_password.get_secret_value())
         if body.decision == "approve" and body.delivery_address is None:
             raise HTTPException(
@@ -143,9 +184,12 @@ def build_reward_router(
                     if body.delivery_address is not None
                     else None
                 ),
+                gift_points_eligible=eligible,
             )
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (RuntimeError, TypeError) as exc:
@@ -157,10 +201,14 @@ def build_reward_router(
 
     @router.get("/api/rewards/options")
     async def reward_options(request: Request):
-        await account_context(request)
+        account = await account_context(request)
+        eligible = await gift_points_eligible(account)
         return {
             "success": True,
             "gift_points_name": "Gift Points",
+            "gift_points_eligible": eligible,
+            "gift_points_requires_active_subscription": True,
+            "gift_subscription_note": GIFT_SUBSCRIPTION_NOTE,
             "delivery_country": "GB",
             "requires_parent_delivery_address": True,
             "xp_never_deducted": True,

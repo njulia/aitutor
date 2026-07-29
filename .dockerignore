@@ -16,6 +16,7 @@ uploads
 !uploads/.gitkeep
 data
 data_archive
+pics
 test
 tests
 .pytest_cache

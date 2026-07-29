@@ -156,6 +156,7 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
         "get_active_subscription",
         lambda _account_id: {"plan": "homework_monthly"},
     )
+    assert account_store.account_has_active_reward_subscription("acct_1")
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["homework_monthly"]
     )
@@ -168,6 +169,7 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
         "get_active_subscription",
         lambda _account_id: {"plan": "trial_5day"},
     )
+    assert not account_store.account_has_active_reward_subscription("acct_1")
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["homework_monthly"]
     )

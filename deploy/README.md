@@ -122,7 +122,9 @@ the Stripe values before building and retains existing secret mappings with
 
 If the pricing page says secure checkout is temporarily unavailable after an
 older deployment, export the three live Price IDs and run the repair script.
-It updates only the Stripe settings on the current `aitutor-prod` service:
+The supplied live Pricing Table ID and publishable key are built into the
+script as non-secret defaults. It updates only the Stripe settings on the
+current `aitutor-prod` service:
 
 ```bash
 export STRIPE_PRICE_TRIAL_5DAY="price_..."

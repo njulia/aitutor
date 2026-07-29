@@ -1,8 +1,9 @@
 """Privacy-conscious quests, permanent XP and branded gift redemptions.
 
 Lifetime XP measures a learner's progress and never decreases. The legacy
-``spendable_xp`` database column stores a separate Gift Points balance; only
-Gift Points are spent when a parent approves a physical gift.
+``spendable_xp`` database column stores a separate Gift Points balance.
+Everyone can earn XP, while only learners covered by an active recurring
+subscription can earn Gift Points or claim physical gifts.
 
 Homework Magic stores no homework text, answers or marks in this subsystem.
 An adult recipient's UK delivery address is accepted only during parent
@@ -52,21 +53,21 @@ DEFAULT_REWARDS: tuple[dict[str, Any], ...] = (
         "code": "homework_magic_stickers",
         "name": "Homework Magic sticker pack",
         "icon": "⭐",
-        "points_cost": 200,
+        "points_cost": 500,
         "description": "A colourful pack of Homework Magic logo stickers.",
     },
     {
         "code": "homework_magic_pen",
         "name": "Homework Magic pen",
         "icon": "✏️",
-        "points_cost": 500,
+        "points_cost": 1000,
         "description": "A Homework Magic logo pen for learning adventures.",
     },
     {
         "code": "homework_magic_notebook",
         "name": "Homework Magic notebook",
         "icon": "📓",
-        "points_cost": 1000,
+        "points_cost": 2000,
         "description": "A Homework Magic logo notebook for ideas and practice.",
     },
 )
@@ -768,9 +769,10 @@ class RewardStore:
         fingerprint: str,
         subject: str,
         is_tutor_mode: bool = False,
+        gift_points_eligible: bool = False,
         awarded_at: datetime | None = None,
     ) -> dict[str, Any]:
-        """Award permanent XP and matching Gift Points once per source/day."""
+        """Award permanent XP, plus Gift Points for an eligible subscriber."""
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
         digest = _clean_id(fingerprint, maximum=80)
@@ -811,7 +813,9 @@ class RewardStore:
                         event_type="checked_activity",
                         label="Checked learning activity",
                         lifetime_delta=activity_xp,
-                        spendable_delta=activity_xp,
+                        spendable_delta=(
+                            activity_xp if gift_points_eligible else 0
+                        ),
                         subject=subject,
                         local_day=local_day,
                         week_start=week_start,
@@ -838,7 +842,11 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=int(quest["bonus_xp"]),
+                        spendable_delta=(
+                            int(quest["bonus_xp"])
+                            if gift_points_eligible
+                            else 0
+                        ),
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,
@@ -862,7 +870,11 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=int(quest["bonus_xp"]),
+                        spendable_delta=(
+                            int(quest["bonus_xp"])
+                            if gift_points_eligible
+                            else 0
+                        ),
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,
@@ -881,11 +893,16 @@ class RewardStore:
             wallet = _public_wallet(wallet_row)
 
         awarded_xp = sum(max(0, int(item["xp"])) for item in awarded_events)
+        awarded_gift_points = sum(
+            max(0, int(item["gift_points"])) for item in awarded_events
+        )
         quest_completions = [
             item for item in awarded_events if item["event_type"] == "quest_bonus"
         ]
         return {
             "awarded_xp": awarded_xp,
+            "awarded_gift_points": awarded_gift_points,
+            "gift_points_eligible": bool(gift_points_eligible),
             "activity_xp": activity_xp if any(
                 item["event_type"] == "checked_activity" for item in awarded_events
             ) else 0,
@@ -1117,8 +1134,17 @@ class RewardStore:
         return None
 
     def request_redemption(
-        self, *, account_id: str, student_id: str, reward_code: str
+        self,
+        *,
+        account_id: str,
+        student_id: str,
+        reward_code: str,
+        gift_points_eligible: bool = False,
     ) -> dict[str, Any]:
+        if not gift_points_eligible:
+            raise PermissionError(
+                "An active Homework Magic subscription is needed to claim gifts"
+            )
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
         now = _now()
@@ -1188,6 +1214,7 @@ class RewardStore:
         redemption_id: str,
         decision: str,
         delivery_address: Mapping[str, Any] | None = None,
+        gift_points_eligible: bool = False,
     ) -> dict[str, Any]:
         account = _clean_id(account_id, maximum=80)
         redemption = _clean_id(redemption_id, maximum=80)
@@ -1196,6 +1223,10 @@ class RewardStore:
             raise ValueError("Choose approve, decline, dispatch or cancel")
         encrypted_address: str | None = None
         if action == "approve":
+            if not gift_points_eligible:
+                raise PermissionError(
+                    "An active Homework Magic subscription is needed to approve a gift"
+                )
             if delivery_address is None:
                 raise ValueError(
                     "A parent or guardian must enter the UK delivery address"

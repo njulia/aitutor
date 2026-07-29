@@ -30,13 +30,14 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
     store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'rewards.db'}")
     account_id = "acct_family"
     student_id = "stu_learner"
-    now = datetime.now(UTC).replace(hour=10, minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
 
     first = store.award_checked_activity(
         account_id=account_id,
         student_id=student_id,
         fingerprint=_fingerprint("one"),
         subject="Maths",
+        gift_points_eligible=True,
         awarded_at=now,
     )
     assert first["awarded_xp"] == 30  # 20 activity + 10 first quest
@@ -47,6 +48,7 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         student_id=student_id,
         fingerprint=_fingerprint("one"),
         subject="Maths",
+        gift_points_eligible=True,
         awarded_at=now,
     )
     assert duplicate["awarded_xp"] == 0
@@ -57,6 +59,7 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         student_id=student_id,
         fingerprint=_fingerprint("two"),
         subject="English",
+        gift_points_eligible=True,
         awarded_at=now,
     )
     assert second["awarded_xp"] == 35  # 20 activity + 15 second quest
@@ -66,6 +69,7 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         student_id=student_id,
         fingerprint=_fingerprint("three"),
         subject="Science",
+        gift_points_eligible=True,
         awarded_at=now,
     )
     # 20 activity + 20 third quest + 25 three-subject weekly quest.
@@ -80,6 +84,7 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
         student_id=student_id,
         fingerprint=_fingerprint("four"),
         subject="History",
+        gift_points_eligible=True,
         awarded_at=now,
     )
     assert capped["awarded_xp"] == 0
@@ -104,18 +109,47 @@ def test_effort_xp_quests_daily_cap_and_certificates(tmp_path) -> None:
     assert certificate and certificate["title"] == "Brilliant Beginner"
 
 
+def test_everyone_earns_xp_but_free_learners_do_not_earn_gift_points(
+    tmp_path,
+) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'free-rewards.db'}")
+    awarded = store.award_checked_activity(
+        account_id="acct_free",
+        student_id="stu_free",
+        fingerprint=_fingerprint("free"),
+        subject="Maths",
+    )
+
+    assert awarded["awarded_xp"] == 30
+    assert awarded["awarded_gift_points"] == 0
+    assert awarded["gift_points_eligible"] is False
+    assert awarded["lifetime_xp"] == 30
+    assert awarded["gift_points"] == 0
+
+    dashboard = store.dashboard(account_id="acct_free", student_id="stu_free")
+    assert dashboard["wallet"]["lifetime_xp"] == 30
+    assert dashboard["wallet"]["gift_points"] == 0
+    with pytest.raises(PermissionError, match="active Homework Magic subscription"):
+        store.request_redemption(
+            account_id="acct_free",
+            student_id="stu_free",
+            reward_code="homework_magic_stickers",
+        )
+
+
 def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> None:
     store = RewardStore(
         f"sqlite+pysqlite:///{tmp_path / 'spend.db'}",
         delivery_secret=DELIVERY_SECRET,
     )
-    now = datetime.now(UTC).replace(hour=10, minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     for index, subject in enumerate(("Maths", "English", "Science"), start=1):
         store.award_checked_activity(
             account_id="acct_family",
             student_id="stu_learner",
             fingerprint=_fingerprint(str(index)),
             subject=subject,
+            gift_points_eligible=True,
             awarded_at=now,
         )
 
@@ -123,6 +157,7 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
         account_id="acct_family",
         student_id="stu_learner",
         reward_code="homework_magic_stickers",
+        gift_points_eligible=True,
     )
     assert requested["status"] == "pending"
     before = store.dashboard(
@@ -130,11 +165,20 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
     )["wallet"]
     assert before["gift_points"] == 130
 
+    with pytest.raises(PermissionError, match="active Homework Magic subscription"):
+        store.decide_redemption(
+            account_id="acct_family",
+            redemption_id=requested["id"],
+            decision="approve",
+            delivery_address=DELIVERY_ADDRESS,
+        )
+
     approved = store.decide_redemption(
         account_id="acct_family",
         redemption_id=requested["id"],
         decision="approve",
         delivery_address=DELIVERY_ADDRESS,
+        gift_points_eligible=True,
     )
     assert approved["redemption"]["status"] == "approved"
     assert approved["wallet"]["gift_points"] == 30
@@ -165,13 +209,14 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
         f"sqlite+pysqlite:///{tmp_path / 'delivery.db'}",
         delivery_secret=DELIVERY_SECRET,
     )
-    now = datetime.now(UTC).replace(hour=10, minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     for index, subject in enumerate(("Maths", "English", "Science"), start=1):
         store.award_checked_activity(
             account_id="acct_family",
             student_id="stu_learner",
             fingerprint=_fingerprint(f"delivery-{index}"),
             subject=subject,
+            gift_points_eligible=True,
             awarded_at=now,
         )
 
@@ -185,6 +230,7 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
         account_id="acct_family",
         student_id="stu_learner",
         reward_code="homework_magic_stickers",
+        gift_points_eligible=True,
     )
     with pytest.raises(ValueError, match="postcode"):
         store.decide_redemption(
@@ -192,6 +238,7 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
             redemption_id=requested["id"],
             decision="approve",
             delivery_address={**DELIVERY_ADDRESS, "postcode": "NOT A POSTCODE"},
+            gift_points_eligible=True,
         )
 
     store.decide_redemption(
@@ -199,6 +246,7 @@ def test_only_branded_gifts_and_encrypted_adult_uk_delivery(tmp_path) -> None:
         redemption_id=requested["id"],
         decision="approve",
         delivery_address=DELIVERY_ADDRESS,
+        gift_points_eligible=True,
     )
     with store.engine.begin() as conn:
         encrypted = conn.execute(

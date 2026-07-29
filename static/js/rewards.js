@@ -76,8 +76,13 @@ function requireParentPassword() {
 function renderWallet(data) {
   const wallet = data.wallet;
   const level = wallet.level;
+  const giftAccess = data.gift_access || {};
   document.getElementById('lifetime-xp').textContent = String(wallet.lifetime_xp);
   document.getElementById('gift-points').textContent = String(wallet.gift_points);
+  const giftPointsNote = document.querySelector('.wallet-card.spendable small');
+  giftPointsNote.textContent = giftAccess.eligible
+    ? 'Your active plan earns Gift Points for checked learning'
+    : 'Locked: an active monthly subscription is needed';
   document.getElementById('level-icon').textContent = level.icon;
   document.getElementById('level-number').textContent = String(level.number);
   document.getElementById('level-name').textContent = level.name;
@@ -87,6 +92,23 @@ function renderWallet(data) {
   document.getElementById('level-next').textContent = level.next
     ? `${level.xp_to_next} XP to Level ${level.next.number}: ${level.next.name}`
     : 'Top level reached—what a learning legend!';
+}
+
+function renderGiftAccess(giftAccess) {
+  const eligible = Boolean(giftAccess && giftAccess.eligible);
+  const note = document.getElementById('gift-access-note');
+  const copy = note.querySelector('p');
+  const planLink = document.getElementById('gift-access-plan-link');
+  clearNode(copy);
+  const heading = element('strong', '', 'Everyone can earn XP. ');
+  copy.append(heading);
+  copy.append(document.createTextNode(
+    eligible
+      ? 'Your active monthly plan also earns Gift Points and unlocks gift claims.'
+      : 'Gift Points and gifts are available only with an active monthly Homework Magic subscription.',
+  ));
+  note.classList.toggle('eligible', eligible);
+  planLink.hidden = eligible;
 }
 
 function renderQuests(quests) {
@@ -185,8 +207,12 @@ function renderCatalog(data) {
   const grid = document.getElementById('catalog-grid');
   clearNode(grid);
   const pendingCodes = pendingRewardCodes(data.redemptions);
+  const giftAccessEligible = Boolean(data.gift_access && data.gift_access.eligible);
   data.catalog.forEach((item) => {
-    const card = element('article', 'catalog-card');
+    const card = element(
+      'article',
+      `catalog-card${giftAccessEligible ? '' : ' subscription-locked'}`,
+    );
     const icon = element('span', 'catalog-icon', item.icon);
     icon.setAttribute('aria-hidden', 'true');
     card.append(icon, element('h3', '', item.name));
@@ -199,7 +225,10 @@ function renderCatalog(data) {
     const button = element('button', 'reward-button');
     button.type = 'button';
     const shortfall = Math.max(0, item.points_cost - data.wallet.gift_points);
-    if (pendingCodes.has(item.code)) {
+    if (!giftAccessEligible) {
+      button.textContent = 'Active plan needed';
+      button.disabled = true;
+    } else if (pendingCodes.has(item.code)) {
       button.textContent = 'Request in progress';
       button.disabled = true;
     } else if (shortfall > 0) {
@@ -235,7 +264,9 @@ function renderRecent(items) {
     const xp = element(
       'span',
       'recent-xp',
-      `+${delta} XP · +${giftPoints} Gift Points`,
+      giftPoints > 0
+        ? `+${delta} XP · +${giftPoints} Gift Points`
+        : `+${delta} XP`,
     );
     row.append(label, xp);
     list.append(row);
@@ -347,8 +378,19 @@ function renderRedemptions(items) {
 
     const actions = element('div', 'redemption-actions');
     if (item.status === 'pending') {
+      const canApprove = Boolean(
+        rewardState.dashboard
+        && rewardState.dashboard.gift_access
+        && rewardState.dashboard.gift_access.eligible
+      );
+      const approveButton = actionButton(
+        canApprove ? 'Approve' : 'Active plan needed to approve',
+        'good',
+        () => decideRedemption(item.id, 'approve'),
+      );
+      approveButton.disabled = !canApprove;
       actions.append(
-        actionButton('Approve', 'good', () => decideRedemption(item.id, 'approve')),
+        approveButton,
         actionButton('Decline', 'danger', () => decideRedemption(item.id, 'decline')),
       );
     } else if (item.status === 'approved') {
@@ -381,6 +423,7 @@ function renderDashboard(data) {
     ? 'Have a go, check your work, and watch your forever XP grow!'
     : 'Build permanent XP with steady effort—your marks do not decide your reward.';
   renderWallet(data);
+  renderGiftAccess(data.gift_access);
   renderQuests(data.quests);
   renderCertificates(data.certificates);
   renderCatalog(data);

@@ -68,3 +68,5 @@ def test_repair_script_updates_only_stripe_configuration() -> None:
     assert "STRIPE_PRICE_TRIAL_5DAY" in source
     assert "STRIPE_PRICE_HOMEWORK_MONTHLY" in source
     assert "STRIPE_PRICE_ELEVENPLUS_MONTHLY" in source
+    assert "STRIPE_PRICING_TABLE_ID" in source
+    assert "STRIPE_PUBLISHABLE_KEY" in source

@@ -219,6 +219,32 @@ body.hm-rewards {
 .wallet-card strong { display: block; margin: 2px 0; font-size: 2rem; color: var(--reward-purple-dark); }
 .wallet-card small { display: block; color: var(--reward-muted); line-height: 1.35; }
 
+.subscription-note {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  color: #3f326b;
+  background: #eee8ff;
+  border-left: 5px solid var(--reward-purple);
+  border-radius: 12px;
+}
+
+.subscription-note.eligible {
+  color: #1b6045;
+  background: #e7f7ef;
+  border-left-color: var(--reward-green);
+}
+
+.subscription-note > span { font-size: 1.65rem; }
+.subscription-note p { flex: 1; margin: 0; line-height: 1.45; }
+.subscription-note a {
+  flex: 0 0 auto;
+  color: var(--reward-purple-dark);
+  font-weight: 800;
+}
+
 .level-track,
 .quest-track {
   width: 100%;
@@ -403,6 +429,11 @@ body.hm-rewards {
 }
 .catalog-cost { margin: 0 0 13px; color: #6d4e08; font-weight: 850; }
 .catalog-card .reward-button { margin-top: auto; }
+.catalog-card.subscription-locked {
+  background: #f4f4f7;
+  border-color: #d9dce5;
+}
+.catalog-card.subscription-locked .catalog-icon { filter: grayscale(.35); }
 .branded-tag {
   align-self: center;
   padding: 4px 9px;
@@ -628,6 +659,8 @@ body.hm-rewards {
   .catalog-grid,
   .quest-grid { grid-template-columns: repeat(2, 1fr); }
   .parent-password-row { align-items: stretch; flex-direction: column; }
+  .subscription-note { align-items: flex-start; flex-wrap: wrap; }
+  .subscription-note a { margin-left: 45px; }
 }
 
 @media (max-width: 480px) {
@@ -638,6 +671,7 @@ body.hm-rewards {
   .catalog-card { min-height: 220px; }
   .summary-grid { grid-template-columns: 1fr; }
   .delivery-form-row { grid-template-columns: 1fr; }
+  .subscription-note a { margin-left: 0; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

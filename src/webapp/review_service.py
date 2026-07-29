@@ -39,6 +39,13 @@ PRACTICE_GENERATION_UNAVAILABLE_MESSAGE = (
     "was created. Please try again in a moment."
 )
 
+RAG_REVIEW_FALLBACK_FEEDBACK = (
+    "## Your answers are marked\n\n"
+    "I used the trusted Homework Magic answer key to check this work. "
+    "The AI teacher could not add extra comments just now, but your marked "
+    "answers and score are ready."
+)
+
 _PRACTICE_SECTION_RE = re.compile(
     r"(?im)^\s*#{1,6}\s*(?:\d+\s*[.)-]?\s*)?"
     r"(?:(?:similar|targeted|extra|adaptive)\s+)?practice questions?\s*:?[\s*]*$"
@@ -690,8 +697,6 @@ def review_homework(
         REVIEW_UPLOADED_HOMEWORK_PROMPT,
     )
 
-    if llm_client is None:
-        raise RuntimeError("LLM client is not configured")
     intervention = safety_result("review", student_answers)
     if intervention is not None:
         return intervention
@@ -768,8 +773,12 @@ def review_homework(
     score: Optional[float] = float(correct_count) if rows else None
     max_score: Optional[int] = attempted if rows else None
     model_used: Optional[str] = None
+    raw_feedback = ""
+    llm_fallback = False
 
     if uploaded_work:
+        if llm_client is None:
+            raise RuntimeError("LLM client is not configured")
         submitted_work = (
             "Homework questions and extracted writing:\n"
             f"{budget['homework_content']}\n\n"
@@ -798,28 +807,48 @@ def review_homework(
         )
         model_used = _resolved_model(llm_client, selected_model)
     elif rows:
-        rag_context = _rag_prompt_context(rows)
-        prompt = format_prompt(
-            REVIEW_DETAIL_WITH_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITH_RAG_PROMPT,
-            student_profile=str(_prompt_profile(budget["profile"])),
-            subject=compact_text(subject_display_name(subject), 80),
-            **rag_context,
-        )
-        prompt += _solution_method_prompt(missing_methods)
-        raw_feedback = _complete_review(
-            llm_client,
-            build_messages(prompt),
-            model=selected_model,
-            temperature=0.2 if use_detail_model else 0.15,
-            max_tokens=(
-                _token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000)
-                if use_detail_model else
-                _token_limit("QUICK_REVIEW_MAX_TOKENS", 1000, maximum=5000)
-            ),
-            operation= "detail_review_with_rag" if use_detail_model else "quick_review_with_rag",
-        )
-        model_used = _resolved_model(llm_client, selected_model)
+        if llm_client is None:
+            llm_fallback = True
+            logger.warning(
+                "LLM client is unavailable; returning trusted RAG marking for %s",
+                homework_doc_id,
+            )
+        else:
+            rag_context = _rag_prompt_context(rows)
+            prompt = format_prompt(
+                REVIEW_DETAIL_WITH_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITH_RAG_PROMPT,
+                student_profile=str(_prompt_profile(budget["profile"])),
+                subject=compact_text(subject_display_name(subject), 80),
+                **rag_context,
+            )
+            prompt += _solution_method_prompt(missing_methods)
+            try:
+                raw_feedback = _complete_review(
+                    llm_client,
+                    build_messages(prompt),
+                    model=selected_model,
+                    temperature=0.2 if use_detail_model else 0.15,
+                    max_tokens=(
+                        _token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000)
+                        if use_detail_model else
+                        _token_limit("QUICK_REVIEW_MAX_TOKENS", 1000, maximum=5000)
+                    ),
+                    operation=(
+                        "detail_review_with_rag"
+                        if use_detail_model
+                        else "quick_review_with_rag"
+                    ),
+                )
+                model_used = _resolved_model(llm_client, selected_model)
+            except Exception:
+                llm_fallback = True
+                logger.exception(
+                    "LLM review failed; returning trusted RAG marking for %s",
+                    homework_doc_id,
+                )
     else:
+        if llm_client is None:
+            raise RuntimeError("LLM client is not configured")
         prompt = format_prompt(
             REVIEW_DETAIL_WITHOUT_RAG_PROMPT if use_detail_model else REVIEW_QUICK_WITHOUT_RAG_PROMPT,
             student_profile=str(_prompt_profile(budget["profile"])),
@@ -846,10 +875,20 @@ def review_homework(
         )
         model_used = _resolved_model(llm_client, selected_model)
     if not str(raw_feedback or "").strip():
-        raise RuntimeError("The AI provider returned an empty homework review")
-    feedback, returned_methods = _parse_review_response(
-        raw_feedback, missing_methods
-    )
+        if not rows:
+            raise RuntimeError("The AI provider returned an empty homework review")
+        if not llm_fallback:
+            logger.warning(
+                "LLM returned an empty review; returning trusted RAG marking for %s",
+                homework_doc_id,
+            )
+        llm_fallback = True
+        feedback = RAG_REVIEW_FALLBACK_FEEDBACK
+        returned_methods: List[Dict[str, str]] = []
+    else:
+        feedback, returned_methods = _parse_review_response(
+            raw_feedback, missing_methods
+        )
     solution_methods = (
         []
         if uploaded_work
@@ -865,12 +904,14 @@ def review_homework(
     )
     rendered_methods = _render_solution_methods(solution_methods)
     if rows:
-        review = (
+        display_review = (
             _table(rows)
             + f"**Score: {correct_count}/{attempted}**\n\n"
             + feedback
         )
+        review = display_review
     else:
+        display_review = feedback
         review = feedback
         score, max_score = _extract_score(feedback)
     if rendered_methods:
@@ -879,7 +920,7 @@ def review_homework(
     result = {
         "success": True,
         "review": review,
-        "llm_response": feedback,
+        "llm_response": "" if llm_fallback else feedback,
         "solution_methods": solution_methods,
         "from_rag_answers": bool(rows),
         "score": score,
@@ -888,8 +929,17 @@ def review_homework(
         "attempted": attempted if rows else None,
         "model_tier": "plus" if use_detail_model else "flash",
         "model_used": model_used,
+        "llm_fallback": llm_fallback,
     }
-    review_cache.set(cache_key, result)
+    if llm_fallback:
+        # Tutor mode normally renders llm_response separately from locally
+        # stored solution methods. Give it the table and score without
+        # duplicating those methods.
+        result["display_review"] = display_review
+    else:
+        # A provider outage should not pin the fallback in cache after the
+        # provider recovers.
+        review_cache.set(cache_key, result)
 
     if not is_tutor_mode and student_id not in {None, "", "anonymous"} and not str(student_id).startswith("anon_"):
         try:

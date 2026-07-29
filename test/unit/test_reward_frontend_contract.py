@@ -6,10 +6,13 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     page = (ROOT / "static" / "rewards.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "rewards.js").read_text(encoding="utf-8")
+    pricing = (ROOT / "static" / "pricing.html").read_text(encoding="utf-8")
     assert "Your quests" in page
     assert "Lifetime XP" in page
     assert "Gift Points" in page
     assert "never goes down" in page
+    assert "Everyone can earn XP" in page
+    assert "active monthly Homework Magic subscription" in page
     assert "Parent account password" in page
     assert "Homework Magic sticker pack, pen or notebook" in page
     assert "Adult recipient's name" in page
@@ -18,9 +21,13 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert "/api/rewards" in script
     assert "delivery_address" in script
     assert "wallet.gift_points" in script
+    assert "gift_access.eligible" in script
+    assert "Active plan needed" in script
     assert "wallet.spendable_xp" not in script
     assert "textContent" in script
     assert "https://" not in script
+    assert "Earn Gift Points and claim branded gifts" in pricing
+    assert "Gift Points are not included" in pricing
 
 
 def test_admin_has_a_protected_gift_fulfilment_page() -> None:

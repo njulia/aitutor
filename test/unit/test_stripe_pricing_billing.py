@@ -256,6 +256,8 @@ def test_pricing_page_uses_the_supplied_stripe_pricing_table_without_secrets():
     assert 'publishable-key="pk_live_fYeIDSqsqYC6MDKau5eFsI0U"' in page
     assert "customer-session-client-secret" in page
     assert "client-reference-id" in page
+    assert "data.pricing_table_id" in page
+    assert "data.publishable_key" in page
     assert "sk_live_" not in page
     assert "whsec_" not in page
     assert 'id="change-plan-button"' in page

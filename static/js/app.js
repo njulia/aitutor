@@ -2410,7 +2410,7 @@
                 }
 
                 if (data.success) {
-                    displayReview(data.llm_response || data.review, {
+                    displayReview(data.display_review || data.llm_response || data.review, {
                         homework: homeworkContent,
                         answers: studentAnswer,
                         subject: subject || 'Maths',
@@ -2706,7 +2706,7 @@
                     : answers;
 
                 displayReview(
-                    data.llm_response || data.review ||
+                    data.display_review || data.llm_response || data.review ||
                         'The homework was checked, but no feedback was returned.',
                     {
                         homework: homework,

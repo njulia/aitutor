@@ -384,8 +384,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy-Report-Only",
             "default-src 'self'; img-src 'self' data: blob:; "
-            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+            "connect-src 'self' https://api.stripe.com https://*.stripe.com; "
+            "frame-src https://js.stripe.com https://hooks.stripe.com; "
+            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         )
         sensitive_prefixes = (
             "/api/account", "/api/students", "/api/memory", "/api/progress",

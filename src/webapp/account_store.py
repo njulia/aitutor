@@ -413,6 +413,20 @@ def get_active_subscription(account_id: str) -> Optional[Dict[str, Any]]:
     return _dict(row)
 
 
+def account_has_active_reward_subscription(account_id: str) -> bool:
+    """Return whether a recurring plan currently includes physical rewards.
+
+    The five-day pass is a non-renewing purchase rather than a subscription.
+    It continues to unlock its advertised learning features, but it does not
+    earn Gift Points or unlock physical gift claims.
+    """
+    subscription = get_active_subscription(account_id)
+    if not subscription:
+        return False
+    plan = str(subscription.get("plan") or "").strip().lower()
+    return bool(plan and plan != "trial_5day")
+
+
 def account_has_used_plan(account_id: str, plan: str) -> bool:
     """Return whether an account has ever received the named entitlement."""
     if not account_id or not plan:

@@ -304,6 +304,24 @@ def user_has_subscription(
         return False
 
 
+async def _account_has_reward_subscription(account_id: str) -> bool:
+    """Fail closed for gifts without stopping a learner from earning XP."""
+    from src.webapp.account_store import account_has_active_reward_subscription
+
+    try:
+        return bool(
+            await run_blocking(
+                account_has_active_reward_subscription,
+                account_id,
+                timeout=10,
+                limit_concurrency=False,
+            )
+        )
+    except Exception:
+        logger.exception("Could not check reward gift subscription")
+        return False
+
+
 app = FastAPI(
     title="Homework Magic",
     description="AI Tutor for UK Primary Schools",
@@ -1743,12 +1761,15 @@ async def api_review(req: Request, request_body: ReviewRequest):
                     timeout=10,
                     limit_concurrency=False,
                 )
-                owns_learner = await run_blocking(
-                    student_belongs_to_account,
-                    resolved_student_id,
-                    account["id"],
-                    timeout=10,
-                    limit_concurrency=False,
+                owns_learner, gift_points_eligible = await asyncio.gather(
+                    run_blocking(
+                        student_belongs_to_account,
+                        resolved_student_id,
+                        account["id"],
+                        timeout=10,
+                        limit_concurrency=False,
+                    ),
+                    _account_has_reward_subscription(account["id"]),
                 )
                 if owns_learner:
                     fingerprint = review_fingerprint(
@@ -1766,6 +1787,7 @@ async def api_review(req: Request, request_body: ReviewRequest):
                         fingerprint=fingerprint,
                         subject=request_body.subject,
                         is_tutor_mode=bool(request_body.is_tutor_mode),
+                        gift_points_eligible=gift_points_eligible,
                         timeout=10,
                         limit_concurrency=False,
                     )

@@ -5,6 +5,7 @@ export STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_1TvlG3A7C4P8kXJMScIbgIwg"
 export STRIPE_PRICE_HOMEWORK_MONTHLY="price_1TvlFJA7C4P8kXJMwop34qv5"
 export STRIPE_PRICE_TRIAL_5DAY="price_1TvlE7A7C4P8kXJMNZk8fCey"
 
+
 # Repair Stripe variables that an earlier --env-vars-file/--set-secrets deploy
 # removed. Price IDs are safe non-secret identifiers; key material remains in
 # Google Secret Manager.

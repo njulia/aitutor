@@ -42,8 +42,9 @@ STRIPE_LIVE_SETUP.md
 .DS_Store
 Thumbs.db
 
-# Gradio
+# UI
 .gradio/
+pics/
 
 # Jupyter
 .ipynb_checkpoints/
