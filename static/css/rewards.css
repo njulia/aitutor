@@ -679,16 +679,17 @@ body.hm-rewards {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 500px;
+  max-width: 100%;
 }
 
-.custom-request-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.custom-request-row {
+  display: flex;
+  align-items: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.custom-request-fields label {
+.custom-request-row label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -697,7 +698,20 @@ body.hm-rewards {
   color: var(--reward-ink);
 }
 
-.custom-request-fields input {
+.custom-request-row label:first-child {
+  flex: 1 1 200px;
+  min-width: 140px;
+}
+
+.custom-request-row label:nth-child(2) {
+  flex: 0 0 90px;
+}
+
+.custom-request-row label:nth-child(3) {
+  flex: 0 0 100px;
+}
+
+.custom-request-row input {
   padding: 10px 12px;
   border: 2px solid var(--reward-line);
   border-radius: 10px;
@@ -707,7 +721,12 @@ body.hm-rewards {
   transition: border-color 0.2s;
 }
 
-.custom-request-fields input:focus {
+.custom-request-row .reward-button {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.custom-request-row input:focus {
   outline: none;
   border-color: var(--reward-purple);
 }
@@ -734,8 +753,18 @@ body.hm-rewards {
 }
 
 @media (max-width: 600px) {
-  .custom-request-fields {
-    grid-template-columns: 1fr;
+  .custom-request-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .custom-request-row label:first-child,
+  .custom-request-row label:nth-child(2),
+  .custom-request-row label:nth-child(3) {
+    flex: auto;
+    min-width: unset;
+  }
+  .custom-request-row .reward-button {
+    width: 100%;
   }
 }
 

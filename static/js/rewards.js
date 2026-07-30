@@ -45,6 +45,7 @@ async function jsonFetch(url, options = {}) {
 }
 
 function clearNode(node) {
+  if (!node) return;
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
@@ -207,6 +208,7 @@ async function requestReward(code) {
 
 function renderCatalog(data) {
   const grid = document.getElementById('catalog-grid');
+  if (!grid) return;
   clearNode(grid);
   const pendingCodes = pendingRewardCodes(data.redemptions);
   const giftAccessEligible = Boolean(data.gift_access && data.gift_access.eligible);
@@ -588,7 +590,7 @@ if (customRequestForm) {
     const costInput = document.getElementById('custom-reward-cost');
 
     const rewardName = nameInput.value.trim();
-    const rewardIcon = iconInput.value.trim() || '🎁';
+    const rewardIcon = iconInput ? (iconInput.value.trim() || '🎁') : '🎁';
     const xpCost = parseInt(costInput.value, 10);
 
     if (!rewardName) {

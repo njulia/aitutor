@@ -148,21 +148,21 @@
           Gift Points are only used when a grown-up says yes.
         </p>
         <form id="custom-request-form" class="custom-request-form">
-          <div class="custom-request-fields">
+          <div class="custom-request-row">
             <label>
               Gift name
               <input type="text" id="custom-reward-name" placeholder="e.g., a book" maxlength="40" required>
             </label>
-<!--            <label>-->
-<!--              Icon (optional)-->
-<!--              <input type="text" id="custom-reward-icon" placeholder="e.g., a star" maxlength="12">-->
-<!--            </label>-->
+            <label>
+              Icon
+              <input type="text" id="custom-reward-icon" placeholder="e.g., &#11088;" maxlength="12">
+            </label>
             <label>
               Gift Points
               <input type="number" id="custom-reward-cost" placeholder="50" min="10" max="5000" required>
             </label>
+            <button type="submit" class="reward-button primary">Send request</button>
           </div>
-          <button type="submit" class="reward-button primary">Send request</button>
           <div id="custom-request-status" class="custom-request-status" role="status" aria-live="polite"></div>
         </form>
 
@@ -324,7 +324,7 @@
   </main>
 
   <div id="reward-toast" class="reward-toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/js/rewards.js?v=20260729-reward-dom-sync" defer></script>
+  <script src="/static/js/rewards.js?v=20260730-rendercatalog-null" defer></script>
   <script src="/static/js/auth-nav.js" defer></script>
 </body>
 </html>
