@@ -20,7 +20,8 @@ PLAN_DISPLAY_NAMES = {
     "trial_5day": "5-day Homework Magic trial",
     "homework_monthly": "Homework Premium",
     "elevenplus_monthly": "11+ Premium",
-    "family_monthly": "Family Premium",
+    "family_monthly": "Family (Years 1-6)",
+    "family_11plus_monthly": "Family (Years 1-6 + 11+)",
 }
 
 
@@ -291,3 +292,63 @@ def send_password_reset_email(*, to_email: str, reset_url: str, expires_minutes:
         return "sent", None
     except Exception as exc:
         return "failed", f"Email delivery failed: {type(exc).__name__}"
+
+
+def send_xp_digest_email(
+    *,
+    to_email: str,
+    digest: dict,
+) -> Tuple[str, Optional[str]]:
+    """发送每日 XP 收益摘要邮件给家长。"""
+    kids = digest.get("kids", [])
+    if not kids:
+        return "skipped", "No XP activity in the digest period."
+
+    # 构建纯文本内容
+    lines = ["Hello,\n\nHere is your family's learning summary from the past 24 hours:\n"]
+    for kid in kids:
+        name = kid.get("name", "Your child")
+        xp = kid.get("total_xp", 0)
+        events = kid.get("event_count", 0)
+        lines.append(f"  - {name}: earned {xp} XP from {events} activities")
+    lines.append("\nKeep encouraging your children to learn every day!")
+    lines.append("\nView the full dashboard: " + _public_link("/parent-dashboard"))
+    lines.append("\nHomework Magic")
+
+    email = EmailMessage()
+    email["To"] = to_email
+    email["Subject"] = "Your family's learning summary from Homework Magic"
+    email.set_content("\n".join(lines))
+
+    # 构建 HTML 内容
+    kid_rows = "".join(
+        f"<tr><td style='padding:8px 12px;border-bottom:1px solid #e5e7eb'>"
+        f"{escape(kid.get('name', 'Your child'))}</td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right'>"
+        f"<strong>{kid.get('total_xp', 0)}</strong> XP</td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right'>"
+        f"{kid.get('event_count', 0)} activities</td></tr>"
+        for kid in kids
+    )
+    dashboard_link = _public_link("/parent-dashboard")
+    safe_dashboard_link = escape(dashboard_link, quote=True)
+
+    html_content = (
+        "<!doctype html><html><body style='font-family:Arial,sans-serif;color:#263238;line-height:1.55'>"
+        "<div style='max-width:600px;margin:auto;padding:24px'>"
+        "<h1 style='color:#6b46c1'>Your family's learning summary</h1>"
+        "<p>Here is what your children achieved in the past 24 hours:</p>"
+        f"<table style='width:100%;border-collapse:collapse;margin:16px 0'>"
+        f"<thead><tr style='background:#f3f4f6'>"
+        "<th style='padding:8px 12px;text-align:left'>Child</th>"
+        "<th style='padding:8px 12px;text-align:right'>XP earned</th>"
+        "<th style='padding:8px 12px;text-align:right'>Activities</th>"
+        "</tr></thead><tbody>{kid_rows}</tbody></table>"
+        "<p>Keep encouraging your children to learn every day!</p>"
+        f"<p><a href='{safe_dashboard_link}' style='background:#6b46c1;color:#fff;padding:12px 18px;"
+        "text-decoration:none;border-radius:8px;display:inline-block'>View full dashboard</a></p>"
+        "<p>Homework Magic</p></div></body></html>"
+    )
+    email.add_alternative(html_content, subtype="html")
+
+    return _deliver_transactional_email(email, "XP digest")

@@ -506,6 +506,30 @@
             margin-bottom: 20px;
         }
         
+        .learner-picker {
+            display: grid;
+            gap: 6px;
+            min-width: 180px;
+            font-weight: 700;
+            color: #555;
+        }
+
+        .learner-picker select {
+            min-height: 42px;
+            padding: 8px 12px;
+            background: #fff;
+            border: 2px solid #d7d2e7;
+            border-radius: 12px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .learner-picker select:focus {
+            outline: 3px solid rgba(102, 126, 234, 0.35);
+            outline-offset: 1px;
+            border-color: #667eea;
+        }
+
         .hidden {
             display: none;
         }
@@ -710,17 +734,12 @@
         <div class="header-content">
             <a class="logo" href="/" aria-label="Homework Magic home">✨ Homework Magic</a>
             <nav class="nav-links">
-  <a href="/ks1-homework">KS1</a>
-  <a href="/ks2-homework">KS2</a>
-  <a href="/elevenplus-practice">11+</a>
-  <a href="/elevenplus/articles">11+ Articles</a>
-  <a href="/memory">Memory</a>
-  <a href="/progress">Progress</a>
-  <a href="/rewards">Rewards</a>
-<!--  <a href="/check-my-homework">Mark Homework</a>-->
-    <a href="/login">Login</a> <!-- Added Login link -->
-  <a href="/register">Register</a> <!-- Added Register link -->
-                <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
+              <a href="/ks1-homework">KS1</a>
+              <a href="/ks2-homework">KS2</a>
+              <a href="/elevenplus-practice">11+</a>
+              <a href="/rewards">Rewards</a>
+                <a href="/parent-dashboard" id="parent-dashboard-link" >Parent Dashboard</a>
+                <a href="#" id="home-logout-link" >Logout</a> <!-- Placeholder for Logout -->
             </nav>
         </div>
     </div>
@@ -732,6 +751,10 @@
                 <h1 id="progress-title">See how your learning is growing</h1>
                 <p>Celebrate steady effort, then choose one small thing to practise next.</p>
             </div>
+            <label class="learner-picker">
+                Learning as
+                <select id="learner-select" aria-label="Choose learner profile"></select>
+            </label>
             <div class="app-welcome-tip">Progress, not perfection</div>
         </section>
 <!--        <div class="card">-->
@@ -835,9 +858,10 @@
         let charts = [];
         let latestProgressData = null;
         let resizeTimer = null;
+        let currentStudentId = null;
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadProgress();
+            initLearnerPicker();
             window.addEventListener('resize', scheduleChartResize, { passive: true });
         });
 
@@ -964,11 +988,53 @@
             return null;
         }
 
+        async function initLearnerPicker() {
+            const select = document.getElementById('learner-select');
+            try {
+                const response = await fetch('/api/account', { credentials: 'same-origin' });
+                if (!response.ok) return;
+                const account = await response.json();
+                const students = (account.students || []).filter(s => s.is_active);
+                if (students.length <= 1) {
+                    select.closest('.learner-picker').style.display = 'none';
+                    if (students.length === 1) currentStudentId = students[0].id;
+                    await loadProgress();
+                    return;
+                }
+                students.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = student.name || 'Learner';
+                    select.appendChild(option);
+                });
+                currentStudentId = account.default_student_id || students[0].id;
+                const requested = new URLSearchParams(window.location.search).get('student_id');
+                if (requested && students.some(s => s.id === requested)) {
+                    currentStudentId = requested;
+                }
+                select.value = currentStudentId;
+                select.addEventListener('change', () => {
+                    currentStudentId = select.value;
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('student_id', currentStudentId);
+                    window.history.replaceState({}, '', url);
+                    loadProgress();
+                });
+                await loadProgress();
+            } catch (error) {
+                console.error('Learner picker error:', error);
+                await loadProgress();
+            }
+        }
+
         async function loadProgress() {
             showPageStatus('Getting the latest results…');
 
             try {
-                const response = await fetch('/api/progress', { credentials: 'same-origin' });
+                const apiUrl = currentStudentId
+                    ? `/api/progress/${encodeURIComponent(currentStudentId)}`
+                    : '/api/progress';
+                const response = await fetch(apiUrl, { credentials: 'same-origin' });
                 const data = await response.json().catch(() => ({}));
 
                 if (response.status === 401) {
@@ -1524,5 +1590,6 @@
             }).join('');
         }
     </script>
+    <script src="/static/js/auth-nav.js" defer></script>
 </body>
 </html>

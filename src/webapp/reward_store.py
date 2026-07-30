@@ -1603,6 +1603,266 @@ class RewardStore:
                 counts[key] = int(result.rowcount or 0)
         return counts
 
+    # 家长自定义奖励目录管理
+
+    def list_catalog_items(
+        self, *, account_id: str, include_inactive: bool = False
+    ) -> list[dict[str, Any]]:
+        """列出家长为该家庭创建的自定义奖励。"""
+        account = _clean_id(account_id, maximum=80)
+        query = select(self.catalog).where(self.catalog.c.account_id == account)
+        if not include_inactive:
+            query = query.where(self.catalog.c.is_active.is_(True))
+        query = query.order_by(self.catalog.c.created_at.desc())
+        with self.engine.begin() as conn:
+            rows = conn.execute(query).all()
+        return [
+            {
+                "id": row._mapping["id"],
+                "name": row._mapping["name"],
+                "icon": row._mapping["icon"],
+                "xp_cost": int(row._mapping["xp_cost"]),
+                "is_active": bool(row._mapping["is_active"]),
+                "created_at": row._mapping["created_at"].isoformat()
+                if row._mapping["created_at"] else None,
+            }
+            for row in rows
+        ]
+
+    def create_catalog_item(
+        self,
+        *,
+        account_id: str,
+        name: str,
+        icon: str,
+        xp_cost: int,
+    ) -> dict[str, Any]:
+        """家长创建自定义奖励（如书本、电影票、足球等）。"""
+        account = _clean_id(account_id, maximum=80)
+        clean_name = " ".join(str(name or "").split())[:40]
+        if not clean_name:
+            raise ValueError("Please enter a reward name")
+        clean_icon = str(icon or "").strip()[:12] or "gift"
+        cost = max(10, min(int(xp_cost or 0), 5000))
+        now = _now()
+        item_id = f"cat_{uuid.uuid4().hex}"
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(self.catalog).values(
+                    id=item_id,
+                    account_id=account,
+                    name=clean_name,
+                    icon=clean_icon,
+                    xp_cost=cost,
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            row = conn.execute(
+                select(self.catalog).where(self.catalog.c.id == item_id)
+            ).first()
+        return {
+            "id": row._mapping["id"],
+            "name": row._mapping["name"],
+            "icon": row._mapping["icon"],
+            "xp_cost": int(row._mapping["xp_cost"]),
+            "is_active": bool(row._mapping["is_active"]),
+            "created_at": row._mapping["created_at"].isoformat()
+            if row._mapping["created_at"] else None,
+        }
+
+    def update_catalog_item(
+        self,
+        *,
+        account_id: str,
+        item_id: str,
+        name: str | None = None,
+        icon: str | None = None,
+        xp_cost: int | None = None,
+        is_active: bool | None = None,
+    ) -> dict[str, Any]:
+        """家长更新自定义奖励。"""
+        account = _clean_id(account_id, maximum=80)
+        clean_id = _clean_id(item_id, maximum=80)
+        values: dict[str, Any] = {"updated_at": _now()}
+        if name is not None:
+            clean_name = " ".join(str(name).split())[:40]
+            if clean_name:
+                values["name"] = clean_name
+        if icon is not None:
+            values["icon"] = str(icon).strip()[:12] or "gift"
+        if xp_cost is not None:
+            values["xp_cost"] = max(10, min(int(xp_cost), 5000))
+        if is_active is not None:
+            values["is_active"] = bool(is_active)
+        with self.engine.begin() as conn:
+            conn.execute(
+                update(self.catalog)
+                .where(
+                    and_(
+                        self.catalog.c.id == clean_id,
+                        self.catalog.c.account_id == account,
+                    )
+                )
+                .values(**values)
+            )
+            row = conn.execute(
+                select(self.catalog).where(self.catalog.c.id == clean_id)
+            ).first()
+        if row is None:
+            raise LookupError("Reward not found")
+        return {
+            "id": row._mapping["id"],
+            "name": row._mapping["name"],
+            "icon": row._mapping["icon"],
+            "xp_cost": int(row._mapping["xp_cost"]),
+            "is_active": bool(row._mapping["is_active"]),
+            "created_at": row._mapping["created_at"].isoformat()
+            if row._mapping["created_at"] else None,
+        }
+
+    def delete_catalog_item(self, *, account_id: str, item_id: str) -> bool:
+        """家长删除自定义奖励。"""
+        account = _clean_id(account_id, maximum=80)
+        clean_id = _clean_id(item_id, maximum=80)
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                delete(self.catalog).where(
+                    and_(
+                        self.catalog.c.id == clean_id,
+                        self.catalog.c.account_id == account,
+                    )
+                )
+            )
+        return bool(result.rowcount)
+
+    def decide_redemption_with_custom_xp(
+        self,
+        *,
+        account_id: str,
+        redemption_id: str,
+        decision: str,
+        xp_to_deduct: int | None = None,
+    ) -> dict[str, Any]:
+        """家长审批/拒绝孩子的奖励请求，可自定义扣除的 XP 数量。
+
+        奖励为线下交接（如书本、电影票），无需配送地址。
+        """
+        account = _clean_id(account_id, maximum=80)
+        redemption = _clean_id(redemption_id, maximum=80)
+        action = str(decision or "").strip().lower()
+        if action not in {"approve", "decline"}:
+            raise ValueError("Choose approve or decline")
+        now = _now()
+        local_day, week_start = _local_day_and_week(now)
+        with self.engine.begin() as conn:
+            row = conn.execute(
+                select(self.redemptions)
+                .where(
+                    and_(
+                        self.redemptions.c.id == redemption,
+                        self.redemptions.c.account_id == account,
+                    )
+                )
+                .with_for_update()
+            ).first()
+            if row is None:
+                raise LookupError("Reward request not found")
+            item = row._mapping
+            status = str(item["status"])
+            learner = str(item["student_id"])
+            wallet = self._ensure_wallet(conn, account, learner, lock=True)
+            values: dict[str, Any] = {"updated_at": now}
+
+            if action == "approve":
+                if status != "pending":
+                    raise ValueError("Only a waiting request can be approved")
+                # 家长可自定义扣除的 XP 数量
+                deduct = int(xp_to_deduct) if xp_to_deduct is not None else int(item["xp_cost"])
+                deduct = max(0, min(deduct, int(wallet._mapping["spendable_xp"])))
+                if deduct <= 0:
+                    raise ValueError("Not enough Gift Points to approve this reward")
+                event = self._add_event(
+                    conn,
+                    account_id=account,
+                    student_id=learner,
+                    source_key=f"redemption:{redemption}:spend",
+                    event_type="gift_points_spend",
+                    label=f"Gift approved: {item['reward_name']}",
+                    lifetime_delta=0,
+                    spendable_delta=-deduct,
+                    subject=None,
+                    local_day=local_day,
+                    week_start=week_start,
+                    created_at=now,
+                )
+                if event is None:
+                    raise ValueError("This gift has already been approved")
+                values.update(
+                    status="approved",
+                    decided_at=now,
+                    xp_cost=deduct,
+                )
+            else:  # decline
+                if status != "pending":
+                    raise ValueError("Only a waiting request can be declined")
+                values.update(status="declined", decided_at=now)
+
+            conn.execute(
+                update(self.redemptions)
+                .where(self.redemptions.c.id == redemption)
+                .values(**values)
+            )
+            updated_redemption = conn.execute(
+                select(self.redemptions).where(
+                    self.redemptions.c.id == redemption
+                )
+            ).first()
+            updated_wallet = self._ensure_wallet(conn, account, learner)
+        return {
+            "redemption": _public_redemption(updated_redemption),
+            "wallet": _public_wallet(updated_wallet),
+        }
+
+    def get_xp_digest_for_account(
+        self,
+        *,
+        account_id: str,
+        since: datetime | None = None,
+    ) -> dict[str, Any]:
+        """查询家庭在过去一段时间内的 XP 收益摘要，用于每日邮件通知。"""
+        account = _clean_id(account_id, maximum=80)
+        cutoff = since or (_now() - timedelta(hours=24))
+        with self.engine.begin() as conn:
+            rows = conn.execute(
+                select(
+                    self.events.c.student_id,
+                    func.sum(self.events.c.lifetime_delta).label("total_xp"),
+                    func.count().label("event_count"),
+                )
+                .where(
+                    and_(
+                        self.events.c.account_id == account,
+                        self.events.c.created_at >= cutoff,
+                        self.events.c.lifetime_delta > 0,
+                    )
+                )
+                .group_by(self.events.c.student_id)
+            ).all()
+        digest = []
+        for row in rows:
+            digest.append({
+                "student_id": row._mapping["student_id"],
+                "total_xp": int(row._mapping["total_xp"] or 0),
+                "event_count": int(row._mapping["event_count"] or 0),
+            })
+        return {
+            "account_id": account,
+            "period_start": cutoff.isoformat(),
+            "kids": digest,
+        }
+
 
 _store: RewardStore | None = None
 _store_lock = threading.Lock()

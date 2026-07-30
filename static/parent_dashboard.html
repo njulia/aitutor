@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parent Dashboard | Homework Magic</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif;
+      background: #f7fafc; color: #2d3748;
+    }
+    .header {
+      background: white; padding: 20px 24px; border-bottom: 1px solid #e2e8f0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { margin: 0; font-size: 24px; color: #2d3748; }
+    .header-actions { display: flex; gap: 12px; }
+    .btn {
+      padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.2s;
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-secondary { background: #edf2f7; color: #4a5568; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: #fed7d7; color: #c53030; }
+    .btn-danger:hover { background: #feb2b2; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .section h2 { margin: 0 0 16px; font-size: 20px; color: #2d3748; }
+    .family-code {
+      background: #f7fafc; padding: 16px; border-radius: 8px;
+      border: 2px dashed #cbd5e0; text-align: center; margin-bottom: 16px;
+    }
+    .family-code strong { font-size: 24px; color: #667eea; letter-spacing: 2px; }
+    .kids-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .kid-card {
+      background: #f7fafc; border-radius: 10px; padding: 20px;
+      border: 1px solid #e2e8f0;
+    }
+    .kid-card h3 { margin: 0 0 12px; color: #2d3748; }
+    .kid-info { font-size: 14px; color: #718096; margin-bottom: 8px; }
+    .kid-code {
+      background: white; padding: 8px 12px; border-radius: 6px;
+      font-family: monospace; font-size: 14px; color: #667eea;
+      border: 1px solid #e2e8f0; margin-top: 8px;
+    }
+    .xp-stats { display: flex; gap: 16px; margin-top: 12px; }
+    .xp-stat { text-align: center; }
+    .xp-stat .value { font-size: 24px; font-weight: 700; color: #667eea; }
+    .xp-stat .label { font-size: 12px; color: #718096; }
+    .target-form { margin-top: 16px; }
+    .target-form .field { margin-bottom: 12px; }
+    .target-form label { display: block; font-size: 13px; color: #4a5568; margin-bottom: 4px; }
+    .target-form input, .target-form select {
+      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: 14px;
+    }
+    .catalog-list { list-style: none; padding: 0; margin: 0; }
+    .catalog-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; background: #f7fafc; border-radius: 8px; margin-bottom: 8px;
+    }
+    .catalog-item-info { display: flex; align-items: center; gap: 12px; }
+    .catalog-item-icon { font-size: 24px; }
+    .catalog-item-name { font-weight: 600; }
+    .catalog-item-cost { color: #718096; font-size: 14px; }
+    .catalog-item-actions { display: flex; gap: 8px; }
+    .add-catalog-form {
+      background: #f7fafc; padding: 16px; border-radius: 8px; margin-top: 16px;
+    }
+    .add-catalog-form .field { margin-bottom: 12px; }
+    .add-catalog-form label { display: block; font-size: 13px; color: #4a5568; margin-bottom: 4px; }
+    .add-catalog-form input {
+      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: 14px;
+    }
+    .digest-table { width: 100%; border-collapse: collapse; }
+    .digest-table th, .digest-table td {
+      padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0;
+    }
+    .digest-table th { background: #f7fafc; font-weight: 600; font-size: 14px; }
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; padding: 24px;
+      max-width: 400px; width: 90%;
+    }
+    .modal h3 { margin: 0 0 16px; }
+    .modal .field { margin-bottom: 16px; }
+    .modal label { display: block; font-size: 14px; color: #4a5568; margin-bottom: 4px; }
+    .modal input {
+      width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: 14px;
+    }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .empty-state { text-align: center; padding: 40px; color: #718096; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Parent Dashboard</h1>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="window.location.href='/pricing'">Manage Plan</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/ks1-homework'">KS1</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/ks2-homework'">KS2</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/elevenplus-practice'">11+</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/elevenplus/articles'">11+ Articles</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/progress'">Progress</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/rewards'">Rewards</button>
+      <button class="btn btn-secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+    <!-- Family Overview -->
+    <div class="section">
+      <h2>Your Family</h2>
+      <div class="family-code">
+        <p style="margin:0 0 8px; color:#718096; font-size:14px;">Share this code with your kids to log in:</p>
+        <strong id="familyCode">Loading...</strong>
+      </div>
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="showCreateKidForm()">+ Add Child</button>
+      </div>
+      <!-- Create Kid Form (hidden by default) -->
+      <div id="createKidForm" style="display:none; background:#f7fafc; padding:16px; border-radius:8px; margin-bottom:16px;">
+        <h4 style="margin:0 0 12px;">Add a Child</h4>
+        <div class="field">
+          <label>Nickname</label>
+          <input type="text" id="newKidName" placeholder="e.g., Alex" maxlength="80">
+        </div>
+        <div class="field">
+          <label>Year Group</label>
+          <select id="newKidYear">
+            <option value="1">Year 1</option>
+            <option value="2">Year 2</option>
+            <option value="3">Year 3</option>
+            <option value="4">Year 4</option>
+            <option value="5">Year 5</option>
+            <option value="6">Year 6</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Age</label>
+          <input type="number" id="newKidAge" placeholder="7" min="5" max="11">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="createKid()">Create</button>
+          <button class="btn btn-secondary" onclick="hideCreateKidForm()">Cancel</button>
+        </div>
+      </div>
+      <div class="kids-grid" id="kidsGrid">
+        <div class="empty-state">Loading kids...</div>
+      </div>
+    </div>
+
+    <!-- XP Digest -->
+    <div class="section">
+      <h2>Learning Summary (Last 24 Hours)</h2>
+      <table class="digest-table">
+        <thead>
+          <tr>
+            <th>Child</th>
+            <th>XP Earned</th>
+            <th>Activities</th>
+          </tr>
+        </thead>
+        <tbody id="digestBody">
+          <tr><td colspan="3" style="text-align:center; color:#718096;">Loading...</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px; text-align:right;">
+        <button class="btn btn-primary" onclick="sendDigestEmail()">Send Summary Email</button>
+      </div>
+    </div>
+
+    <!-- Reward Catalog -->
+    <div class="section">
+      <h2>Custom Rewards</h2>
+      <p style="color:#718096; font-size:14px; margin:0 0 16px;">
+        Create rewards your kids can earn with their Gift Points (e.g., books, cinema tickets, toys).
+      </p>
+      <ul class="catalog-list" id="catalogList">
+        <li class="empty-state">Loading rewards...</li>
+      </ul>
+      <div class="add-catalog-form">
+        <h4 style="margin:0 0 12px;">Add New Reward</h4>
+        <div class="field">
+          <label>Reward Name</label>
+          <input type="text" id="newRewardName" placeholder="e.g., Cinema Ticket" maxlength="40">
+        </div>
+        <div class="field">
+          <label>Icon (emoji)</label>
+          <input type="text" id="newRewardIcon" placeholder="e.g., 🎬" maxlength="12">
+        </div>
+        <div class="field">
+          <label>Gift Points Cost</label>
+          <input type="number" id="newRewardCost" placeholder="100" min="10" max="5000">
+        </div>
+        <button class="btn btn-primary" onclick="addCatalogItem()">Add Reward</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Modal -->
+  <div class="modal-overlay" id="passwordModal">
+    <div class="modal">
+      <h3>Confirm Your Password</h3>
+      <div class="field">
+        <label>Enter your account password to continue</label>
+        <input type="password" id="modalPassword" placeholder="Password">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirmBtn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let pendingAction = null;
+
+    // 从后端响应中提取可读的错误信息
+    function extractError(data) {
+      if (data.error) return data.error;
+      if (data.detail) {
+        // Pydantic 验证错误返回数组格式: [{loc: [...], msg: "...", type: "..."}]
+        if (Array.isArray(data.detail)) {
+          return data.detail.map(e => e.msg || e.message || String(e)).join('; ');
+        }
+        // HTTPException 返回字符串格式
+        if (typeof data.detail === 'string') return data.detail;
+      }
+      return null;
+    }
+    
+    // Clear cached password
+    function clearCachedPassword() {
+        // No password caching implemented for security reasons
+    }
+
+    // Check if parent is logged in using the same mechanism as the main app
+    async function checkAuthStatus() {
+      try {
+        const response = await fetch('/api/check-subscription', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: {'Accept': 'application/json'}
+        });
+        if (!response.ok) throw new Error('Login status request failed.');
+        const data = await response.json();
+        const loggedIn = data.logged_in === true;
+        if (!loggedIn) {
+          window.location.href = '/login';
+        }
+      } catch (error) {
+        console.warn('Could not refresh login status:', error);
+        // Redirect to login if authentication check fails
+        window.location.href = '/login';
+      }
+    }
+
+    // Check authentication status on page load
+    checkAuthStatus();
+
+    // Load family overview
+    async function loadOverview() {
+      try {
+        const response = await fetch('/api/parent/overview', {
+          credentials: 'same-origin'
+        });
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        const data = await response.json();
+        if (data.success) {
+          document.getElementById('familyCode').textContent = data.family_code || 'Not available';
+          renderKids(data.kids || []);
+        }
+      } catch (err) {
+        console.error('Failed to load overview:', err);
+      }
+    }
+
+    function renderKids(kids) {
+      const grid = document.getElementById('kidsGrid');
+      if (!kids.length) {
+        grid.innerHTML = '<div class="empty-state">No kids added yet. Click "+ Add Child" to create a child profile.</div>';
+        return;
+      }
+      grid.innerHTML = kids.map(kid => `
+        <div class="kid-card">
+          <h3>${escapeHtml(kid.name)}</h3>
+          <div class="kid-info">Year ${kid.year_group} | Age ${kid.age}</div>
+          <div class="kid-code">Kid Code: ${kid.kid_code || 'Not assigned'}</div>
+          <div class="xp-stats">
+            <div class="xp-stat">
+              <div class="value">${kid.wallet?.lifetime_xp || 0}</div>
+              <div class="label">Lifetime XP</div>
+            </div>
+            <div class="xp-stat">
+              <div class="value">${kid.wallet?.gift_points || 0}</div>
+              <div class="label">Gift Points</div>
+            </div>
+          </div>
+          <div class="target-form">
+            <h4 style="margin:12px 0 8px; font-size:14px;">Learning Target</h4>
+            <div class="field">
+              <label>Daily Goal (activities)</label>
+              <input type="number" id="daily_${kid.id}" value="${kid.learning_target?.daily_goal || 1}" min="1" max="10">
+            </div>
+            <div class="field">
+              <label>Weekly XP Goal</label>
+              <input type="number" id="weekly_${kid.id}" value="${kid.learning_target?.weekly_xp_goal || 100}" min="10" max="2000">
+            </div>
+            <button class="btn btn-primary" onclick="saveTarget('${kid.id}', '${escapeHtml(kid.name)}')">Save Target</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function showCreateKidForm() {
+      document.getElementById('createKidForm').style.display = 'block';
+    }
+
+    function hideCreateKidForm() {
+      document.getElementById('createKidForm').style.display = 'none';
+      document.getElementById('newKidName').value = '';
+      document.getElementById('newKidAge').value = '';
+    }
+
+    async function createKid() {
+      const name = document.getElementById('newKidName').value.trim();
+      const yearGroup = parseInt(document.getElementById('newKidYear').value);
+      const age = parseInt(document.getElementById('newKidAge').value);
+
+      if (!name) {
+        alert('Please enter a nickname');
+        return;
+      }
+      if (!age || age < 5 || age > 11) {
+        alert('Please enter a valid age (5-11)');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/students', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: name,
+            year_group: yearGroup,
+            age: age
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          hideCreateKidForm();
+          loadOverview();
+        } else {
+          alert(extractError(data) || 'Failed to create child profile');
+        }
+      } catch (err) {
+        console.error('Failed to create student:', err);
+        alert('Failed to create child profile');
+      }
+    }
+
+    async function saveTarget(studentId, name) {
+      const daily = parseInt(document.getElementById(`daily_${studentId}`).value);
+      const weekly = parseInt(document.getElementById(`weekly_${studentId}`).value);
+      pendingAction = async (password) => {
+        const response = await fetch('/api/parent/learning-target', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            student_id: studentId,
+            daily_goal: daily,
+            weekly_xp_goal: weekly,
+            parent_password: password
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert(`Learning target saved for ${name}`);
+          loadOverview();
+        } else {
+          alert(extractError(data) || 'Failed to save target');
+        }
+      };
+      showPasswordModal();
+    }
+
+    // Load XP digest
+    async function loadDigest() {
+      try {
+        const response = await fetch('/api/parent/xp-digest', {
+          credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+          renderDigest(data.digest?.kids || []);
+        }
+      } catch (err) {
+        console.error('Failed to load digest:', err);
+      }
+    }
+
+    function renderDigest(kids) {
+      const tbody = document.getElementById('digestBody');
+      if (!kids.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#718096;">No activity in the last 24 hours</td></tr>';
+        return;
+      }
+      tbody.innerHTML = kids.map(kid => `
+        <tr>
+          <td>${escapeHtml(kid.name)}</td>
+          <td><strong>${kid.total_xp}</strong> XP</td>
+          <td>${kid.event_count} activities</td>
+        </tr>
+      `).join('');
+    }
+
+    async function sendDigestEmail() {
+      pendingAction = async (password) => {
+        const response = await fetch('/api/parent/xp-digest/send', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ parent_password: password })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert('Summary email sent!');
+        } else {
+          alert(extractError(data) || 'Failed to send email');
+        }
+      };
+      showPasswordModal();
+    }
+
+    // Load reward catalog
+    async function loadCatalog() {
+      try {
+        const response = await fetch('/api/rewards/catalog', {
+          credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+          renderCatalog(data.items || []);
+        }
+      } catch (err) {
+        console.error('Failed to load catalog:', err);
+      }
+    }
+
+    function renderCatalog(items) {
+      const list = document.getElementById('catalogList');
+      if (!items.length) {
+        list.innerHTML = '<li class="empty-state">No custom rewards yet. Add one below!</li>';
+        return;
+      }
+      list.innerHTML = items.map(item => `
+        <li class="catalog-item">
+          <div class="catalog-item-info">
+            <span class="catalog-item-icon">${escapeHtml(item.icon)}</span>
+            <div>
+              <div class="catalog-item-name">${escapeHtml(item.name)}</div>
+              <div class="catalog-item-cost">${item.xp_cost} Gift Points</div>
+            </div>
+          </div>
+          <div class="catalog-item-actions">
+            <button class="btn btn-danger" onclick="deleteCatalogItem('${item.id}', '${escapeHtml(item.name)}')">Delete</button>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    async function addCatalogItem() {
+      const name = document.getElementById('newRewardName').value.trim();
+      const icon = document.getElementById('newRewardIcon').value.trim() || '🎁';
+      const cost = parseInt(document.getElementById('newRewardCost').value) || 100;
+      if (!name) {
+        alert('Please enter a reward name');
+        return;
+      }
+      pendingAction = async (password) => {
+        const response = await fetch('/api/rewards/catalog', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: name,
+            icon: icon,
+            xp_cost: cost,
+            parent_password: password
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          document.getElementById('newRewardName').value = '';
+          document.getElementById('newRewardIcon').value = '';
+          document.getElementById('newRewardCost').value = '';
+          loadCatalog();
+        } else {
+          alert(extractError(data) || 'Failed to add reward');
+        }
+      };
+      showPasswordModal();
+    }
+
+    async function deleteCatalogItem(itemId, name) {
+      if (!confirm(`Delete "${name}"?`)) return;
+      pendingAction = async (password) => {
+        const response = await fetch(`/api/rewards/catalog/${itemId}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ parent_password: password })
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadCatalog();
+        } else {
+          alert(extractError(data) || 'Failed to delete reward');
+        }
+      };
+      showPasswordModal();
+    }
+
+    function showPasswordModal() {
+      document.getElementById('passwordModal').classList.add('show');
+      document.getElementById('modalPassword').value = '';
+      document.getElementById('modalPassword').focus();
+    }
+
+    function closeModal() {
+      document.getElementById('passwordModal').classList.remove('show');
+      pendingAction = null;
+    }
+
+    // Handle click on confirm button
+    document.getElementById('modalConfirmBtn').addEventListener('click', async () => {
+      const password = document.getElementById('modalPassword').value;
+      if (!password) {
+        alert('Please enter your password');
+        return;
+      }
+      if (pendingAction) {
+        try {
+          await pendingAction(password);
+          closeModal();
+        } catch (err) {
+          alert('Failed to confirm action');
+        }
+      }
+    });
+    
+    // Handle Enter key in password input
+    document.getElementById('modalPassword').addEventListener('keypress', async (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const password = document.getElementById('modalPassword').value;
+        if (!password) {
+          alert('Please enter your password');
+          return;
+        }
+        if (pendingAction) {
+          try {
+            await pendingAction(password);
+            closeModal();
+          } catch (err) {
+            alert('Failed to confirm action');
+          }
+        }
+      }
+    });
+
+    async function logout() {
+      try {
+        // Call the logout API to invalidate the session
+        await fetch('/api/logout', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Accept': 'application/json'}
+        });
+      } catch (error) {
+        console.error('Logout API call failed:', error);
+      } finally {
+        // Clear any local session data and sync across tabs
+        localStorage.removeItem('session');
+        localStorage.removeItem('auth_state');
+        clearCachedPassword(); // Clear cached password on logout
+        // Trigger storage event to update navigation in other tabs
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'auth_state',
+          oldValue: 'logged_in',
+          newValue: null
+        }));
+        window.location.href = '/';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initial load
+    loadOverview();
+    loadDigest();
+    loadCatalog();
+  </script>
+</body>
+</html>

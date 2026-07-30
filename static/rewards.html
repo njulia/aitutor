@@ -11,15 +11,16 @@
   <link rel="stylesheet" href="/static/css/rewards.css?v=20260728-subscriber-gifts">
 </head>
 <body class="hm-rewards">
-  <a class="hm-skip-link" href="#main-content">Skip to reward quests</a>
+<!--  <a class="hm-skip-link" href="#main-content">Skip to reward quests</a>-->
   <header class="reward-header">
     <a class="reward-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>
     <nav class="reward-nav" aria-label="Main navigation">
-      <a href="/app">Homework</a>
-      <a href="/progress">Progress</a>
-      <a href="/memory">Memory</a>
-      <a href="/rewards" aria-current="page">Rewards</a>
-      <a href="#" id="reward-logout">Log out</a>
+              <a href="/ks1-homework">KS1</a>
+              <a href="/ks2-homework">KS2</a>
+              <a href="/elevenplus-practice">11+</a>
+              <a href="/progress">Progress</a>
+              <a href="/parent-dashboard" id="parent-dashboard-link" >Parent Dashboard</a>
+              <a href="#" id="reward-logout">Log out</a>
     </nav>
   </header>
 
@@ -284,5 +285,6 @@
 
   <div id="reward-toast" class="reward-toast" role="status" aria-live="polite" hidden></div>
   <script src="/static/js/rewards.js?v=20260729-reward-dom-sync" defer></script>
+  <script src="/static/js/auth-nav.js" defer></script>
 </body>
 </html>

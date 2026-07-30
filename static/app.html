@@ -1079,11 +1079,10 @@
   <a href="/elevenplus/articles">11+ Articles</a>
   <a href="/progress" target="_blank" rel="noopener noreferrer">Progress</a>
   <a href="/rewards">Rewards</a>
-  <a href="/pricing" id="billing-link">Plans &amp; billing</a>
-<!--  <a href="/check-my-homework">Mark Homework</a>-->
-  <a href="/messages">Contact us</a>
-    <a href="/login">Login</a> <!-- Added Login link -->
+  <a href="/pricing" id="billing-link">Parent Plans</a>
+    <a href="/login" id="home-login-link">Login</a> <!-- Added Login link -->
   <a href="/register">Register</a> <!-- Added Register link -->
+  <a href="/parent-dashboard" id="parent-dashboard-link" style="display:none;">Parent Dashboard</a> <!-- Parent Dashboard link -->
                 <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
             </nav>
         </div>
@@ -1592,5 +1591,55 @@
 
     <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
+    <script>
+    // 检查家长登录状态，显示/隐藏 Parent Dashboard 和 Logout 链接
+    (function() {
+      const loginLink = document.getElementById('home-login-link');
+      const logoutLink = document.getElementById('logout-link');
+      const parentDashboardLink = document.getElementById('parent-dashboard-link');
+      const registerLink = document.querySelector('a[href="/register"]');
+
+      async function updateNav() {
+        try {
+          const response = await fetch('/api/check-subscription', {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {'Accept': 'application/json'}
+          });
+          if (!response.ok) throw new Error('Failed');
+          const data = await response.json();
+          const loggedIn = data.logged_in === true;
+
+          if (loginLink) loginLink.style.display = loggedIn ? 'none' : 'inline';
+          if (logoutLink) logoutLink.style.display = loggedIn ? 'inline' : 'none';
+          if (parentDashboardLink) parentDashboardLink.style.display = loggedIn ? 'inline' : 'none';
+          if (registerLink) registerLink.style.display = loggedIn ? 'none' : 'inline';
+        } catch (e) {
+          // 默认显示登录/注册
+          if (loginLink) loginLink.style.display = 'inline';
+          if (logoutLink) logoutLink.style.display = 'none';
+          if (parentDashboardLink) parentDashboardLink.style.display = 'none';
+          if (registerLink) registerLink.style.display = 'inline';
+        }
+      }
+
+      if (logoutLink) {
+        logoutLink.addEventListener('click', async function(e) {
+          e.preventDefault();
+          try {
+            await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+            localStorage.removeItem('session');
+            localStorage.removeItem('auth_state');
+            window.location.href = '/';
+          } catch (err) {
+            alert('We could not log you out just now. Please try again.');
+          }
+        });
+      }
+
+      updateNav();
+    })();
+    </script>
 </body>
 </html>

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field, SecretStr
 
 from src.progress_db import verify_user_credentials
 
@@ -35,6 +36,27 @@ PARENT_GIFT_PLAN_NOTE = (
     "Gift Points and gift approvals require an eligible monthly plan. "
     "The five-day pass and free beta access do not include physical gifts."
 )
+
+
+class CatalogItemRequest(BaseModel):
+    name: str = Field(default="", max_length=40)
+    icon: str = Field(default="gift", max_length=12)
+    xp_cost: int = Field(default=100, ge=10, le=5000)
+    parent_password: SecretStr
+
+
+class CatalogItemUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=40)
+    icon: str | None = Field(default=None, max_length=12)
+    xp_cost: int | None = Field(default=None, ge=10, le=5000)
+    is_active: bool | None = None
+    parent_password: SecretStr
+
+
+class ParentRedemptionDecisionRequest(BaseModel):
+    decision: str
+    xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
+    parent_password: SecretStr
 
 
 def build_reward_router(
@@ -284,6 +306,106 @@ def build_reward_router(
             )
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"success": True, **result}
+
+    # 家长自定义奖励目录管理
+
+    @router.get("/api/rewards/catalog")
+    async def list_custom_catalog(request: Request):
+        """家长查看为该家庭创建的自定义奖励列表。"""
+        account = await account_context(request)
+        items = await asyncio.to_thread(
+            get_reward_store().list_catalog_items,
+            account_id=account["id"],
+            include_inactive=True,
+        )
+        return {"success": True, "items": items}
+
+    @router.post("/api/rewards/catalog")
+    async def create_custom_catalog_item(
+        request: Request, body: CatalogItemRequest
+    ):
+        """家长创建自定义奖励（如书本、电影票、足球等）。"""
+        account = await account_context(request)
+        await confirm_parent(account, body.parent_password.get_secret_value())
+        try:
+            item = await asyncio.to_thread(
+                get_reward_store().create_catalog_item,
+                account_id=account["id"],
+                name=body.name,
+                icon=body.icon,
+                xp_cost=body.xp_cost,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"success": True, "item": item}
+
+    @router.put("/api/rewards/catalog/{item_id}")
+    async def update_custom_catalog_item(
+        item_id: str, request: Request, body: CatalogItemUpdateRequest
+    ):
+        """家长更新自定义奖励。"""
+        account = await account_context(request)
+        await confirm_parent(account, body.parent_password.get_secret_value())
+        try:
+            item = await asyncio.to_thread(
+                get_reward_store().update_catalog_item,
+                account_id=account["id"],
+                item_id=item_id,
+                name=body.name,
+                icon=body.icon,
+                xp_cost=body.xp_cost,
+                is_active=body.is_active,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"success": True, "item": item}
+
+    @router.delete("/api/rewards/catalog/{item_id}")
+    async def delete_custom_catalog_item(
+        item_id: str, request: Request, parent_password: SecretStr
+    ):
+        """家长删除自定义奖励。"""
+        account = await account_context(request)
+        await confirm_parent(account, parent_password.get_secret_value())
+        deleted = await asyncio.to_thread(
+            get_reward_store().delete_catalog_item,
+            account_id=account["id"],
+            item_id=item_id,
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Reward not found")
+        return {"success": True}
+
+    @router.post("/api/rewards/redemptions/{redemption_id}/parent-decision")
+    async def parent_decide_redemption(
+        redemption_id: str,
+        request: Request,
+        body: ParentRedemptionDecisionRequest,
+    ):
+        """家长审批/拒绝孩子的奖励请求，可自定义扣除的 XP 数量。
+
+        奖励为线下交接（如书本、电影票），无需配送地址。
+        """
+        account = await account_context(request)
+        eligible = await gift_points_eligible(account)
+        if body.decision == "approve" and not eligible:
+            raise HTTPException(status_code=403, detail=PARENT_GIFT_PLAN_NOTE)
+        await confirm_parent(account, body.parent_password.get_secret_value())
+        try:
+            result = await asyncio.to_thread(
+                get_reward_store().decide_redemption_with_custom_xp,
+                account_id=account["id"],
+                redemption_id=redemption_id,
+                decision=body.decision,
+                xp_to_deduct=body.xp_to_deduct,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"success": True, **result}

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kid Login | Homework Magic</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .card {
+      background: white; border-radius: 16px; padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 400px; width: 100%;
+    }
+    h1 {
+      margin: 0 0 8px; color: #2d3748; font-size: 28px; text-align: center;
+    }
+    .subtitle {
+      color: #718096; text-align: center; margin-bottom: 32px; font-size: 14px;
+    }
+    .field { margin-bottom: 20px; }
+    label {
+      display: block; margin-bottom: 8px; color: #4a5568;
+      font-weight: 600; font-size: 14px;
+    }
+    input {
+      width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0;
+      border-radius: 10px; font-size: 16px; transition: border-color 0.2s;
+    }
+    input:focus {
+      outline: none; border-color: #667eea;
+    }
+    button {
+      width: 100%; padding: 16px; background: #667eea; color: white;
+      border: none; border-radius: 10px; font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    button:hover { background: #5568d3; }
+    button:disabled { background: #a0aec0; cursor: not-allowed; }
+    .error {
+      background: #fed7d7; color: #c53030; padding: 12px; border-radius: 8px;
+      margin-bottom: 16px; font-size: 14px; display: none;
+    }
+    .error.show { display: block; }
+    .back-link {
+      display: block; text-align: center; margin-top: 20px;
+      color: #667eea; text-decoration: none; font-size: 14px;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Welcome back!</h1>
+    <p class="subtitle">Enter your codes to start learning</p>
+    <div class="error" id="error"></div>
+    <form id="kidLoginForm">
+      <div class="field">
+        <label for="familyCode">Family Code</label>
+        <input type="text" id="familyCode" name="familyCode" placeholder="FAM-XXXXXX" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="kidCode">Your Kid Code</label>
+        <input type="text" id="kidCode" name="kidCode" placeholder="KID-XXXXXX" required autocomplete="off">
+      </div>
+      <button type="submit" id="submitBtn">Start Learning</button>
+    </form>
+    <a href="/login" class="back-link">Parent login</a>
+  </div>
+  <script>
+    const form = document.getElementById('kidLoginForm');
+    const errorEl = document.getElementById('error');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove('show');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in...';
+
+      const familyCode = document.getElementById('familyCode').value.trim().toUpperCase();
+      const kidCode = document.getElementById('kidCode').value.trim().toUpperCase();
+
+      try {
+        const response = await fetch('/api/kid-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ family_code: familyCode, kid_code: kidCode }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Store the kid session token
+          localStorage.setItem('kid_session_token', data.token);
+          localStorage.setItem('kid_student_id', data.student_id);
+          localStorage.setItem('kid_student_name', data.student_name);
+          // Redirect to the app
+          window.location.href = '/app';
+        } else {
+          errorEl.textContent = data.error || 'The codes are not correct. Please try again.';
+          errorEl.classList.add('show');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Start Learning';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Start Learning';
+      }
+    });
+  </script>
+</body>
+</html>

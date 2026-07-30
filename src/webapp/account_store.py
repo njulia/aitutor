@@ -56,6 +56,8 @@ accounts = Table(
     Column("display_name", String(80), nullable=True),
     Column("role", String(20), nullable=False, default="user"),
     Column("stripe_customer_id", String(100), nullable=True, unique=True),
+    # 永久家庭登录码，供孩子用 family_code + kid_code 登录，不依赖家长邮箱
+    Column("family_code", String(16), nullable=True, unique=True, index=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
@@ -72,7 +74,19 @@ students = Table(
     Column("is_default", Boolean, nullable=False, default=False),
     # NULL for ordinary learners; account_id for the single default learner.
     Column("default_for_account", String(80), nullable=True, unique=True),
+    # 永久孩子登录码，与家庭码配对使用，不包含任何个人数据
+    Column("kid_code", String(20), nullable=True, unique=True, index=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+learning_targets = Table(
+    "learning_targets",
+    _metadata,
+    Column("student_id", String(80), ForeignKey("students.id", ondelete="CASCADE"), primary_key=True),
+    Column("daily_goal", Integer, nullable=False, default=1),
+    Column("weekly_xp_goal", Integer, nullable=False, default=100),
+    Column("focus_subjects", String(200), nullable=True),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -149,6 +163,38 @@ def _engine() -> Engine:
 
 def init_account_db() -> None:
     _engine()
+    _ensure_legacy_columns()
+
+
+# 孩子登录码使用的字符表，去除了容易混淆的 I O 0 1
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _generate_code(prefix: str, length: int = 6) -> str:
+    """生成人类可读、可输入的永久登录码，避免混淆字符。"""
+    body = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
+    return f"{prefix}-{body}"
+
+
+def _ensure_legacy_columns() -> None:
+    """为既有数据库补齐新增列，避免老库在升级时报错。
+
+    这是一次性迁移而非运行时兜底：新列在创建后即由 create_all 维护。
+    """
+    engine = _engine()
+    additions = [
+        ("accounts", "family_code", "VARCHAR(16)"),
+        ("students", "kid_code", "VARCHAR(20)"),
+    ]
+    for table_name, column_name, column_type in additions:
+        try:
+            with engine.begin() as conn:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                )
+        except Exception:
+            # 列已存在时 ALTER 会失败，这是预期行为，直接忽略
+            pass
 
 
 def _normalise_email(email: str) -> str:
@@ -196,7 +242,8 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
                 conn.execute(insert(accounts).values(
                     id=f"acct_{uuid.uuid4().hex}", email=clean_email,
                     display_name=clean_display, role=safe_role,
-                    stripe_customer_id=None, created_at=now, updated_at=now,
+                    stripe_customer_id=None, family_code=_generate_code("FAM"),
+                    created_at=now, updated_at=now,
                 ))
         except IntegrityError:
             # Another worker created the same normalised account.
@@ -205,7 +252,73 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
             row = conn.execute(select(accounts).where(accounts.c.email == clean_email)).first()
     if row is None:
         raise RuntimeError("Unable to create or read account")
-    return _dict(row) or {}
+    data = _dict(row) or {}
+    # 老账号补发永久家庭码，保证每个家庭都有可用的孩子登录入口
+    if not data.get("family_code"):
+        data = _backfill_family_code(data["id"]) or data
+    return data
+
+
+def _backfill_family_code(account_id: str) -> Optional[Dict[str, Any]]:
+    """为缺少家庭码的既有账号补发一个唯一码。"""
+    for _ in range(5):
+        code = _generate_code("FAM")
+        try:
+            with _engine().begin() as conn:
+                conn.execute(
+                    update(accounts).where(accounts.c.id == account_id).values(
+                        family_code=code, updated_at=_now()
+                    )
+                )
+                return _dict(conn.execute(select(accounts).where(accounts.c.id == account_id)).first())
+        except IntegrityError:
+            continue
+    return None
+
+
+def get_account_by_family_code(family_code: str) -> Optional[Dict[str, Any]]:
+    """按家庭登录码查找账号，用于孩子登录。"""
+    code = _normalise_code(family_code)
+    if not code:
+        return None
+    with _engine().begin() as conn:
+        return _dict(conn.execute(
+            select(accounts).where(accounts.c.family_code == code)
+        ).first())
+
+
+def _normalise_code(code: str) -> str:
+    return " ".join(str(code or "").upper().split())[:20]
+
+
+def verify_family_kid_codes(family_code: str, kid_code: str) -> Optional[Dict[str, Any]]:
+    """校验家庭码 + 孩子码配对，返回孩子档案或 None。
+
+    两个码都是随机生成的，使用常量时间比较以避免侧信道。
+    """
+    account = get_account_by_family_code(family_code)
+    if not account:
+        return None
+    normalised_kid = _normalise_code(kid_code)
+    if not normalised_kid:
+        return None
+    with _engine().begin() as conn:
+        row = conn.execute(
+            select(students).where(
+                and_(
+                    students.c.account_id == account["id"],
+                    students.c.kid_code == normalised_kid,
+                    students.c.is_active.is_(True),
+                )
+            )
+        ).first()
+    if row is None:
+        # 避免因码不存在而提前返回，做一次等长比较以保持常量时间行为
+        secrets.compare_digest(normalised_kid, normalised_kid)
+        return None
+    student = _dict(row) or {}
+    student["account_id"] = account["id"]
+    return student
 
 
 def get_account_by_email(email: str) -> Optional[Dict[str, Any]]:
@@ -262,7 +375,8 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
                 conn.execute(insert(students).values(
                     id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
                     year_group=year_group, age=age, is_active=True, is_default=True,
-                    default_for_account=account_id, created_at=now, updated_at=now,
+                    default_for_account=account_id, kid_code=_generate_code("KID"),
+                    created_at=now, updated_at=now,
                 ))
     except IntegrityError:
         # The unique default_for_account key makes this safe across workers.
@@ -271,10 +385,31 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
         row = conn.execute(select(students).where(and_(
             students.c.account_id == account_id,
             students.c.default_for_account == account_id,
-        ))).first()
+        )).with_for_update()).first()
     if row is None:
         raise RuntimeError("Unable to create default learner")
-    return _dict(row) or {}
+    result = _dict(row) or {}
+    # 既有孩子档案补发永久孩子登录码
+    if not result.get("kid_code"):
+        result = _ensure_student_kid_code(result["id"]) or result
+    return result
+
+
+def _ensure_student_kid_code(student_id: str) -> Optional[Dict[str, Any]]:
+    """为缺少孩子登录码的既有档案补发唯一码。"""
+    for _ in range(5):
+        code = _generate_code("KID")
+        try:
+            with _engine().begin() as conn:
+                conn.execute(
+                    update(students).where(students.c.id == student_id).values(
+                        kid_code=code, updated_at=_now()
+                    )
+                )
+                return _dict(conn.execute(select(students).where(students.c.id == student_id)).first())
+        except IntegrityError:
+            continue
+    return None
 
 
 def create_student(account_id: str, name: str, year_group: int, age: int) -> Dict[str, Any]:
@@ -288,7 +423,8 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
             insert(students).values(
                 id=learner_id, account_id=account_id, name=nickname,
                 year_group=year_group, age=age, is_active=True, is_default=False,
-                default_for_account=None, created_at=now, updated_at=now,
+                default_for_account=None, kid_code=_generate_code("KID"),
+                created_at=now, updated_at=now,
             )
         )
         row = conn.execute(select(students).where(students.c.id == learner_id)).first()
@@ -308,7 +444,46 @@ def list_students(account_id: str, active_only: bool = False) -> List[Dict[str, 
 
 def get_student(student_id: str) -> Optional[Dict[str, Any]]:
     with _engine().begin() as conn:
-        return _dict(conn.execute(select(students).where(students.c.id == student_id)).first())
+        row = conn.execute(select(students).where(students.c.id == student_id)).first()
+    result = _dict(row)
+    if result and not result.get("kid_code"):
+        # 既有档案补发孩子登录码，保证家长仪表盘能展示可分享的码
+        result = _ensure_student_kid_code(student_id) or result
+    return result
+
+
+def get_student_by_kid_code(kid_code: str) -> Optional[Dict[str, Any]]:
+    """按孩子登录码查找档案，用于孩子登录后的身份解析。"""
+    code = _normalise_code(kid_code)
+    if not code:
+        return None
+    with _engine().begin() as conn:
+        return _dict(conn.execute(
+            select(students).where(students.c.kid_code == code)
+        ).first())
+
+
+def subscription_active_for_student(student_id: str, required_plans: Optional[List[str]] = None) -> bool:
+    """孩子登录会话的订阅校验：通过孩子档案解析家庭账号再查订阅。
+
+    家庭档订阅属于账号，不属于单个孩子。
+    """
+    student = get_student(student_id)
+    if not student:
+        return False
+    sub = get_active_subscription(student["account_id"])
+    if not sub:
+        return False
+    if not required_plans:
+        return True
+    plan = str(sub.get("plan") or "")
+    # 家庭档含 11+ 套餐与五日体验覆盖全部学习区
+    if plan in {"family_11plus_monthly", "trial_5day"}:
+        return True
+    # 家庭档不含 11+ 套餐与免费 beta 仅覆盖 Years 1-6 家庭作业
+    if plan in {"family_monthly", BETA_PLAN}:
+        return "homework_monthly" in set(required_plans)
+    return plan in set(required_plans)
 
 
 def student_belongs_to_account(student_id: str, account_id: str) -> bool:
@@ -346,6 +521,7 @@ def update_student(student_id: str, account_id: str, **updates: Any) -> Optional
 
 def delete_student(student_id: str, account_id: str) -> bool:
     with _engine().begin() as conn:
+        conn.execute(delete(learning_targets).where(learning_targets.c.student_id == student_id))
         result = conn.execute(
             delete(students).where(and_(students.c.id == student_id, students.c.account_id == account_id))
         )
@@ -652,14 +828,63 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
     if not sub:
         return False
     if required_plans:
-        # Family and the five-day introductory pass include both premium areas.
+        # 家庭档含 11+ 套餐与五日体验覆 与免费 beta 盖全部学习区
         effective_required = set(required_plans)
-        if sub.get("plan") in {"family_monthly", "trial_5day"}:
+        if sub.get("plan") in {"family_11plus_monthly", "trial_5day", BETA_PLAN}:
             return True
-        if sub.get("plan") == BETA_PLAN:
+        # 家庭档不含 11+ 套餐仅覆盖 Years 1-6 家庭作业
+        if sub.get("plan") in {"family_monthly"}:
             return "homework_monthly" in effective_required
         return sub.get("plan") in effective_required
     return True
+
+
+def get_learning_target(student_id: str) -> Dict[str, Any]:
+    """读取孩子学习目标，缺失时返回默认目标。"""
+    with _engine().begin() as conn:
+        row = conn.execute(
+            select(learning_targets).where(learning_targets.c.student_id == student_id)
+        ).first()
+    if row is None:
+        return {"daily_goal": 1, "weekly_xp_goal": 100, "focus_subjects": None}
+    data = _dict(row) or {}
+    return {
+        "daily_goal": int(data.get("daily_goal") or 1),
+        "weekly_xp_goal": int(data.get("weekly_xp_goal") or 100),
+        "focus_subjects": data.get("focus_subjects"),
+    }
+
+
+def set_learning_target(
+    account_id: str,
+    student_id: str,
+    *,
+    daily_goal: Optional[int] = None,
+    weekly_xp_goal: Optional[int] = None,
+    focus_subjects: Optional[str] = None,
+) -> Dict[str, Any]:
+    """家长为孩子设置学习目标。需校验孩子归属。"""
+    if not student_belongs_to_account(student_id, account_id):
+        raise ValueError("Learner profile not found")
+    daily = 1 if daily_goal is None else max(1, min(int(daily_goal), 10))
+    weekly = 100 if weekly_xp_goal is None else max(10, min(int(weekly_xp_goal), 2000))
+    focus = None
+    if focus_subjects is not None:
+        focus = ", ".join(
+            part.strip()[:40] for part in str(focus_subjects).split(",") if part.strip()
+        )[:200] or None
+    now = _now()
+    with _engine().begin() as conn:
+        conn.execute(
+            delete(learning_targets).where(learning_targets.c.student_id == student_id)
+        )
+        conn.execute(
+            insert(learning_targets).values(
+                student_id=student_id, daily_goal=daily,
+                weekly_xp_goal=weekly, focus_subjects=focus, updated_at=now,
+            )
+        )
+    return get_learning_target(student_id)
 
 
 def get_account_overview(email: str) -> Dict[str, Any]:
@@ -711,8 +936,8 @@ def get_subscription_stats() -> Dict[str, Any]:
     """Return entitlement counts from PostgreSQL, not a live Stripe list call."""
     now = _now()
     monthly_prices = {
-        "homework_monthly": 4.99,
-        "elevenplus_monthly": 9.99,
+        "family_monthly": 4.99,
+        "family_11plus_monthly": 9.99,
     }
     with _engine().begin() as conn:
         active_filter = and_(
@@ -762,6 +987,11 @@ def delete_account(account_id: str) -> bool:
             )
         )
         conn.execute(delete(subscriptions).where(subscriptions.c.account_id == account_id))
+        conn.execute(delete(learning_targets).where(
+            learning_targets.c.student_id.in_(
+                select(students.c.id).where(students.c.account_id == account_id)
+            )
+        ))
         conn.execute(delete(students).where(students.c.account_id == account_id))
         result = conn.execute(delete(accounts).where(accounts.c.id == account_id))
     return bool(result.rowcount)

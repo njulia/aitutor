@@ -40,6 +40,7 @@ from src.webapp.memory_routes import build_memory_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
+from src.webapp.parent_dashboard_routes import build_parent_dashboard_router
 from src.webapp.email_service import send_registration_confirmation_email
 from src.webapp.privacy_metrics import (
     marketing_summary,
@@ -105,9 +106,14 @@ tutor_session_store = TutorSessionStore()
 
 HOMEWORK_PREMIUM_PLAN = "homework_monthly"
 ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
+FAMILY_MONTHLY_PLAN = "family_monthly"
+FAMILY_11PLUS_MONTHLY_PLAN = "family_11plus_monthly"
+
 PREMIUM_PLAN_NAMES = {
     HOMEWORK_PREMIUM_PLAN: "Homework Premium",
     ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
+    FAMILY_MONTHLY_PLAN: "Family (Years 1-6)",
+    FAMILY_11PLUS_MONTHLY_PLAN: "Family (Years 1-6 + 11+)",
 }
 
 OUT_OF_SCOPE_HOMEWORK_MESSAGE = (
@@ -185,6 +191,16 @@ async def lifespan(_app: FastAPI):
     """Validate configuration and perform small bounded maintenance tasks."""
     validate_production_configuration()
     initialize()
+    # 初始化账号和孩子会话数据库，确保新增列已添加
+    try:
+        from src.webapp.account_store import init_account_db
+        from src.webapp.kid_session_store import init_kid_session_db
+        await asyncio.gather(
+            asyncio.to_thread(init_account_db),
+            asyncio.to_thread(init_kid_session_db),
+        )
+    except Exception:
+        logger.exception("Account database initialization failed")
     try:
         from src.auth_tokens import purge_expired as purge_auth_sessions
         from src.progress_db import purge_old_learning_records
@@ -290,6 +306,17 @@ def user_has_subscription(
         resolved_student_id, resolved_username, _ = _get_user_or_anonymous_id(req)
         student_id = student_id or resolved_student_id
         username = username or resolved_username
+    if not username and not student_id:
+        return False
+    # 孩子登录会话：通过学生 ID 查询家庭订阅
+    if not username and student_id and not str(student_id).startswith("anon_"):
+        try:
+            from src.webapp.account_store import subscription_active_for_student
+            required_plans = [required_plan] if required_plan else None
+            return subscription_active_for_student(student_id, required_plans=required_plans)
+        except Exception:
+            logger.exception("Kid session subscription lookup failed")
+            return False
     if not username or (student_id and str(student_id).startswith("anon_")):
         return False
     try:
@@ -589,7 +616,16 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
     new_anonymous_session_id_to_set_in_cookie will be None if no new cookie is needed.
     """
     from src.auth_tokens import verify_token  # Moved to top-level import
-    # 1. Check for logged-in user
+    # 1. Check for kid session (family code + kid code login)
+    kid_token = req.headers.get("X-Kid-Session") or req.cookies.get("kid_session")
+    if kid_token:
+        from src.webapp.kid_session_store import resolve_kid_session
+        session = resolve_kid_session(kid_token)
+        if session:
+            # 孩子登录会话：返回学生 ID，无家长邮箱
+            return str(session["student_id"]), None, None
+
+    # 2. Check for logged-in parent user
     token = req.cookies.get("session") or req.headers.get("Authorization")
     if token:
         username = verify_token(token)
@@ -602,12 +638,12 @@ def _get_user_or_anonymous_id(req: Request) -> tuple[str, Optional[str], Optiona
             learner = ensure_default_student(account["id"])
             return str(learner["id"]), str(username).strip().lower(), None
 
-    # 2. Check for anonymous session ID cookie
+    # 3. Check for anonymous session ID cookie
     anonymous_session_id = req.cookies.get("anon_session_id")
     if anonymous_session_id:
         return anonymous_session_id, None, None # No username for anonymous
 
-    # 3. Generate a new anonymous session ID
+    # 4. Generate a new anonymous session ID
     new_anon_session_id = f"anon_{uuid.uuid4().hex}" # Prefix to distinguish from real student_ids
     return new_anon_session_id, None, new_anon_session_id
 
@@ -650,6 +686,7 @@ app.include_router(
         project_root=project_root,
     )
 )
+app.include_router(build_parent_dashboard_router(_resolve_username))
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
@@ -1069,6 +1106,16 @@ async def register_page(req: Request, background_tasks: BackgroundTasks):
 @app.get("/login")
 async def login_page():
     return _static_page("static", "login.html", cache_control="no-store, private")
+
+
+@app.get("/kid-login")
+async def kid_login_page():
+    return _static_page("static", "kid_login.html", cache_control="no-store, private")
+
+
+@app.get("/parent-dashboard")
+async def parent_dashboard_page():
+    return _static_page("static", "parent_dashboard.html", cache_control="no-store, private")
 
 
 @app.get("/pricing")
@@ -2340,6 +2387,33 @@ async def check_subscription_api(req: Request, plan: Optional[str] = None):
     return response
 
 
+@app.get("/api/check-parent-status")
+async def check_parent_status_api(req: Request):
+    """Check if the logged-in user is a parent (has children associated with their account)."""
+    resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+    
+    is_parent = False
+    child_count = 0
+    
+    if logged_in_username:
+        # Import here to avoid circular imports
+        from src.webapp.account_store import get_account_by_email, list_students
+        
+        account = await run_blocking(get_account_by_email, logged_in_username, timeout=10, limit_concurrency=False)
+        if account:
+            students = await run_blocking(list_students, account["id"], timeout=10, limit_concurrency=False)
+            child_count = len(students)
+            is_parent = child_count > 0
+    
+    response = JSONResponse({
+        "is_parent": is_parent,
+        "child_count": child_count,
+        "logged_in": logged_in_username is not None,
+    })
+    _set_anon_cookie(response, new_anon_session_id, req)
+    return response
+
+
 _COMMON_PASSWORDS = {
     "password", "password1", "password123", "qwerty123", "letmein123",
     "homework123", "12345678", "123456789", "welcome123",
@@ -2453,6 +2527,74 @@ async def api_logout(req: Request):
     response = JSONResponse({"success": True})
     response.delete_cookie(
         "session", path="/", httponly=True, samesite="lax",
+        secure=_cookie_should_be_secure(req),
+    )
+    return response
+
+
+class KidLoginRequest(BaseModel):
+    family_code: str = Field(default="")
+    kid_code: str = Field(default="")
+
+
+@app.post("/api/kid-login")
+async def api_kid_login(request_body: KidLoginRequest, req: Request):
+    """孩子使用家庭码 + 孩子码登录，获得短期会话 token。"""
+    try:
+        from src.webapp.account_store import verify_family_kid_codes
+        from src.webapp.kid_session_store import create_kid_session
+
+        family_code = str(request_body.family_code or "").strip()
+        kid_code = str(request_body.kid_code or "").strip()
+        if not family_code or not kid_code:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Please enter both your family code and kid code."},
+            )
+        student = await run_blocking(
+            verify_family_kid_codes, family_code, kid_code,
+            timeout=10, limit_concurrency=False,
+        )
+        if not student:
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "error": "The codes are not correct. Please check and try again."},
+            )
+        session = await run_blocking(
+            create_kid_session, student["id"], 3600,
+            timeout=10, limit_concurrency=False,
+        )
+        response = JSONResponse({
+            "success": True,
+            "student_id": student["id"],
+            "student_name": student.get("name", ""),
+            "token": session["token"],
+        })
+        response.set_cookie(
+            "kid_session", session["token"], httponly=True, samesite="lax",
+            secure=_cookie_should_be_secure(req), path="/", max_age=3600,
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Kid login failed")
+        return JSONResponse(status_code=500, content={"success": False, "error": "We could not sign you in just now."})
+
+
+@app.post("/api/kid-logout")
+async def api_kid_logout(req: Request):
+    """撤销孩子的登录会话。"""
+    token = req.cookies.get("kid_session") or req.headers.get("X-Kid-Session")
+    if token:
+        try:
+            from src.webapp.kid_session_store import revoke_kid_session
+            await run_blocking(revoke_kid_session, token, timeout=10, limit_concurrency=False)
+        except Exception:
+            logger.exception("Could not revoke kid session")
+    response = JSONResponse({"success": True})
+    response.delete_cookie(
+        "kid_session", path="/", httponly=True, samesite="lax",
         secure=_cookie_should_be_secure(req),
     )
     return response

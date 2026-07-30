@@ -35,6 +35,29 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
     localStorage.setItem('auth_state', 'logged_in');
     localStorage.removeItem('student_id');
     localStorage.removeItem('student_email');
+    
+    // Check if user is a parent and has children
+    try {
+      const parentResponse = await fetch('/api/check-parent-status', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {'Accept': 'application/json'}
+      });
+      
+      if (parentResponse.ok) {
+        const parentData = await parentResponse.json();
+        if (parentData.is_parent && parentData.child_count > 0) {
+          // If user is a parent with children, redirect to parent dashboard
+          window.location.assign('/parent-dashboard');
+          return;
+        }
+      }
+    } catch (parentError) {
+      console.warn('Could not check parent status:', parentError);
+      // Continue with normal redirect if parent status check fails
+    }
+    
     const params = new URLSearchParams(window.location.search);
     const requestedNext = params.get('next') || sessionStorage.getItem('postLoginPath') || '/app';
     const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';

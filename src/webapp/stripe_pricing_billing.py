@@ -315,8 +315,12 @@ def billing_account_has_active_subscription(
         if not required_plans:
             return True
         plan = str(subscription.get("plan") or "")
-        if plan in {"family_monthly", "trial_5day"}:
+        # 家庭档含 11+ 套餐与五日体验覆盖全部学习区
+        if plan in {"family_11plus_monthly", "trial_5day"}:
             return True
+        # 家庭档不含 11+ 套餐仅覆盖 Years 1-6 家庭作业
+        if plan == "family_monthly":
+            return "homework_monthly" in {str(item) for item in required_plans if item}
         return plan in {str(item) for item in required_plans if item}
     except (TypeError, ValueError):
         return False
@@ -368,6 +372,7 @@ def _portal_price_ids() -> list[str]:
         os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "").strip(),
         os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "").strip(),
         os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", "").strip(),
+        os.getenv("STRIPE_PRICE_FAMILY_11PLUS_MONTHLY", "").strip(),
     )
     return list(
         dict.fromkeys(
@@ -560,6 +565,7 @@ def _plan_for_price(price_id: Optional[str], product_id: Optional[str]) -> str:
         "homework_monthly": os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "").strip(),
         "elevenplus_monthly": os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "").strip(),
         "family_monthly": os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", "").strip(),
+        "family_11plus_monthly": os.getenv("STRIPE_PRICE_FAMILY_11PLUS_MONTHLY", "").strip(),
     }
     for plan, configured_price in configured.items():
         if configured_price and configured_price == price_id:

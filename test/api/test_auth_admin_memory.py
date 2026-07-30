@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import register_or_login
+from test.conftest import register_or_login
 
 pytestmark = pytest.mark.api
 
