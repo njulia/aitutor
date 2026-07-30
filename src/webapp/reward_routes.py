@@ -23,6 +23,7 @@ from .account_store import (
 )
 from .reward_models import (
     AdminGiftOrderDecisionRequest,
+    CustomRewardRequest,
     RewardDecisionRequest,
     RewardRequest,
 )
@@ -204,6 +205,50 @@ def build_reward_router(
             "message": (
                 "Your request is waiting for a grown-up. "
                 "Your XP stays forever, and no Gift Points have been used yet."
+            ),
+        }
+
+    @router.post("/api/rewards/custom-request")
+    async def request_custom_reward(request: Request, body: CustomRewardRequest):
+        """孩子提交自定义礼物请求（输入礼物名称和点数）。
+
+        支持家长登录和孩子登录两种会话。
+        """
+        # 优先尝试家长会话，回退到孩子会话
+        try:
+            account, learner = await learner_context(request, body.student_id)
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+            kid_result = await _resolve_kid_learner(request)
+            if kid_result is None:
+                raise
+            account, learner = kid_result
+            # 孩子只能为自己提交请求
+            if learner["id"] != body.student_id:
+                raise HTTPException(status_code=403, detail="You can only request gifts for yourself")
+        eligible = await gift_points_eligible(account)
+        if not eligible:
+            raise HTTPException(status_code=403, detail=GIFT_ACCESS_NOTE)
+        try:
+            redemption = await asyncio.to_thread(
+                get_reward_store().request_custom_redemption,
+                account_id=account["id"],
+                student_id=learner["id"],
+                reward_name=body.reward_name,
+                reward_icon=body.reward_icon,
+                xp_cost=body.xp_cost,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {
+            "success": True,
+            "redemption": redemption,
+            "message": (
+                "Your gift request has been sent to a grown-up. "
+                "Gift Points will be used only after approval."
             ),
         }
 

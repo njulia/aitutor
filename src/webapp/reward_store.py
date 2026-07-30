@@ -1271,6 +1271,91 @@ class RewardStore:
             ).first()
         return _public_redemption(row)
 
+    def request_custom_redemption(
+        self,
+        *,
+        account_id: str,
+        student_id: str,
+        reward_name: str,
+        reward_icon: str = "🎁",
+        xp_cost: int,
+    ) -> dict[str, Any]:
+        """孩子自定义礼物请求：输入礼物名称和点数，等待家长审批。"""
+        account = _clean_id(account_id, maximum=80)
+        learner = _clean_id(student_id, maximum=80)
+        name = str(reward_name or "").strip()[:40]
+        if not name:
+            raise ValueError("Please enter a gift name")
+        icon = str(reward_icon or "🎁").strip()[:12] or "🎁"
+        cost = max(10, min(int(xp_cost or 0), 5000))
+        now = _now()
+        with self.engine.begin() as conn:
+            wallet = self._ensure_wallet(conn, account, learner, lock=True)
+            if int(wallet._mapping["spendable_xp"]) < cost:
+                raise ValueError(
+                    "Keep learning to collect enough Gift Points for this gift"
+                )
+            pending_count = int(
+                conn.execute(
+                    select(func.count())
+                    .select_from(self.redemptions)
+                    .where(
+                        and_(
+                            self.redemptions.c.student_id == learner,
+                            self.redemptions.c.status == "pending",
+                        )
+                    )
+                ).scalar_one()
+                or 0
+            )
+            if pending_count >= 3:
+                raise ValueError("A grown-up needs to check the waiting requests first")
+            redemption_id = f"red_{uuid.uuid4().hex}"
+            # 使用 custom: 前缀区分自定义请求
+            reward_code = f"custom:{redemption_id}"
+            conn.execute(
+                insert(self.redemptions).values(
+                    id=redemption_id,
+                    account_id=account,
+                    student_id=learner,
+                    reward_code=reward_code,
+                    reward_name=name,
+                    reward_icon=icon,
+                    xp_cost=cost,
+                    status="pending",
+                    requested_at=now,
+                    decided_at=None,
+                    fulfilled_at=None,
+                    updated_at=now,
+                )
+            )
+            row = conn.execute(
+                select(self.redemptions).where(
+                    self.redemptions.c.id == redemption_id
+                )
+            ).first()
+        return _public_redemption(row)
+
+    def get_pending_redemptions_for_account(
+        self,
+        *,
+        account_id: str,
+    ) -> list[dict[str, Any]]:
+        """获取家庭所有待审批的礼物请求。"""
+        account = _clean_id(account_id, maximum=80)
+        with self.engine.begin() as conn:
+            rows = conn.execute(
+                select(self.redemptions)
+                .where(
+                    and_(
+                        self.redemptions.c.account_id == account,
+                        self.redemptions.c.status == "pending",
+                    )
+                )
+                .order_by(self.redemptions.c.requested_at.desc())
+            ).fetchall()
+        return [_public_redemption(row, include_owner_ids=True) for row in rows]
+
     def decide_redemption(
         self,
         *,

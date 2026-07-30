@@ -19,7 +19,8 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert "Homework Magic sticker pack, pen or notebook" in page
     assert "Adult recipient's name" in page
     assert "adult recipient's UK" in page
-    assert "custom-reward" not in page
+    # 自定义礼物请求表单已添加（孩子可以向家长请求礼物）
+    assert "custom-request-form" in page
     assert "/api/rewards" in script
     assert "delivery_address" in script
     assert "wallet.gift_points" in script

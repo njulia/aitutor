@@ -674,6 +674,148 @@ body.hm-rewards {
   .subscription-note a { margin-left: 0; width: 100%; }
 }
 
+/* 自定义礼物请求表单 */
+.custom-request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 500px;
+}
+
+.custom-request-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.custom-request-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--reward-ink);
+}
+
+.custom-request-fields input {
+  padding: 10px 12px;
+  border: 2px solid var(--reward-line);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: white;
+  transition: border-color 0.2s;
+}
+
+.custom-request-fields input:focus {
+  outline: none;
+  border-color: var(--reward-purple);
+}
+
+.custom-request-status {
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: none;
+}
+
+.custom-request-status.show {
+  display: block;
+}
+
+.custom-request-status.success {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.custom-request-status.error {
+  background: #fde8e8;
+  color: #c53030;
+}
+
+@media (max-width: 600px) {
+  .custom-request-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 我的请求列表 */
+.my-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.my-request-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #f9f8ff;
+  border: 2px solid #e7e1f5;
+  border-radius: 14px;
+  transition: border-color 0.2s;
+}
+
+.my-request-card:hover {
+  border-color: var(--reward-purple);
+}
+
+.my-request-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.my-request-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.my-request-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--reward-ink);
+  margin-bottom: 4px;
+}
+
+.my-request-meta {
+  font-size: 0.85rem;
+  color: var(--reward-muted);
+}
+
+.my-request-status {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.my-request-status.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.my-request-status.status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.my-request-status.status-declined {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+@media (max-width: 600px) {
+  .my-request-card {
+    flex-wrap: wrap;
+  }
+  .my-request-status {
+    margin-left: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }

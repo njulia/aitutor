@@ -452,6 +452,54 @@ async function loadDashboard() {
   }
 }
 
+// 渲染"我的请求"列表
+function renderMyRequests(redemptions) {
+  const list = document.getElementById('my-requests-list');
+  if (!list) return;
+
+  clearNode(list);
+
+  // 只显示自定义请求（reward_code 以 "custom:" 开头）
+  const customRequests = redemptions.filter(item =>
+    item.reward_code && item.reward_code.startsWith('custom:')
+  );
+
+  if (!customRequests.length) {
+    list.append(element('p', 'empty-state', 'No requests yet. Send your first request above!'));
+    return;
+  }
+
+  customRequests.forEach((item) => {
+    const card = element('article', 'my-request-card');
+    const statusClass = `status-${item.status}`;
+
+    // 创建信息容器
+    const infoDiv = element('div', 'my-request-info');
+    infoDiv.append(
+      element('div', 'my-request-name', item.reward_name),
+      element('div', 'my-request-meta', `${item.points_cost} Gift Points · ${formatDate(item.requested_at)}`),
+    );
+
+    card.append(
+      element('div', 'my-request-icon', item.reward_icon || '🎁'),
+      infoDiv,
+      element('span', `my-request-status ${statusClass}`, item.status),
+    );
+    list.append(card);
+  });
+}
+
+// 加载"我的请求"列表
+async function loadMyRequests() {
+  if (!rewardState.studentId) return;
+  try {
+    const data = await jsonFetch(`/api/rewards?student_id=${encodeURIComponent(rewardState.studentId)}`);
+    renderMyRequests(data.redemptions || []);
+  } catch (error) {
+    console.error('Failed to load my requests:', error);
+  }
+}
+
 async function initialiseRewardPage() {
   // 孩子登录会话：直接使用已知的学生 ID，不需要调用 /api/account
   const kidStudentId = localStorage.getItem('kid_student_id');
@@ -475,6 +523,7 @@ async function initialiseRewardPage() {
     rewardContent.hidden = false;
     loginCard.hidden = true;
     await loadDashboard();
+    await loadMyRequests();
     return;
   }
 
@@ -500,11 +549,13 @@ async function initialiseRewardPage() {
       url.searchParams.set('student_id', rewardState.studentId);
       window.history.replaceState({}, '', url);
       await loadDashboard();
+      await loadMyRequests();
     });
 
     rewardContent.hidden = false;
     loginCard.hidden = true;
     await loadDashboard();
+    await loadMyRequests();
   } catch (error) {
     setMessage('');
     if (error.status === 401) {
@@ -514,6 +565,63 @@ async function initialiseRewardPage() {
       setMessage(error.message, 'error');
     }
   }
+}
+
+// 自定义礼物请求表单
+const customRequestForm = document.getElementById('custom-request-form');
+const customRequestStatus = document.getElementById('custom-request-status');
+
+function showCustomRequestStatus(message, isError = false) {
+  customRequestStatus.textContent = message;
+  customRequestStatus.className = `custom-request-status show ${isError ? 'error' : 'success'}`;
+  window.clearTimeout(showCustomRequestStatus.timer);
+  showCustomRequestStatus.timer = window.setTimeout(() => {
+    customRequestStatus.className = 'custom-request-status';
+  }, 5000);
+}
+
+if (customRequestForm) {
+  customRequestForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const nameInput = document.getElementById('custom-reward-name');
+    const iconInput = document.getElementById('custom-reward-icon');
+    const costInput = document.getElementById('custom-reward-cost');
+
+    const rewardName = nameInput.value.trim();
+    const rewardIcon = iconInput.value.trim() || '🎁';
+    const xpCost = parseInt(costInput.value, 10);
+
+    if (!rewardName) {
+      showCustomRequestStatus('Please enter a gift name.', true);
+      nameInput.focus();
+      return;
+    }
+    if (!xpCost || xpCost < 10) {
+      showCustomRequestStatus('Gift Points must be at least 10.', true);
+      costInput.focus();
+      return;
+    }
+
+    try {
+      const data = await jsonFetch('/api/rewards/custom-request', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: rewardState.studentId,
+          reward_name: rewardName,
+          reward_icon: rewardIcon,
+          xp_cost: xpCost,
+        }),
+      });
+      showCustomRequestStatus(data.message || 'Your gift request has been sent!');
+      customRequestForm.reset();
+      // 刷新仪表盘以更新 Gift Points 显示
+      await loadDashboard();
+      // 刷新"我的请求"列表
+      await loadMyRequests();
+    } catch (error) {
+      showCustomRequestStatus(error.message || 'Could not send request. Please try again.', true);
+    }
+  });
 }
 
 document.getElementById('reward-logout').addEventListener('click', async (event) => {

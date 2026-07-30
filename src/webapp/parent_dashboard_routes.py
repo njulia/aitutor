@@ -13,6 +13,7 @@ from src.progress_db import verify_user_credentials
 from .account_store import (
     ensure_account,
     get_learning_target,
+    get_student,
     list_students,
     set_learning_target,
     student_belongs_to_account,
@@ -33,6 +34,11 @@ class LearningTargetRequest(BaseModel):
 
 class XpDigestRequest(BaseModel):
     parent_password: SecretStr
+
+
+class GiftRequestDecision(BaseModel):
+    parent_password: SecretStr
+    xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
 
 
 def build_parent_dashboard_router(resolve_username) -> APIRouter:
@@ -174,5 +180,65 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
                 detail="Could not send the email just now. Please try again.",
             )
         return {"success": True, "message": "Digest email sent"}
+
+    @router.get("/api/parent/gift-requests")
+    async def list_gift_requests(request: Request):
+        """获取家庭所有待审批的礼物请求。"""
+        account = await account_context(request)
+        students = await asyncio.to_thread(list_students, account["id"])
+        name_map = {s["id"]: s["name"] for s in students}
+        redemptions = await asyncio.to_thread(
+            get_reward_store().get_pending_redemptions_for_account,
+            account_id=account["id"],
+        )
+        # 附加孩子名字
+        for item in redemptions:
+            item["student_name"] = name_map.get(item.get("student_id"), "Unknown")
+        return {"success": True, "requests": redemptions}
+
+    @router.post("/api/parent/gift-requests/{redemption_id}/approve")
+    async def approve_gift_request(
+        redemption_id: str,
+        request: Request,
+        body: GiftRequestDecision,
+    ):
+        """家长同意礼物请求，扣除 Gift Points。"""
+        account = await account_context(request)
+        await confirm_parent(account, body.parent_password.get_secret_value())
+        try:
+            result = await asyncio.to_thread(
+                get_reward_store().decide_redemption_with_custom_xp,
+                account_id=account["id"],
+                redemption_id=redemption_id,
+                decision="approve",
+                xp_to_deduct=body.xp_to_deduct,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"success": True, **result}
+
+    @router.post("/api/parent/gift-requests/{redemption_id}/decline")
+    async def decline_gift_request(
+        redemption_id: str,
+        request: Request,
+        body: GiftRequestDecision,
+    ):
+        """家长拒绝礼物请求，不扣除点数。"""
+        account = await account_context(request)
+        await confirm_parent(account, body.parent_password.get_secret_value())
+        try:
+            result = await asyncio.to_thread(
+                get_reward_store().decide_redemption_with_custom_xp,
+                account_id=account["id"],
+                redemption_id=redemption_id,
+                decision="decline",
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"success": True, **result}
 
     return router

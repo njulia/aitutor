@@ -11,6 +11,14 @@ class RewardRequest(BaseModel):
     reward_code: str = Field(min_length=1, max_length=100)
 
 
+class CustomRewardRequest(BaseModel):
+    """孩子自定义礼物请求：输入礼物名称和点数。"""
+    student_id: str = Field(min_length=1, max_length=80)
+    reward_name: str = Field(min_length=1, max_length=40)
+    reward_icon: str = Field(default="🎁", max_length=12)
+    xp_cost: int = Field(ge=10, le=5000)
+
+
 class DeliveryAddressRequest(BaseModel):
     recipient_name: str = Field(min_length=2, max_length=80)
     address_line1: str = Field(min_length=3, max_length=100)

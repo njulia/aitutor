@@ -48,6 +48,26 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _metadata = MetaData()
 BETA_PLAN = "beta_year3"
 
+# 定价计划常量
+HOMEWORK_PREMIUM_PLAN = "homework_monthly"
+ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
+# FAMILY_MONTHLY_PLAN = "family_monthly"
+# FAMILY_11PLUS_MONTHLY_PLAN = "family_11plus_monthly"
+
+PREMIUM_PLAN_NAMES = {
+    HOMEWORK_PREMIUM_PLAN: "Homework Premium",
+    ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
+    # FAMILY_MONTHLY_PLAN: "Family Premium",
+    # FAMILY_11PLUS_MONTHLY_PLAN: "Family 11+ Premium",
+}
+
+# 各计划允许的最大孩子数量
+MAX_STUDENTS_BY_PLAN = {
+    ELEVENPLUS_PREMIUM_PLAN: 5,
+    HOMEWORK_PREMIUM_PLAN: 3,
+}
+DEFAULT_MAX_STUDENTS = 3  # 无订阅或未知计划时的默认限制
+
 accounts = Table(
     "accounts",
     _metadata,
@@ -495,6 +515,16 @@ def _ensure_student_kid_code(student_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _get_max_students_for_account(account_id: str) -> int:
+    """根据账户的订阅计划获取允许的最大孩子数量。"""
+    sub = get_active_subscription(account_id)
+    if sub:
+        plan = sub.get("plan", "")
+        if plan in MAX_STUDENTS_BY_PLAN:
+            return MAX_STUDENTS_BY_PLAN[plan]
+    return DEFAULT_MAX_STUDENTS
+
+
 def create_student(account_id: str, name: str, year_group: int, age: int) -> Dict[str, Any]:
     nickname, year_group, age = _validate_student(name, year_group, age)
     now = _now()
@@ -502,6 +532,18 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
     with _engine().begin() as conn:
         if not conn.execute(select(accounts.c.id).where(accounts.c.id == account_id)).first():
             raise ValueError("Account not found")
+        # 根据订阅计划限制孩子数量
+        max_students = _get_max_students_for_account(account_id)
+        active_count = conn.execute(
+            select(func.count()).select_from(students).where(
+                and_(
+                    students.c.account_id == account_id,
+                    students.c.is_active.is_(True)
+                )
+            )
+        ).scalar() or 0
+        if active_count >= max_students:
+            raise ValueError(f"Your plan allows up to {max_students} children")
         conn.execute(
             insert(students).values(
                 id=learner_id, account_id=account_id, name=nickname,
@@ -561,10 +603,10 @@ def subscription_active_for_student(student_id: str, required_plans: Optional[Li
         return True
     plan = str(sub.get("plan") or "")
     # 家庭档含 11+ 套餐与五日体验覆盖全部学习区
-    if plan in {"family_11plus_monthly", "trial_5day"}:
+    if plan in {"elevenplus_monthly", "trial_5day"}:
         return True
     # 家庭档不含 11+ 套餐与免费 beta 仅覆盖 Years 1-6 家庭作业
-    if plan in {"family_monthly", BETA_PLAN}:
+    if plan in {"homework_monthly", BETA_PLAN}:
         return "homework_monthly" in set(required_plans)
     return plan in set(required_plans)
 
@@ -913,10 +955,10 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
     if required_plans:
         # 家庭档含 11+ 套餐与五日体验覆 与免费 beta 盖全部学习区
         effective_required = set(required_plans)
-        if sub.get("plan") in {"family_11plus_monthly", "trial_5day", BETA_PLAN}:
+        if sub.get("plan") in {"elevenplus_monthly", "trial_5day", BETA_PLAN}:
             return True
         # 家庭档不含 11+ 套餐仅覆盖 Years 1-6 家庭作业
-        if sub.get("plan") in {"family_monthly"}:
+        if sub.get("plan") in {"homework_monthly"}:
             return "homework_monthly" in effective_required
         return sub.get("plan") in effective_required
     return True
@@ -1019,8 +1061,8 @@ def get_subscription_stats() -> Dict[str, Any]:
     """Return entitlement counts from PostgreSQL, not a live Stripe list call."""
     now = _now()
     monthly_prices = {
-        "family_monthly": 4.99,
-        "family_11plus_monthly": 9.99,
+        "homework_monthly": 4.99,
+        "elevenplus_monthly": 9.99,
     }
     with _engine().begin() as conn:
         active_filter = and_(

@@ -36,6 +36,7 @@ from src.webapp.session_store import TutorSessionStore
 from src.webapp.upload_utils import normalised_extension, stream_upload_to_temp
 from src.webapp.message_routes import create_message_router
 from src.webapp.account_routes import build_account_router
+from src.webapp.account_store import PREMIUM_PLAN_NAMES, HOMEWORK_PREMIUM_PLAN, ELEVENPLUS_PREMIUM_PLAN
 from src.webapp.memory_routes import build_memory_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
@@ -104,17 +105,17 @@ llm = None
 initialized = False
 tutor_session_store = TutorSessionStore()
 
-HOMEWORK_PREMIUM_PLAN = "homework_monthly"
-ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
-FAMILY_MONTHLY_PLAN = "family_monthly"
-FAMILY_11PLUS_MONTHLY_PLAN = "family_11plus_monthly"
+# HOMEWORK_PREMIUM_PLAN = "homework_monthly"
+# ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
+# FAMILY_MONTHLY_PLAN = "family_monthly"
+# FAMILY_11PLUS_MONTHLY_PLAN = "family_11plus_monthly"
 
-PREMIUM_PLAN_NAMES = {
-    HOMEWORK_PREMIUM_PLAN: "Homework Premium",
-    ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
-    FAMILY_MONTHLY_PLAN: "Family (Years 1-6)",
-    FAMILY_11PLUS_MONTHLY_PLAN: "Family (Years 1-6 + 11+)",
-}
+# PREMIUM_PLAN_NAMES = {
+#     HOMEWORK_PREMIUM_PLAN: "Homework Premium",
+#     ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
+#     FAMILY_MONTHLY_PLAN: "Family (Years 1-6)",
+#     FAMILY_11PLUS_MONTHLY_PLAN: "Family (Years 1-6 + 11+)",
+# }
 
 OUT_OF_SCOPE_HOMEWORK_MESSAGE = (
     "Sorry, I can only make homework for UK primary school subjects and 11+ practice. "

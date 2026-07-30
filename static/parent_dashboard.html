@@ -99,6 +99,25 @@
     }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
     .empty-state { text-align: center; padding: 40px; color: #718096; }
+    /* 礼物请求列表 */
+    .gift-request-list { list-style: none; padding: 0; margin: 0; }
+    .gift-request-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: #f7fafc;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .gift-request-info { display: flex; align-items: center; gap: 16px; flex: 1; }
+    .gift-request-icon { font-size: 32px; }
+    .gift-request-details { flex: 1; }
+    .gift-request-name { font-weight: 600; font-size: 16px; color: #2d3748; }
+    .gift-request-meta { font-size: 13px; color: #718096; margin-top: 4px; }
+    .gift-request-cost { color: #667eea; font-weight: 600; }
+    .gift-request-actions { display: flex; gap: 8px; }
   </style>
 </head>
 <!--<body>-->
@@ -174,6 +193,17 @@
       </table>
       <div style="margin-top:16px; text-align:right;">
         <button class="btn btn-primary" onclick="sendDigestEmail()">Send Summary Email</button>
+      </div>
+    </div>
+
+    <!-- Gift Requests from Kids -->
+    <div class="section">
+      <h2>Gift Requests</h2>
+      <p style="color:#718096; font-size:14px; margin:0 0 16px;">
+        Review and approve or decline gift requests from your children. Gift Points are only deducted when you approve.
+      </p>
+      <div id="giftRequestsList">
+        <div class="empty-state">Loading gift requests...</div>
       </div>
     </div>
 
@@ -637,10 +667,96 @@
       return div.innerHTML;
     }
 
+    // 加载礼物请求列表
+    async function loadGiftRequests() {
+      try {
+        const response = await fetch('/api/parent/gift-requests', {
+          credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+          renderGiftRequests(data.requests || []);
+        }
+      } catch (err) {
+        console.error('Failed to load gift requests:', err);
+      }
+    }
+
+    function renderGiftRequests(requests) {
+      const list = document.getElementById('giftRequestsList');
+      if (!requests.length) {
+        list.innerHTML = '<div class="empty-state">No pending gift requests</div>';
+        return;
+      }
+      list.innerHTML = '<ul class="gift-request-list">' + requests.map(req => `
+        <li class="gift-request-item">
+          <div class="gift-request-info">
+            <span class="gift-request-icon">${escapeHtml(req.reward_icon || '🎁')}</span>
+            <div class="gift-request-details">
+              <div class="gift-request-name">${escapeHtml(req.reward_name)}</div>
+              <div class="gift-request-meta">
+                From <strong>${escapeHtml(req.student_name)}</strong>
+                &middot; <span class="gift-request-cost">${req.points_cost} Gift Points</span>
+              </div>
+            </div>
+          </div>
+          <div class="gift-request-actions">
+            <button class="btn btn-primary" onclick="approveGiftRequest('${req.id}', '${escapeHtml(req.student_name)}', ${req.points_cost})">Approve</button>
+            <button class="btn btn-danger" onclick="declineGiftRequest('${req.id}', '${escapeHtml(req.student_name)}')">Decline</button>
+          </div>
+        </li>
+      `).join('') + '</ul>';
+    }
+
+    async function approveGiftRequest(requestId, childName, pointsCost) {
+      pendingAction = async (password) => {
+        const response = await fetch(`/api/parent/gift-requests/${requestId}/approve`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ parent_password: password })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert(`Approved! ${pointsCost} Gift Points deducted from ${childName}'s account.`);
+          loadGiftRequests();
+          loadOverview(); // 刷新以更新 Gift Points 显示
+        } else {
+          alert(extractError(data) || 'Failed to approve request');
+        }
+      };
+      showPasswordModal();
+    }
+
+    async function declineGiftRequest(requestId, childName) {
+      if (!confirm(`Decline the gift request from ${childName}? No points will be deducted.`)) return;
+      pendingAction = async (password) => {
+        const response = await fetch(`/api/parent/gift-requests/${requestId}/decline`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ parent_password: password })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert(`Request declined. No points were deducted.`);
+          loadGiftRequests();
+        } else {
+          alert(extractError(data) || 'Failed to decline request');
+        }
+      };
+      showPasswordModal();
+    }
+
     // Initial load
     loadOverview();
     loadDigest();
     loadCatalog();
+    loadGiftRequests();
   </script>
 </body>
 </html>

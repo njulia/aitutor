@@ -117,23 +117,62 @@
         <div id="certificate-grid" class="certificate-grid"></div>
       </section>
 
-      <section class="reward-section" aria-labelledby="gift-shop-title">
+<!--      <section class="reward-section" aria-labelledby="gift-shop-title">-->
+<!--        <div class="section-heading">-->
+<!--          <div>-->
+<!--            <p class="eyebrow">Choose, ask, celebrate</p>-->
+<!--            <h2 id="gift-shop-title">Homework Magic gift shop</h2>-->
+<!--          </div>-->
+<!--        </div>-->
+<!--        <div class="grown-up-note">-->
+<!--          <span aria-hidden="true">📦</span>-->
+<!--          <p>-->
+<!--            Choose a Homework Magic sticker pack, pen or notebook. Your XP is never deducted.-->
+<!--            Ask a grown-up about Gift Points and gift requests. A parent or guardian must approve-->
+<!--            the request and enter an adult recipient's UK delivery address before Gift Points are-->
+<!--            used.-->
+<!--          </p>-->
+<!--        </div>-->
+<!--        <div id="catalog-grid" class="catalog-grid"></div>-->
+<!--      </section>-->
+
+      <section class="reward-section" aria-labelledby="custom-request-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Choose, ask, celebrate</p>
-            <h2 id="gift-shop-title">Homework Magic gift shop</h2>
+            <p class="eyebrow">Something special?</p>
+            <h2 id="custom-request-title">Request a gift</h2>
           </div>
         </div>
-        <div class="grown-up-note">
-          <span aria-hidden="true">📦</span>
-          <p>
-            Choose a Homework Magic sticker pack, pen or notebook. Your XP is never deducted.
-            Ask a grown-up about Gift Points and gift requests. A parent or guardian must approve
-            the request and enter an adult recipient's UK delivery address before Gift Points are
-            used.
-          </p>
+        <p class="gentle-note">
+          Tell a grown-up what you would like. They will check and decide.
+          Gift Points are only used when a grown-up says yes.
+        </p>
+        <form id="custom-request-form" class="custom-request-form">
+          <div class="custom-request-fields">
+            <label>
+              Gift name
+              <input type="text" id="custom-reward-name" placeholder="e.g., a book" maxlength="40" required>
+            </label>
+<!--            <label>-->
+<!--              Icon (optional)-->
+<!--              <input type="text" id="custom-reward-icon" placeholder="e.g., a star" maxlength="12">-->
+<!--            </label>-->
+            <label>
+              Gift Points
+              <input type="number" id="custom-reward-cost" placeholder="50" min="10" max="5000" required>
+            </label>
+          </div>
+          <button type="submit" class="reward-button primary">Send request</button>
+          <div id="custom-request-status" class="custom-request-status" role="status" aria-live="polite"></div>
+        </form>
+
+        <!-- 我的请求列表 -->
+        <div id="my-requests-section" style="margin-top: 24px;">
+          <h3 style="font-size: 1.1rem; margin-bottom: 12px;">My Requests</h3>
+          <div id="my-requests-list" class="my-requests-list">
+            <p class="empty-state">Loading your requests...</p>
+          </div>
         </div>
-        <div id="catalog-grid" class="catalog-grid"></div>
       </section>
 
       <section class="two-column">
