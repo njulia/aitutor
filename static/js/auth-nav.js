@@ -8,11 +8,21 @@
 
   if (!loginLink || !logoutLink) return;
 
+  // 检测孩子登录会话
+  function isKidLoggedIn() {
+    return Boolean(
+      localStorage.getItem('kid_session_token') &&
+      localStorage.getItem('kid_student_id')
+    );
+  }
+
   function renderLoggedIn(loggedIn) {
     loginLink.hidden = loggedIn;
     logoutLink.hidden = !loggedIn;
     if (parentDashboardLink) {
-      parentDashboardLink.style.display = loggedIn ? 'inline' : 'none';
+      // 孩子登录时隐藏家长仪表盘入口
+      const kidLoggedIn = isKidLoggedIn();
+      parentDashboardLink.style.display = (loggedIn && !kidLoggedIn) ? 'inline' : 'none';
     }
     if (registerLink) {
       registerLink.style.display = loggedIn ? 'none' : 'inline';
@@ -20,6 +30,12 @@
   }
 
   async function refreshLoginStatus() {
+    // 孩子登录会话：直接显示登出按钮，不需要调用家长接口
+    if (isKidLoggedIn()) {
+      renderLoggedIn(true);
+      return;
+    }
+
     try {
       const response = await fetch('/api/check-subscription', {
         method: 'GET',
@@ -35,7 +51,7 @@
 
       if (loggedIn) {
         localStorage.setItem('auth_state', 'logged_in');
-        
+
         // Check if user is a parent and enhance the parent dashboard link
         try {
           const parentResponse = await fetch('/api/check-parent-status', {
@@ -44,7 +60,7 @@
             cache: 'no-store',
             headers: {'Accept': 'application/json'}
           });
-          
+
           if (parentResponse.ok) {
             const parentData = await parentResponse.json();
             if (parentData.is_parent && parentData.child_count > 0) {
@@ -95,7 +111,10 @@
     logoutLink.setAttribute('aria-disabled', 'true');
 
     try {
-      const response = await fetch('/api/logout', {
+      // 根据登录类型选择不同的登出接口
+      const kidLoggedIn = isKidLoggedIn();
+      const logoutUrl = kidLoggedIn ? '/api/kid-logout' : '/api/logout';
+      const response = await fetch(logoutUrl, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'Accept': 'application/json'}
@@ -105,6 +124,10 @@
       localStorage.removeItem('auth_state');
       localStorage.removeItem('student_id');
       localStorage.removeItem('student_email');
+      // 清除孩子登录信息
+      localStorage.removeItem('kid_session_token');
+      localStorage.removeItem('kid_student_id');
+      localStorage.removeItem('kid_student_name');
       window.location.assign('/');
     } catch (error) {
       console.error('Logout failed:', error);

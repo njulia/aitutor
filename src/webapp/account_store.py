@@ -170,10 +170,9 @@ def init_account_db() -> None:
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
-def _generate_code(prefix: str, length: int = 6) -> str:
+def _generate_code(length: int = 6) -> str:
     """生成人类可读、可输入的永久登录码，避免混淆字符。"""
-    body = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
-    return f"{prefix}-{body}"
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
 
 
 def _ensure_legacy_columns() -> None:
@@ -195,6 +194,27 @@ def _ensure_legacy_columns() -> None:
         except Exception:
             # 列已存在时 ALTER 会失败，这是预期行为，直接忽略
             pass
+    # 迁移旧格式: 移除 FAM- 和 KID- 前缀
+    _migrate_code_prefixes()
+
+
+def _migrate_code_prefixes() -> None:
+    """移除旧版登录码的前缀 (FAM-/KID-)，改为纯字符格式。"""
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            # 移除 family_code 的 FAM- 前缀
+            conn.exec_driver_sql(
+                "UPDATE accounts SET family_code = SUBSTR(family_code, 5) "
+                "WHERE family_code LIKE 'FAM-%'"
+            )
+            # 移除 kid_code 的 KID- 前缀
+            conn.exec_driver_sql(
+                "UPDATE students SET kid_code = SUBSTR(kid_code, 5) "
+                "WHERE kid_code LIKE 'KID-%'"
+            )
+    except Exception:
+        pass
 
 
 def _normalise_email(email: str) -> str:
@@ -242,7 +262,7 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
                 conn.execute(insert(accounts).values(
                     id=f"acct_{uuid.uuid4().hex}", email=clean_email,
                     display_name=clean_display, role=safe_role,
-                    stripe_customer_id=None, family_code=_generate_code("FAM"),
+                    stripe_customer_id=None, family_code=_generate_code(),
                     created_at=now, updated_at=now,
                 ))
         except IntegrityError:
@@ -262,7 +282,7 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
 def _backfill_family_code(account_id: str) -> Optional[Dict[str, Any]]:
     """为缺少家庭码的既有账号补发一个唯一码。"""
     for _ in range(5):
-        code = _generate_code("FAM")
+        code = _generate_code()
         try:
             with _engine().begin() as conn:
                 conn.execute(
@@ -277,24 +297,74 @@ def _backfill_family_code(account_id: str) -> Optional[Dict[str, Any]]:
 
 
 def get_account_by_family_code(family_code: str) -> Optional[Dict[str, Any]]:
-    """按家庭登录码查找账号，用于孩子登录。"""
+    """按家庭登录码查找账号，用于孩子登录。
+
+    兼容新旧格式: 数据库可能存储 FAM-XXXXXX 或 XXXXXX。
+    """
     code = _normalise_code(family_code)
     if not code:
         return None
     with _engine().begin() as conn:
-        return _dict(conn.execute(
+        # 先尝试精确匹配
+        row = conn.execute(
             select(accounts).where(accounts.c.family_code == code)
-        ).first())
+        ).first()
+        if row:
+            return _dict(row)
+        # 兼容旧格式: 尝试带 FAM- 前缀
+        legacy_code = f"FAM-{code}"
+        row = conn.execute(
+            select(accounts).where(accounts.c.family_code == legacy_code)
+        ).first()
+        if row:
+            return _dict(row)
+    return None
 
 
 def _normalise_code(code: str) -> str:
     return " ".join(str(code or "").upper().split())[:20]
 
 
+def parse_combined_login_code(combined_code: str) -> Optional[tuple]:
+    """解析组合登录码，返回 (family_code, kid_code) 或 None。
+
+    支持格式:
+    - XXXXXX-XXX (新格式)
+    - FAM-XXXXXX-XXX (旧格式，自动去除 FAM- 前缀)
+    """
+    code = _normalise_code(combined_code)
+    # 处理旧格式: 如果以 FAM- 开头，先去掉
+    if code.startswith("FAM-"):
+        code = code[4:]
+    if "-" not in code:
+        return None
+    parts = code.split("-", 1)
+    if len(parts) != 2:
+        return None
+    family_code, kid_code = parts[0].strip(), parts[1].strip()
+    # family code 固定 6 位，kid code 固定 3 位
+    if len(family_code) != 6 or len(kid_code) != 3:
+        return None
+    # 验证字符表
+    valid_chars = set(_CODE_ALPHABET)
+    if not all(c in valid_chars for c in family_code + kid_code):
+        return None
+    return family_code, kid_code
+
+
+def verify_combined_login_code(combined_code: str) -> Optional[Dict[str, Any]]:
+    """使用组合登录码验证，返回孩子档案或 None。"""
+    parsed = parse_combined_login_code(combined_code)
+    if not parsed:
+        return None
+    family_code, kid_code = parsed
+    return verify_family_kid_codes(family_code, kid_code)
+
+
 def verify_family_kid_codes(family_code: str, kid_code: str) -> Optional[Dict[str, Any]]:
     """校验家庭码 + 孩子码配对，返回孩子档案或 None。
 
-    两个码都是随机生成的，使用常量时间比较以避免侧信道。
+    兼容新旧格式: 数据库可能存储 KID-XXX 或 XXX。
     """
     account = get_account_by_family_code(family_code)
     if not account:
@@ -303,6 +373,7 @@ def verify_family_kid_codes(family_code: str, kid_code: str) -> Optional[Dict[st
     if not normalised_kid:
         return None
     with _engine().begin() as conn:
+        # 先尝试精确匹配
         row = conn.execute(
             select(students).where(
                 and_(
@@ -312,6 +383,18 @@ def verify_family_kid_codes(family_code: str, kid_code: str) -> Optional[Dict[st
                 )
             )
         ).first()
+        if row is None:
+            # 兼容旧格式: 尝试带 KID- 前缀
+            legacy_kid = f"KID-{normalised_kid}"
+            row = conn.execute(
+                select(students).where(
+                    and_(
+                        students.c.account_id == account["id"],
+                        students.c.kid_code == legacy_kid,
+                        students.c.is_active.is_(True),
+                    )
+                )
+            ).first()
     if row is None:
         # 避免因码不存在而提前返回，做一次等长比较以保持常量时间行为
         secrets.compare_digest(normalised_kid, normalised_kid)
@@ -375,7 +458,7 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
                 conn.execute(insert(students).values(
                     id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
                     year_group=year_group, age=age, is_active=True, is_default=True,
-                    default_for_account=account_id, kid_code=_generate_code("KID"),
+                    default_for_account=account_id, kid_code=_generate_code(3),
                     created_at=now, updated_at=now,
                 ))
     except IntegrityError:
@@ -398,7 +481,7 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
 def _ensure_student_kid_code(student_id: str) -> Optional[Dict[str, Any]]:
     """为缺少孩子登录码的既有档案补发唯一码。"""
     for _ in range(5):
-        code = _generate_code("KID")
+        code = _generate_code(3)
         try:
             with _engine().begin() as conn:
                 conn.execute(
@@ -423,7 +506,7 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
             insert(students).values(
                 id=learner_id, account_id=account_id, name=nickname,
                 year_group=year_group, age=age, is_active=True, is_default=False,
-                default_for_account=None, kid_code=_generate_code("KID"),
+                default_for_account=None, kid_code=_generate_code(3),
                 created_at=now, updated_at=now,
             )
         )

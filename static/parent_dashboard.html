@@ -101,28 +101,27 @@
     .empty-state { text-align: center; padding: 40px; color: #718096; }
   </style>
 </head>
-<body>
+<!--<body>-->
+<body class="hm-page">
   <div class="header">
-    <h1>Parent Dashboard</h1>
-    <div class="header-actions">
-      <button class="btn btn-secondary" onclick="window.location.href='/pricing'">Manage Plan</button>
+     <button class="btn btn-primary" onclick="window.location.href='/'"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</button>
+     <div class="header-actions">
+         <button class="btn btn-secondary" onclick="window.location.href='/pricing'">Manage Plan</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/progress'">Progress</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/rewards'">Rewards</button>
+         <button class="btn btn-secondary" onclick="window.location.href='/memory'">Memory</button>
          <button class="btn btn-secondary" onclick="window.location.href='/ks1-homework'">KS1</button>
          <button class="btn btn-secondary" onclick="window.location.href='/ks2-homework'">KS2</button>
          <button class="btn btn-secondary" onclick="window.location.href='/elevenplus-practice'">11+</button>
          <button class="btn btn-secondary" onclick="window.location.href='/elevenplus/articles'">11+ Articles</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/progress'">Progress</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/rewards'">Rewards</button>
       <button class="btn btn-secondary" onclick="logout()">Logout</button>
-    </div>
+     </div>
   </div>
   <div class="container">
     <!-- Family Overview -->
     <div class="section">
       <h2>Your Family</h2>
-      <div class="family-code">
-        <p style="margin:0 0 8px; color:#718096; font-size:14px;">Share this code with your kids to log in:</p>
-        <strong id="familyCode">Loading...</strong>
-      </div>
+      <p style="color:#718096; font-size:14px; margin:0 0 16px;">Share each child's login code with them. They can use it at <a href="/kid-login" style="color:#667eea;">kid login</a>.</p>
       <div style="margin-bottom:16px;">
         <button class="btn btn-primary" onclick="showCreateKidForm()">+ Add Child</button>
       </div>
@@ -280,25 +279,37 @@
         }
         const data = await response.json();
         if (data.success) {
-          document.getElementById('familyCode').textContent = data.family_code || 'Not available';
-          renderKids(data.kids || []);
+          renderKids(data.kids || [], data.family_code || '');
         }
       } catch (err) {
         console.error('Failed to load overview:', err);
       }
     }
 
-    function renderKids(kids) {
+    // 生成组合登录码: family_code-kid_code (例如 7RQKF6-EBR)
+    // 兼容旧格式: 去除 FAM- 和 KID- 前缀
+    function buildLoginCode(familyCode, kidCode) {
+      if (!familyCode || !kidCode) return null;
+      // 去除 FAM- 前缀
+      const family = familyCode.startsWith('FAM-') ? familyCode.slice(4) : familyCode;
+      // 去除 KID- 前缀
+      const kid = kidCode.startsWith('KID-') ? kidCode.slice(4) : kidCode;
+      return `${family}-${kid}`;
+    }
+
+    function renderKids(kids, familyCode) {
       const grid = document.getElementById('kidsGrid');
       if (!kids.length) {
         grid.innerHTML = '<div class="empty-state">No kids added yet. Click "+ Add Child" to create a child profile.</div>';
         return;
       }
-      grid.innerHTML = kids.map(kid => `
+      grid.innerHTML = kids.map(kid => {
+        const loginCode = buildLoginCode(familyCode, kid.kid_code);
+        return `
         <div class="kid-card">
           <h3>${escapeHtml(kid.name)}</h3>
           <div class="kid-info">Year ${kid.year_group} | Age ${kid.age}</div>
-          <div class="kid-code">Kid Code: ${kid.kid_code || 'Not assigned'}</div>
+          <div class="kid-code">Login Code: ${loginCode ? `<strong>${loginCode}</strong>` : 'Not assigned'}</div>
           <div class="xp-stats">
             <div class="xp-stat">
               <div class="value">${kid.wallet?.lifetime_xp || 0}</div>
@@ -322,7 +333,8 @@
             <button class="btn btn-primary" onclick="saveTarget('${kid.id}', '${escapeHtml(kid.name)}')">Save Target</button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function showCreateKidForm() {

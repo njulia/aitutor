@@ -61,12 +61,9 @@
     <div class="error" id="error"></div>
     <form id="kidLoginForm">
       <div class="field">
-        <label for="familyCode">Family Code</label>
-        <input type="text" id="familyCode" name="familyCode" placeholder="FAM-XXXXXX" required autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="kidCode">Your Kid Code</label>
-        <input type="text" id="kidCode" name="kidCode" placeholder="KID-XXXXXX" required autocomplete="off">
+        <label for="loginCode">Your Login Code</label>
+        <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXX" required autocomplete="off" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
+        <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your login code</p>
       </div>
       <button type="submit" id="submitBtn">Start Learning</button>
     </form>
@@ -83,14 +80,13 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Signing in...';
 
-      const familyCode = document.getElementById('familyCode').value.trim().toUpperCase();
-      const kidCode = document.getElementById('kidCode').value.trim().toUpperCase();
+      const loginCode = document.getElementById('loginCode').value.trim().toUpperCase();
 
       try {
         const response = await fetch('/api/kid-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ family_code: familyCode, kid_code: kidCode }),
+          body: JSON.stringify({ login_code: loginCode }),
         });
 
         const data = await response.json();

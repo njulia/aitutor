@@ -732,7 +732,8 @@
 <body class="hm-app hm-progress">
     <div class="header">
         <div class="header-content">
-            <a class="logo" href="/" aria-label="Homework Magic home">✨ Homework Magic</a>
+<!--              <a class="hm-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>-->
+            <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
             <nav class="nav-links">
               <a href="/ks1-homework">KS1</a>
               <a href="/ks2-homework">KS2</a>
@@ -990,6 +991,17 @@
 
         async function initLearnerPicker() {
             const select = document.getElementById('learner-select');
+
+            // 孩子登录会话：直接使用已知的学生 ID，不需要调用 /api/account
+            const kidStudentId = localStorage.getItem('kid_student_id');
+            const kidSessionToken = localStorage.getItem('kid_session_token');
+            if (kidStudentId && kidSessionToken) {
+                currentStudentId = kidStudentId;
+                select.closest('.learner-picker').style.display = 'none';
+                await loadProgress();
+                return;
+            }
+
             try {
                 const response = await fetch('/api/account', { credentials: 'same-origin' });
                 if (!response.ok) return;
@@ -1038,7 +1050,12 @@
                 const data = await response.json().catch(() => ({}));
 
                 if (response.status === 401) {
-                    showPageStatus('A parent or guardian needs to <a href="/login">sign in</a> to see progress.', true);
+                    const isKid = localStorage.getItem('kid_session_token');
+                    if (isKid) {
+                        showPageStatus('Your login has expired. Please ask a grown-up for your <a href="/kid-login">login code</a>.', true);
+                    } else {
+                        showPageStatus('A parent or guardian needs to <a href="/login">sign in</a> to see progress.', true);
+                    }
                     return;
                 }
                 if (response.status === 402) {

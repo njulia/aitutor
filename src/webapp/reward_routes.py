@@ -17,6 +17,7 @@ from .account_store import (
     account_has_active_reward_subscription,
     ensure_account,
     ensure_default_student,
+    get_account,
     get_student,
     student_belongs_to_account,
 )
@@ -121,12 +122,40 @@ def build_reward_router(
                 detail="The parent account password did not match.",
             )
 
+    async def _resolve_kid_learner(request: Request) -> tuple[dict, dict] | None:
+        """尝试解析孩子登录会话，返回 (account, learner) 或 None。"""
+        kid_token = request.cookies.get("kid_session") or request.headers.get("X-Kid-Session")
+        if not kid_token:
+            return None
+        from .kid_session_store import resolve_kid_session
+        kid_session = await asyncio.to_thread(resolve_kid_session, kid_token)
+        if not kid_session:
+            return None
+        kid_student_id = str(kid_session["student_id"])
+        learner = await asyncio.to_thread(get_student, kid_student_id)
+        if not learner:
+            return None
+        account = await asyncio.to_thread(get_account, str(learner["account_id"]))
+        if not account:
+            return None
+        return account, learner
+
     @router.get("/api/rewards")
     async def reward_dashboard(
         request: Request,
         student_id: str | None = Query(default=None, max_length=80),
     ):
-        account, learner = await learner_context(request, student_id)
+        # 优先尝试家长会话
+        try:
+            account, learner = await learner_context(request, student_id)
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+            # 家长未登录，尝试孩子会话
+            kid_result = await _resolve_kid_learner(request)
+            if kid_result is None:
+                raise
+            account, learner = kid_result
         dashboard, eligible = await asyncio.gather(
             asyncio.to_thread(
                 get_reward_store().dashboard,

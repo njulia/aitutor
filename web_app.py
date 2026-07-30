@@ -1945,14 +1945,21 @@ async def api_review(
             question_index=request_body.question_index,
             timeout=120,
         )
-        if (
-            logged_in_username
+        # 奖励发放：家长登录或孩子登录都可以获得 XP
+        should_award = (
+            (logged_in_username or resolved_student_id)
             and result.get("success")
             and not result.get("safety_intervention")
-        ):
+        )
+        # 排除匿名用户（student_id 以 anon_ 开头）
+        if should_award and str(resolved_student_id).startswith("anon_"):
+            should_award = False
+
+        if should_award:
             try:
                 from src.webapp.account_store import (
                     ensure_account,
+                    get_student,
                     student_belongs_to_account,
                 )
                 from src.webapp.reward_store import (
@@ -1960,12 +1967,35 @@ async def api_review(
                     review_fingerprint,
                 )
 
-                account = await run_blocking(
-                    ensure_account,
-                    logged_in_username,
-                    timeout=10,
-                    limit_concurrency=False,
-                )
+                # 解析 account：家长登录用 email，孩子登录用 student 的 account_id
+                account = None
+                if logged_in_username:
+                    account = await run_blocking(
+                        ensure_account,
+                        logged_in_username,
+                        timeout=10,
+                        limit_concurrency=False,
+                    )
+                else:
+                    # 孩子登录会话：通过 student_id 找到 account
+                    student = await run_blocking(
+                        get_student,
+                        resolved_student_id,
+                        timeout=10,
+                        limit_concurrency=False,
+                    )
+                    if student and student.get("account_id"):
+                        from src.webapp.account_store import get_account
+                        account = await run_blocking(
+                            get_account,
+                            str(student["account_id"]),
+                            timeout=10,
+                            limit_concurrency=False,
+                        )
+
+                if not account:
+                    raise ValueError("Could not resolve account for reward")
+
                 owns_learner, gift_points_eligible = await asyncio.gather(
                     run_blocking(
                         student_belongs_to_account,
@@ -2159,21 +2189,36 @@ async def api_get_progress(
     try:
         resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
 
+        # 孩子登录会话：只能查看自己的进度
+        is_kid_session = False
         if logged_in_username is None:
-            return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
+            kid_token = req.cookies.get("kid_session") or req.headers.get("X-Kid-Session")
+            if kid_token:
+                from src.webapp.kid_session_store import resolve_kid_session
+                kid_session = await run_blocking(resolve_kid_session, kid_token, timeout=10, limit_concurrency=False)
+                if kid_session:
+                    is_kid_session = True
+                    resolved_student_id = str(kid_session["student_id"])
+            if not is_kid_session:
+                return JSONResponse(status_code=401, content={"success": False, "error": "Login required to view progress."})
 
         target_student_id = str(student_id or resolved_student_id).strip()
         if not target_student_id:
             return JSONResponse(status_code=400, content={"success": False, "error": "A learner profile is required."})
 
-        # A parent/guardian may view only learner profiles belonging to their account.
-        from src.webapp.account_store import ensure_account, student_belongs_to_account
-        account = await run_blocking(ensure_account, logged_in_username, timeout=10, limit_concurrency=False)
-        belongs = await run_blocking(
-            student_belongs_to_account, target_student_id, account["id"], timeout=10, limit_concurrency=False
-        )
-        if not belongs:
-            return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this learner's progress."})
+        # 孩子会话只能查看自己的进度，家长可查看所属孩子的进度
+        from src.webapp.account_store import student_belongs_to_account
+        if is_kid_session:
+            if target_student_id != resolved_student_id:
+                return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this learner's progress."})
+        else:
+            from src.webapp.account_store import ensure_account
+            account = await run_blocking(ensure_account, logged_in_username, timeout=10, limit_concurrency=False)
+            belongs = await run_blocking(
+                student_belongs_to_account, target_student_id, account["id"], timeout=10, limit_concurrency=False
+            )
+            if not belongs:
+                return JSONResponse(status_code=403, content={"success": False, "error": "Access denied to this learner's progress."})
 
         if not user_has_subscription(req=req, student_id=target_student_id, username=logged_in_username):
             return JSONResponse(status_code=402, content={"success": False,
@@ -2535,26 +2580,37 @@ async def api_logout(req: Request):
 class KidLoginRequest(BaseModel):
     family_code: str = Field(default="")
     kid_code: str = Field(default="")
+    # 组合登录码: family_body-kid_body (例如 7RQKF6-EBRHWY 或 7RQKF6-EBR)
+    login_code: str = Field(default="")
 
 
 @app.post("/api/kid-login")
 async def api_kid_login(request_body: KidLoginRequest, req: Request):
-    """孩子使用家庭码 + 孩子码登录，获得短期会话 token。"""
+    """孩子使用组合登录码或 family_code + kid_code 登录。"""
     try:
-        from src.webapp.account_store import verify_family_kid_codes
+        from src.webapp.account_store import verify_family_kid_codes, verify_combined_login_code
         from src.webapp.kid_session_store import create_kid_session
 
+        login_code = str(request_body.login_code or "").strip()
         family_code = str(request_body.family_code or "").strip()
         kid_code = str(request_body.kid_code or "").strip()
-        if not family_code or not kid_code:
+
+        # 优先使用组合登录码
+        if login_code:
+            student = await run_blocking(
+                verify_combined_login_code, login_code,
+                timeout=10, limit_concurrency=False,
+            )
+        elif family_code and kid_code:
+            student = await run_blocking(
+                verify_family_kid_codes, family_code, kid_code,
+                timeout=10, limit_concurrency=False,
+            )
+        else:
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": "Please enter both your family code and kid code."},
+                content={"success": False, "error": "Please enter your login code."},
             )
-        student = await run_blocking(
-            verify_family_kid_codes, family_code, kid_code,
-            timeout=10, limit_concurrency=False,
-        )
         if not student:
             return JSONResponse(
                 status_code=401,
