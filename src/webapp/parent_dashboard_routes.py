@@ -18,6 +18,7 @@ from .account_store import (
     set_learning_target,
     student_belongs_to_account,
 )
+from .memory_store import get_memory_store
 from .reward_store import get_reward_store
 
 
@@ -140,13 +141,20 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
             get_reward_store().get_xp_digest_for_account,
             account_id=account["id"],
         )
-        # 附加孩子名字
+        # 获取科目准确率
+        subject_breakdown = await asyncio.to_thread(
+            get_memory_store().get_daily_subject_breakdown,
+            account_id=account["id"],
+        )
+        # 附加孩子名字和科目数据
         students = await asyncio.to_thread(
             list_students, account["id"]
         )
         name_map = {s["id"]: s["name"] for s in students}
         for kid in digest.get("kids", []):
-            kid["name"] = name_map.get(kid["student_id"], "Unknown")
+            sid = kid["student_id"]
+            kid["name"] = name_map.get(sid, "Unknown")
+            kid["subjects"] = subject_breakdown.get(sid, [])
         return {"success": True, "digest": digest}
 
     @router.post("/api/parent/xp-digest/send")

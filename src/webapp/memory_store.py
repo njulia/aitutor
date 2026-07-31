@@ -28,6 +28,7 @@ from sqlalchemy import (
     UniqueConstraint,
     and_,
     delete,
+    func,
     insert,
     select,
     update,
@@ -530,6 +531,49 @@ class LearningMemoryStore:
                 return 0
             conn.execute(delete(self.events).where(self.events.c.id.in_(ids)))
         return len(ids)
+
+    def get_daily_subject_breakdown(
+        self,
+        *,
+        account_id: str,
+        since: datetime | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """查询家庭过去24小时内各科目学习情况，返回每个孩子的科目准确率。"""
+        account = account_id.strip()[:80]
+        cutoff = since or (_utcnow() - timedelta(hours=24))
+        with self.engine.begin() as conn:
+            rows = conn.execute(
+                select(
+                    self.events.c.student_id,
+                    self.events.c.subject,
+                    func.sum(self.events.c.attempted).label("total_attempted"),
+                    func.sum(self.events.c.correct_count).label("total_correct"),
+                )
+                .where(
+                    and_(
+                        self.events.c.account_id == account,
+                        self.events.c.created_at >= cutoff,
+                        self.events.c.attempted > 0,
+                    )
+                )
+                .group_by(self.events.c.student_id, self.events.c.subject)
+            ).all()
+
+        # 按 student_id 分组
+        result: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            sid = row._mapping["student_id"]
+            attempted = int(row._mapping["total_attempted"] or 0)
+            correct = int(row._mapping["total_correct"] or 0)
+            if sid not in result:
+                result[sid] = []
+            result[sid].append({
+                "subject": row._mapping["subject"],
+                "attempted": attempted,
+                "correct": correct,
+                "accuracy": round(correct / attempted * 100) if attempted > 0 else 0,
+            })
+        return result
 
 
 _store: Optional[LearningMemoryStore] = None

@@ -81,6 +81,14 @@
       padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0;
     }
     .digest-table th { background: #f7fafc; font-weight: 600; font-size: 14px; }
+    .subject-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0;
+      white-space: nowrap;
+    }
+    .subject-tag.high { background: #c6f6d5; color: #22543d; }
+    .subject-tag.medium { background: #fefcbf; color: #744210; }
+    .subject-tag.low { background: #fed7d7; color: #9b2c2c; }
     .modal-overlay {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
@@ -185,10 +193,11 @@
             <th>Child</th>
             <th>XP Earned</th>
             <th>Activities</th>
+            <th>Subjects</th>
           </tr>
         </thead>
         <tbody id="digestBody">
-          <tr><td colspan="3" style="text-align:center; color:#718096;">Loading...</td></tr>
+          <tr><td colspan="4" style="text-align:center; color:#718096;">Loading...</td></tr>
         </tbody>
       </table>
       <div style="margin-top:16px; text-align:right;">
@@ -472,16 +481,26 @@
     function renderDigest(kids) {
       const tbody = document.getElementById('digestBody');
       if (!kids.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#718096;">No activity in the last 24 hours</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#718096;">No activity in the last 24 hours</td></tr>';
         return;
       }
-      tbody.innerHTML = kids.map(kid => `
+      tbody.innerHTML = kids.map(kid => {
+        const subjectsHtml = (kid.subjects && kid.subjects.length)
+          ? kid.subjects.map(s => {
+              let cls = 'low';
+              if (s.accuracy >= 80) cls = 'high';
+              else if (s.accuracy >= 50) cls = 'medium';
+              return `<span class="subject-tag ${cls}">${escapeHtml(s.subject)} ${s.accuracy}% (${s.correct}/${s.attempted})</span>`;
+            }).join('')
+          : '<span style="color:#a0aec0; font-size:12px;">No subject data</span>';
+        return `
         <tr>
           <td>${escapeHtml(kid.name)}</td>
           <td><strong>${kid.total_xp}</strong> XP</td>
           <td>${kid.event_count} activities</td>
+          <td>${subjectsHtml}</td>
         </tr>
-      `).join('');
+      `}).join('');
     }
 
     async function sendDigestEmail() {
