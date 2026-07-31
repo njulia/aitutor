@@ -11,7 +11,7 @@ guardians. It rewards steady effort rather than high marks.
    awards matching Gift Points.
 4. Daily and weekly quest bonuses are claimed automatically.
 5. Lifetime XP unlocks levels and printable certificates.
-6. Eligible Gift Points may be exchanged for a Homework Magic branded gift.
+6. Gift Points may be exchanged for a Homework Magic branded gift.
 7. A parent approves or declines the request using the parent account password.
 8. Approval requires an adult recipient's UK delivery address.
 9. An administrator posts the parcel and marks the order as dispatched.
@@ -40,20 +40,22 @@ and enforced with database uniqueness constraints.
 
 ## Default XP rules
 
-| Action | Permanent XP for everyone | Gift Points with active subscription |
+| Action | Permanent XP | Gift Points |
 | --- | ---: | ---: |
 | Complete and check a homework activity | 20 | 20 |
-| Complete and check a tutor question | 10 | 10 |
+| Complete and check a tutor question | 2 (1/10 of homework XP) | 2 (1/10 of homework XP) |
 | First checked activity today | +10 | +10 |
 | Second checked activity today | +15 | +15 |
 | Third checked activity today | +20 | +20 |
 | Learn on 3 days this week | +30 | +30 |
 | Learn on 5 days this week | +50 | +50 |
 | Explore 3 subjects this week | +25 | +25 |
+| Get 80% or more answers correct | +5 bonus | +5 bonus |
+| Get 100% answers correct | +10 bonus | +10 bonus |
 
-The activity values and cap can be adjusted with
-`REWARD_HOMEWORK_ACTIVITY_XP`, `REWARD_TUTOR_ACTIVITY_XP` and
-`REWARD_DAILY_ACTIVITY_CAP`. Quest bonuses remain fixed so every family sees
+The homework activity value and daily cap can be adjusted with
+`REWARD_HOMEWORK_ACTIVITY_XP` and `REWARD_DAILY_ACTIVITY_CAP`.
+Tutor question XP is always 1/10 of the homework activity XP (minimum 1). Quest bonuses remain fixed so every family sees
 the same clear rules.
 
 ## Certificates and levels

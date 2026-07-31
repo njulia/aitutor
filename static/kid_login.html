@@ -15,7 +15,7 @@
     .card {
       background: white; border-radius: 16px; padding: 40px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      max-width: 400px; width: 100%;
+      max-width: 420px; width: 100%;
     }
     h1 {
       margin: 0 0 8px; color: #2d3748; font-size: 28px; text-align: center;
@@ -52,35 +52,141 @@
       color: #667eea; text-decoration: none; font-size: 14px;
     }
     .back-link:hover { text-decoration: underline; }
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 24px 0; color: #a0aec0; font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: #e2e8f0;
+    }
+    .saved-accounts { margin-bottom: 8px; }
+    .saved-heading {
+      font-size: 12px; color: #718096; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 12px; font-weight: 600;
+    }
+    .account-card {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 10px;
+      margin-bottom: 8px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .account-card:hover { border-color: #667eea; background: #f7fafc; }
+    .account-card:active { background: #ebf4ff; }
+    .account-info { display: flex; flex-direction: column; }
+    .account-name {
+      font-size: 16px; font-weight: 600; color: #2d3748;
+    }
+    .account-code {
+      font-size: 12px; color: #a0aec0; margin-top: 2px;
+    }
+    .account-remove {
+      padding: 6px 10px; background: none; border: none;
+      color: #cbd5e0; font-size: 18px; cursor: pointer;
+      border-radius: 6px; line-height: 1; flex-shrink: 0;
+      width: auto;
+    }
+    .account-remove:hover { color: #e53e3e; background: #fff5f5; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Welcome back!</h1>
-    <p class="subtitle">Enter your codes to start learning</p>
+    <p class="subtitle">Choose your name to start learning</p>
     <div class="error" id="error"></div>
-    <form id="kidLoginForm">
-      <div class="field">
-        <label for="loginCode">Your Login Code</label>
-        <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXX" required autocomplete="off" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
-        <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your login code</p>
-      </div>
-      <button type="submit" id="submitBtn">Start Learning</button>
-    </form>
+
+    <!-- 已保存的账户列表 -->
+    <div class="saved-accounts" id="savedAccounts">
+      <div class="saved-heading">Saved on this device</div>
+    </div>
+
+    <!-- 手动输入区域 -->
+    <div id="manualLoginSection">
+      <div class="divider">or type your login code</div>
+      <form id="kidLoginForm">
+        <div class="field">
+          <label for="loginCode">Your Login Code</label>
+          <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXX" required autocomplete="off" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
+          <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your login code</p>
+        </div>
+        <button type="submit" id="submitBtn">Start Learning</button>
+      </form>
+    </div>
     <a href="/login" class="back-link">Parent login</a>
   </div>
   <script>
-    const form = document.getElementById('kidLoginForm');
-    const errorEl = document.getElementById('error');
-    const submitBtn = document.getElementById('submitBtn');
+    const SAVED_ACCOUNTS_KEY = 'kid_saved_accounts';
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    function getSavedAccounts() {
+      try {
+        return JSON.parse(localStorage.getItem(SAVED_ACCOUNTS_KEY) || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveAccount(loginCode, studentName) {
+      const accounts = getSavedAccounts();
+      // 去重：同一个 loginCode 只保留一条
+      const filtered = accounts.filter(a => a.loginCode !== loginCode);
+      filtered.push({ loginCode, studentName });
+      localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(filtered));
+    }
+
+    function removeAccount(loginCode) {
+      const accounts = getSavedAccounts().filter(a => a.loginCode !== loginCode);
+      localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
+    }
+
+    // 渲染已保存账户列表
+    function renderSavedAccounts() {
+      const container = document.getElementById('savedAccounts');
+      const accounts = getSavedAccounts();
+      if (accounts.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'block';
+      // 保留 heading，清除旧的卡片
+      const oldCards = container.querySelectorAll('.account-card');
+      oldCards.forEach(c => c.remove());
+
+      accounts.forEach(account => {
+        const card = document.createElement('div');
+        card.className = 'account-card';
+        card.addEventListener('click', () => loginWithCode(account.loginCode, account.studentName));
+
+        const info = document.createElement('div');
+        info.className = 'account-info';
+        info.innerHTML = `<span class="account-name">${escapeHtml(account.studentName)}</span>`;
+        card.appendChild(info);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'account-remove';
+        removeBtn.textContent = 'x';
+        removeBtn.setAttribute('aria-label', 'Remove ' + account.studentName);
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeAccount(account.loginCode);
+          renderSavedAccounts();
+        });
+        card.appendChild(removeBtn);
+
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function loginWithCode(loginCode, studentName) {
+      const errorEl = document.getElementById('error');
       errorEl.classList.remove('show');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Signing in...';
 
-      const loginCode = document.getElementById('loginCode').value.trim().toUpperCase();
+      // 禁用所有按钮防止重复点击
+      document.querySelectorAll('button').forEach(b => b.disabled = true);
 
       try {
         const response = await fetch('/api/kid-login', {
@@ -92,25 +198,51 @@
         const data = await response.json();
 
         if (response.ok && data.success) {
-          // Store the kid session token
           localStorage.setItem('kid_session_token', data.token);
           localStorage.setItem('kid_student_id', data.student_id);
           localStorage.setItem('kid_student_name', data.student_name);
-          // Redirect to the app
+          saveAccount(loginCode, data.student_name);
           window.location.href = '/app';
         } else {
-          errorEl.textContent = data.error || 'The codes are not correct. Please try again.';
+          // 登录失败，移除失效的保存账户
+          removeAccount(loginCode);
+          renderSavedAccounts();
+          errorEl.textContent = data.error || 'Login code has expired. Please ask a grown-up for a new code.';
           errorEl.classList.add('show');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Start Learning';
+          enableButtons();
         }
       } catch (err) {
         errorEl.textContent = 'Something went wrong. Please try again.';
         errorEl.classList.add('show');
+        enableButtons();
+      }
+    }
+
+    function enableButtons() {
+      document.querySelectorAll('button').forEach(b => b.disabled = false);
+    }
+
+    // 手动输入表单
+    const form = document.getElementById('kidLoginForm');
+    const errorEl = document.getElementById('error');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove('show');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in...';
+
+      const loginCode = document.getElementById('loginCode').value.trim().toUpperCase();
+      await loginWithCode(loginCode);
+      if (submitBtn.disabled) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Start Learning';
       }
     });
+
+    // 初始化
+    renderSavedAccounts();
   </script>
 </body>
 </html>

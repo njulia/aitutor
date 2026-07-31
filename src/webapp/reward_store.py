@@ -779,6 +779,7 @@ class RewardStore:
         is_tutor_mode: bool = False,
         gift_points_eligible: bool = False,
         awarded_at: datetime | None = None,
+        accuracy_bonus_xp: int = 0,
     ) -> dict[str, Any]:
         """Award permanent XP, plus Gift Points for an eligible subscriber."""
         account = _clean_id(account_id, maximum=80)
@@ -791,11 +792,14 @@ class RewardStore:
         if now.tzinfo is None:
             now = now.replace(tzinfo=UTC)
         local_day, week_start = _local_day_and_week(now)
-        activity_xp = (
-            _bounded_env_int("REWARD_TUTOR_ACTIVITY_XP", 10, 1, 100)
-            if is_tutor_mode
-            else _bounded_env_int("REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100)
+        homework_activity_xp = _bounded_env_int(
+            "REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100
         )
+        activity_xp = (
+            max(1, homework_activity_xp // 10)
+            if is_tutor_mode
+            else homework_activity_xp
+        ) + max(0, accuracy_bonus_xp)
         # Lifetime XP is an effort record for every authenticated learner and
         # must never depend on a plan or stop after a small number of
         # activities. Keep the configurable cap only for subscriber Gift
@@ -853,10 +857,7 @@ class RewardStore:
                     lifetime_delta=activity_xp,
                     spendable_delta=(
                         activity_xp
-                        if (
-                            gift_points_eligible
-                            and day_count < daily_gift_activity_cap
-                        )
+                        if day_count < daily_gift_activity_cap
                         else 0
                     ),
                     subject=subject,
@@ -885,11 +886,7 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=(
-                            int(quest["bonus_xp"])
-                            if gift_points_eligible
-                            else 0
-                        ),
+                        spendable_delta=int(quest["bonus_xp"]),
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,
@@ -913,11 +910,7 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=(
-                            int(quest["bonus_xp"])
-                            if gift_points_eligible
-                            else 0
-                        ),
+                        spendable_delta=int(quest["bonus_xp"]),
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,
@@ -1171,8 +1164,9 @@ class RewardStore:
                 "homework_activity_xp": _bounded_env_int(
                     "REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100
                 ),
-                "tutor_activity_xp": _bounded_env_int(
-                    "REWARD_TUTOR_ACTIVITY_XP", 10, 1, 100
+                "tutor_activity_xp": max(
+                    1,
+                    _bounded_env_int("REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100) // 10,
                 ),
                 "daily_activity_cap": _bounded_env_int(
                     "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10

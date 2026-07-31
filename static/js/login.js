@@ -1,5 +1,28 @@
 'use strict';
 
+// 检测是否存在孩子登录会话，提示家长确认切换
+(function checkKidSessionBeforeLogin() {
+  const kidSessionToken = localStorage.getItem('kid_session_token');
+  const kidStudentId = localStorage.getItem('kid_student_id');
+  if (!kidSessionToken || !kidStudentId) return;
+
+  const kidName = localStorage.getItem('kid_student_name') || 'a child';
+  const confirmed = confirm(
+    `${kidName} is currently logged in on this browser.\n\n` +
+    'To log in as a grown-up, you need to sign them out first. Continue?'
+  );
+  if (confirmed) {
+    // 登出孩子会话
+    fetch('/api/kid-logout', { method: 'POST', credentials: 'same-origin' });
+    localStorage.removeItem('kid_session_token');
+    localStorage.removeItem('kid_student_id');
+    localStorage.removeItem('kid_student_name');
+  } else {
+    // 取消，返回之前页面
+    window.history.back();
+  }
+})();
+
 function showNotice(message, type) {
   const box = document.getElementById('login-notice');
   box.textContent = message;

@@ -272,6 +272,15 @@
         // No password caching implemented for security reasons
     }
 
+    // 如果浏览器中有孩子登录会话，先跳转到登录页切换
+    (function checkKidSessionForParent() {
+      const kidSessionToken = localStorage.getItem('kid_session_token');
+      const kidStudentId = localStorage.getItem('kid_student_id');
+      if (kidSessionToken && kidStudentId) {
+        window.location.replace('/login');
+      }
+    })();
+
     // Check if parent is logged in using the same mechanism as the main app
     async function checkAuthStatus() {
       try {

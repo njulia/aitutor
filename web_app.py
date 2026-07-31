@@ -144,9 +144,11 @@ def _required_premium_plan(
     return HOMEWORK_PREMIUM_PLAN
 
 
-def _subscription_required_response(feature: str, plan: str, username: Optional[str]) -> JSONResponse:
+def _subscription_required_response(feature: str, plan: str, username: Optional[str], student_id: Optional[str] = None) -> JSONResponse:
     plan_name = PREMIUM_PLAN_NAMES.get(plan, "Premium")
-    if username is None:
+    # 孩子登录会话（有真实 student_id 但无 username）：返回 402 而非 401，
+    # 避免前端误判为未登录而跳转到 /login
+    if username is None and not (student_id and not str(student_id).startswith("anon_")):
         return JSONResponse(
             status_code=401,
             content={
@@ -1768,6 +1770,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                     ),
                     required_plan,
                     logged_in_username,
+                    resolved_student_id,
                 )
 
         generated = await run_blocking(
@@ -1839,7 +1842,7 @@ async def api_generate(req: Request, request: ProfileRequest):
                     _set_anon_cookie(response, new_anon_session_id, req)
                     return response
                 return _subscription_required_response(
-                    "Tutor mode", required_plan, logged_in_username
+                    "Tutor mode", required_plan, logged_in_username, resolved_student_id
                 )
 
             response = JSONResponse({
@@ -1930,7 +1933,7 @@ async def api_review(
                     feature = "11+ year-round review"
                 else:
                     feature = "Detailed review"
-                return _subscription_required_response(feature, required_plan, logged_in_username)
+                return _subscription_required_response(feature, required_plan, logged_in_username, resolved_student_id)
 
         result = await run_blocking(
             review_homework,
@@ -2017,6 +2020,20 @@ async def api_review(
                         question_index=request_body.question_index,
                         session_id=request_body.session_id,
                     )
+                    # 根据正确率计算额外奖励 XP
+                    score_val = result.get("score")
+                    max_score_val = result.get("max_score")
+                    accuracy_bonus_xp = 0
+                    if (
+                        isinstance(score_val, (int, float))
+                        and isinstance(max_score_val, (int, float))
+                        and max_score_val > 0
+                    ):
+                        accuracy = score_val / max_score_val
+                        if accuracy >= 1.0:
+                            accuracy_bonus_xp = 10
+                        elif accuracy >= 0.8:
+                            accuracy_bonus_xp = 5
                     reward_update = await run_blocking(
                         get_reward_store().award_checked_activity,
                         account_id=account["id"],
@@ -2025,6 +2042,7 @@ async def api_review(
                         subject=request_body.subject,
                         is_tutor_mode=bool(request_body.is_tutor_mode),
                         gift_points_eligible=gift_points_eligible,
+                        accuracy_bonus_xp=accuracy_bonus_xp,
                         timeout=10,
                         limit_concurrency=False,
                     )
@@ -2087,7 +2105,7 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
         )
         if not has_sub:
             return _subscription_required_response(
-                "Explain in Detail", required_plan, logged_in_username
+                "Explain in Detail", required_plan, logged_in_username, resolved_student_id
             )
         result = await run_blocking(
             explain_deep,
@@ -2137,7 +2155,7 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
         )
         if not has_sub:
             return _subscription_required_response(
-                "Help me improve", required_plan, logged_in_username
+                "Help me improve", required_plan, logged_in_username, resolved_student_id
             )
         result = await run_blocking(
             improve_practice,

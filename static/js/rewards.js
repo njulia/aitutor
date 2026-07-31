@@ -98,7 +98,9 @@ function renderWallet(data) {
 function renderGiftAccess(giftAccess) {
   const eligible = Boolean(giftAccess && giftAccess.eligible);
   const note = document.getElementById('gift-access-note');
+  if (!note) return;
   const copy = note.querySelector('p');
+  if (!copy) return;
   const parentPlanCopy = document.getElementById('parent-plan-copy');
   const legacyPlanLink = document.getElementById('gift-access-plan-link');
   if (legacyPlanLink) legacyPlanLink.remove();
@@ -360,6 +362,7 @@ async function decideRedemption(id, decision) {
 
 function renderRedemptions(items) {
   const list = document.getElementById('redemption-list');
+  if (!list) return;
   clearNode(list);
   if (!items.length) {
     list.append(element('p', 'empty-state', 'No reward requests yet.'));

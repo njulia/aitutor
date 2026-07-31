@@ -81,7 +81,12 @@
         let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
         localStorage.removeItem('student_id');
         localStorage.removeItem('student_email');
-        let currentStudentId = localStorage.getItem('auth_state') === 'logged_in' ? 'authenticated' : null;
+        let currentStudentId = (function() {
+            if (localStorage.getItem('auth_state') === 'logged_in') return 'authenticated';
+            // 孩子登录会话：通过 kid_session_token 识别
+            if (localStorage.getItem('kid_session_token') && localStorage.getItem('kid_student_id')) return 'authenticated';
+            return null;
+        })();
         let currentStudentEmail = null;
         let anonymousClientId = null; // Server-issued random cookie ID
         let primarySubjects = ['Maths', 'English', 'Science'];

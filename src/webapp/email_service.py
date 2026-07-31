@@ -343,7 +343,7 @@ def send_xp_digest_email(
         "<th style='padding:8px 12px;text-align:left'>Child</th>"
         "<th style='padding:8px 12px;text-align:right'>XP earned</th>"
         "<th style='padding:8px 12px;text-align:right'>Activities</th>"
-        "</tr></thead><tbody>{kid_rows}</tbody></table>"
+        f"</tr></thead><tbody>{kid_rows}</tbody></table>"
         "<p>Keep encouraging your children to learn every day!</p>"
         f"<p><a href='{safe_dashboard_link}' style='background:#6b46c1;color:#fff;padding:12px 18px;"
         "text-decoration:none;border-radius:8px;display:inline-block'>View full dashboard</a></p>"

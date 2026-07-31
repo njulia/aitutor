@@ -101,8 +101,8 @@
         </div>
         <div id="quest-grid" class="quest-grid"></div>
         <p class="gentle-note">
-          Everyone earns permanent XP for finishing and checking their effort—not for getting every
-          answer right. Some families can also earn Gift Points; a grown-up manages this.
+          Everyone earns permanent XP. Gift Points can be used to request gifts—they are spent
+          when a grown-up approves. Marks never affect your XP.
           Up to three checked activities earn points each day.
         </p>
       </section>
@@ -155,7 +155,7 @@
             </label>
             <label>
               Icon
-              <input type="text" id="custom-reward-icon" placeholder="e.g., &#11088;" maxlength="12">
+              <input type="text" id="custom-reward-icon" placeholder="e.g., &#127873;" maxlength="12">
             </label>
             <label>
               Gift Points
@@ -202,124 +202,124 @@
         </article>
       </section>
 
-      <section class="parent-zone" aria-labelledby="parent-zone-title">
-        <div class="parent-zone-heading">
-          <div aria-hidden="true" class="parent-lock">🔒</div>
-          <div>
-            <p class="eyebrow">Grown-ups only</p>
-            <h2 id="parent-zone-title">Parent reward controls</h2>
-            <p>Check the request and delivery details before approving a branded gift.</p>
-            <p id="parent-plan-note">
-              <span id="parent-plan-copy">Gift Points and gift approvals require an eligible monthly plan. The five-day pass and free beta access do not include physical gifts.</span>
-              <a href="/pricing">Manage plans and billing</a>.
-            </p>
-          </div>
-        </div>
+<!--      <section class="parent-zone" aria-labelledby="parent-zone-title">-->
+<!--        <div class="parent-zone-heading">-->
+<!--          <div aria-hidden="true" class="parent-lock">🔒</div>-->
+<!--          <div>-->
+<!--            <p class="eyebrow">Grown-ups only</p>-->
+<!--            <h2 id="parent-zone-title">Parent reward controls</h2>-->
+<!--            <p>Check the request and delivery details before approving a branded gift.</p>-->
+<!--            <p id="parent-plan-note">-->
+<!--              <span id="parent-plan-copy">Gift Points and gift approvals require an eligible monthly plan. The five-day pass and free beta access do not include physical gifts.</span>-->
+<!--              <a href="/pricing">Manage plans and billing</a>.-->
+<!--            </p>-->
+<!--          </div>-->
+<!--        </div>-->
 
-        <div class="parent-password-row">
-          <label>
-            Parent account password
-            <input
-              id="parent-password"
-              type="password"
-              autocomplete="current-password"
-              maxlength="256"
-              placeholder="Enter for each parent action"
-            >
-          </label>
-          <small>The reward system checks this password but does not save it.</small>
-        </div>
+<!--        <div class="parent-password-row">-->
+<!--          <label>-->
+<!--            Parent account password-->
+<!--            <input-->
+<!--              id="parent-password"-->
+<!--              type="password"-->
+<!--              autocomplete="current-password"-->
+<!--              maxlength="256"-->
+<!--              placeholder="Enter for each parent action"-->
+<!--            >-->
+<!--          </label>-->
+<!--          <small>The reward system checks this password but does not save it.</small>-->
+<!--        </div>-->
 
-        <div class="parent-columns">
-          <section aria-labelledby="requests-title">
-            <h3 id="requests-title">Reward requests</h3>
-            <div id="redemption-list" class="redemption-list"></div>
-          </section>
+<!--        <div class="parent-columns">-->
+<!--          <section aria-labelledby="requests-title">-->
+<!--            <h3 id="requests-title">Reward requests</h3>-->
+<!--            <div id="redemption-list" class="redemption-list"></div>-->
+<!--          </section>-->
 
-          <section id="delivery-address-panel" aria-labelledby="delivery-address-title">
-            <h3 id="delivery-address-title">UK delivery details</h3>
-            <p class="parent-help">
-              Enter the parent or guardian receiving the parcel. Do not use the child's name.
-            </p>
-            <div id="delivery-address-form" class="delivery-address-form">
-              <label>
-                Adult recipient's name
-                <input
-                  id="delivery-recipient"
-                  name="recipient_name"
-                  type="text"
-                  autocomplete="shipping name"
-                  maxlength="80"
-                  placeholder="Parent or guardian"
-                >
-              </label>
-              <label>
-                Address line 1
-                <input
-                  id="delivery-line-1"
-                  name="address_line1"
-                  type="text"
-                  autocomplete="shipping address-line1"
-                  maxlength="100"
-                >
-              </label>
-              <label>
-                Address line 2 <span class="optional">(optional)</span>
-                <input
-                  id="delivery-line-2"
-                  name="address_line2"
-                  type="text"
-                  autocomplete="shipping address-line2"
-                  maxlength="100"
-                >
-              </label>
-              <div class="delivery-form-row">
-                <label>
-                  Town or city
-                  <input
-                    id="delivery-town"
-                    name="town_city"
-                    type="text"
-                    autocomplete="shipping address-level2"
-                    maxlength="80"
-                  >
-                </label>
-                <label>
-                  UK postcode
-                  <input
-                    id="delivery-postcode"
-                    name="postcode"
-                    type="text"
-                    autocomplete="shipping postal-code"
-                    maxlength="10"
-                    inputmode="text"
-                  >
-                </label>
-              </div>
-              <label>
-                Country
-                <input
-                  id="delivery-country"
-                  name="country"
-                  type="text"
-                  autocomplete="shipping country-name"
-                  value="United Kingdom"
-                  readonly
-                >
-              </label>
-              <label class="adult-confirmation">
-                <input id="adult-recipient-confirmed" type="checkbox">
-                <span>I am the parent or guardian, and the named recipient is an adult.</span>
-              </label>
-            </div>
-            <p class="privacy-hint">
-              Delivery details are encrypted and are not shown in the child's reward view. They are
-              removed after cancellation or 30 days after dispatch. No phone number or child details
-              are needed.
-            </p>
-          </section>
-        </div>
-      </section>
+<!--          <section id="delivery-address-panel" aria-labelledby="delivery-address-title">-->
+<!--            <h3 id="delivery-address-title">UK delivery details</h3>-->
+<!--            <p class="parent-help">-->
+<!--              Enter the parent or guardian receiving the parcel. Do not use the child's name.-->
+<!--            </p>-->
+<!--            <div id="delivery-address-form" class="delivery-address-form">-->
+<!--              <label>-->
+<!--                Adult recipient's name-->
+<!--                <input-->
+<!--                  id="delivery-recipient"-->
+<!--                  name="recipient_name"-->
+<!--                  type="text"-->
+<!--                  autocomplete="shipping name"-->
+<!--                  maxlength="80"-->
+<!--                  placeholder="Parent or guardian"-->
+<!--                >-->
+<!--              </label>-->
+<!--              <label>-->
+<!--                Address line 1-->
+<!--                <input-->
+<!--                  id="delivery-line-1"-->
+<!--                  name="address_line1"-->
+<!--                  type="text"-->
+<!--                  autocomplete="shipping address-line1"-->
+<!--                  maxlength="100"-->
+<!--                >-->
+<!--              </label>-->
+<!--              <label>-->
+<!--                Address line 2 <span class="optional">(optional)</span>-->
+<!--                <input-->
+<!--                  id="delivery-line-2"-->
+<!--                  name="address_line2"-->
+<!--                  type="text"-->
+<!--                  autocomplete="shipping address-line2"-->
+<!--                  maxlength="100"-->
+<!--                >-->
+<!--              </label>-->
+<!--              <div class="delivery-form-row">-->
+<!--                <label>-->
+<!--                  Town or city-->
+<!--                  <input-->
+<!--                    id="delivery-town"-->
+<!--                    name="town_city"-->
+<!--                    type="text"-->
+<!--                    autocomplete="shipping address-level2"-->
+<!--                    maxlength="80"-->
+<!--                  >-->
+<!--                </label>-->
+<!--                <label>-->
+<!--                  UK postcode-->
+<!--                  <input-->
+<!--                    id="delivery-postcode"-->
+<!--                    name="postcode"-->
+<!--                    type="text"-->
+<!--                    autocomplete="shipping postal-code"-->
+<!--                    maxlength="10"-->
+<!--                    inputmode="text"-->
+<!--                  >-->
+<!--                </label>-->
+<!--              </div>-->
+<!--              <label>-->
+<!--                Country-->
+<!--                <input-->
+<!--                  id="delivery-country"-->
+<!--                  name="country"-->
+<!--                  type="text"-->
+<!--                  autocomplete="shipping country-name"-->
+<!--                  value="United Kingdom"-->
+<!--                  readonly-->
+<!--                >-->
+<!--              </label>-->
+<!--              <label class="adult-confirmation">-->
+<!--                <input id="adult-recipient-confirmed" type="checkbox">-->
+<!--                <span>I am the parent or guardian, and the named recipient is an adult.</span>-->
+<!--              </label>-->
+<!--            </div>-->
+<!--            <p class="privacy-hint">-->
+<!--              Delivery details are encrypted and are not shown in the child's reward view. They are-->
+<!--              removed after cancellation or 30 days after dispatch. No phone number or child details-->
+<!--              are needed.-->
+<!--            </p>-->
+<!--          </section>-->
+<!--        </div>-->
+<!--      </section>-->
     </div>
   </main>
 

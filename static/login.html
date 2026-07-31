@@ -9,6 +9,37 @@
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/auth.css">
   <link rel="stylesheet" href="/static/css/theme.css">
+  <style>
+    .kid-login-bar {
+      background: linear-gradient(135deg, #fef9c3, #fde68a);
+      border: 2px solid #f59e0b;
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .kid-login-bar p {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: #92400e;
+      font-weight: 600;
+    }
+    .kid-login-btn {
+      display: inline-block;
+      padding: 12px 32px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 1rem;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .kid-login-btn:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+    }
+  </style>
 </head>
 <body class="hm-auth">
 <header class="auth-header"><a href="/">✨ Homework Magic</a></header>
@@ -16,6 +47,10 @@
   <section class="auth-card" aria-labelledby="login-title">
     <h1 id="login-title">Welcome back</h1>
     <p class="intro">Log in to manage learning, progress and your family plan.</p>
+    <div class="kid-login-bar">
+      <p>Are you a child? Click below</p>
+      <a class="kid-login-btn" href="/kid-login">I'm a kid - take me to my login</a>
+    </div>
     <div id="login-notice" class="notice" role="status" aria-live="polite"></div>
     <form id="login-form">
       <div class="form-row">
@@ -33,7 +68,6 @@
       <button id="login-button" class="primary-button" type="submit">Log in</button>
     </form>
     <p class="auth-links">New here? <a href="/register">Create an account</a></p>
-    <p class="auth-links">Kid login? <a href="/kid-login">Use your codes</a></p>
     <p class="privacy-note">Account details should be entered by a parent or guardian. Do not use a child's school email address.</p>
   </section>
 </main>
