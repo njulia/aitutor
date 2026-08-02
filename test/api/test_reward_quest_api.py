@@ -256,7 +256,7 @@ def test_successful_review_returns_immediate_effort_xp(
         },
     )
     assert blocked.status_code == 403
-    assert "Everyone can earn XP" in blocked.text
+    assert "subscription" in blocked.text.lower()
 
     repeated = authenticated_client.post("/api/review", json=payload)
     assert repeated.status_code == 200

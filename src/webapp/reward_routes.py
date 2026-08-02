@@ -184,6 +184,7 @@ def build_reward_router(
     @router.post("/api/rewards/redemptions")
     async def request_reward(request: Request, body: RewardRequest):
         account, learner = await learner_context(request, body.student_id)
+        eligible = await gift_points_eligible(account)
         try:
             redemption = await asyncio.to_thread(
                 get_reward_store().request_redemption,

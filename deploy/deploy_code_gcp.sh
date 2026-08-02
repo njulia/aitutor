@@ -19,6 +19,8 @@ DEEPSEEK_API_KEY_SECRET="${DEEPSEEK_API_KEY_SECRET:-aitutor-deepseek-api-key}"
 SMTP_PASSWORD_SECRET="${SMTP_PASSWORD_SECRET:-aitutor-smtp-password}"
 REWARD_DELIVERY_SECRET_SECRET="${REWARD_DELIVERY_SECRET_SECRET:-homeworkmagic-reward-delivery-secret}"
 BUSINESS_CONTACT_EMAIL="${BUSINESS_CONTACT_EMAIL:-contact@homeworkmagic.co.uk}"
+# Define the admin emails variable
+ADMIN_EMAILS="${ADMIN_EMAILS:-admin@homeworkmagic.co.uk,admin1@homeworkmagic.co.uk,admin2@homeworkmagic.co.uk,niejing1@gmail.com}"
 PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
 RELEASE="${RELEASE:-}"
 
@@ -45,6 +47,7 @@ Options:
                            Secret Manager name for SMTP_PASSWORD
   --production-url URL     Public URL checked after promotion
   --contact-email EMAIL    BUSINESS_CONTACT_EMAIL value
+  --admin-emails EMAILS    ADMIN_EMAILS value (comma-separated)
   --release TAG            Explicit image tag (default: UTC timestamp)
   --staging-only           Stop after staging checks; do not move traffic
   --yes                    Promote without an interactive confirmation
@@ -57,6 +60,7 @@ Examples:
   ./deploy/deploy_code_gcp.sh
   ./deploy/deploy_code_gcp.sh --yes
   ./deploy/deploy_code_gcp.sh --staging-only
+  ./deploy/deploy_code_gcp.sh --admin-emails "admin@homeworkmagic.co.uk,admin1@homeworkmagic.co.uk"
 USAGE
 }
 
@@ -170,6 +174,12 @@ while [ "$#" -gt 0 ]; do
     --contact-email)
       [ "$#" -ge 2 ] || die "--contact-email requires a value"
       BUSINESS_CONTACT_EMAIL="$2"
+      shift 2
+      ;;
+    # Add the new option case here
+    --admin-emails)
+      [ "$#" -ge 2 ] || die "--admin-emails requires a value"
+      ADMIN_EMAILS="$2"
       shift 2
       ;;
     --release)
@@ -586,7 +596,7 @@ gcloud run services update "${SERVICE}" \
   --min-instances=0 \
   --max-instances=10 \
   --cpu-boost \
-  --update-env-vars="BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}" \
+  --update-env-vars="BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL},ADMIN_EMAILS=${ADMIN_EMAILS}" \
   --update-secrets="DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \

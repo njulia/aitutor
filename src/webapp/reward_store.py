@@ -857,7 +857,7 @@ class RewardStore:
                     lifetime_delta=activity_xp,
                     spendable_delta=(
                         activity_xp
-                        if day_count < daily_gift_activity_cap
+                        if gift_points_eligible and day_count < daily_gift_activity_cap
                         else 0
                     ),
                     subject=subject,
@@ -886,7 +886,7 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=int(quest["bonus_xp"]),
+                        spendable_delta=int(quest["bonus_xp"]) if gift_points_eligible else 0,
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,
@@ -910,7 +910,7 @@ class RewardStore:
                         event_type="quest_bonus",
                         label=str(quest["name"]),
                         lifetime_delta=int(quest["bonus_xp"]),
-                        spendable_delta=int(quest["bonus_xp"]),
+                        spendable_delta=int(quest["bonus_xp"]) if gift_points_eligible else 0,
                         subject=None,
                         local_day=local_day,
                         week_start=week_start,

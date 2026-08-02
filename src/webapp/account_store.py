@@ -63,10 +63,10 @@ PREMIUM_PLAN_NAMES = {
 
 # 各计划允许的最大孩子数量
 MAX_STUDENTS_BY_PLAN = {
-    ELEVENPLUS_PREMIUM_PLAN: 5,
-    HOMEWORK_PREMIUM_PLAN: 3,
+    ELEVENPLUS_PREMIUM_PLAN: 4,
+    HOMEWORK_PREMIUM_PLAN: 2,
 }
-DEFAULT_MAX_STUDENTS = 3  # 无订阅或未知计划时的默认限制
+DEFAULT_MAX_STUDENTS = 2  # 无订阅或未知计划时的默认限制
 
 accounts = Table(
     "accounts",
