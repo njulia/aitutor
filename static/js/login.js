@@ -18,8 +18,12 @@
     localStorage.removeItem('kid_student_id');
     localStorage.removeItem('kid_student_name');
   } else {
-    // 取消，返回之前页面
-    window.history.back();
+    // 取消，返回之前页面；无历史记录时回首页
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.assign('/');
+    }
   }
 })();
 

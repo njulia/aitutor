@@ -1388,9 +1388,6 @@
             });
 
             document.getElementById('input-' + method).style.display = 'block';
-
-            const subjectGroup = document.getElementById('review-subject-group');
-            if (subjectGroup) subjectGroup.style.display = method === 'file' ? 'none' : 'block';
         }
 
         // Photo handling
@@ -1631,23 +1628,6 @@
                             delete elevenGuideState.answers.subject;
                         }
                         renderElevenGuide();
-                    }
-
-                    const reviewSelect = document.getElementById('review-subject');
-                    if (reviewSelect) {
-                        reviewSelect.innerHTML = '';
-                        const allSubjects = [
-                            ...new Set([
-                                ...loadedPrimarySubjects,
-                                ...loadedElevenPlusSubjects
-                            ])
-                        ].sort();
-                        allSubjects.forEach(subject => {
-                            const option = document.createElement('option');
-                            option.value = subject;
-                            option.textContent = subject;
-                            reviewSelect.appendChild(option);
-                        });
                     }
                 })
                 .catch(error => console.error('Error loading subjects:', error));
@@ -2666,8 +2646,6 @@
             if (currentInputMethod === 'text') {
                 homeworkText = document.getElementById('review-homework').value.trim();
                 answersText = document.getElementById('review-answers').value.trim();
-                const subjectSelect = document.getElementById('review-subject');
-                subject = subjectSelect ? subjectSelect.value : 'General Homework';
             } else if (currentInputMethod === 'file' || currentInputMethod === 'photo') {
                 const pendingUpload = currentInputMethod === 'file'
                     ? fileUploadPromise
@@ -3360,6 +3338,8 @@
             if (!ttsSupported || !window.speechSynthesis) return;
 
             const shouldStop = Boolean(btn && btn.classList.contains('speaking'));
+            // 记录是否有活跃播放，stopSpeechPlayback 会清空 activeSpeechUtterance
+            const wasSpeaking = activeSpeechUtterance !== null || (window.speechSynthesis && window.speechSynthesis.speaking);
             stopSpeechPlayback();
             if (shouldStop) return;
 
@@ -3399,10 +3379,6 @@
                 }
 
                 try {
-                    if (window.speechSynthesis.paused) {
-                        window.speechSynthesis.resume();
-                    }
-
                     const utterance = new SpeechSynthesisUtterance(chunks[index]);
                     activeSpeechUtterance = utterance;
                     utterance.lang = 'en-GB';
@@ -3425,18 +3401,23 @@
                     };
 
                     window.speechSynthesis.speak(utterance);
-
-                    if (window.speechSynthesis.paused) {
-                        window.speechSynthesis.resume();
-                    }
                 } catch (err) {
                     console.error('Failed to initiate speech synthesis:', err);
                     finishPlayback();
                 }
             }
 
-            // Let cancel() finish before the first queued utterance is started.
-            setTimeout(() => speakChunk(0), 75);
+            // Chrome/Safari 的 speechSynthesis 需要 resume() 唤醒可能被暂停的合成器；
+            // 若之前有活跃播放，cancel() 是异步的需要短暂等待；否则立即播放以保持在用户手势上下文中
+            function startSpeaking() {
+                try { window.speechSynthesis.resume(); } catch (e) {}
+                speakChunk(0);
+            }
+            if (wasSpeaking) {
+                setTimeout(startSpeaking, 80);
+            } else {
+                startSpeaking();
+            }
         }
 
         // Text to speech: read the current question aloud in Tutor mode

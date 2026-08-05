@@ -775,25 +775,6 @@
                 <!-- 统计卡片 -->
                 <div class="progress-stats" id="stats-container"></div>
 
-                <!-- 正确率详情 -->
-                <div class="card" id="accuracy-card">
-                    <h3 class="section-title">Accuracy Rate</h3>
-                    <p class="section-help">
-                        This shows how often marked work was correct. Use the subject details to choose what to practise next.
-                    </p>
-                    <div class="detail-grid" id="accuracy-summary-grid"></div>
-                    <div class="accuracy-ring-container">
-                        <div class="accuracy-ring">
-                            <canvas id="accuracyRingChart"></canvas>
-                            <div class="accuracy-ring-label">
-                                <div class="accuracy-ring-value" id="accuracy-ring-value">--</div>
-                                <div class="accuracy-ring-text">Overall</div>
-                            </div>
-                        </div>
-                        <div class="accuracy-details" id="accuracy-details"></div>
-                    </div>
-                </div>
-
                 <!-- 每日目标完成热力图 -->
                 <div class="card" id="daily-goal-card">
                     <h3 class="section-title">Daily Goal Completion</h3>
@@ -820,6 +801,25 @@
                 <div class="chart-container">
                     <div class="chart-title">Accuracy by Subject</div>
                     <canvas id="subjectChart"></canvas>
+                </div>
+
+                <!-- 正确率详情 -->
+                <div class="card" id="accuracy-card">
+                    <h3 class="section-title">Accuracy Rate</h3>
+                    <p class="section-help">
+                        This shows how often marked work was correct. Use the subject details to choose what to practise next.
+                    </p>
+                    <div class="detail-grid" id="accuracy-summary-grid"></div>
+                    <div class="accuracy-ring-container">
+                        <div class="accuracy-ring">
+                            <canvas id="accuracyRingChart"></canvas>
+                            <div class="accuracy-ring-label">
+                                <div class="accuracy-ring-value" id="accuracy-ring-value">--</div>
+                                <div class="accuracy-ring-text">Overall</div>
+                            </div>
+                        </div>
+                        <div class="accuracy-details" id="accuracy-details"></div>
+                    </div>
                 </div>
 
                 <!-- 主题进度表 -->

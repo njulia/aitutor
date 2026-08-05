@@ -2023,17 +2023,18 @@ async def api_review(
                     # 根据正确率计算额外奖励 XP
                     score_val = result.get("score")
                     max_score_val = result.get("max_score")
-                    accuracy_bonus_xp = 0
+                    # accuracy_bonus_xp = 0
+                    accuracy = 1.0
                     if (
                         isinstance(score_val, (int, float))
                         and isinstance(max_score_val, (int, float))
                         and max_score_val > 0
                     ):
                         accuracy = score_val / max_score_val
-                        if accuracy >= 1.0:
-                            accuracy_bonus_xp = 10
-                        elif accuracy >= 0.8:
-                            accuracy_bonus_xp = 5
+                        # if accuracy >= 1.0:
+                        #     accuracy_bonus_xp = 10
+                        # elif accuracy >= 0.8:
+                        #     accuracy_bonus_xp = 5
                     reward_update = await run_blocking(
                         get_reward_store().award_checked_activity,
                         account_id=account["id"],
@@ -2042,7 +2043,7 @@ async def api_review(
                         subject=request_body.subject,
                         is_tutor_mode=bool(request_body.is_tutor_mode),
                         gift_points_eligible=gift_points_eligible,
-                        accuracy_bonus_xp=accuracy_bonus_xp,
+                        accuracy=accuracy,
                         timeout=10,
                         limit_concurrency=False,
                     )

@@ -779,7 +779,7 @@ class RewardStore:
         is_tutor_mode: bool = False,
         gift_points_eligible: bool = False,
         awarded_at: datetime | None = None,
-        accuracy_bonus_xp: int = 0,
+        accuracy: float = 1.0,
     ) -> dict[str, Any]:
         """Award permanent XP, plus Gift Points for an eligible subscriber."""
         account = _clean_id(account_id, maximum=80)
@@ -799,7 +799,17 @@ class RewardStore:
             max(1, homework_activity_xp // 10)
             if is_tutor_mode
             else homework_activity_xp
-        ) + max(0, accuracy_bonus_xp)
+        )
+
+        if accuracy <= 0.3:
+            # 正确率 <= 30% 时 XP 减半
+            activity_xp = max(1, activity_xp // 2)
+        elif accuracy >= 1.0:
+            # 正确率 >= 100% 时 XP 增加
+            activity_xp = activity_xp + 10
+        elif accuracy >= 0.8:
+            # 正确率 >= 80% 时 XP 增加
+            activity_xp = activity_xp + 5
         # Lifetime XP is an effort record for every authenticated learner and
         # must never depend on a plan or stop after a small number of
         # activities. Keep the configurable cap only for subscriber Gift
@@ -874,7 +884,7 @@ class RewardStore:
                 local_day=local_day,
                 week_start=week_start,
             )
-            if awarded_events:
+            if awarded_events and not is_tutor_mode:
                 for quest in DAILY_QUESTS:
                     if day_count < int(quest["target"]):
                         continue
@@ -1114,6 +1124,7 @@ class RewardStore:
                 select(
                     self.events.c.label,
                     self.events.c.event_type,
+                    self.events.c.subject,
                     self.events.c.lifetime_delta,
                     self.events.c.spendable_delta,
                     self.events.c.created_at,
@@ -1134,6 +1145,9 @@ class RewardStore:
                 item["gift_points_delta"] = int(
                     item.pop("spendable_delta", 0) or 0
                 )
+                # 对于 checked_activity 事件，用科目名称替换 "Checked learning activity"
+                if item.get("event_type") == "checked_activity" and item.get("subject"):
+                    item["label"] = item["subject"]
                 recent_activity.append(item)
             day_count, active_days, subject_count = self._quest_progress(
                 conn,
@@ -1918,7 +1932,12 @@ class RewardStore:
                 select(
                     self.events.c.student_id,
                     func.sum(self.events.c.lifetime_delta).label("total_xp"),
-                    func.count().label("event_count"),
+                    func.sum(
+                        case(
+                            (self.events.c.event_type == "checked_activity", 1),
+                            else_=0,
+                        )
+                    ).label("event_count"),
                 )
                 .where(
                     and_(

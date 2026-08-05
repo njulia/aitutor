@@ -556,6 +556,44 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
     return _dict(row) or {}
 
 
+def adjust_student_for_academic_year(student: Dict[str, Any]) -> Dict[str, Any]:
+    """根据当前日期和注册日期，自动调整学生的年级和年龄。
+
+    英国学年从9月1日开始。每过一个9月1日，年级和年龄各增加1。
+    如果学生在当前9月1日之后注册，则不晋升。
+    """
+    from datetime import UTC, datetime as dt
+
+    now = dt.now(tz=UTC)
+    created = student.get("created_at")
+    if not created:
+        return student
+
+    if getattr(created, "tzinfo", None) is None:
+        created = created.replace(tzinfo=UTC)
+
+    # 计算当前学术年度（9月1日开始）
+    if now.month >= 9:
+        current_academic_year = now.year
+    else:
+        current_academic_year = now.year - 1
+
+    # 计算注册时的学术年度
+    if created.month >= 9:
+        registration_academic_year = created.year
+    else:
+        registration_academic_year = created.year - 1
+
+    years_promoted = current_academic_year - registration_academic_year
+    if years_promoted <= 0:
+        return student
+
+    adjusted = dict(student)
+    adjusted["year_group"] = student["year_group"] + years_promoted
+    adjusted["age"] = student["age"] + years_promoted
+    return adjusted
+
+
 def list_students(account_id: str, active_only: bool = False) -> List[Dict[str, Any]]:
     condition = students.c.account_id == account_id
     if active_only:

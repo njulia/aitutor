@@ -4,18 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Parent Dashboard | Homework Magic</title>
+  <link rel="stylesheet" href="/static/css/theme.css">
   <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif;
-      background: #f7fafc; color: #2d3748;
-    }
-    .header {
-      background: white; padding: 20px 24px; border-bottom: 1px solid #e2e8f0;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .header h1 { margin: 0; font-size: 24px; color: #2d3748; }
-    .header-actions { display: flex; gap: 12px; }
+    header { background: #fff; padding: 1rem 5%; border-bottom: 1px solid #dde3ef; }
     .btn {
       padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
       cursor: pointer; border: none; transition: all 0.2s;
@@ -130,20 +121,22 @@
 </head>
 <!--<body>-->
 <body class="hm-page">
-  <div class="header">
-     <button class="btn btn-primary" onclick="window.location.href='/'"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</button>
-     <div class="header-actions">
-         <button class="btn btn-secondary" onclick="window.location.href='/pricing'">Manage Plan</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/progress'">Progress</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/rewards'">Rewards</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/memory'">Memory</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/ks1-homework'">KS1</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/ks2-homework'">KS2</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/elevenplus-practice'">11+</button>
-         <button class="btn btn-secondary" onclick="window.location.href='/elevenplus/articles'">11+ Articles</button>
-      <button class="btn btn-secondary" onclick="logout()">Logout</button>
-     </div>
-  </div>
+<header>
+    <div class="hm-nav-wrap">
+      <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+      <nav class="hm-main-nav" aria-label="Main navigation">
+        <a href="/pricing">Manage Plan</a>
+        <a href="/progress">Progress</a>
+        <a href="/rewards">Rewards</a>
+        <a href="/memory">Memory</a>
+        <a href="/ks1-homework">KS1</a>
+        <a href="/ks2-homework">KS2</a>
+        <a href="/elevenplus-practice">11+</a>
+        <a href="/elevenplus/articles">11+ Articles</a>
+        <a href="#" onclick="logout();return false;">Logout</a>
+      </nav>
+    </div>
+  </header>
   <div class="container">
     <!-- Family Overview -->
     <div class="section">
@@ -155,26 +148,26 @@
       <!-- Create Kid Form (hidden by default) -->
       <div id="createKidForm" style="display:none; background:#f7fafc; padding:16px; border-radius:8px; margin-bottom:16px;">
         <h4 style="margin:0 0 12px;">Add a Child</h4>
-        <div class="field">
-          <label>Nickname</label>
-          <input type="text" id="newKidName" placeholder="e.g., Alex" maxlength="80">
-        </div>
-        <div class="field">
-          <label>Year Group</label>
-          <select id="newKidYear">
-            <option value="1">Year 1</option>
-            <option value="2">Year 2</option>
-            <option value="3">Year 3</option>
-            <option value="4">Year 4</option>
-            <option value="5">Year 5</option>
-            <option value="6">Year 6</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Age</label>
-          <input type="number" id="newKidAge" placeholder="7" min="5" max="11">
-        </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+          <div class="field" style="flex:1; min-width:120px;">
+            <label>Nickname</label>
+            <input type="text" id="newKidName" placeholder="e.g., Alex" maxlength="80">
+          </div>
+          <div class="field" style="flex:1; min-width:100px;">
+            <label>Year Group</label>
+            <select id="newKidYear">
+              <option value="1">Year 1</option>
+              <option value="2">Year 2</option>
+              <option value="3">Year 3</option>
+              <option value="4">Year 4</option>
+              <option value="5">Year 5</option>
+              <option value="6">Year 6</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0 0 80px; min-width:70px;">
+            <label>Age</label>
+            <input type="number" id="newKidAge" placeholder="7" min="4" max="11">
+          </div>
           <button class="btn btn-primary" onclick="createKid()">Create</button>
           <button class="btn btn-secondary" onclick="hideCreateKidForm()">Cancel</button>
         </div>
@@ -281,12 +274,22 @@
         // No password caching implemented for security reasons
     }
 
-    // 如果浏览器中有孩子登录会话，先跳转到登录页切换
+    // 如果浏览器中有孩子登录会话，弹出确认框后再决定是否切换
     (function checkKidSessionForParent() {
       const kidSessionToken = localStorage.getItem('kid_session_token');
       const kidStudentId = localStorage.getItem('kid_student_id');
       if (kidSessionToken && kidStudentId) {
-        window.location.replace('/login');
+        const kidName = localStorage.getItem('kid_student_name') || 'a child';
+        const confirmed = confirm(
+          `${kidName} is currently logged in on this browser.\n\n` +
+          'To view the Parent Dashboard, you need to sign them out first. Continue?'
+        );
+        if (confirmed) {
+          window.location.replace('/login');
+        } else {
+          // 取消，回到学生学习页面
+          window.location.replace('/app');
+        }
       }
     })();
 

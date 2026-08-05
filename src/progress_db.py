@@ -161,6 +161,61 @@ def _raw_storage_enabled() -> bool:
     return os.getenv("STORE_RAW_LEARNER_CONTENT", "false").lower() in {"1", "true", "yes", "on"}
 
 
+def _upsert_topic_progress(conn, student_id: str, subject: str, score: float, max_score: float, now: datetime) -> None:
+    """向 topic_progress 表插入或更新某个科目的累计答题数据。"""
+    clean_subject = subject[:80]
+    # 用法科目本身作为 topic（因为没有更细粒度的 topic 信息）
+    topic = clean_subject
+    attempted = int(max_score or 0)
+    correct = int(score or 0)
+    if attempted <= 0:
+        return
+    existing = conn.execute(
+        select(topic_progress.c.questions_attempted, topic_progress.c.questions_correct)
+        .where(
+            and_(
+                topic_progress.c.student_id == student_id,
+                topic_progress.c.subject == clean_subject,
+                topic_progress.c.topic == topic,
+            )
+        )
+    ).first()
+    if existing:
+        new_attempted = int(existing._mapping["questions_attempted"] or 0) + attempted
+        new_correct = int(existing._mapping["questions_correct"] or 0) + correct
+        new_accuracy = round(new_correct / new_attempted * 100, 1) if new_attempted > 0 else 0.0
+        conn.execute(
+            update(topic_progress)
+            .where(
+                and_(
+                    topic_progress.c.student_id == student_id,
+                    topic_progress.c.subject == clean_subject,
+                    topic_progress.c.topic == topic,
+                )
+            )
+            .values(
+                questions_attempted=new_attempted,
+                questions_correct=new_correct,
+                accuracy=new_accuracy,
+                updated_at=now,
+            )
+        )
+    else:
+        new_accuracy = round(correct / attempted * 100, 1) if attempted > 0 else 0.0
+        conn.execute(
+            insert(topic_progress).values(
+                id=f"tp_{uuid.uuid4().hex}",
+                student_id=student_id,
+                subject=clean_subject,
+                topic=topic,
+                questions_attempted=attempted,
+                questions_correct=correct,
+                accuracy=new_accuracy,
+                updated_at=now,
+            )
+        )
+
+
 def save_homework_session(
     student_id: str,
     subject: str,
@@ -191,6 +246,8 @@ def save_homework_session(
             review_text=review_text if store_raw else None,
             created_at=now,
         ))
+        # 同步更新 topic_progress 表，供进度页面的 "Topic Progress" 使用
+        _upsert_topic_progress(conn, student_id, subject[:80], score, max_score, now)
     return session_id
 
 
@@ -361,6 +418,50 @@ def create_student(name: str, year_group: int = 3, age: int = 8) -> Dict[str, An
     with _engine.begin() as conn:
         conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, created_at=now, updated_at=now, is_active=True))
     return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "is_active": 1, "created_at": now.isoformat()}
+
+
+def get_students_subject_breakdown(student_ids: List[str], since: datetime = None) -> Dict[str, List[Dict[str, Any]]]:
+    """根据学生ID列表，查询 homework_sessions 中各科目的答题情况。
+
+    返回: {student_id: [{subject, attempted, correct, accuracy}, ...]}
+    """
+    if not student_ids:
+        return {}
+    cutoff = since or (_now() - timedelta(hours=24))
+    with _engine.begin() as conn:
+        rows = conn.execute(
+            select(
+                homework_sessions.c.student_id,
+                homework_sessions.c.subject,
+                func.count().label("total_attempted"),
+                func.sum(homework_sessions.c.score).label("total_correct"),
+                func.max(homework_sessions.c.max_score).label("max_score_val"),
+            )
+            .where(
+                and_(
+                    homework_sessions.c.student_id.in_(student_ids),
+                    homework_sessions.c.created_at >= cutoff,
+                    homework_sessions.c.score.is_not(None),
+                )
+            )
+            .group_by(homework_sessions.c.student_id, homework_sessions.c.subject)
+        ).all()
+
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        sid = row._mapping["student_id"]
+        attempted = int(row._mapping["total_attempted"] or 0)
+        correct = int(row._mapping["total_correct"] or 0)
+        max_score = int(row._mapping["max_score_val"] or 10)
+        if sid not in result:
+            result[sid] = []
+        result[sid].append({
+            "subject": row._mapping["subject"],
+            "attempted": attempted,
+            "correct": correct,
+            "accuracy": round(correct / (attempted * max_score) * 100) if attempted > 0 else 0,
+        })
+    return result
 
 
 def get_all_sessions_summary() -> Dict[str, Any]:

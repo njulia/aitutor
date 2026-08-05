@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, SecretStr
 
-from src.progress_db import verify_user_credentials
+from src.progress_db import verify_user_credentials, get_students_subject_breakdown
 
 from .account_store import (
+    adjust_student_for_academic_year,
     ensure_account,
     get_learning_target,
     get_student,
@@ -18,8 +20,12 @@ from .account_store import (
     set_learning_target,
     student_belongs_to_account,
 )
-from .memory_store import get_memory_store
 from .reward_store import get_reward_store
+
+
+def _utcnow() -> datetime:
+    """返回当前UTC时间。"""
+    return datetime.now(tz=UTC)
 
 
 logger = logging.getLogger(__name__)
@@ -73,6 +79,8 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
         )
         kids = []
         for student in students:
+            # 根据学术年度自动晋升年级和年龄
+            student = await asyncio.to_thread(adjust_student_for_academic_year, student)
             target = await asyncio.to_thread(
                 get_learning_target, student["id"]
             )
@@ -141,11 +149,21 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
             get_reward_store().get_xp_digest_for_account,
             account_id=account["id"],
         )
-        # 获取科目准确率
+        # 获取科目准确率 - 从 homework_sessions 查询真实数据
+        kid_ids = [k["student_id"] for k in digest.get("kids", [])]
         subject_breakdown = await asyncio.to_thread(
-            get_memory_store().get_daily_subject_breakdown,
-            account_id=account["id"],
+            get_students_subject_breakdown,
+            student_ids=kid_ids,
         )
+        
+        # 如果过去24小时没有科目数据，尝试获取最近7天的数据
+        if kid_ids and not any(subject_breakdown.values()):
+            subject_breakdown = await asyncio.to_thread(
+                get_students_subject_breakdown,
+                student_ids=kid_ids,
+                since=_utcnow() - timedelta(days=7),
+            )
+        
         # 附加孩子名字和科目数据
         students = await asyncio.to_thread(
             list_students, account["id"]

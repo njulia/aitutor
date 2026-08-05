@@ -750,6 +750,48 @@ def review_homework(
             rows = _mark_rows(pairs, budget["student_answers"], subject)
         except Exception:
             logger.exception("RAG answer lookup failed for %s", homework_doc_id)
+    
+    # Quick review with RAG answers: skip LLM call, return only table and score
+    if quick_review and rows:
+        correct_count = sum(1 for row in rows if row["is_correct"])
+        attempted = len(rows)
+        display_review = (
+            _table(rows)
+            + f"**Score: {correct_count}/{attempted}**\n"
+        )
+        result = {
+            "success": True,
+            "review": display_review,
+            "llm_response": "",
+            "solution_methods": [],
+            "from_rag_answers": True,
+            "score": float(correct_count),
+            "max_score": attempted,
+            "correct_count": correct_count,
+            "attempted": attempted,
+            "model_tier": "flash",
+            "model_used": None,
+            "llm_fallback": True,
+            "display_review": display_review,
+        }
+        review_cache.set(cache_key, result)
+        # 保存作业记录到 progress 数据库，供进度页面使用
+        if not is_tutor_mode and student_id not in {None, "", "anonymous"} and not str(student_id).startswith("anon_"):
+            try:
+                from src.progress_db import save_homework_session
+                save_homework_session(
+                    student_id=str(student_id),
+                    subject=subject,
+                    year_group=int(profile.get("year_group", 3)),
+                    homework_content=budget["homework_content"],
+                    student_answers=budget["student_answers"],
+                    score=float(correct_count),
+                    review_text=display_review,
+                    max_score=attempted,
+                )
+            except Exception:
+                logger.exception("Could not save homework progress")
+        return result
 
     year_group = int(profile.get("year_group", 3))
     if uploaded_work:
