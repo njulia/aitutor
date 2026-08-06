@@ -9,12 +9,18 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, SecretStr
 
-from src.progress_db import verify_user_credentials, get_students_subject_breakdown
+from src.progress_db import (
+    get_progress_summary,
+    get_streak_info,
+    get_students_subject_breakdown,
+    verify_user_credentials,
+)
 
 from .account_store import (
     adjust_student_for_academic_year,
     ensure_account,
     get_learning_target,
+    get_student_limit,
     get_student,
     list_students,
     set_learning_target,
@@ -75,38 +81,61 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
         """家长查看家庭概览：所有孩子及其学习进度。"""
         account = await account_context(request)
         students = await asyncio.to_thread(
-            list_students, account["id"]
+            list_students, account["id"], True
         )
-        kids = []
-        for student in students:
-            # 根据学术年度自动晋升年级和年龄
-            student = await asyncio.to_thread(adjust_student_for_academic_year, student)
-            target = await asyncio.to_thread(
-                get_learning_target, student["id"]
-            )
-            # 获取孩子的 XP 数据
+
+        async def kid_overview(student: dict) -> dict:
+            adjusted = adjust_student_for_academic_year(student)
             try:
-                dashboard = await asyncio.to_thread(
-                    get_reward_store().dashboard,
-                    account_id=account["id"],
-                    student_id=student["id"],
+                target, progress, streak, wallet = await asyncio.gather(
+                    asyncio.to_thread(get_learning_target, adjusted["id"]),
+                    asyncio.to_thread(get_progress_summary, adjusted["id"]),
+                    asyncio.to_thread(get_streak_info, adjusted["id"]),
+                    asyncio.to_thread(
+                        get_reward_store().learner_summary,
+                        account_id=account["id"],
+                        student_id=adjusted["id"],
+                    ),
                 )
-                wallet = dashboard.get("wallet", {})
             except Exception:
-                wallet = {"lifetime_xp": 0, "gift_points": 0}
-            kids.append({
-                "id": student["id"],
-                "name": student["name"],
-                "year_group": student["year_group"],
-                "age": student["age"],
-                "kid_code": student.get("kid_code"),
+                logger.exception("Could not load learner overview")
+                target = await asyncio.to_thread(
+                    get_learning_target, adjusted["id"]
+                )
+                progress = {"total_sessions": 0, "average_accuracy": 0}
+                streak = {"current_streak": 0}
+                wallet = {
+                    "lifetime_xp": 0,
+                    "gift_points": 0,
+                    "level": {"number": 1, "name": "Starter", "icon": "🌱"},
+                    "pending_rewards": 0,
+                }
+            return {
+                "id": adjusted["id"],
+                "name": adjusted["name"],
+                "year_group": adjusted["year_group"],
+                "age": adjusted["age"],
+                "is_default": bool(adjusted.get("is_default")),
+                "kid_code": adjusted.get("kid_code"),
                 "learning_target": target,
                 "wallet": wallet,
-            })
+                "progress": {
+                    "total_sessions": int(progress.get("total_sessions") or 0),
+                    "average_accuracy": float(progress.get("average_accuracy") or 0),
+                    "current_streak": int(streak.get("current_streak") or 0),
+                },
+            }
+
+        kids, student_limit = await asyncio.gather(
+            asyncio.gather(*(kid_overview(student) for student in students)),
+            asyncio.to_thread(get_student_limit, account["id"]),
+        )
         return {
             "success": True,
             "family_code": account.get("family_code"),
-            "kids": kids,
+            "kids": list(kids),
+            "student_limit": int(student_limit),
+            "can_add_student": len(students) < int(student_limit),
         }
 
     @router.get("/api/parent/learning-target/{student_id}")

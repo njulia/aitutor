@@ -47,9 +47,15 @@ PLAN_ENV_VARS = {
     TRIAL_PLAN: "STRIPE_PRICE_TRIAL_5DAY",
     "homework_monthly": "STRIPE_PRICE_HOMEWORK_MONTHLY",
     "elevenplus_monthly": "STRIPE_PRICE_ELEVENPLUS_MONTHLY",
-    "family_monthly": "STRIPE_PRICE_FAMILY_MONTHLY",
+    # "elevenplus_mock_monthly": "STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY",
+    # "family_monthly": "STRIPE_PRICE_FAMILY_MONTHLY",
 }
-REQUIRED_PUBLIC_PLANS = (TRIAL_PLAN, "homework_monthly", "elevenplus_monthly")
+REQUIRED_PUBLIC_PLANS = (
+    TRIAL_PLAN,
+    "homework_monthly",
+    "elevenplus_monthly",
+    # "elevenplus_mock_monthly",
+)
 PLAN_EXPECTATIONS = {
     TRIAL_PLAN: {"currency": "gbp", "unit_amount": 99, "interval": None},
     "homework_monthly": {"currency": "gbp", "unit_amount": 499, "interval": "month"},
@@ -160,6 +166,16 @@ def billing_configuration_issues(plan: Optional[str] = None) -> list[str]:
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
     if not webhook_secret.startswith("whsec_"):
         issues.append("STRIPE_WEBHOOK_SECRET is not configured")
+
+    public_business_fields = {
+        "DATA_CONTROLLER_NAME": "Homework Magic",
+        "PRIVACY_POSTAL_ADDRESS": "Homework Magic",
+        "BUSINESS_CONTACT_EMAIL": "contact@homeworkmagic.co.uk",
+    }
+    for variable, description in public_business_fields.items():
+        value = os.getenv(variable, "").strip()
+        if not value or value.casefold() in {"todo", "tbd", "..."} or value.startswith("["):
+            issues.append(f"{variable} must contain {description} before billing is enabled")
 
     requested_plans = (plan,) if plan else REQUIRED_PUBLIC_PLANS
     plans = _plans()

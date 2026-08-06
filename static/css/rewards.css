@@ -40,41 +40,49 @@ body.hm-rewards {
 .hm-skip-link:focus { transform: translateY(0); }
 
 .header {
-  background: white;
-  padding: 20px 0;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  margin-bottom: 30px;
-  border-radius: 0 0 20px 20px;
+  background: rgba(255,255,255,.94);
+  padding: 14px 0;
+  margin: 0 0 22px;
+  border-bottom: 1px solid var(--hm-line);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .header-content {
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
 .nav-links {
   display: flex;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 3px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .nav-links a {
-  margin-left: 0;
+  min-height: 42px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--hm-ink);
+  font-size: .9rem;
+  font-weight: 750;
   text-decoration: none;
-  color: #666;
-  font-weight: 500;
 }
 
 .nav-links a:hover {
-  color: #667eea;
+  color: var(--hm-purple-dark);
+  background: var(--hm-purple-soft);
 }
 
 .reward-shell {
@@ -646,7 +654,8 @@ body.hm-rewards {
 
 @media (max-width: 760px) {
   .header-content { align-items: flex-start; flex-direction: column; }
-  .nav-links { justify-content: flex-start; }
+  .nav-links { width: 100%; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .nav-links a { flex: 0 0 auto; }
   .reward-shell { width: min(100% - 20px, 1180px); margin-top: 14px; }
   .reward-welcome { align-items: stretch; flex-direction: column; padding: 24px; }
   .wallet-grid,

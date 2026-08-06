@@ -60,6 +60,7 @@ class FakeStripe:
             products = {
                 "price_homework": "prod_homework",
                 "price_elevenplus": "prod_elevenplus",
+                "price_mock": "prod_mock",
             }
             return StripeObject(
                 id=price_id,
@@ -110,6 +111,7 @@ def isolated_billing_database(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_BASE_URL", "https://homeworkmagic.co.uk")
     monkeypatch.setenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "price_homework")
     monkeypatch.setenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "price_elevenplus")
+    monkeypatch.setenv("STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY", "price_mock")
     monkeypatch.delenv("STRIPE_PRICE_FAMILY_MONTHLY", raising=False)
     monkeypatch.delenv("STRIPE_PORTAL_CONFIGURATION_ID", raising=False)
     monkeypatch.delenv("DEV_MODE", raising=False)
@@ -240,31 +242,24 @@ def test_change_and_cancel_open_explicit_stripe_portal_flows():
     )
 
 
-def test_pricing_page_uses_the_supplied_stripe_pricing_table_without_secrets():
+def test_pricing_page_uses_server_created_checkout_without_remote_stripe_script():
     project_page = Path(__file__).resolve().parents[2] / "static" / "pricing.html"
     page_path = project_page if project_page.is_file() else Path(__file__).with_name("pricing.html")
     page = page_path.read_text(encoding="utf-8")
 
-    assert "/api/billing/status" in page
-    assert "/api/billing/pricing-table-session" in page
-    assert "/api/billing/checkout" in page  # Retained only for the one-off pass.
-    assert "JSON.stringify({plan: 'trial_5day'})" in page
-    assert "JSON.stringify({plan})" not in page
-    assert 'src="https://js.stripe.com/v3/pricing-table.js"' in page
-    assert "<stripe-pricing-table" in page
-    assert 'pricing-table-id="prctbl_1TvlP9A7C4P8kXJMSS8t4VRT"' in page
-    assert 'publishable-key="pk_live_fYeIDSqsqYC6MDKau5eFsI0U"' in page
-    assert "customer-session-client-secret" in page
-    assert "client-reference-id" in page
-    assert "data.pricing_table_id" in page
-    assert "data.publishable_key" in page
+    assert "£9.99 GBP / month" in page
+    assert "/static/js/pricing.js" in page
+    assert "js.stripe.com" not in page
+    assert "pricing-table-id" not in page
     assert "sk_live_" not in page
     assert "whsec_" not in page
     assert 'id="change-plan-button"' in page
     assert 'id="cancel-plan-button"' in page
-    assert "/api/billing/portal/change" not in page  # Built from a fixed allow-listed action.
-    assert "openPortal('change')" in page
-    assert "openPortal('cancel')" in page
+    pricing_script = (page_path.parent / "js" / "pricing.js").read_text(encoding="utf-8")
+    assert "/api/billing/portal/change" not in pricing_script  # Built from a fixed allow-listed action.
+    assert "openPortal('change')" in pricing_script
+    assert "openPortal('cancel')" in pricing_script
+    assert "/api/billing/checkout" in pricing_script
 
     app_page = page_path.with_name("app.html")
     if app_page.is_file():

@@ -188,6 +188,8 @@ def init_account_db() -> None:
 
 # 孩子登录码使用的字符表，去除了容易混淆的 I O 0 1
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+KID_CODE_LENGTH = 6
+_CODE_CREATE_ATTEMPTS = 10
 
 
 def _generate_code(length: int = 6) -> str:
@@ -277,19 +279,26 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
         row = conn.execute(select(accounts).where(accounts.c.email == clean_email)).first()
     if row is None:
         now = _now()
-        try:
+        for _ in range(_CODE_CREATE_ATTEMPTS):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(insert(accounts).values(
+                        id=f"acct_{uuid.uuid4().hex}", email=clean_email,
+                        display_name=clean_display, role=safe_role,
+                        stripe_customer_id=None, family_code=_generate_code(),
+                        created_at=now, updated_at=now,
+                    ))
+            except IntegrityError:
+                # Either another worker created this email, or a family-code
+                # collision occurred. Read by email first, then retry with a
+                # fresh code when needed.
+                pass
             with engine.begin() as conn:
-                conn.execute(insert(accounts).values(
-                    id=f"acct_{uuid.uuid4().hex}", email=clean_email,
-                    display_name=clean_display, role=safe_role,
-                    stripe_customer_id=None, family_code=_generate_code(),
-                    created_at=now, updated_at=now,
-                ))
-        except IntegrityError:
-            # Another worker created the same normalised account.
-            pass
-        with engine.begin() as conn:
-            row = conn.execute(select(accounts).where(accounts.c.email == clean_email)).first()
+                row = conn.execute(
+                    select(accounts).where(accounts.c.email == clean_email)
+                ).first()
+            if row is not None:
+                break
     if row is None:
         raise RuntimeError("Unable to create or read account")
     data = _dict(row) or {}
@@ -349,7 +358,8 @@ def parse_combined_login_code(combined_code: str) -> Optional[tuple]:
     """解析组合登录码，返回 (family_code, kid_code) 或 None。
 
     支持格式:
-    - XXXXXX-XXX (新格式)
+    - XXXXXX-XXXXXX (current format)
+    - XXXXXX-XXX (legacy format)
     - FAM-XXXXXX-XXX (旧格式，自动去除 FAM- 前缀)
     """
     code = _normalise_code(combined_code)
@@ -362,8 +372,9 @@ def parse_combined_login_code(combined_code: str) -> Optional[tuple]:
     if len(parts) != 2:
         return None
     family_code, kid_code = parts[0].strip(), parts[1].strip()
-    # family code 固定 6 位，kid code 固定 3 位
-    if len(family_code) != 6 or len(kid_code) != 3:
+    # Keep existing three-character learner codes working while issuing much
+    # larger six-character codes to new learners.
+    if len(family_code) != 6 or len(kid_code) not in {3, KID_CODE_LENGTH}:
         return None
     # 验证字符表
     valid_chars = set(_CODE_ALPHABET)
@@ -468,22 +479,34 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
     if not account_exists:
         raise ValueError("Account not found")
     now = _now()
-    try:
-        with engine.begin() as conn:
-            if existing:
+    if existing:
+        try:
+            with engine.begin() as conn:
                 conn.execute(update(students).where(students.c.id == existing._mapping["id"]).values(
                     is_default=True, default_for_account=account_id, updated_at=now
                 ))
-            else:
-                conn.execute(insert(students).values(
-                    id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
-                    year_group=year_group, age=age, is_active=True, is_default=True,
-                    default_for_account=account_id, kid_code=_generate_code(3),
-                    created_at=now, updated_at=now,
-                ))
-    except IntegrityError:
-        # The unique default_for_account key makes this safe across workers.
-        pass
+        except IntegrityError:
+            # Another worker selected the default learner first.
+            pass
+    else:
+        for _ in range(_CODE_CREATE_ATTEMPTS):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(insert(students).values(
+                        id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
+                        year_group=year_group, age=age, is_active=True, is_default=True,
+                        default_for_account=account_id, kid_code=_generate_code(KID_CODE_LENGTH),
+                        created_at=now, updated_at=now,
+                    ))
+            except IntegrityError:
+                pass
+            with engine.begin() as conn:
+                created_default = conn.execute(select(students.c.id).where(and_(
+                    students.c.account_id == account_id,
+                    students.c.default_for_account == account_id,
+                ))).first()
+            if created_default:
+                break
     with engine.begin() as conn:
         row = conn.execute(select(students).where(and_(
             students.c.account_id == account_id,
@@ -500,8 +523,8 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
 
 def _ensure_student_kid_code(student_id: str) -> Optional[Dict[str, Any]]:
     """为缺少孩子登录码的既有档案补发唯一码。"""
-    for _ in range(5):
-        code = _generate_code(3)
+    for _ in range(_CODE_CREATE_ATTEMPTS):
+        code = _generate_code(KID_CODE_LENGTH)
         try:
             with _engine().begin() as conn:
                 conn.execute(
@@ -525,35 +548,55 @@ def _get_max_students_for_account(account_id: str) -> int:
     return DEFAULT_MAX_STUDENTS
 
 
+def get_student_limit(account_id: str) -> int:
+    """Return the active learner-profile allowance for a family account."""
+    return _get_max_students_for_account(account_id)
+
+
 def create_student(account_id: str, name: str, year_group: int, age: int) -> Dict[str, Any]:
     nickname, year_group, age = _validate_student(name, year_group, age)
     now = _now()
-    learner_id = f"stu_{uuid.uuid4().hex}"
-    with _engine().begin() as conn:
-        if not conn.execute(select(accounts.c.id).where(accounts.c.id == account_id)).first():
-            raise ValueError("Account not found")
-        # 根据订阅计划限制孩子数量
-        max_students = _get_max_students_for_account(account_id)
-        active_count = conn.execute(
-            select(func.count()).select_from(students).where(
-                and_(
-                    students.c.account_id == account_id,
-                    students.c.is_active.is_(True)
+    engine = _engine()
+    max_students = _get_max_students_for_account(account_id)
+    for _ in range(_CODE_CREATE_ATTEMPTS):
+        learner_id = f"stu_{uuid.uuid4().hex}"
+        try:
+            with engine.begin() as conn:
+                # Lock the parent row so two simultaneous requests cannot both
+                # pass the learner-count check on PostgreSQL.
+                account_row = conn.execute(
+                    select(accounts.c.id)
+                    .where(accounts.c.id == account_id)
+                    .with_for_update()
+                ).first()
+                if not account_row:
+                    raise ValueError("Account not found")
+                active_count = conn.execute(
+                    select(func.count()).select_from(students).where(
+                        and_(
+                            students.c.account_id == account_id,
+                            students.c.is_active.is_(True),
+                        )
+                    )
+                ).scalar() or 0
+                if active_count >= max_students:
+                    raise ValueError(f"Your plan allows up to {max_students} children")
+                conn.execute(
+                    insert(students).values(
+                        id=learner_id, account_id=account_id, name=nickname,
+                        year_group=year_group, age=age, is_active=True, is_default=False,
+                        default_for_account=None, kid_code=_generate_code(KID_CODE_LENGTH),
+                        created_at=now, updated_at=now,
+                    )
                 )
-            )
-        ).scalar() or 0
-        if active_count >= max_students:
-            raise ValueError(f"Your plan allows up to {max_students} children")
-        conn.execute(
-            insert(students).values(
-                id=learner_id, account_id=account_id, name=nickname,
-                year_group=year_group, age=age, is_active=True, is_default=False,
-                default_for_account=None, kid_code=_generate_code(3),
-                created_at=now, updated_at=now,
-            )
-        )
-        row = conn.execute(select(students).where(students.c.id == learner_id)).first()
-    return _dict(row) or {}
+                row = conn.execute(
+                    select(students).where(students.c.id == learner_id)
+                ).first()
+            return _dict(row) or {}
+        except IntegrityError:
+            # Extremely unlikely global learner-code collision; retry safely.
+            continue
+    raise RuntimeError("Unable to create learner profile")
 
 
 def adjust_student_for_academic_year(student: Dict[str, Any]) -> Dict[str, Any]:
@@ -589,8 +632,8 @@ def adjust_student_for_academic_year(student: Dict[str, Any]) -> Dict[str, Any]:
         return student
 
     adjusted = dict(student)
-    adjusted["year_group"] = student["year_group"] + years_promoted
-    adjusted["age"] = student["age"] + years_promoted
+    adjusted["year_group"] = min(6, student["year_group"] + years_promoted)
+    adjusted["age"] = min(11, student["age"] + years_promoted)
     return adjusted
 
 
@@ -991,12 +1034,12 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
     if not sub:
         return False
     if required_plans:
-        # 家庭档含 11+ 套餐与五日体验覆 与免费 beta 盖全部学习区
+        # 11+ Premium and the five-day pass cover both learning areas.
         effective_required = set(required_plans)
-        if sub.get("plan") in {"elevenplus_monthly", "trial_5day", BETA_PLAN}:
+        if sub.get("plan") in {"elevenplus_monthly", "trial_5day"}:
             return True
-        # 家庭档不含 11+ 套餐仅覆盖 Years 1-6 家庭作业
-        if sub.get("plan") in {"homework_monthly"}:
+        # Homework Premium and the research beta cover Years 1-6 only.
+        if sub.get("plan") in {"homework_monthly", BETA_PLAN}:
             return "homework_monthly" in effective_required
         return sub.get("plan") in effective_required
     return True

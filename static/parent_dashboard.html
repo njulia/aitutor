@@ -3,791 +3,164 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
   <title>Parent Dashboard | Homework Magic</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/theme.css">
   <style>
-    header { background: #fff; padding: 1rem 5%; border-bottom: 1px solid #dde3ef; }
-    .btn {
-      padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
-      cursor: pointer; border: none; transition: all 0.2s;
-    }
-    .btn-primary { background: #667eea; color: white; }
-    .btn-primary:hover { background: #5568d3; }
-    .btn-secondary { background: #edf2f7; color: #4a5568; }
-    .btn-secondary:hover { background: #e2e8f0; }
-    .btn-danger { background: #fed7d7; color: #c53030; }
-    .btn-danger:hover { background: #feb2b2; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-    .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .section h2 { margin: 0 0 16px; font-size: 20px; color: #2d3748; }
-    .family-code {
-      background: #f7fafc; padding: 16px; border-radius: 8px;
-      border: 2px dashed #cbd5e0; text-align: center; margin-bottom: 16px;
-    }
-    .family-code strong { font-size: 24px; color: #667eea; letter-spacing: 2px; }
-    .kids-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-    .kid-card {
-      background: #f7fafc; border-radius: 10px; padding: 20px;
-      border: 1px solid #e2e8f0;
-    }
-    .kid-card h3 { margin: 0 0 12px; color: #2d3748; }
-    .kid-info { font-size: 14px; color: #718096; margin-bottom: 8px; }
-    .kid-code {
-      background: white; padding: 8px 12px; border-radius: 6px;
-      font-family: monospace; font-size: 14px; color: #667eea;
-      border: 1px solid #e2e8f0; margin-top: 8px;
-    }
-    .xp-stats { display: flex; gap: 16px; margin-top: 12px; }
-    .xp-stat { text-align: center; }
-    .xp-stat .value { font-size: 24px; font-weight: 700; color: #667eea; }
-    .xp-stat .label { font-size: 12px; color: #718096; }
-    .target-form { margin-top: 16px; }
-    .target-form .field { margin-bottom: 12px; }
-    .target-form label { display: block; font-size: 13px; color: #4a5568; margin-bottom: 4px; }
-    .target-form input, .target-form select {
-      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: 14px;
-    }
-    .catalog-list { list-style: none; padding: 0; margin: 0; }
-    .catalog-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px; background: #f7fafc; border-radius: 8px; margin-bottom: 8px;
-    }
-    .catalog-item-info { display: flex; align-items: center; gap: 12px; }
-    .catalog-item-icon { font-size: 24px; }
-    .catalog-item-name { font-weight: 600; }
-    .catalog-item-cost { color: #718096; font-size: 14px; }
-    .catalog-item-actions { display: flex; gap: 8px; }
-    .add-catalog-form {
-      background: #f7fafc; padding: 16px; border-radius: 8px; margin-top: 16px;
-    }
-    .add-catalog-form .field { margin-bottom: 12px; }
-    .add-catalog-form label { display: block; font-size: 13px; color: #4a5568; margin-bottom: 4px; }
-    .add-catalog-form input {
-      width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: 14px;
-    }
-    .digest-table { width: 100%; border-collapse: collapse; }
-    .digest-table th, .digest-table td {
-      padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0;
-    }
-    .digest-table th { background: #f7fafc; font-weight: 600; font-size: 14px; }
-    .subject-tag {
-      display: inline-block; padding: 2px 8px; border-radius: 12px;
-      font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0;
-      white-space: nowrap;
-    }
-    .subject-tag.high { background: #c6f6d5; color: #22543d; }
-    .subject-tag.medium { background: #fefcbf; color: #744210; }
-    .subject-tag.low { background: #fed7d7; color: #9b2c2c; }
-    .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
-    }
+    body { background: #f5f7fb; color: #24304f; }
+    header { background: #fff; border-bottom: 1px solid #dde3ef; padding: 1rem 5%; }
+    .container { margin: 0 auto; max-width: 1200px; padding: 24px; }
+    .section { background: #fff; border-radius: 14px; box-shadow: 0 2px 8px #23325a12; margin-bottom: 24px; padding: 24px; }
+    .section-heading { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+    .section h1, .section h2 { color: #27345a; margin: 0 0 8px; }
+    .muted { color: #68758d; font-size: .92rem; margin: 0 0 16px; }
+    .btn { border: 0; border-radius: 9px; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 15px; }
+    .btn:disabled { cursor: not-allowed; opacity: .55; }
+    .btn-primary { background: #5d56d8; color: #fff; }
+    .btn-secondary { background: #edf0f7; color: #34405d; }
+    .btn-danger { background: #ffe1e1; color: #9d2525; }
+    .btn-link { color: #5149c4; font-weight: 700; text-decoration: none; }
+    .profile-form { background: #f7f8fc; border: 1px solid #e0e5f0; border-radius: 12px; display: none; margin: 16px 0; padding: 18px; }
+    .profile-form.show { display: block; }
+    .form-row { align-items: end; display: flex; flex-wrap: wrap; gap: 12px; }
+    .field { flex: 1 1 130px; }
+    .field label { color: #4c5872; display: block; font-size: .82rem; font-weight: 700; margin-bottom: 5px; }
+    .field input, .field select { background: #fff; border: 1px solid #ccd4e3; border-radius: 8px; font: inherit; padding: 9px 10px; width: 100%; }
+    .kids-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .kid-card { background: #f9faff; border: 1px solid #dde3ef; border-radius: 12px; padding: 18px; }
+    .kid-title { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+    .kid-title h3 { margin: 0; }
+    .default-badge { background: #e7e5ff; border-radius: 999px; color: #4e46b9; font-size: .72rem; padding: 3px 8px; }
+    .kid-code { background: #fff; border: 1px dashed #adb8cd; border-radius: 8px; color: #413aa9; font-family: ui-monospace, monospace; margin: 10px 0; padding: 9px; word-break: break-all; }
+    .metrics { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); margin: 14px 0; }
+    .metric { background: #fff; border-radius: 8px; padding: 9px 5px; text-align: center; }
+    .metric strong { color: #5149c4; display: block; font-size: 1.15rem; }
+    .metric span { color: #738098; font-size: .7rem; }
+    .card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+    .target-form { border-top: 1px solid #e0e5f0; margin-top: 14px; padding-top: 14px; }
+    .target-form .form-row { align-items: end; }
+    .digest-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #e3e7ef; padding: 11px; text-align: left; }
+    th { background: #f7f8fc; font-size: .85rem; }
+    .list { list-style: none; margin: 0; padding: 0; }
+    .list-item { align-items: center; background: #f8f9fc; border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 9px; padding: 13px; }
+    .item-main { align-items: center; display: flex; gap: 12px; }
+    .item-icon { font-size: 1.6rem; }
+    .item-title { font-weight: 700; }
+    .item-meta { color: #6f7c92; font-size: .82rem; margin-top: 3px; }
+    .empty { color: #718096; padding: 22px; text-align: center; }
+    .modal-overlay { align-items: center; background: #17213c99; display: none; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 1000; }
     .modal-overlay.show { display: flex; }
-    .modal {
-      background: white; border-radius: 12px; padding: 24px;
-      max-width: 400px; width: 90%;
+    .modal { background: #fff; border-radius: 13px; max-width: 420px; padding: 24px; width: 100%; }
+    .modal-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 16px; }
+    #page-status { border-radius: 9px; margin-bottom: 16px; padding: 10px 14px; }
+    #page-status:empty { display: none; }
+    #page-status.error { background: #ffe8e8; color: #8c2525; }
+    @media (max-width: 650px) {
+      .container { padding: 14px; }
+      .section { padding: 18px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .list-item { align-items: flex-start; flex-direction: column; }
     }
-    .modal h3 { margin: 0 0 16px; }
-    .modal .field { margin-bottom: 16px; }
-    .modal label { display: block; font-size: 14px; color: #4a5568; margin-bottom: 4px; }
-    .modal input {
-      width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: 14px;
-    }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-    .empty-state { text-align: center; padding: 40px; color: #718096; }
-    /* 礼物请求列表 */
-    .gift-request-list { list-style: none; padding: 0; margin: 0; }
-    .gift-request-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px;
-      background: #f7fafc;
-      border-radius: 10px;
-      margin-bottom: 12px;
-      border: 1px solid #e2e8f0;
-    }
-    .gift-request-info { display: flex; align-items: center; gap: 16px; flex: 1; }
-    .gift-request-icon { font-size: 32px; }
-    .gift-request-details { flex: 1; }
-    .gift-request-name { font-weight: 600; font-size: 16px; color: #2d3748; }
-    .gift-request-meta { font-size: 13px; color: #718096; margin-top: 4px; }
-    .gift-request-cost { color: #667eea; font-weight: 600; }
-    .gift-request-actions { display: flex; gap: 8px; }
   </style>
 </head>
-<!--<body>-->
 <body class="hm-page">
-<header>
+  <header>
     <div class="hm-nav-wrap">
       <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
       <nav class="hm-main-nav" aria-label="Main navigation">
-        <a href="/pricing">Manage Plan</a>
+        <a href="/pricing">Manage plan</a>
         <a href="/progress">Progress</a>
         <a href="/rewards">Rewards</a>
-        <a href="/memory">Memory</a>
-        <a href="/ks1-homework">KS1</a>
-        <a href="/ks2-homework">KS2</a>
-        <a href="/elevenplus-practice">11+</a>
-        <a href="/elevenplus/articles">11+ Articles</a>
-        <a href="#" onclick="logout();return false;">Logout</a>
+        <a href="/elevenplus-practice">11+ practice</a>
+        <a href="/elevenplus-mock-exams">11+ mocks</a>
+        <a href="#" id="parent-logout">Log out</a>
       </nav>
     </div>
   </header>
-  <div class="container">
-    <!-- Family Overview -->
-    <div class="section">
-      <h2>Your Family</h2>
-      <p style="color:#718096; font-size:14px; margin:0 0 16px;">Share each child's login code with them. They can use it at <a href="/kid-login" style="color:#667eea;">kid login</a>.</p>
-      <div style="margin-bottom:16px;">
-        <button class="btn btn-primary" onclick="showCreateKidForm()">+ Add Child</button>
+
+  <main class="container">
+    <div id="page-status" role="status" aria-live="polite"></div>
+
+    <section class="section" aria-labelledby="family-title">
+      <div class="section-heading">
+        <div>
+          <h1 id="family-title">Your family</h1>
+          <p class="muted">Each child has their own private progress, XP, Gift Points and login code.</p>
+          <p class="muted" id="family-limit-note"></p>
+        </div>
+        <button class="btn btn-primary" id="add-child-button" type="button">+ Add child</button>
       </div>
-      <!-- Create Kid Form (hidden by default) -->
-      <div id="createKidForm" style="display:none; background:#f7fafc; padding:16px; border-radius:8px; margin-bottom:16px;">
-        <h4 style="margin:0 0 12px;">Add a Child</h4>
-        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
-          <div class="field" style="flex:1; min-width:120px;">
-            <label>Nickname</label>
-            <input type="text" id="newKidName" placeholder="e.g., Alex" maxlength="80">
+
+      <form id="profile-form" class="profile-form">
+        <h2 id="profile-form-title">Add a child</h2>
+        <div class="form-row">
+          <div class="field">
+            <label for="profile-name">Nickname</label>
+            <input id="profile-name" maxlength="40" required autocomplete="off" placeholder="e.g. Alex">
           </div>
-          <div class="field" style="flex:1; min-width:100px;">
-            <label>Year Group</label>
-            <select id="newKidYear">
-              <option value="1">Year 1</option>
-              <option value="2">Year 2</option>
-              <option value="3">Year 3</option>
-              <option value="4">Year 4</option>
-              <option value="5">Year 5</option>
-              <option value="6">Year 6</option>
+          <div class="field">
+            <label for="profile-year">Year group</label>
+            <select id="profile-year">
+              <option value="1">Year 1</option><option value="2">Year 2</option>
+              <option value="3">Year 3</option><option value="4">Year 4</option>
+              <option value="5">Year 5</option><option value="6">Year 6</option>
             </select>
           </div>
-          <div class="field" style="flex:0 0 80px; min-width:70px;">
-            <label>Age</label>
-            <input type="number" id="newKidAge" placeholder="7" min="4" max="11">
+          <div class="field">
+            <label for="profile-age">Age</label>
+            <input id="profile-age" type="number" min="5" max="11" required>
           </div>
-          <button class="btn btn-primary" onclick="createKid()">Create</button>
-          <button class="btn btn-secondary" onclick="hideCreateKidForm()">Cancel</button>
+          <button class="btn btn-primary" id="save-profile-button" type="submit">Add child</button>
+          <button class="btn btn-secondary" id="cancel-profile-button" type="button">Cancel</button>
         </div>
-      </div>
-      <div class="kids-grid" id="kidsGrid">
-        <div class="empty-state">Loading kids...</div>
-      </div>
-    </div>
+      </form>
+      <div class="kids-grid" id="kids-grid"><div class="empty">Loading learner profiles…</div></div>
+    </section>
 
-    <!-- XP Digest -->
-    <div class="section">
-      <h2>Learning Summary (Last 24 Hours)</h2>
-      <table class="digest-table">
-        <thead>
-          <tr>
-            <th>Child</th>
-            <th>XP Earned</th>
-            <th>Activities</th>
-            <th>Subjects</th>
-          </tr>
-        </thead>
-        <tbody id="digestBody">
-          <tr><td colspan="4" style="text-align:center; color:#718096;">Loading...</td></tr>
-        </tbody>
-      </table>
-      <div style="margin-top:16px; text-align:right;">
-        <button class="btn btn-primary" onclick="sendDigestEmail()">Send Summary Email</button>
+    <section class="section" aria-labelledby="digest-title">
+      <div class="section-heading">
+        <div><h2 id="digest-title">Learning summary</h2><p class="muted">Activity from the last 24 hours, with a seven-day subject fallback.</p></div>
+        <button class="btn btn-secondary" id="send-digest-button" type="button">Email summary</button>
       </div>
-    </div>
+      <div class="digest-wrap">
+        <table><thead><tr><th>Child</th><th>XP earned</th><th>Activities</th><th>Subjects</th></tr></thead>
+          <tbody id="digest-body"><tr><td colspan="4">Loading…</td></tr></tbody></table>
+      </div>
+    </section>
 
-    <!-- Gift Requests from Kids -->
-    <div class="section">
-      <h2>Gift Requests</h2>
-      <p style="color:#718096; font-size:14px; margin:0 0 16px;">
-        Review and approve or decline gift requests from your children. Gift Points are only deducted when you approve.
-      </p>
-      <div id="giftRequestsList">
-        <div class="empty-state">Loading gift requests...</div>
-      </div>
-    </div>
+    <section class="section" aria-labelledby="requests-title">
+      <h2 id="requests-title">Gift requests</h2>
+      <p class="muted">Gift Points are used only after you approve a request.</p>
+      <div id="gift-requests"><div class="empty">Loading requests…</div></div>
+    </section>
 
-    <!-- Reward Catalog -->
-    <div class="section">
-      <h2>Custom Rewards</h2>
-      <p style="color:#718096; font-size:14px; margin:0 0 16px;">
-        Create rewards your kids can earn with their Gift Points (e.g., books, cinema tickets, toys).
-      </p>
-      <ul class="catalog-list" id="catalogList">
-        <li class="empty-state">Loading rewards...</li>
-      </ul>
-      <div class="add-catalog-form">
-        <h4 style="margin:0 0 12px;">Add New Reward</h4>
-        <div class="field">
-          <label>Reward Name</label>
-          <input type="text" id="newRewardName" placeholder="e.g., Cinema Ticket" maxlength="40">
+    <section class="section" aria-labelledby="catalog-title">
+      <h2 id="catalog-title">Family rewards</h2>
+      <p class="muted">Add rewards such as a book, cinema trip or choosing dinner.</p>
+      <ul class="list" id="catalog-list"><li class="empty">Loading rewards…</li></ul>
+      <form id="catalog-form" class="profile-form show">
+        <div class="form-row">
+          <div class="field"><label for="reward-name">Reward name</label><input id="reward-name" maxlength="40" required></div>
+          <div class="field"><label for="reward-icon">Icon</label><input id="reward-icon" maxlength="12" placeholder="🎁"></div>
+          <div class="field"><label for="reward-cost">Gift Points</label><input id="reward-cost" type="number" min="10" max="5000" value="100" required></div>
+          <button class="btn btn-primary" type="submit">Add reward</button>
         </div>
-        <div class="field">
-          <label>Icon (emoji)</label>
-          <input type="text" id="newRewardIcon" placeholder="e.g., 🎬" maxlength="12">
-        </div>
-        <div class="field">
-          <label>Gift Points Cost</label>
-          <input type="number" id="newRewardCost" placeholder="100" min="10" max="5000">
-        </div>
-        <button class="btn btn-primary" onclick="addCatalogItem()">Add Reward</button>
-      </div>
-    </div>
+      </form>
+    </section>
+  </main>
+
+  <div class="modal-overlay" id="password-modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
+    <form class="modal" id="password-form">
+      <h2 id="password-title">Confirm your password</h2>
+      <div class="field"><label for="parent-password">Parent account password</label><input id="parent-password" type="password" required autocomplete="current-password"></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="cancel-password" type="button">Cancel</button><button class="btn btn-primary" type="submit">Confirm</button></div>
+    </form>
   </div>
 
-  <!-- Password Modal -->
-  <div class="modal-overlay" id="passwordModal">
-    <div class="modal">
-      <h3>Confirm Your Password</h3>
-      <div class="field">
-        <label>Enter your account password to continue</label>
-        <input type="password" id="modalPassword" placeholder="Password">
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" id="modalConfirmBtn">Confirm</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let pendingAction = null;
-
-    // 从后端响应中提取可读的错误信息
-    function extractError(data) {
-      if (data.error) return data.error;
-      if (data.detail) {
-        // Pydantic 验证错误返回数组格式: [{loc: [...], msg: "...", type: "..."}]
-        if (Array.isArray(data.detail)) {
-          return data.detail.map(e => e.msg || e.message || String(e)).join('; ');
-        }
-        // HTTPException 返回字符串格式
-        if (typeof data.detail === 'string') return data.detail;
-      }
-      return null;
-    }
-    
-    // Clear cached password
-    function clearCachedPassword() {
-        // No password caching implemented for security reasons
-    }
-
-    // 如果浏览器中有孩子登录会话，弹出确认框后再决定是否切换
-    (function checkKidSessionForParent() {
-      const kidSessionToken = localStorage.getItem('kid_session_token');
-      const kidStudentId = localStorage.getItem('kid_student_id');
-      if (kidSessionToken && kidStudentId) {
-        const kidName = localStorage.getItem('kid_student_name') || 'a child';
-        const confirmed = confirm(
-          `${kidName} is currently logged in on this browser.\n\n` +
-          'To view the Parent Dashboard, you need to sign them out first. Continue?'
-        );
-        if (confirmed) {
-          window.location.replace('/login');
-        } else {
-          // 取消，回到学生学习页面
-          window.location.replace('/app');
-        }
-      }
-    })();
-
-    // Check if parent is logged in using the same mechanism as the main app
-    async function checkAuthStatus() {
-      try {
-        const response = await fetch('/api/check-subscription', {
-          method: 'GET',
-          credentials: 'same-origin',
-          cache: 'no-store',
-          headers: {'Accept': 'application/json'}
-        });
-        if (!response.ok) throw new Error('Login status request failed.');
-        const data = await response.json();
-        const loggedIn = data.logged_in === true;
-        if (!loggedIn) {
-          window.location.href = '/login';
-        }
-      } catch (error) {
-        console.warn('Could not refresh login status:', error);
-        // Redirect to login if authentication check fails
-        window.location.href = '/login';
-      }
-    }
-
-    // Check authentication status on page load
-    checkAuthStatus();
-
-    // Load family overview
-    async function loadOverview() {
-      try {
-        const response = await fetch('/api/parent/overview', {
-          credentials: 'same-origin'
-        });
-        if (response.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
-        const data = await response.json();
-        if (data.success) {
-          renderKids(data.kids || [], data.family_code || '');
-        }
-      } catch (err) {
-        console.error('Failed to load overview:', err);
-      }
-    }
-
-    // 生成组合登录码: family_code-kid_code (例如 7RQKF6-EBR)
-    // 兼容旧格式: 去除 FAM- 和 KID- 前缀
-    function buildLoginCode(familyCode, kidCode) {
-      if (!familyCode || !kidCode) return null;
-      // 去除 FAM- 前缀
-      const family = familyCode.startsWith('FAM-') ? familyCode.slice(4) : familyCode;
-      // 去除 KID- 前缀
-      const kid = kidCode.startsWith('KID-') ? kidCode.slice(4) : kidCode;
-      return `${family}-${kid}`;
-    }
-
-    function renderKids(kids, familyCode) {
-      const grid = document.getElementById('kidsGrid');
-      if (!kids.length) {
-        grid.innerHTML = '<div class="empty-state">No kids added yet. Click "+ Add Child" to create a child profile.</div>';
-        return;
-      }
-      grid.innerHTML = kids.map(kid => {
-        const loginCode = buildLoginCode(familyCode, kid.kid_code);
-        return `
-        <div class="kid-card">
-          <h3>${escapeHtml(kid.name)}</h3>
-          <div class="kid-info">Year ${kid.year_group} | Age ${kid.age}</div>
-          <div class="kid-code">Login Code: ${loginCode ? `<strong>${loginCode}</strong>` : 'Not assigned'}</div>
-          <div class="xp-stats">
-            <div class="xp-stat">
-              <div class="value">${kid.wallet?.lifetime_xp || 0}</div>
-              <div class="label">Lifetime XP</div>
-            </div>
-            <div class="xp-stat">
-              <div class="value">${kid.wallet?.gift_points || 0}</div>
-              <div class="label">Gift Points</div>
-            </div>
-          </div>
-          <div class="target-form">
-            <h4 style="margin:12px 0 8px; font-size:14px;">Learning Target</h4>
-            <div class="field">
-              <label>Daily Goal (activities)</label>
-              <input type="number" id="daily_${kid.id}" value="${kid.learning_target?.daily_goal || 1}" min="1" max="10">
-            </div>
-            <div class="field">
-              <label>Weekly XP Goal</label>
-              <input type="number" id="weekly_${kid.id}" value="${kid.learning_target?.weekly_xp_goal || 100}" min="10" max="2000">
-            </div>
-            <button class="btn btn-primary" onclick="saveTarget('${kid.id}', '${escapeHtml(kid.name)}')">Save Target</button>
-          </div>
-        </div>
-      `;
-      }).join('');
-    }
-
-    function showCreateKidForm() {
-      document.getElementById('createKidForm').style.display = 'block';
-    }
-
-    function hideCreateKidForm() {
-      document.getElementById('createKidForm').style.display = 'none';
-      document.getElementById('newKidName').value = '';
-      document.getElementById('newKidAge').value = '';
-    }
-
-    async function createKid() {
-      const name = document.getElementById('newKidName').value.trim();
-      const yearGroup = parseInt(document.getElementById('newKidYear').value);
-      const age = parseInt(document.getElementById('newKidAge').value);
-
-      if (!name) {
-        alert('Please enter a nickname');
-        return;
-      }
-      if (!age || age < 5 || age > 11) {
-        alert('Please enter a valid age (5-11)');
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/students', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            name: name,
-            year_group: yearGroup,
-            age: age
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          hideCreateKidForm();
-          loadOverview();
-        } else {
-          alert(extractError(data) || 'Failed to create child profile');
-        }
-      } catch (err) {
-        console.error('Failed to create student:', err);
-        alert('Failed to create child profile');
-      }
-    }
-
-    async function saveTarget(studentId, name) {
-      const daily = parseInt(document.getElementById(`daily_${studentId}`).value);
-      const weekly = parseInt(document.getElementById(`weekly_${studentId}`).value);
-      pendingAction = async (password) => {
-        const response = await fetch('/api/parent/learning-target', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            student_id: studentId,
-            daily_goal: daily,
-            weekly_xp_goal: weekly,
-            parent_password: password
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert(`Learning target saved for ${name}`);
-          loadOverview();
-        } else {
-          alert(extractError(data) || 'Failed to save target');
-        }
-      };
-      showPasswordModal();
-    }
-
-    // Load XP digest
-    async function loadDigest() {
-      try {
-        const response = await fetch('/api/parent/xp-digest', {
-          credentials: 'same-origin'
-        });
-        const data = await response.json();
-        if (data.success) {
-          renderDigest(data.digest?.kids || []);
-        }
-      } catch (err) {
-        console.error('Failed to load digest:', err);
-      }
-    }
-
-    function renderDigest(kids) {
-      const tbody = document.getElementById('digestBody');
-      if (!kids.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#718096;">No activity in the last 24 hours</td></tr>';
-        return;
-      }
-      tbody.innerHTML = kids.map(kid => {
-        const subjectsHtml = (kid.subjects && kid.subjects.length)
-          ? kid.subjects.map(s => {
-              let cls = 'low';
-              if (s.accuracy >= 80) cls = 'high';
-              else if (s.accuracy >= 50) cls = 'medium';
-              return `<span class="subject-tag ${cls}">${escapeHtml(s.subject)} ${s.accuracy}% (${s.correct}/${s.attempted})</span>`;
-            }).join('')
-          : '<span style="color:#a0aec0; font-size:12px;">No subject data</span>';
-        return `
-        <tr>
-          <td>${escapeHtml(kid.name)}</td>
-          <td><strong>${kid.total_xp}</strong> XP</td>
-          <td>${kid.event_count} activities</td>
-          <td>${subjectsHtml}</td>
-        </tr>
-      `}).join('');
-    }
-
-    async function sendDigestEmail() {
-      pendingAction = async (password) => {
-        const response = await fetch('/api/parent/xp-digest/send', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ parent_password: password })
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert('Summary email sent!');
-        } else {
-          alert(extractError(data) || 'Failed to send email');
-        }
-      };
-      showPasswordModal();
-    }
-
-    // Load reward catalog
-    async function loadCatalog() {
-      try {
-        const response = await fetch('/api/rewards/catalog', {
-          credentials: 'same-origin'
-        });
-        const data = await response.json();
-        if (data.success) {
-          renderCatalog(data.items || []);
-        }
-      } catch (err) {
-        console.error('Failed to load catalog:', err);
-      }
-    }
-
-    function renderCatalog(items) {
-      const list = document.getElementById('catalogList');
-      if (!items.length) {
-        list.innerHTML = '<li class="empty-state">No custom rewards yet. Add one below!</li>';
-        return;
-      }
-      list.innerHTML = items.map(item => `
-        <li class="catalog-item">
-          <div class="catalog-item-info">
-            <span class="catalog-item-icon">${escapeHtml(item.icon)}</span>
-            <div>
-              <div class="catalog-item-name">${escapeHtml(item.name)}</div>
-              <div class="catalog-item-cost">${item.xp_cost} Gift Points</div>
-            </div>
-          </div>
-          <div class="catalog-item-actions">
-            <button class="btn btn-danger" onclick="deleteCatalogItem('${item.id}', '${escapeHtml(item.name)}')">Delete</button>
-          </div>
-        </li>
-      `).join('');
-    }
-
-    async function addCatalogItem() {
-      const name = document.getElementById('newRewardName').value.trim();
-      const icon = document.getElementById('newRewardIcon').value.trim() || '🎁';
-      const cost = parseInt(document.getElementById('newRewardCost').value) || 100;
-      if (!name) {
-        alert('Please enter a reward name');
-        return;
-      }
-      pendingAction = async (password) => {
-        const response = await fetch('/api/rewards/catalog', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            name: name,
-            icon: icon,
-            xp_cost: cost,
-            parent_password: password
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          document.getElementById('newRewardName').value = '';
-          document.getElementById('newRewardIcon').value = '';
-          document.getElementById('newRewardCost').value = '';
-          loadCatalog();
-        } else {
-          alert(extractError(data) || 'Failed to add reward');
-        }
-      };
-      showPasswordModal();
-    }
-
-    async function deleteCatalogItem(itemId, name) {
-      if (!confirm(`Delete "${name}"?`)) return;
-      pendingAction = async (password) => {
-        const response = await fetch(`/api/rewards/catalog/${itemId}`, {
-          method: 'DELETE',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ parent_password: password })
-        });
-        const data = await response.json();
-        if (data.success) {
-          loadCatalog();
-        } else {
-          alert(extractError(data) || 'Failed to delete reward');
-        }
-      };
-      showPasswordModal();
-    }
-
-    function showPasswordModal() {
-      document.getElementById('passwordModal').classList.add('show');
-      document.getElementById('modalPassword').value = '';
-      document.getElementById('modalPassword').focus();
-    }
-
-    function closeModal() {
-      document.getElementById('passwordModal').classList.remove('show');
-      pendingAction = null;
-    }
-
-    // Handle click on confirm button
-    document.getElementById('modalConfirmBtn').addEventListener('click', async () => {
-      const password = document.getElementById('modalPassword').value;
-      if (!password) {
-        alert('Please enter your password');
-        return;
-      }
-      if (pendingAction) {
-        try {
-          await pendingAction(password);
-          closeModal();
-        } catch (err) {
-          alert('Failed to confirm action');
-        }
-      }
-    });
-    
-    // Handle Enter key in password input
-    document.getElementById('modalPassword').addEventListener('keypress', async (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        const password = document.getElementById('modalPassword').value;
-        if (!password) {
-          alert('Please enter your password');
-          return;
-        }
-        if (pendingAction) {
-          try {
-            await pendingAction(password);
-            closeModal();
-          } catch (err) {
-            alert('Failed to confirm action');
-          }
-        }
-      }
-    });
-
-    async function logout() {
-      try {
-        // Call the logout API to invalidate the session
-        await fetch('/api/logout', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {'Accept': 'application/json'}
-        });
-      } catch (error) {
-        console.error('Logout API call failed:', error);
-      } finally {
-        // Clear any local session data and sync across tabs
-        localStorage.removeItem('session');
-        localStorage.removeItem('auth_state');
-        clearCachedPassword(); // Clear cached password on logout
-        // Trigger storage event to update navigation in other tabs
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'auth_state',
-          oldValue: 'logged_in',
-          newValue: null
-        }));
-        window.location.href = '/';
-      }
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // 加载礼物请求列表
-    async function loadGiftRequests() {
-      try {
-        const response = await fetch('/api/parent/gift-requests', {
-          credentials: 'same-origin'
-        });
-        const data = await response.json();
-        if (data.success) {
-          renderGiftRequests(data.requests || []);
-        }
-      } catch (err) {
-        console.error('Failed to load gift requests:', err);
-      }
-    }
-
-    function renderGiftRequests(requests) {
-      const list = document.getElementById('giftRequestsList');
-      if (!requests.length) {
-        list.innerHTML = '<div class="empty-state">No pending gift requests</div>';
-        return;
-      }
-      list.innerHTML = '<ul class="gift-request-list">' + requests.map(req => `
-        <li class="gift-request-item">
-          <div class="gift-request-info">
-            <span class="gift-request-icon">${escapeHtml(req.reward_icon || '🎁')}</span>
-            <div class="gift-request-details">
-              <div class="gift-request-name">${escapeHtml(req.reward_name)}</div>
-              <div class="gift-request-meta">
-                From <strong>${escapeHtml(req.student_name)}</strong>
-                &middot; <span class="gift-request-cost">${req.points_cost} Gift Points</span>
-              </div>
-            </div>
-          </div>
-          <div class="gift-request-actions">
-            <button class="btn btn-primary" onclick="approveGiftRequest('${req.id}', '${escapeHtml(req.student_name)}', ${req.points_cost})">Approve</button>
-            <button class="btn btn-danger" onclick="declineGiftRequest('${req.id}', '${escapeHtml(req.student_name)}')">Decline</button>
-          </div>
-        </li>
-      `).join('') + '</ul>';
-    }
-
-    async function approveGiftRequest(requestId, childName, pointsCost) {
-      pendingAction = async (password) => {
-        const response = await fetch(`/api/parent/gift-requests/${requestId}/approve`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ parent_password: password })
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert(`Approved! ${pointsCost} Gift Points deducted from ${childName}'s account.`);
-          loadGiftRequests();
-          loadOverview(); // 刷新以更新 Gift Points 显示
-        } else {
-          alert(extractError(data) || 'Failed to approve request');
-        }
-      };
-      showPasswordModal();
-    }
-
-    async function declineGiftRequest(requestId, childName) {
-      if (!confirm(`Decline the gift request from ${childName}? No points will be deducted.`)) return;
-      pendingAction = async (password) => {
-        const response = await fetch(`/api/parent/gift-requests/${requestId}/decline`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ parent_password: password })
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert(`Request declined. No points were deducted.`);
-          loadGiftRequests();
-        } else {
-          alert(extractError(data) || 'Failed to decline request');
-        }
-      };
-      showPasswordModal();
-    }
-
-    // Initial load
-    loadOverview();
-    loadDigest();
-    loadCatalog();
-    loadGiftRequests();
-  </script>
+  <script src="/static/js/session-context.js?v=20260806" defer></script>
+  <script src="/static/js/parent-dashboard.js?v=20260806" defer></script>
 </body>
 </html>

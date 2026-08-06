@@ -53,7 +53,7 @@ Options:
   --yes                    Promote without an interactive confirmation
   -h, --help               Show this help
 
-Environment variables are also supported, including DEEPSEEK_API_KEY_SECRET
+Environment variables with the uppercase option names are also supported. It includes DEEPSEEK_API_KEY_SECRET
 and SMTP_PASSWORD_SECRET for the two runtime credentials.
 
 Examples:

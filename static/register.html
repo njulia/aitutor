@@ -314,6 +314,9 @@
                     localStorage.setItem('auth_state', 'logged_in');
                     localStorage.removeItem('student_id');
                     localStorage.removeItem('student_email');
+                    localStorage.removeItem('kid_session_token');
+                    localStorage.removeItem('kid_student_id');
+                    localStorage.removeItem('kid_student_name');
                     const requestedNext = params.get('next') || sessionStorage.getItem('postLoginPath') || '/app';
                     const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';
                     sessionStorage.removeItem('postLoginPath');

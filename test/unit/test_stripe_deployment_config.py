@@ -1,5 +1,6 @@
 """Regression checks for production Stripe bindings."""
 from pathlib import Path
+import subprocess
 
 
 def test_cloud_run_environment_keeps_stripe_checkout_settings() -> None:
@@ -82,6 +83,19 @@ def test_code_deploy_preflights_and_rebinds_provider_secrets() -> None:
     assert source.index('log "Checking required provider') < source.index(
         'log "Building'
     )
+
+
+def test_code_deploy_is_valid_shell_and_uses_existing_elevenplus_plan() -> None:
+    source = Path("deploy/deploy_code_gcp.sh").read_text(encoding="utf-8")
+    result = subprocess.run(
+        ["bash", "-n", "deploy/deploy_code_gcp.sh"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--mock-price-id" not in source
+    assert "STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY" not in source
 
 
 def test_repair_script_updates_only_stripe_configuration() -> None:

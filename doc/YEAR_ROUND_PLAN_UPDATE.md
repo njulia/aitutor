@@ -5,7 +5,7 @@
 - Multiple-choice weekly questions are shown as selectable options instead of a text box.
 - Before marking, the page receives and displays only question stems and options.
 - Weekly retrieval uses an exact `year_group + subject + week_num` RAG filter.
-- Year-round RAG records now use separate internal subject keys: `Maths-1year`, `English-1year`, `VerbalReasoning-1year`, and `NonVerbalReasoning-1year`.
+- Year-round RAG records now use separate internal subject keys: `Maths-11+`, `English-11+`, `VerbalReasoning-11+`, and `NonVerbalReasoning-11+`.
 - The page keeps child-friendly labels while sending the new internal keys.
 - Older `VerbalReasoning` and `NonVerbalReasoning` metadata names remain supported.
 - RAG marking returns the correct option, a worked explanation, and a helpful 11+ tip for each question without calling the LLM.

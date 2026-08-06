@@ -62,6 +62,17 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
     localStorage.setItem('auth_state', 'logged_in');
     localStorage.removeItem('student_id');
     localStorage.removeItem('student_email');
+    localStorage.removeItem('kid_session_token');
+    localStorage.removeItem('kid_student_id');
+    localStorage.removeItem('kid_student_name');
+
+    const params = new URLSearchParams(window.location.search);
+    const explicitNext = params.get('next');
+    if (explicitNext && explicitNext.startsWith('/') && !explicitNext.startsWith('//')) {
+      sessionStorage.removeItem('postLoginPath');
+      window.location.assign(explicitNext);
+      return;
+    }
     
     // Check if user is a parent and has children
     try {
@@ -85,7 +96,6 @@ document.getElementById('login-form').addEventListener('submit', async (event) =
       // Continue with normal redirect if parent status check fails
     }
     
-    const params = new URLSearchParams(window.location.search);
     const requestedNext = params.get('next') || sessionStorage.getItem('postLoginPath') || '/app';
     const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';
     sessionStorage.removeItem('postLoginPath');

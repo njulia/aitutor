@@ -61,6 +61,10 @@ class ParentRedemptionDecisionRequest(BaseModel):
     parent_password: SecretStr
 
 
+class ParentPasswordRequest(BaseModel):
+    parent_password: SecretStr
+
+
 def build_reward_router(
     resolve_username,
     require_admin=None,
@@ -141,22 +145,32 @@ def build_reward_router(
             return None
         return account, learner
 
+    async def authenticated_learner_context(
+        request: Request, student_id: str | None
+    ) -> tuple[dict, dict]:
+        """Resolve one learner, with a valid kid session taking precedence.
+
+        A kid can only access their own rewards even if a stale parent cookie
+        remains in the browser. Parents can select any active learner belonging
+        to their family account.
+        """
+        kid_result = await _resolve_kid_learner(request)
+        if kid_result is not None:
+            account, learner = kid_result
+            if student_id and str(student_id) != str(learner["id"]):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only view or request rewards for yourself.",
+                )
+            return account, learner
+        return await learner_context(request, student_id)
+
     @router.get("/api/rewards")
     async def reward_dashboard(
         request: Request,
         student_id: str | None = Query(default=None, max_length=80),
     ):
-        # 优先尝试家长会话
-        try:
-            account, learner = await learner_context(request, student_id)
-        except HTTPException as exc:
-            if exc.status_code != 401:
-                raise
-            # 家长未登录，尝试孩子会话
-            kid_result = await _resolve_kid_learner(request)
-            if kid_result is None:
-                raise
-            account, learner = kid_result
+        account, learner = await authenticated_learner_context(request, student_id)
         dashboard, eligible = await asyncio.gather(
             asyncio.to_thread(
                 get_reward_store().dashboard,
@@ -183,7 +197,9 @@ def build_reward_router(
 
     @router.post("/api/rewards/redemptions")
     async def request_reward(request: Request, body: RewardRequest):
-        account, learner = await learner_context(request, body.student_id)
+        account, learner = await authenticated_learner_context(
+            request, body.student_id
+        )
         eligible = await gift_points_eligible(account)
         try:
             redemption = await asyncio.to_thread(
@@ -212,19 +228,9 @@ def build_reward_router(
 
         支持家长登录和孩子登录两种会话。
         """
-        # 优先尝试家长会话，回退到孩子会话
-        try:
-            account, learner = await learner_context(request, body.student_id)
-        except HTTPException as exc:
-            if exc.status_code != 401:
-                raise
-            kid_result = await _resolve_kid_learner(request)
-            if kid_result is None:
-                raise
-            account, learner = kid_result
-            # 孩子只能为自己提交请求
-            if learner["id"] != body.student_id:
-                raise HTTPException(status_code=403, detail="You can only request gifts for yourself")
+        account, learner = await authenticated_learner_context(
+            request, body.student_id
+        )
         try:
             redemption = await asyncio.to_thread(
                 get_reward_store().request_custom_redemption,
@@ -434,11 +440,11 @@ def build_reward_router(
 
     @router.delete("/api/rewards/catalog/{item_id}")
     async def delete_custom_catalog_item(
-        item_id: str, request: Request, parent_password: SecretStr
+        item_id: str, request: Request, body: ParentPasswordRequest
     ):
         """家长删除自定义奖励。"""
         account = await account_context(request)
-        await confirm_parent(account, parent_password.get_secret_value())
+        await confirm_parent(account, body.parent_password.get_secret_value())
         deleted = await asyncio.to_thread(
             get_reward_store().delete_catalog_item,
             account_id=account["id"],
@@ -485,7 +491,7 @@ def build_reward_router(
         request: Request,
         student_id: str = Query(min_length=1, max_length=80),
     ):
-        account, learner = await learner_context(request, student_id)
+        account, learner = await authenticated_learner_context(request, student_id)
         certificate = await asyncio.to_thread(
             get_reward_store().get_certificate,
             account_id=account["id"],

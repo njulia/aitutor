@@ -33,9 +33,10 @@
 
     <section id="login-card" class="login-card" hidden>
       <div aria-hidden="true" class="login-icon">🔐</div>
-      <h1>A grown-up needs to sign in</h1>
-      <p>Reward quests belong to your family account, so your XP stays with you.</p>
-      <a class="reward-button primary" href="/login?next=/rewards">Grown-up sign in</a>
+      <h1>Sign in to see rewards</h1>
+      <p>Kids can use their family login code. Grown-ups can sign in to switch between every learner.</p>
+      <a class="reward-button primary" href="/kid-login?next=/rewards">Kid sign in</a>
+      <a class="reward-button" href="/login?next=/rewards">Grown-up sign in</a>
     </section>
 
     <div id="reward-content" hidden>
@@ -325,7 +326,8 @@
   </main>
 
   <div id="reward-toast" class="reward-toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/js/rewards.js?v=20260730-rendercatalog-null" defer></script>
-  <script src="/static/js/auth-nav.js" defer></script>
+  <script src="/static/js/session-context.js?v=20260806" defer></script>
+  <script src="/static/js/rewards.js?v=20260729-reward-dom-sync-20260806-family" defer></script>
+  <script src="/static/js/auth-nav.js?v=20260806" defer></script>
 </body>
 </html>

@@ -203,10 +203,11 @@ def render_page(page_data, sections, faqs, cta_text, page_path, page_name, json_
   <a href="/ks1-homework">KS1</a>
   <a href="/ks2-homework">KS2</a>
   <a href="/elevenplus-practice">11+</a>
-  <a href="/elevenplus/articles">11+ Articles</a>
+  <a href="/elevenplus-mock-exams">11+ mock</a>
+  <a href="/elevenplus/articles">11+ articles</a>
   <a href="/progress">Progress</a>
-  <a href="/check-my-homework">Mark Homework</a>
-    <a href="/login">Login</a> <!-- Added Login link -->
+  <a href="/parent-dashboard">Parent Dashboard</a>
+  <a href="/login">Login</a> <!-- Added Login link -->
   <a href="/register">Register</a> <!-- Added Register link -->
                 <a href="#" id="logout-link" style="display:none;">Logout</a> <!-- Placeholder for Logout -->
 </div>

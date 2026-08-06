@@ -81,12 +81,8 @@
         let currentQuestionAnswers = {}; // Store answers for each question in tutor mode
         localStorage.removeItem('student_id');
         localStorage.removeItem('student_email');
-        let currentStudentId = (function() {
-            if (localStorage.getItem('auth_state') === 'logged_in') return 'authenticated';
-            // 孩子登录会话：通过 kid_session_token 识别
-            if (localStorage.getItem('kid_session_token') && localStorage.getItem('kid_student_id')) return 'authenticated';
-            return null;
-        })();
+        let currentStudentId = null;
+        let currentSessionRole = 'anonymous';
         let currentStudentEmail = null;
         let anonymousClientId = null; // Server-issued random cookie ID
         let primarySubjects = ['Maths', 'English', 'Science'];
@@ -99,51 +95,22 @@
         } else {
             console.log("Speech recognition is not supported in this browser.");
         }
-        const ttsSupported = 'speechSynthesis' in window;
+        const ttsSupported = Boolean(
+            window.HomeworkMagicSpeech && window.HomeworkMagicSpeech.isSupported()
+        );
         const sttSupported = !!SpeechRec;
         let recognizer = null;
         let isListening = false;
-        let speechPlaybackId = 0;
-        let activeSpeechUtterance = null;
-        let activeSpeechButton = null;
 
-        // Warm up and cache voices asynchronously for Web Speech API
-        let voiceCache = [];
-        function updateVoiceCache() {
-            if (ttsSupported && window.speechSynthesis) {
-                try {
-                    voiceCache = window.speechSynthesis.getVoices() || [];
-                } catch (e) {
-                    voiceCache = [];
-                }
+        // Keep generation and navigation independent from speech support.
+        // The old inline TTS implementation exposed stopSpeechPlayback(); the
+        // shared speech helper now owns that state, so retain this small bridge
+        // for every caller that needs to stop audio before changing the page.
+        function stopSpeechPlayback() {
+            if (window.HomeworkMagicSpeech
+                    && typeof window.HomeworkMagicSpeech.stop === 'function') {
+                window.HomeworkMagicSpeech.stop();
             }
-        }
-        if (ttsSupported && window.speechSynthesis) {
-            updateVoiceCache();
-            if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
-                window.speechSynthesis.onvoiceschanged = updateVoiceCache;
-            }
-        }
-
-        // 获取女声教师语音（en-GB优先）
-        function getFemaleVoice() {
-            if (!ttsSupported || !window.speechSynthesis) return null;
-            const voices = window.speechSynthesis.getVoices();
-            // 优先匹配明确的女性英音
-            const femaleGb = voices.find(v =>
-                v.lang === 'en-GB' && /female|woman|girl/i.test(v.name)
-            );
-            if (femaleGb) return femaleGb;
-            // 回退：任意女性英文语音
-            const femaleAny = voices.find(v =>
-                v.lang.startsWith('en') && /female|woman|girl/i.test(v.name)
-            );
-            if (femaleAny) return femaleAny;
-            // 再回退：en-GB 任意语音
-            const anyGb = voices.find(v => v.lang === 'en-GB');
-            if (anyGb) return anyGb;
-            // 最终回退：任意英文语音
-            return voices.find(v => v.lang.startsWith('en')) || null;
         }
 
         const HOMEWORK_COMMON_SUBJECTS = ['Maths', 'English', 'Science'];
@@ -1265,6 +1232,21 @@
 
         // Initialize subjects and check dev mode
         document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const sessionContext = window.HomeworkMagicSession
+                    ? await window.HomeworkMagicSession.get(true)
+                    : {authenticated: false, role: 'anonymous'};
+                currentSessionRole = sessionContext.role || 'anonymous';
+                if (currentSessionRole === 'kid' && sessionContext.student) {
+                    currentStudentId = sessionContext.student.id;
+                } else if (currentSessionRole === 'parent') {
+                    currentStudentId = sessionContext.default_student_id || null;
+                }
+            } catch (error) {
+                console.warn('Could not refresh session context:', error);
+                currentStudentId = null;
+                currentSessionRole = 'anonymous';
+            }
             restoreLearningChoices();
             applyLandingPagePreset();
             hideLegacyHomeworkQuestionStyle();
@@ -1299,11 +1281,15 @@
             const resumedPendingHomework = await restoreResumableSession();
 
             // Update UI based on login status
-            if (currentStudentId) {
-                document.getElementById('logout-link').style.display = 'block';
-                document.querySelector('nav.nav-links a[href="/login"]').style.display = 'none';
-                document.querySelector('nav.nav-links a[href="/register"]').style.display = 'none';
-            }
+            const appLogoutLink = document.getElementById('logout-link');
+            const appLoginLink = document.querySelector('nav.nav-links a[href="/login"]');
+            const appRegisterLink = document.querySelector('nav.nav-links a[href="/register"]');
+            const appParentLink = document.getElementById('parent-dashboard-link');
+            const authenticated = Boolean(currentStudentId);
+            if (appLogoutLink) appLogoutLink.style.display = authenticated ? 'block' : 'none';
+            if (appLoginLink) appLoginLink.style.display = authenticated ? 'none' : '';
+            if (appRegisterLink) appRegisterLink.style.display = authenticated ? 'none' : '';
+            if (appParentLink) appParentLink.style.display = currentSessionRole === 'parent' ? '' : 'none';
 
             // Check for tab parameter in URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -1360,15 +1346,21 @@
         document.getElementById('logout-link').addEventListener('click', async function(event) {
             event.preventDefault();
             try {
-                await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+                const logoutUrl = currentSessionRole === 'kid' ? '/api/kid-logout' : '/api/logout';
+                await fetch(logoutUrl, {method: 'POST', credentials: 'same-origin'});
             } catch (error) {
                 console.error('Logout request failed:', error);
             }
             localStorage.removeItem('student_id');
             localStorage.removeItem('student_email');
             localStorage.removeItem('auth_state');
+            localStorage.removeItem('kid_session_token');
+            localStorage.removeItem('kid_student_id');
+            localStorage.removeItem('kid_student_name');
+            if (window.HomeworkMagicSession) window.HomeworkMagicSession.clear();
             clearSavedLearningPrompts();
             currentStudentId = null;
+            currentSessionRole = 'anonymous';
             currentStudentEmail = null;
             hasSubscription = null;
             window.location.assign('/');
@@ -1690,9 +1682,20 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
 
-            const tabButton = selectedButton || document.querySelector(`.tab[onclick*="${tabId}"]`);
+            const tabButton = selectedButton || document.querySelector(`.tab[data-tab="${tabId}"]`);
             if (tabButton) tabButton.classList.add('active');
             document.getElementById(tabId).classList.add('active');
+        }
+
+        function revealLearningPanel(element) {
+            if (!element || typeof element.scrollIntoView !== 'function') return;
+            window.setTimeout(() => {
+                try {
+                    element.scrollIntoView({behavior: 'smooth', block: 'start'});
+                } catch (error) {
+                    element.scrollIntoView();
+                }
+            }, 0);
         }
 
         function showLoading() {
@@ -1701,8 +1704,10 @@
                 try { recognizer.stop(); } catch (e) {}
                 isListening = false;
             }
-            document.getElementById('loading').style.display = 'block';
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
             document.getElementById('results').style.display = 'none';
+            revealLearningPanel(loading);
         }
 
         function hideLoading() {
@@ -1711,9 +1716,11 @@
 
         function showResults() {
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('results').style.display = 'block';
+            const results = document.getElementById('results');
+            results.style.display = 'block';
             document.getElementById('review-result').innerHTML = '';
             activeReviewContext = null;
+            revealLearningPanel(results);
         }
 
         function clearResults() {
@@ -3286,143 +3293,26 @@
             }).catch(() => {});
         }
 
-        function resetSpeechButtons() {
-            if (activeSpeechButton) {
-                activeSpeechButton.classList.remove('speaking');
-                if (activeSpeechButton.dataset.originalText) {
-                    activeSpeechButton.textContent = activeSpeechButton.dataset.originalText;
-                }
-            }
-            document.querySelectorAll('.voice-btn.speaking').forEach(b => {
-                b.classList.remove('speaking');
-                if (b.dataset.originalText) b.textContent = b.dataset.originalText;
-            });
-            activeSpeechButton = null;
-        }
-
-        function stopSpeechPlayback() {
-            speechPlaybackId += 1;
-            activeSpeechUtterance = null;
-            resetSpeechButtons();
-            if (ttsSupported && window.speechSynthesis) {
-                try { window.speechSynthesis.cancel(); } catch (e) {}
-            }
-        }
-
-        // Split long feedback into short phrases. Chrome and Safari can silently
-        // fail or stop early when one SpeechSynthesisUtterance is too long.
-        function splitSpeechText(text, maxLength = 220) {
-            const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
-            const chunks = [];
-            let current = '';
-
-            sentences.forEach(sentence => {
-                const words = sentence.trim().split(/\s+/).filter(Boolean);
-                words.forEach(word => {
-                    const candidate = current ? `${current} ${word}` : word;
-                    if (candidate.length <= maxLength) {
-                        current = candidate;
-                    } else {
-                        if (current) chunks.push(current);
-                        current = word;
-                    }
-                });
-            });
-            if (current) chunks.push(current);
-            return chunks;
-        }
-
-        // Centralised text-to-speech handler with toggle, UI feedback, and
-        // retained utterances to prevent browser garbage collection.
+        // Centralised device-native speech with Safari/Chrome recovery.
         function speakText(text, btn = null) {
-            if (!ttsSupported || !window.speechSynthesis) return;
-
-            const shouldStop = Boolean(btn && btn.classList.contains('speaking'));
-            // 记录是否有活跃播放，stopSpeechPlayback 会清空 activeSpeechUtterance
-            const wasSpeaking = activeSpeechUtterance !== null || (window.speechSynthesis && window.speechSynthesis.speaking);
-            stopSpeechPlayback();
-            if (shouldStop) return;
-
-            const plainText = String(text || '')
-                .replace(/<[^>]*>/g, ' ')
-                .replace(/[#*_`~]/g, '')
-                .replace(/^\d+\.\s*/gm, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            if (!plainText) return;
-
-            const chunks = splitSpeechText(plainText);
-            if (!chunks.length) return;
-
-            const playbackId = speechPlaybackId;
-            if (btn) {
-                if (!btn.dataset.originalText) {
-                    btn.dataset.originalText = btn.textContent;
-                }
-                activeSpeechButton = btn;
-                btn.classList.add('speaking');
-                btn.textContent = '⏹ Stop reading';
-            }
-
-            function finishPlayback() {
-                if (playbackId !== speechPlaybackId) return;
-                activeSpeechUtterance = null;
-                resetSpeechButtons();
-            }
-
-            function speakChunk(index) {
-                if (playbackId !== speechPlaybackId) return;
-                if (index >= chunks.length) {
-                    finishPlayback();
-                    return;
-                }
-
-                try {
-                    const utterance = new SpeechSynthesisUtterance(chunks[index]);
-                    activeSpeechUtterance = utterance;
-                    utterance.lang = 'en-GB';
-                    utterance.rate = 0.85;
-
-                    try {
-                        const femaleVoice = getFemaleVoice();
-                        if (femaleVoice) utterance.voice = femaleVoice;
-                    } catch (e) {
-                        console.warn('Voice selection fallback:', e);
+            if (!ttsSupported) return;
+            window.HomeworkMagicSpeech.read(text, {
+                button: btn,
+                lang: 'en-GB',
+                rate: 0.9,
+                onStart: function() { logVoiceUsage('tts_used'); },
+                onError: function(code) {
+                    console.warn('Speech could not start:', code);
+                    if (btn && (code === 'not-allowed' || code === 'not-started')) {
+                        btn.title = 'Sound was blocked. Tap again to retry.';
                     }
-
-                    utterance.onend = () => speakChunk(index + 1);
-                    utterance.onerror = (event) => {
-                        if (playbackId !== speechPlaybackId) return;
-                        if (event.error !== 'canceled' && event.error !== 'interrupted') {
-                            console.error('Speech synthesis utterance error:', event);
-                        }
-                        finishPlayback();
-                    };
-
-                    window.speechSynthesis.speak(utterance);
-                } catch (err) {
-                    console.error('Failed to initiate speech synthesis:', err);
-                    finishPlayback();
                 }
-            }
-
-            // Chrome/Safari 的 speechSynthesis 需要 resume() 唤醒可能被暂停的合成器；
-            // 若之前有活跃播放，cancel() 是异步的需要短暂等待；否则立即播放以保持在用户手势上下文中
-            function startSpeaking() {
-                try { window.speechSynthesis.resume(); } catch (e) {}
-                speakChunk(0);
-            }
-            if (wasSpeaking) {
-                setTimeout(startSpeaking, 80);
-            } else {
-                startSpeaking();
-            }
+            });
         }
 
         // Text to speech: read the current question aloud in Tutor mode
         function speakQuestion() {
-            if (!ttsSupported || !window.speechSynthesis) return;
+            if (!ttsSupported) return;
             const btn = document.getElementById('speak-question-btn');
             const card = document.querySelector('#homework-results .single-question-card');
             const textEl = card ? card.querySelector('.single-question-text') : null;
@@ -3481,7 +3371,7 @@
 
         // 标准作业模式：从按钮所在的问题卡片读取题目文本并朗读
         function speakQuestionFromCard(btn) {
-            if (!ttsSupported || !window.speechSynthesis) return;
+            if (!ttsSupported) return;
             const card = btn ? btn.closest('.single-question-card') : null;
             const textEl = card ? card.querySelector('.single-question-text') : null;
             if (textEl) {
@@ -3491,7 +3381,7 @@
 
         // 朗读评审/反馈/解释文本
         function speakReviewFeedback() {
-            if (!ttsSupported || !window.speechSynthesis) return;
+            if (!ttsSupported) return;
             const reviewEl = document.querySelector('#review-result .review-output');
             if (!reviewEl) return;
             const btn = document.getElementById('speak-review-btn');

@@ -733,14 +733,17 @@
     <div class="header">
         <div class="header-content">
 <!--              <a class="hm-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>-->
-            <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+            <a class="logo" href="/" aria-label="Homework Magic home"><span aria-hidden="true">✨</span> Homework Magic</a>
             <nav class="nav-links">
               <a href="/ks1-homework">KS1</a>
               <a href="/ks2-homework">KS2</a>
               <a href="/elevenplus-practice">11+</a>
               <a href="/rewards">Rewards</a>
-                <a href="/parent-dashboard" id="parent-dashboard-link" >Parent Dashboard</a>
-                <a href="#" id="home-logout-link" >Logout</a> <!-- Placeholder for Logout -->
+<!--              <a href="/pricing" id="parent-plan-link">Parent plans</a>-->
+              <a href="/parent-dashboard" id="parent-dashboard-link">Parent dashboard</a>
+              <a href="/login" id="home-login-link">Login</a>
+              <a href="/register">Register</a>
+              <a href="#" id="home-logout-link">Logout</a>
             </nav>
         </div>
     </div>
@@ -860,6 +863,7 @@
         let latestProgressData = null;
         let resizeTimer = null;
         let currentStudentId = null;
+        let currentSessionRole = 'anonymous';
 
         document.addEventListener('DOMContentLoaded', () => {
             initLearnerPicker();
@@ -992,21 +996,23 @@
         async function initLearnerPicker() {
             const select = document.getElementById('learner-select');
 
-            // 孩子登录会话：直接使用已知的学生 ID，不需要调用 /api/account
-            const kidStudentId = localStorage.getItem('kid_student_id');
-            const kidSessionToken = localStorage.getItem('kid_session_token');
-            if (kidStudentId && kidSessionToken) {
-                currentStudentId = kidStudentId;
-                select.closest('.learner-picker').style.display = 'none';
-                await loadProgress();
-                return;
-            }
-
             try {
-                const response = await fetch('/api/account', { credentials: 'same-origin' });
-                if (!response.ok) return;
-                const account = await response.json();
-                const students = (account.students || []).filter(s => s.is_active);
+                const context = await window.HomeworkMagicSession.get(true);
+                currentSessionRole = context.role || 'anonymous';
+                if (!context.authenticated) {
+                    currentStudentId = null;
+                    select.closest('.learner-picker').style.display = 'none';
+                    await loadProgress();
+                    return;
+                }
+                if (currentSessionRole === 'kid' && context.student) {
+                    currentStudentId = context.student.id;
+                    select.closest('.learner-picker').style.display = 'none';
+                    await loadProgress();
+                    return;
+                }
+
+                const students = Array.isArray(context.students) ? context.students : [];
                 if (students.length <= 1) {
                     select.closest('.learner-picker').style.display = 'none';
                     if (students.length === 1) currentStudentId = students[0].id;
@@ -1019,7 +1025,7 @@
                     option.textContent = student.name || 'Learner';
                     select.appendChild(option);
                 });
-                currentStudentId = account.default_student_id || students[0].id;
+                currentStudentId = context.default_student_id || students[0].id;
                 const requested = new URLSearchParams(window.location.search).get('student_id');
                 if (requested && students.some(s => s.id === requested)) {
                     currentStudentId = requested;
@@ -1050,8 +1056,7 @@
                 const data = await response.json().catch(() => ({}));
 
                 if (response.status === 401) {
-                    const isKid = localStorage.getItem('kid_session_token');
-                    if (isKid) {
+                    if (currentSessionRole === 'kid') {
                         showPageStatus('Your login has expired. Please ask a grown-up for your <a href="/kid-login">login code</a>.', true);
                     } else {
                         showPageStatus('A parent or guardian needs to <a href="/login">sign in</a> to see progress.', true);
@@ -1607,6 +1612,7 @@
             }).join('');
         }
     </script>
-    <script src="/static/js/auth-nav.js" defer></script>
+    <script src="/static/js/session-context.js?v=20260806" defer></script>
+    <script src="/static/js/auth-nav.js?v=20260806" defer></script>
 </body>
 </html>

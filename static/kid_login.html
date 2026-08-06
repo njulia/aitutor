@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
   <title>Kid Login | Homework Magic</title>
   <style>
     * { box-sizing: border-box; }
@@ -105,8 +106,9 @@
       <form id="kidLoginForm">
         <div class="field">
           <label for="loginCode">Your Login Code</label>
-          <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXX" required autocomplete="off" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
-          <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your login code</p>
+          <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXXXXX" required autocomplete="off" maxlength="17" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
+          <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your code. Older shorter codes still work.</p>
+          <label style="font-weight:400; margin-top:12px;"><input id="rememberKid" type="checkbox" style="width:auto; margin-right:6px;"> Remember me on this device</label>
         </div>
         <button type="submit" id="submitBtn">Start Learning</button>
       </form>
@@ -157,7 +159,10 @@
 
         const info = document.createElement('div');
         info.className = 'account-info';
-        info.innerHTML = `<span class="account-name">${escapeHtml(account.studentName)}</span>`;
+        const accountName = document.createElement('span');
+        accountName.className = 'account-name';
+        accountName.textContent = account.studentName || 'Learner';
+        info.appendChild(accountName);
         card.appendChild(info);
 
         const removeBtn = document.createElement('button');
@@ -181,7 +186,7 @@
       return div.innerHTML;
     }
 
-    async function loginWithCode(loginCode, studentName) {
+    async function loginWithCode(loginCode, studentName, rememberAccount = true) {
       const errorEl = document.getElementById('error');
       errorEl.classList.remove('show');
 
@@ -201,8 +206,14 @@
           localStorage.setItem('kid_session_token', data.token);
           localStorage.setItem('kid_student_id', data.student_id);
           localStorage.setItem('kid_student_name', data.student_name);
-          saveAccount(loginCode, data.student_name);
-          window.location.href = '/app';
+          localStorage.removeItem('auth_state');
+          localStorage.removeItem('student_id');
+          localStorage.removeItem('student_email');
+          if (rememberAccount) saveAccount(loginCode, data.student_name);
+          const params = new URLSearchParams(window.location.search);
+          const requestedNext = params.get('next') || '/app';
+          const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/app';
+          window.location.href = next;
         } else {
           // 登录失败，移除失效的保存账户
           removeAccount(loginCode);
@@ -234,7 +245,7 @@
       submitBtn.textContent = 'Signing in...';
 
       const loginCode = document.getElementById('loginCode').value.trim().toUpperCase();
-      await loginWithCode(loginCode);
+      await loginWithCode(loginCode, '', document.getElementById('rememberKid').checked);
       if (submitBtn.disabled) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Start Learning';

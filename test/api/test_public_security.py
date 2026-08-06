@@ -10,7 +10,13 @@ def test_health_and_public_pages(client) -> None:
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
 
-    for path in ("/", "/app", "/elevenplus-practice", "/elevenplus-year-round-plan"):
+    for path in (
+        "/",
+        "/app",
+        "/elevenplus-practice",
+        "/elevenplus-mock-exams",
+        "/elevenplus-year-round-plan",
+    ):
         response = client.get(path)
         assert response.status_code == 200, path
         assert "text/html" in response.headers.get("content-type", "")
@@ -22,6 +28,7 @@ def test_security_headers_are_present(client) -> None:
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["cross-origin-resource-policy"] == "same-origin"
+    assert "microphone=(self)" in response.headers["permissions-policy"]
 
 
 def test_client_id_never_exposes_or_derives_response_from_ip(client) -> None:
@@ -48,3 +55,6 @@ def test_sensitive_responses_are_not_cached(client) -> None:
     response = client.get("/api/check-subscription")
     assert response.status_code == 200
     assert "no-store" in response.headers.get("cache-control", "")
+    session = client.get("/api/session-context")
+    assert session.status_code == 200
+    assert "no-store" in session.headers.get("cache-control", "")

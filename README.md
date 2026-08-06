@@ -1,7 +1,8 @@
 # Homework Magic
 
 Homework Magic is a FastAPI web application for UK primary-school homework,
-guided 11+ practice, marking and parent-managed learner progress.
+guided 11+ practice, timed mock exams, marking and parent-managed learner
+progress.
 
 The request path is RAG-first: it searches the PostgreSQL/pgvector homework
 library by exact year and subject before it can call an LLM. A genuine library
@@ -19,6 +20,11 @@ model prompt.
   certificates and parent-approved Homework Magic branded gifts.
 - Requested session length now controls the number of returned questions.
 - Guided 11+ access is checked before any expensive generation.
+- Original, locally scored 11+ mocks are separated into common four-subject and
+  school-target formats. Public school, council and government pages are used
+  only for format and curriculum guidance; paid papers are never copied.
+- The £9.99/month `elevenplus_monthly` plan includes guided 11+ practice and
+  the paid mock catalogue. A short diagnostic remains free.
 - RAG methods are first-write-wins and reused under opaque hashes.
 - Static pages use short public caches, assets use revalidation caches, and
   responses larger than 1 KB are compressed.
@@ -48,6 +54,7 @@ Open:
 
 - Website: `http://127.0.0.1:5000/`
 - Tutor: `http://127.0.0.1:5000/app`
+- 11+ mocks: `http://127.0.0.1:5000/elevenplus-mock-exams`
 - Health: `http://127.0.0.1:5000/api/health`
 - Readiness: `http://127.0.0.1:5000/api/ready`
 
@@ -113,6 +120,10 @@ Registry repository if needed, builds with Cloud Build, attaches Cloud SQL and
 deploys a bounded-concurrency Cloud Run revision. Database and API credentials
 are injected from Secret Manager rather than stored in the source archive.
 
+The mock catalogue uses the existing `STRIPE_PRICE_ELEVENPLUS_MONTHLY` plan;
+there is no separate mock-exam product. See
+[`deploy/SETUP_11PLUS_MOCK_TIER.md`](deploy/SETUP_11PLUS_MOCK_TIER.md).
+
 After the first database is available:
 
 ```bash
@@ -128,6 +139,8 @@ printing the connection string.
 - `web_app.py` — FastAPI routes and browser response contracts
 - `src/homework_generator.py` — RAG-first assignment and miss generation
 - `src/homework_rag.py` / `src/elevenplus_rag.py` — vector-library contracts
+- `src/elevenplus_mock_exams.py` — original mock catalogue, signed attempts and
+  deterministic local marking
 - `src/webapp/` — account, billing, safety, review and runtime services
 - `src/webapp/reward_store.py` / `reward_routes.py` — quests, XP, certificates
   and parent-controlled branded gift orders

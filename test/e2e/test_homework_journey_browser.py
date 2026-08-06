@@ -189,6 +189,67 @@ def test_primary_homework_generate_answer_and_review_journey(
     assert "student_id" not in payload["profile"]
 
 
+def test_saved_start_now_and_quick_lets_go_both_show_homework(
+    page: Page,
+    e2e_base_url: str,
+    fulfil_json,
+    mock_common_app_endpoints,
+) -> None:
+    page.add_init_script(
+        """
+        localStorage.setItem(
+          'homeworkMagic.learningChoices.v1',
+          JSON.stringify({
+            homeworkYear: 3,
+            homeworkSubject: 'Maths',
+            homeworkMinutes: 10,
+            homeworkDifficulty: 'gentle',
+            homeworkMode: 'homework',
+            homeworkQuickYear: 3,
+            homeworkQuickSubject: 'Maths',
+            homeworkQuickMode: 'homework'
+          })
+        );
+        """
+    )
+    page.route(
+        "**/api/generate",
+        lambda route: fulfil_json(
+            route,
+            {
+                "success": True,
+                "homework": [{
+                    "subject": "Maths",
+                    "content": "1. What is 4 + 3?\nA) 6\nB) 7",
+                    "questions": [{
+                        "number": 1,
+                        "question": "What is 4 + 3?",
+                        "response_type": "single_choice",
+                        "options": [
+                            {"label": "A", "text": "6"},
+                            {"label": "B", "text": "7"},
+                        ],
+                    }],
+                    "doc_id": "start_buttons_regression",
+                    "from_rag": True,
+                }],
+                "profile": {"year_group": 3, "age": 8},
+                "mode": "homework",
+            },
+        ),
+    )
+
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+    page.get_by_role("button", name=re.compile(r"Start now", re.I)).click()
+    expect(page.locator("#results")).to_be_visible()
+    expect(page.locator("#homework-results")).to_contain_text("What is 4 + 3?")
+
+    page.get_by_text("Quick start: choose one subject and year", exact=True).click()
+    page.get_by_role("button", name="Let’s go!", exact=True).click()
+    expect(page.locator("#results")).to_be_visible()
+    expect(page.locator("#homework-results")).to_contain_text("What is 4 + 3?")
+
+
 def test_review_requires_every_visible_answer(
     page: Page,
     e2e_base_url: str,

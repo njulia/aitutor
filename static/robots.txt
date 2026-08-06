@@ -11,6 +11,9 @@ Disallow: /forgot-password
 Disallow: /reset-password
 Disallow: /progress
 Disallow: /memory
+Disallow: /rewards
+Disallow: /parent-dashboard
+Disallow: /kid-login
 
 User-agent: MJ12bot
 Disallow: /

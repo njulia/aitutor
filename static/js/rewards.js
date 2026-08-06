@@ -4,6 +4,7 @@ const rewardState = {
   account: null,
   studentId: null,
   dashboard: null,
+  role: 'anonymous',
 };
 
 const pageMessage = document.getElementById('page-message');
@@ -447,7 +448,7 @@ async function loadDashboard() {
     renderDashboard(data);
     setMessage('');
   } catch (error) {
-    if (error.status === 401 && localStorage.getItem('kid_session_token')) {
+    if (error.status === 401 && rewardState.role === 'kid') {
       setMessage('Your login has expired. Please ask a grown-up for your login code.', 'error');
       rewardContent.hidden = true;
       loginCard.hidden = false;
@@ -506,43 +507,39 @@ async function loadMyRequests() {
 }
 
 async function initialiseRewardPage() {
-  // 孩子登录会话：直接使用已知的学生 ID，不需要调用 /api/account
-  const kidStudentId = localStorage.getItem('kid_student_id');
-  const kidSessionToken = localStorage.getItem('kid_session_token');
-  const isKidSession = Boolean(kidStudentId && kidSessionToken);
-
-  if (isKidSession) {
-    rewardState.studentId = kidStudentId;
-    // 孩子只能看自己的，隐藏选择器
-    const picker = learnerSelect.closest('.learner-picker');
-    if (picker) picker.style.display = 'none';
-
-    // 隐藏家长专属区域（礼物审批、配送地址等）
-    const parentZone = document.querySelector('.parent-zone');
-    if (parentZone) parentZone.hidden = true;
-
-    // 隐藏家长仪表盘入口
-    const parentDashboardLink = document.getElementById('parent-dashboard-link');
-    if (parentDashboardLink) parentDashboardLink.style.display = 'none';
-
-    rewardContent.hidden = false;
-    loginCard.hidden = true;
-    await loadDashboard();
-    await loadMyRequests();
-    return;
-  }
-
   try {
-    const account = await jsonFetch('/api/account');
-    rewardState.account = account;
+    const context = await window.HomeworkMagicSession.get(true);
+    rewardState.role = context.role || 'anonymous';
+    if (!context.authenticated) {
+      const unauthorised = new Error('Sign in to view rewards.');
+      unauthorised.status = 401;
+      throw unauthorised;
+    }
+
+    if (rewardState.role === 'kid' && context.student) {
+      rewardState.studentId = context.student.id;
+      const picker = learnerSelect.closest('.learner-picker');
+      if (picker) picker.style.display = 'none';
+      const parentZone = document.querySelector('.parent-zone');
+      if (parentZone) parentZone.hidden = true;
+      const parentDashboardLink = document.getElementById('parent-dashboard-link');
+      if (parentDashboardLink) parentDashboardLink.style.display = 'none';
+      rewardContent.hidden = false;
+      loginCard.hidden = true;
+      await loadDashboard();
+      await loadMyRequests();
+      return;
+    }
+
+    rewardState.account = context;
     clearNode(learnerSelect);
-    (account.students || []).filter((student) => student.is_active).forEach((student) => {
+    (context.students || []).forEach((student) => {
       const option = element('option', '', student.name || 'Learner');
       option.value = student.id;
       learnerSelect.append(option);
     });
     if (!learnerSelect.options.length) throw new Error('No learner profile was found.');
-    rewardState.studentId = account.default_student_id || learnerSelect.value;
+    rewardState.studentId = context.default_student_id || learnerSelect.value;
     const requested = new URLSearchParams(window.location.search).get('student_id');
     if (requested && Array.from(learnerSelect.options).some((item) => item.value === requested)) {
       rewardState.studentId = requested;
@@ -632,13 +629,14 @@ if (customRequestForm) {
 document.getElementById('reward-logout').addEventListener('click', async (event) => {
   event.preventDefault();
   // 根据登录类型选择不同的登出接口
-  const isKid = Boolean(localStorage.getItem('kid_session_token'));
-  const logoutUrl = isKid ? '/api/kid-logout' : '/api/logout';
+  const logoutUrl = rewardState.role === 'kid' ? '/api/kid-logout' : '/api/logout';
   await fetch(logoutUrl, {method: 'POST', credentials: 'same-origin'});
   // 清除孩子登录信息
   localStorage.removeItem('kid_session_token');
   localStorage.removeItem('kid_student_id');
   localStorage.removeItem('kid_student_name');
+  localStorage.removeItem('auth_state');
+  if (window.HomeworkMagicSession) window.HomeworkMagicSession.clear();
   window.location.assign('/');
 });
 

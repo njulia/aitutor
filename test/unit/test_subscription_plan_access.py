@@ -34,338 +34,6 @@ def test_required_plan_names_are_clear(app_module) -> None:
     assert b"11+ Premium" in eleven_response.body
 
 
-def test_billing_status_route_is_registered_and_requires_parent_login(client) -> None:
-    response = client.get("/api/billing/status")
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "A parent or guardian must sign in."
-
-
-def test_signed_in_parent_can_read_checkout_status(
-    authenticated_client, monkeypatch
-) -> None:
-    monkeypatch.setattr(billing, "get_active_subscription", lambda _account_id: None)
-    monkeypatch.setattr(
-        billing,
-        "public_billing_status",
-        lambda: {
-            "enabled": True,
-            "live_mode": False,
-            "plans": ["trial_5day", "homework_monthly", "elevenplus_monthly"],
-            "plan_availability": {
-                "trial_5day": True,
-                "homework_monthly": True,
-                "elevenplus_monthly": True,
-            },
-            "checkout_ready": True,
-        },
-    )
-
-    response = authenticated_client.get("/api/billing/status")
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store, private"
-    assert response.json()["has_subscription"] is False
-    assert response.json()["plan_availability"]["homework_monthly"] is True
-
-
-def test_pricing_page_portal_actions_are_registered(
-    authenticated_client, monkeypatch
-) -> None:
-    monkeypatch.setattr(
-        billing,
-        "create_portal",
-        lambda _account, _action: {
-            "portal_url": "https://billing.stripe.com/test"
-        },
-    )
-
-    for action in ("change", "cancel"):
-        response = authenticated_client.post(f"/api/billing/portal/{action}")
-        assert response.status_code == 200
-        assert response.json()["action"] == action
-        assert response.json()["portal_url"].startswith("https://billing.stripe.com/")
-
-
-def test_active_elevenplus_parent_sees_plan_and_cancellation_entry(
-    authenticated_client, monkeypatch
-) -> None:
-    period_end = datetime.now(UTC) + timedelta(days=30)
-    monkeypatch.setattr(
-        billing,
-        "get_active_subscription",
-        lambda _account_id: {
-            "plan": "elevenplus_monthly",
-            "status": "active",
-            "current_period_end": period_end,
-            "cancel_at_period_end": False,
-            "stripe_subscription_id": "sub_elevenplus",
-        },
-    )
-
-    response = authenticated_client.get("/api/billing/status")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["has_subscription"] is True
-    assert body["subscription"]["plan"] == "elevenplus_monthly"
-    assert body["management"]["can_cancel"] is True
-
-
-def test_pricing_status_can_repair_a_delayed_webhook(
-    authenticated_client, unique_email, monkeypatch
-) -> None:
-    account = account_store.ensure_account(unique_email)
-    account_store.set_stripe_customer(account["id"], "cus_parent")
-    refreshed = {
-        "plan": "elevenplus_monthly",
-        "status": "active",
-        "current_period_end": datetime.now(UTC) + timedelta(days=30),
-        "cancel_at_period_end": False,
-        "stripe_subscription_id": "sub_parent",
-    }
-    monkeypatch.setattr(
-        billing,
-        "refresh_stripe_subscriptions",
-        lambda _account: refreshed,
-    )
-
-    response = authenticated_client.get("/api/billing/status?refresh=true")
-
-    assert response.status_code == 200
-    assert response.json()["subscription"]["plan"] == "elevenplus_monthly"
-    assert response.json()["management"]["can_manage"] is True
-    assert response.json()["refresh"] == {
-        "attempted": True,
-        "succeeded": True,
-    }
-
-
-def test_parent_refresh_recovers_pricing_table_checkout_without_saved_customer(
-    monkeypatch,
-    unique_email,
-) -> None:
-    _configure_test_billing(
-        monkeypatch,
-        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_elevenplus_recovery",
-    )
-    account = account_store.ensure_account(unique_email)
-    assert account["stripe_customer_id"] is None
-    period_end = datetime.now(UTC) + timedelta(days=30)
-    stripe_subscription = SimpleNamespace(
-        id=f"sub_parent_{account['id'][-10:]}",
-        customer=f"cus_parent_{account['id'][-10:]}",
-        metadata={},
-        status="active",
-        cancel_at_period_end=False,
-        items=SimpleNamespace(
-            data=[
-                SimpleNamespace(
-                    price=SimpleNamespace(id="price_elevenplus_recovery"),
-                    current_period_end=int(period_end.timestamp()),
-                )
-            ]
-        ),
-    )
-    checkout_session = SimpleNamespace(
-        id="cs_parent_recovery",
-        status="complete",
-        client_reference_id=account["id"],
-        customer=stripe_subscription.customer,
-        subscription=stripe_subscription.id,
-    )
-    captured = {}
-
-    class FakeCheckoutSession:
-        @staticmethod
-        def list(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(data=[checkout_session], has_more=False)
-
-    class FakeSubscription:
-        @staticmethod
-        def retrieve(subscription_id):
-            assert subscription_id == stripe_subscription.id
-            return stripe_subscription
-
-    fake_stripe = SimpleNamespace(
-        Subscription=FakeSubscription,
-        checkout=SimpleNamespace(Session=FakeCheckoutSession),
-    )
-    monkeypatch.setattr(billing, "_stripe", lambda: fake_stripe)
-    monkeypatch.setattr(
-        billing,
-        "_record_subscription_transition",
-        lambda _previous, _current: None,
-    )
-
-    refreshed = billing.refresh_stripe_subscriptions(account)
-    linked_account = account_store.get_account(account["id"])
-
-    assert captured == {
-        "status": "complete",
-        "customer_details": {"email": unique_email},
-        "limit": 20,
-    }
-    assert refreshed is not None
-    assert refreshed["plan"] == "elevenplus_monthly"
-    assert linked_account["stripe_customer_id"] == stripe_subscription.customer
-
-
-def test_pricing_status_refreshes_even_before_customer_id_is_saved(
-    authenticated_client,
-    monkeypatch,
-) -> None:
-    refreshed = {
-        "plan": "elevenplus_monthly",
-        "status": "active",
-        "current_period_end": datetime.now(UTC) + timedelta(days=30),
-        "cancel_at_period_end": False,
-        "stripe_customer_id": "cus_recovered",
-        "stripe_subscription_id": "sub_recovered",
-    }
-    monkeypatch.setattr(
-        billing,
-        "refresh_stripe_subscriptions",
-        lambda account: refreshed
-        if not account.get("stripe_customer_id")
-        else pytest.fail("fixture account unexpectedly has a Stripe customer"),
-    )
-    monkeypatch.setattr(
-        billing,
-        "get_active_subscription",
-        lambda _account_id: None,
-    )
-
-    response = authenticated_client.get("/api/billing/status?refresh=true")
-
-    assert response.status_code == 200
-    assert response.json()["has_subscription"] is True
-    assert response.json()["management"]["can_manage"] is True
-    assert response.json()["refresh"] == {
-        "attempted": True,
-        "succeeded": True,
-    }
-
-
-def test_cancel_entry_opens_a_direct_stripe_cancellation_flow(
-    monkeypatch,
-) -> None:
-    captured = {}
-
-    class FakePortalSession:
-        @staticmethod
-        def create(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(
-                url="https://billing.stripe.com/p/session/test_cancel"
-            )
-
-    _configure_test_billing(monkeypatch)
-    monkeypatch.setattr(
-        billing,
-        "_stripe",
-        lambda: SimpleNamespace(
-            billing_portal=SimpleNamespace(Session=FakePortalSession)
-        ),
-    )
-    monkeypatch.setattr(
-        billing,
-        "get_active_subscription",
-        lambda _account_id: {
-            "stripe_subscription_id": "sub_elevenplus",
-            "plan": "elevenplus_monthly",
-        },
-    )
-    monkeypatch.setattr(
-        billing,
-        "_cancellation_portal_configuration",
-        lambda _stripe: "bpc_cancel",
-    )
-
-    result = billing.create_portal(
-        {
-            "id": "acct_parent",
-            "stripe_customer_id": "cus_parent",
-        },
-        "cancel",
-    )
-
-    assert result["portal_url"].startswith("https://billing.stripe.com/")
-    assert captured["customer"] == "cus_parent"
-    assert captured["configuration"] == "bpc_cancel"
-    assert captured["flow_data"]["type"] == "subscription_cancel"
-    assert captured["flow_data"]["subscription_cancel"] == {
-        "subscription": "sub_elevenplus"
-    }
-    assert captured["flow_data"]["after_completion"]["redirect"][
-        "return_url"
-    ].endswith("/pricing?billing=cancelled")
-
-
-def test_pricing_table_customer_session_links_the_parent_account(monkeypatch) -> None:
-    captured = {}
-
-    class FakeCustomerSession:
-        @staticmethod
-        def create(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(client_secret="cuss_test_short_lived")
-
-    _configure_test_billing(
-        monkeypatch,
-        STRIPE_PRICE_HOMEWORK_MONTHLY="price_homework",
-        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_elevenplus",
-    )
-    monkeypatch.setenv("STRIPE_PRICING_TABLE_ID", "prctbl_test_unit")
-    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "pk_test_unit")
-    monkeypatch.setattr(
-        billing,
-        "_stripe",
-        lambda: SimpleNamespace(CustomerSession=FakeCustomerSession),
-    )
-    monkeypatch.setattr(billing, "get_active_subscription", lambda _account_id: None)
-
-    result = billing.create_pricing_table_session({
-        "id": "acct_1",
-        "email": "parent@example.com",
-        "display_name": "Parent",
-        "stripe_customer_id": "cus_1",
-    })
-
-    assert captured == {
-        "customer": "cus_1",
-        "components": {"pricing_table": {"enabled": True}},
-    }
-    assert result == {
-        "client_secret": "cuss_test_short_lived",
-        "client_reference_id": "acct_1",
-        "pricing_table_id": "prctbl_test_unit",
-        "publishable_key": "pk_test_unit",
-    }
-
-
-def test_pricing_table_session_route_is_registered(
-    authenticated_client, monkeypatch
-) -> None:
-    monkeypatch.setattr(
-        billing,
-        "create_pricing_table_session",
-        lambda account: {
-            "client_secret": "cuss_test_short_lived",
-            "client_reference_id": account["id"],
-            "pricing_table_id": "prctbl_test_unit",
-            "publishable_key": "pk_test_unit",
-        },
-    )
-
-    response = authenticated_client.post("/api/billing/pricing-table-session")
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store, private"
-    assert response.json()["client_secret"] == "cuss_test_short_lived"
-
-
 def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
     monkeypatch.setattr(account_store, "get_account_by_email", lambda _email: {"id": "acct_1"})
 
@@ -374,7 +42,6 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
         "get_active_subscription",
         lambda _account_id: {"plan": "homework_monthly"},
     )
-    assert account_store.account_has_active_reward_subscription("acct_1")
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["homework_monthly"]
     )
@@ -387,9 +54,17 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
         "get_active_subscription",
         lambda _account_id: {"plan": "trial_5day"},
     )
-    assert not account_store.account_has_active_reward_subscription("acct_1")
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["homework_monthly"]
+    )
+    assert account_store.account_has_active_subscription(
+        "parent@example.com", ["elevenplus_monthly"]
+    )
+
+    monkeypatch.setattr(
+        account_store,
+        "get_active_subscription",
+        lambda _account_id: {"plan": "elevenplus_monthly"},
     )
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["elevenplus_monthly"]
@@ -438,7 +113,7 @@ def test_trial_can_only_be_started_once(monkeypatch) -> None:
         )
 
 
-def test_checkout_is_not_blocked_by_optional_public_merchant_fields(monkeypatch) -> None:
+def test_checkout_is_blocked_until_public_merchant_identity_is_configured(monkeypatch) -> None:
     _configure_test_billing(monkeypatch, STRIPE_PRICE_TRIAL_5DAY="price_trial")
     monkeypatch.delenv("DATA_CONTROLLER_NAME")
     monkeypatch.delenv("PRIVACY_POSTAL_ADDRESS")
@@ -446,7 +121,9 @@ def test_checkout_is_not_blocked_by_optional_public_merchant_fields(monkeypatch)
 
     issues = billing.billing_configuration_issues(billing.TRIAL_PLAN)
 
-    assert issues == []
+    assert any("DATA_CONTROLLER_NAME" in issue for issue in issues)
+    assert any("PRIVACY_POSTAL_ADDRESS" in issue for issue in issues)
+    assert any("BUSINESS_CONTACT_EMAIL" in issue for issue in issues)
 
 
 def test_paid_trial_webhook_grants_five_days(monkeypatch) -> None:
@@ -623,42 +300,6 @@ def test_subscription_rejects_metadata_price_mismatch(monkeypatch) -> None:
             "metadata": {"account_id": "acct_1", "plan": "elevenplus_monthly"},
             "items": {"data": [{"price": {"id": "price_homework"}}]},
         })
-
-
-def test_subscription_accepts_typed_datetime_period_end(
-    monkeypatch,
-    unique_email,
-) -> None:
-    captured = {}
-    account = account_store.ensure_account(unique_email)
-    period_end = datetime.now(UTC) + timedelta(days=30)
-    _configure_test_billing(
-        monkeypatch,
-        STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_typed_period",
-    )
-    monkeypatch.setattr(
-        billing,
-        "upsert_stripe_subscription",
-        lambda **kwargs: captured.update(kwargs) or kwargs,
-    )
-
-    billing.sync_subscription({
-        "id": "sub_typed_period",
-        "customer": "cus_typed_period",
-        "status": "active",
-        "metadata": {
-            "account_id": account["id"],
-            "plan": "elevenplus_monthly",
-        },
-        "items": {
-            "data": [{
-                "price": {"id": "price_typed_period"},
-                "current_period_end": period_end,
-            }]
-        },
-    })
-
-    assert captured["current_period_end"] == period_end
 
 
 def test_live_checkout_verifies_price_before_opening_session(monkeypatch) -> None:

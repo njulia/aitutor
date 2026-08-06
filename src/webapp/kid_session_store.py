@@ -4,7 +4,6 @@
 会话不存储任何个人数据，仅保存学生 ID 和过期时间。
 """
 import secrets
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
@@ -65,6 +64,8 @@ def resolve_kid_session(token: str) -> Optional[Dict[str, Any]]:
         "student_id": row.student_id,
         "expires_at": row.expires_at,
     }
+    if data["expires_at"].tzinfo is None:
+        data["expires_at"] = data["expires_at"].replace(tzinfo=timezone.utc)
     if data["expires_at"] < _now():
         revoke_kid_session(token)
         return None
@@ -91,7 +92,7 @@ def revoke_all_kid_sessions_for_account(account_id: str) -> int:
     from src.webapp.account_store import students
     with _engine().begin() as conn:
         student_ids = [
-            r.student_id for r in conn.execute(
+            r.id for r in conn.execute(
                 select(students.c.id).where(students.c.account_id == account_id)
             ).fetchall()
         ]

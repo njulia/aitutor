@@ -1,0 +1,363 @@
+'use strict';
+
+const familyState = {
+  kids: new Map(),
+  familyCode: '',
+  limit: 0,
+  canAdd: false,
+  editingId: null,
+  pendingPasswordAction: null,
+};
+
+function byId(id) { return document.getElementById(id); }
+
+function clearNode(item) {
+  while (item.firstChild) item.removeChild(item.firstChild);
+}
+
+function node(tag, className, text) {
+  const item = document.createElement(tag);
+  if (className) item.className = className;
+  if (text !== undefined && text !== null) item.textContent = String(text);
+  return item;
+}
+
+function setStatus(message, isError = false) {
+  const status = byId('page-status');
+  status.textContent = message || '';
+  status.className = isError ? 'error' : '';
+}
+
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    ...options,
+    headers: {
+      'Accept': 'application/json',
+      ...(options.body ? {'Content-Type': 'application/json'} : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) {
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((item) => item.msg || String(item)).join('; ')
+      : (data.detail || data.error || 'That action could not be completed.');
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function combinedLoginCode(kidCode) {
+  if (!familyState.familyCode || !kidCode) return '';
+  const family = String(familyState.familyCode).replace(/^FAM-/, '');
+  const kid = String(kidCode).replace(/^KID-/, '');
+  return `${family}-${kid}`;
+}
+
+function metric(value, label) {
+  const card = node('div', 'metric');
+  card.append(node('strong', '', value), node('span', '', label));
+  return card;
+}
+
+function renderKids() {
+  const grid = byId('kids-grid');
+  clearNode(grid);
+  if (!familyState.kids.size) {
+    grid.append(node('div', 'empty', 'No learner profiles yet.'));
+    return;
+  }
+
+  familyState.kids.forEach((kid) => {
+    const card = node('article', 'kid-card');
+    const title = node('div', 'kid-title');
+    title.append(node('h3', '', kid.name || 'Learner'));
+    if (kid.is_default) title.append(node('span', 'default-badge', 'Default'));
+    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`));
+
+    const codeValue = combinedLoginCode(kid.kid_code);
+    const code = node('div', 'kid-code');
+    code.append(node('span', '', 'Kid login: '), node('strong', '', codeValue || 'Not assigned'));
+    if (codeValue) {
+      const copy = node('button', 'btn btn-secondary', 'Copy');
+      copy.type = 'button';
+      copy.style.marginLeft = '8px';
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(codeValue);
+          copy.textContent = 'Copied';
+          window.setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+        } catch (error) {
+          window.prompt('Copy this kid login code:', codeValue);
+        }
+      });
+      code.append(copy);
+    }
+    card.append(code);
+
+    const wallet = kid.wallet || {};
+    const progress = kid.progress || {};
+    const level = wallet.level || {};
+    const metrics = node('div', 'metrics');
+    metrics.append(
+      metric(wallet.lifetime_xp || 0, 'Lifetime XP'),
+      metric(wallet.gift_points || 0, 'Gift Points'),
+      metric(progress.total_sessions || 0, 'Sessions'),
+      metric(`${progress.average_accuracy || 0}%`, 'Accuracy'),
+      metric(progress.current_streak || 0, 'Day streak'),
+      metric(level.name || 'Starter', 'Level'),
+    );
+    card.append(metrics);
+
+    const actions = node('div', 'card-actions');
+    const progressLink = node('a', 'btn-link', 'Full progress');
+    progressLink.href = `/progress?student_id=${encodeURIComponent(kid.id)}`;
+    const rewardLink = node('a', 'btn-link', 'Rewards');
+    rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
+    const edit = node('button', 'btn btn-secondary', 'Edit profile');
+    edit.type = 'button';
+    edit.addEventListener('click', () => showProfileForm(kid));
+    actions.append(progressLink, rewardLink, edit);
+    if (Number(wallet.pending_rewards || 0) > 0) {
+      actions.append(node('span', 'default-badge', `${wallet.pending_rewards} pending gift`));
+    }
+    card.append(actions);
+
+    const target = kid.learning_target || {};
+    const targetBox = node('div', 'target-form');
+    targetBox.append(node('strong', '', 'Learning target'));
+    const row = node('div', 'form-row');
+    const dailyField = node('div', 'field');
+    const dailyLabel = node('label', '', 'Daily activities');
+    const daily = node('input');
+    daily.type = 'number'; daily.min = '1'; daily.max = '10'; daily.value = target.daily_goal || 1;
+    dailyLabel.htmlFor = `daily-${kid.id}`; daily.id = `daily-${kid.id}`;
+    dailyField.append(dailyLabel, daily);
+    const weeklyField = node('div', 'field');
+    const weeklyLabel = node('label', '', 'Weekly XP goal');
+    const weekly = node('input');
+    weekly.type = 'number'; weekly.min = '10'; weekly.max = '2000'; weekly.value = target.weekly_xp_goal || 100;
+    weeklyLabel.htmlFor = `weekly-${kid.id}`; weekly.id = `weekly-${kid.id}`;
+    weeklyField.append(weeklyLabel, weekly);
+    const save = node('button', 'btn btn-primary', 'Save target');
+    save.type = 'button';
+    save.addEventListener('click', () => requestPassword(async (password) => {
+      await api('/api/parent/learning-target', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: kid.id,
+          daily_goal: Number(daily.value),
+          weekly_xp_goal: Number(weekly.value),
+          parent_password: password,
+        }),
+      });
+      setStatus(`Learning target saved for ${kid.name}.`);
+      await loadOverview();
+    }));
+    row.append(dailyField, weeklyField, save);
+    targetBox.append(row);
+    card.append(targetBox);
+    grid.append(card);
+  });
+}
+
+async function loadOverview() {
+  const data = await api('/api/parent/overview');
+  familyState.familyCode = data.family_code || '';
+  familyState.limit = Number(data.student_limit || 0);
+  familyState.canAdd = data.can_add_student === true;
+  familyState.kids = new Map((data.kids || []).map((kid) => [kid.id, kid]));
+  byId('family-limit-note').textContent = familyState.limit
+    ? `${familyState.kids.size} of ${familyState.limit} learner profiles used.` : '';
+  byId('add-child-button').disabled = !familyState.canAdd;
+  byId('add-child-button').title = familyState.canAdd ? '' : 'Your current plan has reached its learner limit.';
+  renderKids();
+}
+
+function showProfileForm(kid = null) {
+  if (!kid && !familyState.canAdd) return;
+  familyState.editingId = kid ? kid.id : null;
+  byId('profile-form-title').textContent = kid ? 'Edit learner profile' : 'Add a child';
+  byId('save-profile-button').textContent = kid ? 'Save profile' : 'Add child';
+  byId('profile-name').value = kid ? kid.name : '';
+  byId('profile-year').value = String(kid ? kid.year_group : 3);
+  byId('profile-age').value = String(kid ? kid.age : 7);
+  byId('profile-form').classList.add('show');
+  byId('profile-name').focus();
+}
+
+function hideProfileForm() {
+  familyState.editingId = null;
+  byId('profile-form').classList.remove('show');
+  byId('profile-form').reset();
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const body = {
+    name: byId('profile-name').value.trim(),
+    year_group: Number(byId('profile-year').value),
+    age: Number(byId('profile-age').value),
+  };
+  const editing = familyState.editingId;
+  await api(editing ? `/api/students/${encodeURIComponent(editing)}` : '/api/students', {
+    method: editing ? 'PUT' : 'POST',
+    body: JSON.stringify(body),
+  });
+  hideProfileForm();
+  setStatus(editing ? 'Learner profile updated.' : 'Learner profile added.');
+  await loadOverview();
+}
+
+async function loadDigest() {
+  const data = await api('/api/parent/xp-digest');
+  const body = byId('digest-body');
+  clearNode(body);
+  const kids = data.digest && data.digest.kids ? data.digest.kids : [];
+  if (!kids.length) {
+    const row = node('tr'); const cell = node('td', '', 'No activity in the last 24 hours.');
+    cell.colSpan = 4; row.append(cell); body.append(row); return;
+  }
+  kids.forEach((kid) => {
+    const subjects = (kid.subjects || []).map((item) => `${item.subject} ${item.accuracy}%`).join(', ') || 'No subject data';
+    const row = node('tr');
+    row.append(node('td', '', kid.name), node('td', '', kid.total_xp || 0),
+      node('td', '', kid.event_count || 0), node('td', '', subjects));
+    body.append(row);
+  });
+}
+
+async function loadCatalog() {
+  const data = await api('/api/rewards/catalog');
+  const list = byId('catalog-list');
+  clearNode(list);
+  if (!(data.items || []).length) { list.append(node('li', 'empty', 'No family rewards yet.')); return; }
+  data.items.forEach((item) => {
+    const entry = node('li', 'list-item');
+    const main = node('div', 'item-main');
+    const copy = node('div');
+    copy.append(node('div', 'item-title', item.name), node('div', 'item-meta', `${item.xp_cost} Gift Points`));
+    main.append(node('span', 'item-icon', item.icon || '🎁'), copy);
+    const remove = node('button', 'btn btn-danger', 'Delete');
+    remove.type = 'button';
+    remove.addEventListener('click', () => {
+      if (!window.confirm(`Delete “${item.name}”?`)) return;
+      requestPassword(async (password) => {
+        await api(`/api/rewards/catalog/${encodeURIComponent(item.id)}`, {
+          method: 'DELETE', body: JSON.stringify({parent_password: password}),
+        });
+        setStatus('Reward deleted.');
+        await loadCatalog();
+      });
+    });
+    entry.append(main, remove); list.append(entry);
+  });
+}
+
+async function loadGiftRequests() {
+  const data = await api('/api/parent/gift-requests');
+  const holder = byId('gift-requests');
+  clearNode(holder);
+  if (!(data.requests || []).length) { holder.append(node('div', 'empty', 'No pending gift requests.')); return; }
+  const list = node('ul', 'list');
+  data.requests.forEach((request) => {
+    const entry = node('li', 'list-item');
+    const main = node('div', 'item-main');
+    const copy = node('div');
+    copy.append(node('div', 'item-title', request.reward_name),
+      node('div', 'item-meta', `${request.student_name} · ${request.points_cost} Gift Points`));
+    main.append(node('span', 'item-icon', request.reward_icon || '🎁'), copy);
+    const actions = node('div', 'card-actions');
+    const approve = node('button', 'btn btn-primary', 'Approve'); approve.type = 'button';
+    const decline = node('button', 'btn btn-danger', 'Decline'); decline.type = 'button';
+    approve.addEventListener('click', () => decideGift(request, 'approve'));
+    decline.addEventListener('click', () => decideGift(request, 'decline'));
+    actions.append(approve, decline); entry.append(main, actions); list.append(entry);
+  });
+  holder.append(list);
+}
+
+function decideGift(request, decision) {
+  if (decision === 'decline' && !window.confirm(`Decline ${request.student_name}'s gift request?`)) return;
+  requestPassword(async (password) => {
+    await api(`/api/parent/gift-requests/${encodeURIComponent(request.id)}/${decision}`, {
+      method: 'POST', body: JSON.stringify({parent_password: password}),
+    });
+    setStatus(decision === 'approve' ? 'Gift request approved.' : 'Gift request declined.');
+    await Promise.all([loadGiftRequests(), loadOverview()]);
+  });
+}
+
+function requestPassword(action) {
+  familyState.pendingPasswordAction = action;
+  byId('parent-password').value = '';
+  byId('password-modal').classList.add('show');
+  byId('parent-password').focus();
+}
+
+function closePasswordModal() {
+  familyState.pendingPasswordAction = null;
+  byId('password-modal').classList.remove('show');
+}
+
+async function initialise() {
+  try {
+    const context = await window.HomeworkMagicSession.get(true);
+    if (!context.authenticated || context.role !== 'parent') {
+      window.location.replace(context.role === 'kid' ? '/app' : '/login?next=/parent-dashboard');
+      return;
+    }
+    await Promise.all([loadOverview(), loadDigest(), loadCatalog(), loadGiftRequests()]);
+  } catch (error) {
+    if (error.status === 401) window.location.replace('/login?next=/parent-dashboard');
+    else setStatus(error.message || 'The dashboard could not be loaded.', true);
+  }
+}
+
+byId('add-child-button').addEventListener('click', () => showProfileForm());
+byId('cancel-profile-button').addEventListener('click', hideProfileForm);
+byId('profile-form').addEventListener('submit', (event) => {
+  saveProfile(event).catch((error) => setStatus(error.message, true));
+});
+byId('profile-year').addEventListener('change', () => {
+  if (!familyState.editingId) byId('profile-age').value = String(Math.min(11, Number(byId('profile-year').value) + 4));
+});
+byId('catalog-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const reward = {
+    name: byId('reward-name').value.trim(), icon: byId('reward-icon').value.trim() || '🎁',
+    xp_cost: Number(byId('reward-cost').value),
+  };
+  requestPassword(async (password) => {
+    await api('/api/rewards/catalog', {method: 'POST', body: JSON.stringify({...reward, parent_password: password})});
+    byId('catalog-form').reset(); byId('reward-cost').value = '100'; setStatus('Reward added.'); await loadCatalog();
+  });
+});
+byId('send-digest-button').addEventListener('click', () => requestPassword(async (password) => {
+  await api('/api/parent/xp-digest/send', {method: 'POST', body: JSON.stringify({parent_password: password})});
+  setStatus('Learning summary email sent.');
+}));
+byId('cancel-password').addEventListener('click', closePasswordModal);
+byId('password-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!familyState.pendingPasswordAction) return;
+  try {
+    await familyState.pendingPasswordAction(byId('parent-password').value);
+    closePasswordModal();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+byId('parent-logout').addEventListener('click', async (event) => {
+  event.preventDefault();
+  await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+  localStorage.removeItem('auth_state');
+  window.HomeworkMagicSession.clear();
+  window.location.assign('/');
+});
+
+initialise();

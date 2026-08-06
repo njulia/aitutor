@@ -38,6 +38,7 @@ from src.webapp.message_routes import create_message_router
 from src.webapp.account_routes import build_account_router
 from src.webapp.account_store import PREMIUM_PLAN_NAMES, HOMEWORK_PREMIUM_PLAN, ELEVENPLUS_PREMIUM_PLAN
 from src.webapp.memory_routes import build_memory_router
+from src.webapp.mock_exam_routes import build_mock_exam_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
@@ -221,6 +222,14 @@ async def lifespan(_app: FastAPI):
 def _resolve_username(req: Request) -> Optional[str]:
     """Resolve the authenticated parent/admin email from the signed session token."""
     try:
+        # A valid child session always wins over a stale parent cookie. This
+        # prevents child-facing browsers from reaching parent-only endpoints.
+        kid_token = req.cookies.get("kid_session") or req.headers.get("X-Kid-Session")
+        if kid_token:
+            from src.webapp.kid_session_store import resolve_kid_session
+
+            if resolve_kid_session(kid_token):
+                return None
         from src.auth_tokens import verify_token
 
         token = req.cookies.get("session") or req.headers.get("Authorization")
@@ -400,7 +409,6 @@ def process_uploaded_file(file_path: str):
             os.remove(file_path)
         except OSError:
             pass
-
 
 
 def process_base64_image(data_url: str) -> str:
@@ -1090,6 +1098,11 @@ async def eleven_plus_year_round_plan():
     return _static_page("static", "elevenplus-year-round-plan.html")
 
 
+@app.get("/elevenplus-mock-exams")
+async def eleven_plus_mock_exams():
+    return _static_page("static", "elevenplus-mock-exams.html")
+
+
 @app.get("/elevenplus-topic-mastery")
 async def eleven_plus_topic_mastery():
     return _static_page("static", "elevenplus-topic-mastery.html")
@@ -1548,6 +1561,11 @@ def _set_anon_cookie(response: JSONResponse, anon_id: Optional[str], request: Re
             path="/",
         )
 
+app.include_router(build_mock_exam_router(
+    resolve_identity=_get_user_or_anonymous_id,
+    has_subscription=user_has_subscription,
+    set_anon_cookie=_set_anon_cookie,
+))
 
 @app.get("/api/elevenplus/topic-mastery/catalog")
 async def get_topic_mastery_catalog():
@@ -2024,7 +2042,7 @@ async def api_review(
                     score_val = result.get("score")
                     max_score_val = result.get("max_score")
                     # accuracy_bonus_xp = 0
-                    accuracy = 1.0
+                    accuracy = None
                     if (
                         isinstance(score_val, (int, float))
                         and isinstance(max_score_val, (int, float))
@@ -2479,6 +2497,93 @@ async def check_parent_status_api(req: Request):
     return response
 
 
+def _public_session_student(student: Dict[str, Any]) -> Dict[str, Any]:
+    """Return only learner fields that are safe for role-aware navigation."""
+    return {
+        "id": str(student.get("id") or ""),
+        "name": str(student.get("name") or "Learner"),
+        "year_group": int(student.get("year_group") or 1),
+        "age": int(student.get("age") or 5),
+        "is_default": bool(student.get("is_default")),
+    }
+
+
+@app.get("/api/session-context")
+async def session_context_api(req: Request):
+    """Return the authoritative browser role without exposing login codes."""
+    kid_token = req.cookies.get("kid_session") or req.headers.get("X-Kid-Session")
+    if kid_token:
+        from src.webapp.kid_session_store import resolve_kid_session
+        from src.webapp.account_store import get_student
+
+        kid_session = await run_blocking(
+            resolve_kid_session, kid_token, timeout=10, limit_concurrency=False
+        )
+        if kid_session:
+            learner = await run_blocking(
+                get_student,
+                str(kid_session["student_id"]),
+                timeout=10,
+                limit_concurrency=False,
+            )
+            if learner and bool(learner.get("is_active")):
+                return {
+                    "authenticated": True,
+                    "role": "kid",
+                    "student": _public_session_student(learner),
+                }
+
+    username = _resolve_username(req)
+    if username:
+        from src.webapp.account_store import (
+            adjust_student_for_academic_year,
+            ensure_account,
+            ensure_default_student,
+            get_student_limit,
+            list_students,
+        )
+
+        account = await run_blocking(
+            ensure_account, username, timeout=10, limit_concurrency=False
+        )
+        await run_blocking(
+            ensure_default_student,
+            account["id"],
+            timeout=10,
+            limit_concurrency=False,
+        )
+        students = await run_blocking(
+            list_students,
+            account["id"],
+            True,
+            timeout=10,
+            limit_concurrency=False,
+        )
+        public_students = [
+            _public_session_student(adjust_student_for_academic_year(item))
+            for item in students
+        ]
+        default_student = next(
+            (item["id"] for item in public_students if item["is_default"]),
+            public_students[0]["id"] if public_students else None,
+        )
+        student_limit = await run_blocking(
+            get_student_limit,
+            account["id"],
+            timeout=10,
+            limit_concurrency=False,
+        )
+        return {
+            "authenticated": True,
+            "role": "parent",
+            "students": public_students,
+            "default_student_id": default_student,
+            "student_limit": int(student_limit),
+        }
+
+    return {"authenticated": False, "role": "anonymous"}
+
+
 _COMMON_PASSWORDS = {
     "password", "password1", "password123", "qwerty123", "letmein123",
     "homework123", "12345678", "123456789", "welcome123",
@@ -2545,6 +2650,16 @@ async def api_register(request_body: AuthRequest, req: Request, background_tasks
             "session", token, httponly=True, samesite="lax",
             secure=_cookie_should_be_secure(req), path="/", max_age=12 * 60 * 60,
         )
+        kid_token = req.cookies.get("kid_session")
+        if kid_token:
+            from src.webapp.kid_session_store import revoke_kid_session
+            await run_blocking(
+                revoke_kid_session, kid_token, timeout=10, limit_concurrency=False
+            )
+        response.delete_cookie(
+            "kid_session", path="/", httponly=True, samesite="lax",
+            secure=_cookie_should_be_secure(req),
+        )
         return response
     except HTTPException:
         raise
@@ -2572,6 +2687,16 @@ async def api_login(request_body: AuthRequest, req: Request):
             "session", token, httponly=True, samesite="lax",
             secure=_cookie_should_be_secure(req), path="/", max_age=12 * 60 * 60,
         )
+        kid_token = req.cookies.get("kid_session")
+        if kid_token:
+            from src.webapp.kid_session_store import revoke_kid_session
+            await run_blocking(
+                revoke_kid_session, kid_token, timeout=10, limit_concurrency=False
+            )
+        response.delete_cookie(
+            "kid_session", path="/", httponly=True, samesite="lax",
+            secure=_cookie_should_be_secure(req),
+        )
         return response
     except HTTPException:
         raise
@@ -2592,6 +2717,19 @@ async def api_logout(req: Request):
     response = JSONResponse({"success": True})
     response.delete_cookie(
         "session", path="/", httponly=True, samesite="lax",
+        secure=_cookie_should_be_secure(req),
+    )
+    kid_token = req.cookies.get("kid_session")
+    if kid_token:
+        try:
+            from src.webapp.kid_session_store import revoke_kid_session
+            await run_blocking(
+                revoke_kid_session, kid_token, timeout=10, limit_concurrency=False
+            )
+        except Exception:
+            logger.exception("Could not revoke overlapping kid session")
+    response.delete_cookie(
+        "kid_session", path="/", httponly=True, samesite="lax",
         secure=_cookie_should_be_secure(req),
     )
     return response
@@ -2649,6 +2787,16 @@ async def api_kid_login(request_body: KidLoginRequest, req: Request):
         response.set_cookie(
             "kid_session", session["token"], httponly=True, samesite="lax",
             secure=_cookie_should_be_secure(req), path="/", max_age=3600,
+        )
+        parent_token = req.cookies.get("session") or req.headers.get("Authorization")
+        if parent_token:
+            from src.auth_tokens import revoke_token
+            await run_blocking(
+                revoke_token, parent_token, timeout=10, limit_concurrency=False
+            )
+        response.delete_cookie(
+            "session", path="/", httponly=True, samesite="lax",
+            secure=_cookie_should_be_secure(req),
         )
         return response
     except HTTPException:
@@ -3119,6 +3267,7 @@ Available pages:
   - http://localhost:{port}/ks1-homework
   - http://localhost:{port}/ks2-homework
   - http://localhost:{port}/elevenplus-practice
+  - http://localhost:{port}/elevenplus-mock-exams
   - http://localhost:{port}/check-my-homework
   - http://localhost:{port}/app
 

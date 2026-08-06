@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+import json
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 from fastapi import FastAPI
@@ -21,13 +23,14 @@ PUBLIC_PAGES = {
     "/": "index.html",
     "/ks1-homework": "ks1-homework.html",
     "/ks2-homework": "ks2-homework.html",
-    "/elevenplus-practice": "elevenplus-practice.html",
-    "/elevenplus-year-round-plan": "elevenplus-year-round-plan.html",
-    "/elevenplus-topic-mastery": "elevenplus-topic-mastery.html",
-    "/check-my-homework": "check-my-homework.html",
     "/year-3-maths-practice": "year-3-maths-practice.html",
     "/year-3-english-reading-practice": "year-3-english-reading-practice.html",
     "/calm-eleven-plus-practice": "calm-eleven-plus-practice.html",
+    "/elevenplus-practice": "elevenplus-practice.html",
+    "/elevenplus-mock-exams": "elevenplus-mock-exams.html",
+    "/elevenplus-year-round-plan": "elevenplus-year-round-plan.html",
+    "/elevenplus-topic-mastery": "elevenplus-topic-mastery.html",
+    "/check-my-homework": "check-my-homework.html",
     "/pricing": "pricing.html",
     "/messages": "messages.html",
     "/safety": "safety.html",
@@ -113,6 +116,37 @@ def test_sitemap_contains_only_the_public_canonical_urls() -> None:
 
     assert locations == expected
     assert not any("www.homeworkmagic.co.uk" in location for location in locations)
+
+
+def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None:
+    source = (STATIC / "elevenplus-mock-exams.html").read_text(encoding="utf-8")
+    match = re.search(
+        r'<script type="application/ld\+json">\s*(.*?)\s*</script>',
+        source,
+        re.DOTALL,
+    )
+    assert match
+    graph = json.loads(match.group(1))["@graph"]
+    types = {item["@type"] for item in graph}
+    assert {"WebPage", "SoftwareApplication", "BreadcrumbList", "FAQPage"} <= types
+    faq = next(item for item in graph if item["@type"] == "FAQPage")
+    assert len(faq["mainEntity"]) == 4
+    assert all(item["name"] in source for item in faq["mainEntity"])
+    application = next(item for item in graph if item["@type"] == "SoftwareApplication")
+    assert {offer["price"] for offer in application["offers"]} == {"0", "9.99"}
+    assert "14.99" not in source
+    assert "free diagnostic" in source.casefold()
+
+
+def test_mock_exam_sitemap_entry_has_a_last_modified_date() -> None:
+    tree = ET.parse(STATIC / "sitemap.xml")
+    namespace = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    for entry in tree.findall("s:url", namespace):
+        if entry.findtext("s:loc", namespaces=namespace) == f"{ORIGIN}/elevenplus-mock-exams":
+            assert entry.findtext("s:lastmod", namespaces=namespace) == "2026-08-06"
+            break
+    else:
+        pytest.fail("Mock-exam sitemap entry not found")
 
 
 def test_robots_endpoint_is_available_and_points_to_canonical_sitemap(client) -> None:

@@ -185,6 +185,7 @@ def production_configuration_issues() -> list[str]:
             "STRIPE_PRICE_TRIAL_5DAY",
             "STRIPE_PRICE_HOMEWORK_MONTHLY",
             "STRIPE_PRICE_ELEVENPLUS_MONTHLY",
+            # "STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY",
         )
         stripe_prices = []
         for variable in stripe_price_vars:
@@ -389,7 +390,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault(
             "Permissions-Policy",
-            "camera=(self), microphone=(), geolocation=(), payment=(self)",
+            "camera=(self), microphone=(self), geolocation=(), payment=(self)",
         )
         # CSP is intentionally report-only until inline scripts are fully removed.
         response.headers.setdefault(
@@ -405,6 +406,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "/api/account", "/api/students", "/api/memory", "/api/progress",
             "/api/rewards", "/rewards/certificate", "/api/messages", "/api/login",
             "/api/register", "/api/check-subscription", "/api/admin",
+            "/api/session-context", "/api/kid-login",
         )
         if request.url.path.startswith(sensitive_prefixes):
             response.headers["Cache-Control"] = "no-store, private"
@@ -584,6 +586,7 @@ class SensitiveRouteRateLimitMiddleware(BaseHTTPMiddleware):
     LIMITS = {
         "/api/login": (10, 10 * 60),
         "/api/register": (5, 60 * 60),
+        "/api/kid-login": (10, 10 * 60),
         "/api/password-reset/request": (5, 60 * 60),
         "/api/messages": (12, 60 * 60),
         "/api/billing/checkout": (10, 10 * 60),
@@ -637,7 +640,10 @@ def configure_cors(app: FastAPI) -> None:
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID", "X-CSRF-Token"],
+        allow_headers=[
+            "Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID",
+            "X-CSRF-Token", "X-Kid-Session",
+        ],
         expose_headers=["X-Request-ID"],
         max_age=600,
     )

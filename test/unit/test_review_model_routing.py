@@ -44,7 +44,7 @@ def test_other_review_uses_detail_model() -> None:
     assert llm.models == [review_service.DETAIL_REVIEW_MODEL]
 
 
-def test_rag_quick_review_still_calls_quick_model(monkeypatch) -> None:
+def test_rag_quick_review_uses_trusted_local_marking_without_model(monkeypatch) -> None:
     monkeypatch.setattr(
         review_service,
         "_load_rag_answers",
@@ -59,7 +59,9 @@ def test_rag_quick_review_still_calls_quick_model(monkeypatch) -> None:
     )
 
     assert result["from_rag_answers"] is True
-    assert llm.models == [review_service.QUICK_REVIEW_MODEL]
+    assert result["llm_fallback"] is True
+    assert result["model_used"] is None
+    assert llm.models == []
 
 
 def test_review_question_uses_detail_model() -> None:

@@ -20,8 +20,8 @@ PLAN_DISPLAY_NAMES = {
     "trial_5day": "5-day Homework Magic trial",
     "homework_monthly": "Homework Premium",
     "elevenplus_monthly": "11+ Premium",
-    # "family_monthly": "Family (Years 1-6)",
-    # "family_11plus_monthly": "Family (Years 1-6 + 11+)",
+    # "elevenplus_mock_monthly": "11+ Mock Exams",
+    # "family_monthly": "Family Premium",
 }
 
 

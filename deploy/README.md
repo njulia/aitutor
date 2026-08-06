@@ -223,7 +223,9 @@ free-text fields.
 ## 4. Deploy
 
 Authenticate `gcloud`, select a deployer identity with permission to build and
-deploy, then run:
+deploy. The 11+ mock catalogue is included in the existing £9.99 11+ Premium
+plan; verify that plan by following
+[`SETUP_11PLUS_MOCK_TIER.md`](SETUP_11PLUS_MOCK_TIER.md), then run:
 
 ```bash
 ./deploy/deploy_gcp.sh
@@ -284,3 +286,10 @@ DATABASE_URL='postgresql+psycopg://...' python scripts/elevenplus/rebuild_all_el
 
 Run these from a secured administrative environment; never place the database
 URL in shell history or logs.
+
+For the reviewed Cloud Run job workflow, use:
+
+```bash
+./deploy/deploy_rag_gcp.sh --plan-only
+./deploy/deploy_rag_gcp.sh
+```

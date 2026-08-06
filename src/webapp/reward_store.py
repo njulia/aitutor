@@ -779,7 +779,7 @@ class RewardStore:
         is_tutor_mode: bool = False,
         gift_points_eligible: bool = False,
         awarded_at: datetime | None = None,
-        accuracy: float = 1.0,
+        accuracy: float | None = None,
     ) -> dict[str, Any]:
         """Award permanent XP, plus Gift Points for an eligible subscriber."""
         account = _clean_id(account_id, maximum=80)
@@ -801,13 +801,13 @@ class RewardStore:
             else homework_activity_xp
         )
 
-        if accuracy <= 0.3:
+        if accuracy is not None and accuracy <= 0.3:
             # 正确率 <= 30% 时 XP 减半
             activity_xp = max(1, activity_xp // 2)
-        elif accuracy >= 1.0:
+        elif accuracy is not None and accuracy >= 1.0:
             # 正确率 >= 100% 时 XP 增加
             activity_xp = activity_xp + 10
-        elif accuracy >= 0.8:
+        elif accuracy is not None and accuracy >= 0.8:
             # 正确率 >= 80% 时 XP 增加
             activity_xp = activity_xp + 5
         # Lifetime XP is an effort record for every authenticated learner and
@@ -1043,6 +1043,33 @@ class RewardStore:
             }
             for item in DEFAULT_REWARDS
         ]
+
+    def learner_summary(self, *, account_id: str, student_id: str) -> dict[str, Any]:
+        """Return the compact reward data needed by the family overview."""
+        account = _clean_id(account_id, maximum=80)
+        learner = _clean_id(student_id, maximum=80)
+        with self.engine.begin() as conn:
+            wallet = _public_wallet(
+                self._ensure_wallet(conn, account, learner, lock=False)
+            )
+            pending = conn.execute(
+                select(func.count())
+                .select_from(self.redemptions)
+                .where(
+                    and_(
+                        self.redemptions.c.account_id == account,
+                        self.redemptions.c.student_id == learner,
+                        self.redemptions.c.status == "pending",
+                    )
+                )
+            ).scalar() or 0
+        lifetime_xp = int(wallet["lifetime_xp"])
+        return {
+            "lifetime_xp": lifetime_xp,
+            "gift_points": int(wallet["gift_points"]),
+            "level": _level_status(lifetime_xp),
+            "pending_rewards": int(pending),
+        }
 
     def dashboard(self, *, account_id: str, student_id: str) -> dict[str, Any]:
         account = _clean_id(account_id, maximum=80)

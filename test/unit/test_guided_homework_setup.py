@@ -112,3 +112,31 @@ def test_subject_buttons_support_older_ipad_safari() -> None:
     # reuse the previously broken script from its cache.
     assert "app.js?v=20260728-old-ipad-fix" in html
     assert "[hidden] { display: none !important; }" in html
+
+
+def test_homework_generation_stops_shared_speech_without_reference_error() -> None:
+    html = Path("static/app.html").read_text(encoding="utf-8")
+    javascript = Path("static/js/app.js").read_text(encoding="utf-8")
+
+    helper = javascript.split("function stopSpeechPlayback()", 1)[1].split(
+        "const HOMEWORK_COMMON_SUBJECTS", 1
+    )[0]
+    assert "window.HomeworkMagicSpeech.stop();" in helper
+    assert javascript.index("function stopSpeechPlayback()") < javascript.index(
+        "function showLoading()"
+    )
+    assert "revealLearningPanel(loading);" in javascript
+    assert "revealLearningPanel(results);" in javascript
+    assert 'id="loading" class="loading" role="status"' in html
+    assert "make-homework-render-fix" in html
+
+
+def test_quick_start_markup_keeps_results_in_the_main_container() -> None:
+    html = Path("static/app.html").read_text(encoding="utf-8")
+
+    assert html.count("<div") == html.count("</div>")
+    assert html.count("<details") == html.count("</details>")
+    assert 'onclick="generateGuidedHomework()"' in html
+    assert 'onclick="generateHomework()"' in html
+    assert 'onclick="generateCustomHomeworkEleven()"' in html
+    assert 'onclick="changeElevenGuide()"' in html

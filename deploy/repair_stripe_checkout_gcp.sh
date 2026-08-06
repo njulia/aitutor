@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export STRIPE_PRICE_ELEVENPLUS_MONTHLY="price_1TvlG3A7C4P8kXJMScIbgIwg"
-export STRIPE_PRICE_HOMEWORK_MONTHLY="price_1TvlFJA7C4P8kXJMwop34qv5"
-export STRIPE_PRICE_TRIAL_5DAY="price_1TvlE7A7C4P8kXJMNZk8fCey"
-
-
 # Repair Stripe variables that an earlier --env-vars-file/--set-secrets deploy
 # removed. Export the Price IDs currently used by the live Pricing Table before
 # running this script. They are deliberately not hard-coded because editing a
@@ -18,8 +13,8 @@ GCP_SERVICE="${GCP_SERVICE:-${SERVICE:-aitutor-prod}}"
 GCP_SERVICE_ACCOUNT="${GCP_SERVICE_ACCOUNT:-aitutor-run@${GCP_PROJECT_ID}.iam.gserviceaccount.com}"
 STRIPE_SECRET_KEY_SECRET="${STRIPE_SECRET_KEY_SECRET:-homeworkmagic-stripe-secret-key}"
 STRIPE_WEBHOOK_SECRET_SECRET="${STRIPE_WEBHOOK_SECRET_SECRET:-homeworkmagic-stripe-webhook-secret}"
-STRIPE_PRICING_TABLE_ID="${STRIPE_PRICING_TABLE_ID:-prctbl_1TvlP9A7C4P8kXJMSS8t4VRT}"
-STRIPE_PUBLISHABLE_KEY="${STRIPE_PUBLISHABLE_KEY:-pk_live_fYeIDSqsqYC6MDKau5eFsI0U}"
+STRIPE_PRICING_TABLE_ID="${STRIPE_PRICING_TABLE_ID:-}"
+STRIPE_PUBLISHABLE_KEY="${STRIPE_PUBLISHABLE_KEY:-}"
 BILLING_HEALTH_URL="${BILLING_HEALTH_URL:-https://homeworkmagic.co.uk/api/billing/plans}"
 
 for command_name in gcloud curl python3; do
