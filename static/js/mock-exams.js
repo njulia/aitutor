@@ -89,13 +89,12 @@
     if (!exam.available) card.classList.add('locked');
 
     const top = element('div', 'mock-card-top');
-    let badgeText = 'Included';
+    let badgeText = '11+ Premium';
     let badgeClass = '';
     if (exam.is_free) {
-      badgeText = 'Free sample';
+      badgeText = 'Free';
       badgeClass = ' free';
     } else if (!exam.available) {
-      badgeText = 'Mock plan';
       badgeClass = ' locked';
     }
     top.appendChild(element('span', 'mock-badge' + badgeClass, badgeText));
@@ -113,14 +112,24 @@
     card.appendChild(element('p', 'subject-list', subjectSummary(exam.subject_counts)));
     card.appendChild(element('p', 'format-note', exam.format_note));
 
+    if (!exam.is_free) {
+      card.appendChild(element(
+        'p',
+        'mock-access-note' + (exam.available ? ' available' : ''),
+        exam.available
+          ? 'Included with your active 11+ Premium subscription.'
+          : 'Requires an active 11+ Premium subscription.'
+      ));
+    }
+
     const button = element('button', 'mock-button ' + (exam.available ? 'primary' : 'secondary'));
     button.type = 'button';
     if (exam.is_free) {
       button.textContent = 'Start free diagnostic';
     } else if (exam.available) {
-      button.textContent = 'Start this mock';
+      button.textContent = 'Start 11+ Premium mock';
     } else {
-      button.textContent = 'Ask a grown-up to unlock';
+      button.textContent = 'Get 11+ Premium';
     }
     button.addEventListener('click', function () {
       if (!exam.available) {
@@ -157,7 +166,7 @@
     });
     setStatus(
       catalogueStatus,
-      'Try the free diagnostic, or choose a timed mock when you are ready.',
+      'Common 11+ Diagnostic is free. Every other mock requires 11+ Premium.',
       false
     );
   }

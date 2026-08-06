@@ -136,6 +136,21 @@ def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None
     assert {offer["price"] for offer in application["offers"]} == {"0", "9.99"}
     assert "14.99" not in source
     assert "free diagnostic" in source.casefold()
+    assert "Only the Common 11+ Diagnostic is free" in source
+    assert "every other mock" in source.casefold()
+
+
+def test_mock_exam_frontend_and_pricing_name_the_premium_boundary() -> None:
+    page = (STATIC / "elevenplus-mock-exams.html").read_text(encoding="utf-8")
+    javascript = (STATIC / "js" / "mock-exams.js").read_text(encoding="utf-8")
+    pricing = (STATIC / "pricing.html").read_text(encoding="utf-8")
+
+    assert "20260806-premium-access" in page
+    assert "Free:</strong> Common 11+ Diagnostic" in page
+    assert "11+ Premium:</strong> every other mock exam" in page
+    assert "Requires an active 11+ Premium subscription." in javascript
+    assert "Get 11+ Premium" in javascript
+    assert "other mocks require 11+ Premium" in pricing
 
 
 def test_mock_exam_sitemap_entry_has_a_last_modified_date() -> None:

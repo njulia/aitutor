@@ -669,7 +669,12 @@ def get_student_by_kid_code(kid_code: str) -> Optional[Dict[str, Any]]:
         ).first())
 
 
-def subscription_active_for_student(student_id: str, required_plans: Optional[List[str]] = None) -> bool:
+def subscription_active_for_student(
+    student_id: str,
+    required_plans: Optional[List[str]] = None,
+    *,
+    strict_plans: bool = False,
+) -> bool:
     """孩子登录会话的订阅校验：通过孩子档案解析家庭账号再查订阅。
 
     家庭档订阅属于账号，不属于单个孩子。
@@ -683,6 +688,8 @@ def subscription_active_for_student(student_id: str, required_plans: Optional[Li
     if not required_plans:
         return True
     plan = str(sub.get("plan") or "")
+    if strict_plans:
+        return plan in set(required_plans)
     # 家庭档含 11+ 套餐与五日体验覆盖全部学习区
     if plan in {"elevenplus_monthly", "trial_5day"}:
         return True
@@ -1026,7 +1033,12 @@ def account_has_used_plan(account_id: str, plan: str) -> bool:
     return row is not None
 
 
-def account_has_active_subscription(email: str, required_plans: Optional[List[str]] = None) -> bool:
+def account_has_active_subscription(
+    email: str,
+    required_plans: Optional[List[str]] = None,
+    *,
+    strict_plans: bool = False,
+) -> bool:
     account = get_account_by_email(email)
     if not account:
         return False
@@ -1034,6 +1046,8 @@ def account_has_active_subscription(email: str, required_plans: Optional[List[st
     if not sub:
         return False
     if required_plans:
+        if strict_plans:
+            return str(sub.get("plan") or "") in set(required_plans)
         # 11+ Premium and the five-day pass cover both learning areas.
         effective_required = set(required_plans)
         if sub.get("plan") in {"elevenplus_monthly", "trial_5day"}:

@@ -24,6 +24,22 @@ def complete_homework_guide(
     page.get_by_role("button", name=re.compile(mode, re.I)).click()
 
 
+def complete_eleven_guide(
+    page: Page,
+    *,
+    year: int = 5,
+    subject: str = "Maths",
+    confidence: str = "Sometimes tricky",
+    minutes: int = 10,
+    mode: str = "All together",
+) -> None:
+    page.get_by_role("button", name=f"Year {year}", exact=True).click()
+    page.get_by_role("button", name=subject, exact=True).click()
+    page.get_by_role("button", name=re.compile(confidence, re.I)).click()
+    page.get_by_role("button", name=re.compile(rf"^{minutes} minutes")).click()
+    page.get_by_role("button", name=re.compile(mode, re.I)).click()
+
+
 def test_last_primary_year_and_subject_are_restored(
     page: Page,
     e2e_base_url: str,
@@ -64,6 +80,70 @@ def test_last_primary_year_and_subject_are_restored(
     expect(page.locator("#homework-quick-title")).to_have_text(
         "Ready for Year 4 Science for 20 minutes?"
     )
+
+
+def test_last_guided_elevenplus_plan_is_migrated_saved_and_restored(
+    page: Page,
+    e2e_base_url: str,
+    mock_common_app_endpoints,
+) -> None:
+    page.add_init_script(
+        """
+        localStorage.setItem(
+          'homeworkMagic.learningChoices.v1',
+          JSON.stringify({
+            elevenYear: 5,
+            elevenSubject: 'English',
+            elevenConfidence: 'needs_help',
+            elevenQuestionCount: 8,
+            elevenMode: 'tutor'
+          })
+        );
+        """
+    )
+    page.goto(f"{e2e_base_url}/app", wait_until="domcontentloaded")
+    page.locator('button.tab[data-tab="eleven"]').click()
+
+    expect(page.locator("#eleven-quick-start")).to_be_visible()
+    expect(page.locator("#eleven-quick-title")).to_have_text(
+        "Ready for Year 5 11+ English?"
+    )
+    expect(page.locator("#eleven-quick-detail")).to_contain_text("15 minutes")
+    expect(page.locator("#eleven-quick-detail")).to_contain_text("One at a time")
+
+    migrated = page.evaluate(
+        "() => JSON.parse(localStorage.getItem('homeworkMagic.learningChoices.v1') || '{}')"
+    )
+    assert migrated["elevenMinutes"] == 15
+    assert "elevenQuestionCount" not in migrated
+
+    page.locator("#eleven-quick-change-button").click()
+    complete_eleven_guide(
+        page,
+        year=4,
+        subject="Non-Verbal Reasoning",
+        confidence="I feel confident",
+        minutes=10,
+        mode="All together",
+    )
+    expect(page.locator("#eleven-guide-step-label")).to_have_text("Ready to start")
+
+    saved = page.evaluate(
+        "() => JSON.parse(localStorage.getItem('homeworkMagic.learningChoices.v1') || '{}')"
+    )
+    assert saved["elevenYear"] == 4
+    assert saved["elevenSubject"] == "Non-Verbal Reasoning"
+    assert saved["elevenConfidence"] == "confident"
+    assert saved["elevenMinutes"] == 10
+    assert saved["elevenMode"] == "homework"
+
+    page.reload(wait_until="domcontentloaded")
+    page.locator('button.tab[data-tab="eleven"]').click()
+    expect(page.locator("#eleven-quick-title")).to_have_text(
+        "Ready for Year 4 11+ Non-Verbal Reasoning?"
+    )
+    expect(page.locator("#eleven-quick-detail")).to_contain_text("10 minutes")
+    expect(page.locator("#eleven-quick-detail")).to_contain_text("All together")
 
 
 def test_legacy_descriptions_are_removed_and_parent_notes_are_not_saved(

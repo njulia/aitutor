@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import pytest
 
+from src.webapp.account_store import create_subscription
+from src.progress_db import set_user_test_flag
+
 
 pytestmark = pytest.mark.api
 
@@ -73,3 +76,76 @@ def test_paid_mock_requires_parent_and_mock_plan(client) -> None:
     assert response.status_code == 401
     assert response.json()["required_plan"] == "elevenplus_monthly"
     assert response.json()["required_plan_name"] == "11+ Premium"
+
+
+def test_five_day_access_does_not_unlock_paid_mock_exams(
+    authenticated_client,
+) -> None:
+    account = authenticated_client.get("/api/account").json()["account"]
+    create_subscription(
+        account_id=account["id"],
+        plan="trial_5day",
+        status="active",
+        duration_days=5,
+    )
+
+    catalogue = authenticated_client.get("/api/elevenplus/mock-exams")
+    assert catalogue.status_code == 200
+    exams = catalogue.json()["exams"]
+    diagnostic = next(item for item in exams if item["id"] == "common-diagnostic-1")
+    paid = [item for item in exams if item["id"] != "common-diagnostic-1"]
+    assert diagnostic["is_free"] is True
+    assert diagnostic["available"] is True
+    assert all(item["is_free"] is False for item in paid)
+    assert all(item["available"] is False for item in paid)
+    assert all(item["required_plan"] == "elevenplus_monthly" for item in paid)
+
+    free_start = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-diagnostic-1/start"
+    )
+    paid_start = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-full-1/start"
+    )
+    assert free_start.status_code == 200
+    assert paid_start.status_code == 402
+    assert paid_start.json()["required_plan_name"] == "11+ Premium"
+
+
+def test_free_test_account_does_not_unlock_paid_mock_exams(
+    authenticated_client,
+    unique_email,
+) -> None:
+    assert set_user_test_flag(unique_email, True)
+
+    catalogue = authenticated_client.get("/api/elevenplus/mock-exams")
+    paid = [item for item in catalogue.json()["exams"] if not item["is_free"]]
+    assert paid
+    assert all(item["available"] is False for item in paid)
+
+    started = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-full-1/start"
+    )
+    assert started.status_code == 402
+    assert started.json()["required_plan"] == "elevenplus_monthly"
+
+
+def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> None:
+    account = authenticated_client.get("/api/account").json()["account"]
+    create_subscription(
+        account_id=account["id"],
+        plan="elevenplus_monthly",
+        status="active",
+        duration_days=30,
+    )
+
+    catalogue = authenticated_client.get("/api/elevenplus/mock-exams")
+    exams = catalogue.json()["exams"]
+    paid = [item for item in exams if item["id"] != "common-diagnostic-1"]
+    assert paid
+    assert all(item["available"] is True for item in paid)
+    assert all(item["required_plan"] == "elevenplus_monthly" for item in paid)
+
+    started = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-full-1/start"
+    )
+    assert started.status_code == 200, started.text

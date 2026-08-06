@@ -9,6 +9,7 @@ Do not create a separate mock-exam product or price.
 - Entitlement name: `elevenplus_monthly`
 - Included: guided 11+ practice and all paid common/school-target mocks
 - Free without a plan: the short common diagnostic
+- The one-off five-day pass does not unlock paid mock exams
 
 ## Stripe setup
 

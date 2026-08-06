@@ -119,6 +119,10 @@
             15: 8,
             20: 10
         };
+        const ELEVEN_SESSION_QUESTIONS = {
+            10: 5,
+            15: 8
+        };
         const HOMEWORK_DIFFICULTY_LABELS = {
             gentle: '😊 Gentle',
             just_right: '👍 Just right',
@@ -456,7 +460,7 @@
                     ]
                 },
                 {
-                    key: 'question_count',
+                    key: 'session_minutes',
                     question: 'How long shall we practise?',
                     options: [
                         {value: 10, label: '10 minutes · Quick'},
@@ -502,7 +506,7 @@
             appendElevenSummaryItem(list, 'Year', findElevenGuideLabel(steps[0], elevenGuideState.answers.year_group));
             appendElevenSummaryItem(list, 'Subject', findElevenGuideLabel(steps[1], elevenGuideState.answers.subject));
             appendElevenSummaryItem(list, 'How it feels', findElevenGuideLabel(steps[2], elevenGuideState.answers.confidence));
-            appendElevenSummaryItem(list, 'Practice', findElevenGuideLabel(steps[3], elevenGuideState.answers.question_count));
+            appendElevenSummaryItem(list, 'Practice', findElevenGuideLabel(steps[3], elevenGuideState.answers.session_minutes));
             appendElevenSummaryItem(list, 'Style', findElevenGuideLabel(steps[4], elevenGuideState.answers.mode));
 
             const examBoardInput = document.getElementById('eleven-exam-board');
@@ -617,10 +621,10 @@
 
             const year = findElevenGuideLabel(steps[0], answers.year_group);
             const subject = findElevenGuideLabel(steps[1], answers.subject);
-            const questionCount = findElevenGuideLabel(steps[3], answers.question_count);
+            const practiceTime = findElevenGuideLabel(steps[3], answers.session_minutes);
             const mode = findElevenGuideLabel(steps[4], answers.mode);
             title.textContent = `Ready for ${year} 11+ ${subject}?`;
-            detail.textContent = `${questionCount} · ${mode}. Tap Start now, or change your choices.`;
+            detail.textContent = `${practiceTime} · ${mode}. Tap Start now, or change your choices.`;
         }
 
         function renderElevenGuide() {
@@ -826,7 +830,8 @@
 
             const elevenAnswers = elevenGuideState.answers;
             const elevenYear = Number(elevenAnswers.year_group);
-            const elevenQuestionCount = Number(elevenAnswers.question_count);
+            const elevenMinutes = Number(elevenAnswers.session_minutes);
+            delete value.elevenQuestionCount;
             if ([3, 4, 5, 6].includes(elevenYear)) {
                 value.elevenYear = elevenYear;
             }
@@ -836,8 +841,8 @@
             if (['confident', 'sometimes_tricky', 'needs_help'].includes(elevenAnswers.confidence)) {
                 value.elevenConfidence = elevenAnswers.confidence;
             }
-            if ([5, 8].includes(elevenQuestionCount)) {
-                value.elevenQuestionCount = elevenQuestionCount;
+            if (Object.prototype.hasOwnProperty.call(ELEVEN_SESSION_QUESTIONS, elevenMinutes)) {
+                value.elevenMinutes = elevenMinutes;
             }
             if (elevenAnswers.mode === 'homework' || elevenAnswers.mode === 'tutor') {
                 value.elevenMode = elevenAnswers.mode;
@@ -860,17 +865,51 @@
 
         function restoreLearningChoices() {
             const saved = loadLearningChoices();
-            let removedLegacyText = false;
+            let savedChoicesChanged = false;
             ['homeworkPrompt', 'elevenPrompt'].forEach(key => {
                 if (!Object.prototype.hasOwnProperty.call(saved, key)) return;
-                removedLegacyText = true;
+                savedChoicesChanged = true;
                 delete saved[key];
             });
-            if (removedLegacyText) {
+
+            // Older builds stored the generated question count (5 or 8),
+            // while the current guide asks for a 10- or 15-minute session.
+            // Convert either legacy shape once, then use the same saved-time
+            // pattern as Make Homework.
+            const storedElevenMinutes = Number(saved.elevenMinutes);
+            const legacyElevenQuestionCount = Number(saved.elevenQuestionCount);
+            let elevenMinutes = Object.prototype.hasOwnProperty.call(
+                ELEVEN_SESSION_QUESTIONS, storedElevenMinutes
+            ) ? storedElevenMinutes : null;
+            if (elevenMinutes === null) {
+                if (Object.prototype.hasOwnProperty.call(
+                    ELEVEN_SESSION_QUESTIONS, legacyElevenQuestionCount
+                )) {
+                    elevenMinutes = legacyElevenQuestionCount;
+                } else if (legacyElevenQuestionCount === 5) {
+                    elevenMinutes = 10;
+                } else if (legacyElevenQuestionCount === 8) {
+                    elevenMinutes = 15;
+                }
+            }
+            if (elevenMinutes !== null && saved.elevenMinutes !== elevenMinutes) {
+                saved.elevenMinutes = elevenMinutes;
+                savedChoicesChanged = true;
+            } else if (elevenMinutes === null
+                    && Object.prototype.hasOwnProperty.call(saved, 'elevenMinutes')) {
+                delete saved.elevenMinutes;
+                savedChoicesChanged = true;
+            }
+            if (Object.prototype.hasOwnProperty.call(saved, 'elevenQuestionCount')) {
+                delete saved.elevenQuestionCount;
+                savedChoicesChanged = true;
+            }
+
+            if (savedChoicesChanged) {
                 try {
                     localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(saved));
                 } catch (error) {
-                    console.warn('Could not remove an old learner description:', error);
+                    console.warn('Could not migrate saved learning choices:', error);
                 }
             }
 
@@ -932,7 +971,6 @@
             }
 
             const elevenYear = Number(saved.elevenYear);
-            const elevenQuestionCount = Number(saved.elevenQuestionCount);
             if ([3, 4, 5, 6].includes(elevenYear)) {
                 elevenGuideState.answers.year_group = elevenYear;
             }
@@ -942,8 +980,8 @@
             if (['confident', 'sometimes_tricky', 'needs_help'].includes(saved.elevenConfidence)) {
                 elevenGuideState.answers.confidence = saved.elevenConfidence;
             }
-            if ([5, 8].includes(elevenQuestionCount)) {
-                elevenGuideState.answers.question_count = elevenQuestionCount;
+            if (Object.prototype.hasOwnProperty.call(ELEVEN_SESSION_QUESTIONS, elevenMinutes)) {
+                elevenGuideState.answers.session_minutes = elevenMinutes;
             }
             if (saved.elevenMode === 'homework' || saved.elevenMode === 'tutor') {
                 elevenGuideState.answers.mode = saved.elevenMode;
@@ -1996,6 +2034,8 @@
 
             const answers = elevenGuideState.answers;
             const yearGroup = Number(answers.year_group);
+            const sessionMinutes = Number(answers.session_minutes);
+            const questionCount = ELEVEN_SESSION_QUESTIONS[sessionMinutes];
             const ageByYear = {3: 8, 4: 9, 5: 10, 6: 11};
             const examBoardInput = document.getElementById('eleven-exam-board');
             const examDateInput = document.getElementById('eleven-exam-date');
@@ -2015,7 +2055,8 @@
                 age: ageByYear[yearGroup] || 10,
                 subject: answers.subject,
                 confidence: answers.confidence,
-                question_count: Number(answers.question_count),
+                session_minutes: sessionMinutes,
+                question_count: questionCount,
                 exam_format: examBoard,
                 exam_date: examDate,
                 learning_notes: parentNotes,
@@ -2034,7 +2075,7 @@
                         subjects: subjects,
                         is_eleven_plus: true,
                         mode: mode,
-                        question_count: Number(answers.question_count),
+                        question_count: questionCount,
                         student_id: studentId
                     })
                 });

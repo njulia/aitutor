@@ -308,6 +308,7 @@ def user_has_subscription(
     student_id: Optional[str] = None,
     username: Optional[str] = None,
     required_plan: Optional[str] = None,
+    strict_plan: bool = False,
 ) -> bool:
     """Read access from the local account database synchronised by Stripe webhooks.
 
@@ -325,25 +326,42 @@ def user_has_subscription(
         try:
             from src.webapp.account_store import subscription_active_for_student
             required_plans = [required_plan] if required_plan else None
-            return subscription_active_for_student(student_id, required_plans=required_plans)
+            return subscription_active_for_student(
+                student_id,
+                required_plans=required_plans,
+                strict_plans=strict_plan,
+            )
         except Exception:
             logger.exception("Kid session subscription lookup failed")
             return False
     if not username or (student_id and str(student_id).startswith("anon_")):
         return False
     try:
-        if is_user_test(username):
+        if is_user_test(username) and not strict_plan:
             return True
         from src.webapp.account_store import account_has_active_subscription
 
         required_plans = [required_plan] if required_plan else None
-        if account_has_active_subscription(username, required_plans=required_plans):
+        if account_has_active_subscription(
+            username,
+            required_plans=required_plans,
+            strict_plans=strict_plan,
+        ):
             return True
         # Backward-compatible local developer subscriptions only. Production
         # access must come from verified Stripe webhook state.
         if _dev_mode:
             from src.progress_db import get_local_subscriptions_by_email
-            return any(item.get("status") == "active" for item in get_local_subscriptions_by_email(username))
+            local_subscriptions = get_local_subscriptions_by_email(username)
+            if strict_plan:
+                required_name = str(PREMIUM_PLAN_NAMES.get(required_plan) or "").casefold()
+                return any(
+                    item.get("status") == "active"
+                    and required_name
+                    and required_name in str(item.get("product_name") or "").casefold()
+                    for item in local_subscriptions
+                )
+            return any(item.get("status") == "active" for item in local_subscriptions)
         return False
     except Exception:
         logger.exception("Subscription lookup failed")

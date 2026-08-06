@@ -686,6 +686,39 @@ body.hm-eleven { background: #f8f7ff; }
   text-decoration: none;
 }
 
+/* Supplied Homework Magic mascot and wordmark.
+   The source artwork is intentionally kept unchanged; this viewport trims only
+   its outer whitespace so the complete mark stays legible in compact headers. */
+.hm-brand,
+.hm-app .logo,
+.hm-auth .auth-header > a,
+.hm-register .logo,
+.hm-page .brand,
+.hm-eleven .brand,
+.hm-page header > a[aria-label="Homework Magic home"] {
+  width: 184px;
+  height: 58px;
+  flex: 0 0 auto;
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 14px;
+  color: transparent !important;
+  background-color: #fff !important;
+  background-image: url("/static/images/homework-magic-logo.webp") !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.hm-brand > * { display: none; }
+.hm-register .logo { display: block; margin: 0 auto 8px; }
+.hm-auth .auth-header > a { display: block; }
+.hm-footer .hm-brand { box-shadow: 0 0 0 1px rgba(255, 255, 255, .28); }
+
 @media (max-width: 980px) {
   .hm-main-nav a:not(.hm-nav-cta):not(#home-login-link):not(#home-logout-link) { display: none; }
   .hm-hero { grid-template-columns: 1fr; padding-top: 58px; }
@@ -739,6 +772,17 @@ body.hm-eleven { background: #f8f7ff; }
   .hm-nav-wrap { width: min(100% - 22px, 440px); }
   .hm-brand { font-size: 1rem; }
   .hm-brand-mark { display: none; }
+  .hm-brand,
+  .hm-app .logo,
+  .hm-auth .auth-header > a,
+  .hm-register .logo,
+  .hm-page .brand,
+  .hm-eleven .brand,
+  .hm-page header > a[aria-label="Homework Magic home"] {
+    width: 145px;
+    height: 46px;
+    border-radius: 11px;
+  }
   .hm-main-nav .hm-nav-cta { min-height: 40px; padding: 7px 11px; }
   .hm-hero-actions .hm-button { width: 100%; }
   .hm-quest-scene { min-height: 535px; }
@@ -759,4 +803,24 @@ body.hm-eleven { background: #f8f7ff; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+@media print, (forced-colors: active) {
+  .hm-brand,
+  .hm-app .logo,
+  .hm-auth .auth-header > a,
+  .hm-register .logo,
+  .hm-page .brand,
+  .hm-eleven .brand,
+  .hm-page header > a[aria-label="Homework Magic home"] {
+    width: auto;
+    height: auto;
+    overflow: visible;
+    color: currentColor !important;
+    background: none !important;
+    font-size: 1.1rem !important;
+    line-height: normal !important;
+  }
+
+  .hm-brand > * { display: inline; }
 }

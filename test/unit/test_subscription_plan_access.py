@@ -60,6 +60,9 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["elevenplus_monthly"]
     )
+    assert not account_store.account_has_active_subscription(
+        "parent@example.com", ["elevenplus_monthly"], strict_plans=True
+    )
 
     monkeypatch.setattr(
         account_store,
@@ -68,6 +71,29 @@ def test_plan_specific_access_and_trial_superset(monkeypatch) -> None:
     )
     assert account_store.account_has_active_subscription(
         "parent@example.com", ["elevenplus_monthly"]
+    )
+    assert account_store.account_has_active_subscription(
+        "parent@example.com", ["elevenplus_monthly"], strict_plans=True
+    )
+
+
+def test_kid_strict_plan_access_rejects_five_day_pass(monkeypatch) -> None:
+    monkeypatch.setattr(
+        account_store,
+        "get_student",
+        lambda _student_id: {"id": "student_1", "account_id": "acct_1"},
+    )
+    monkeypatch.setattr(
+        account_store,
+        "get_active_subscription",
+        lambda _account_id: {"plan": "trial_5day"},
+    )
+
+    assert account_store.subscription_active_for_student(
+        "student_1", ["elevenplus_monthly"]
+    )
+    assert not account_store.subscription_active_for_student(
+        "student_1", ["elevenplus_monthly"], strict_plans=True
     )
 
 

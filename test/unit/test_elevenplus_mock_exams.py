@@ -39,9 +39,28 @@ def test_catalogue_separates_common_and_school_target_mocks_without_answers() ->
         "common",
         "school_target",
     }
-    assert any(item["is_free"] and item["available"] for item in catalogue["exams"])
+    free_exams = [item for item in catalogue["exams"] if item["is_free"]]
+    assert [(item["id"], item["title"]) for item in free_exams] == [
+        ("common-diagnostic-1", "Common 11+ Diagnostic")
+    ]
+    assert free_exams[0]["available"] is True
+    assert free_exams[0]["required_plan"] is None
     assert any(not item["is_free"] and not item["available"] for item in catalogue["exams"])
+    assert all(
+        item["required_plan"] == "elevenplus_monthly"
+        and item["required_plan_name"] == "11+ Premium"
+        for item in catalogue["exams"]
+        if not item["is_free"]
+    )
     assert not _contains_private_key(catalogue)
+
+    unlocked = mocks.mock_exam_catalogue(has_mock_access=True)
+    assert all(item["available"] for item in unlocked["exams"])
+    assert all(
+        item["required_plan"] == "elevenplus_monthly"
+        for item in unlocked["exams"]
+        if not item["is_free"]
+    )
 
 
 def test_every_exam_is_unique_and_uses_only_declared_public_sources() -> None:

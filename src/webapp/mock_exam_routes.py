@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.elevenplus_mock_exams import (
     EXAMS,
+    FREE_MOCK_EXAM_ID,
     MOCK_EXAM_PLAN,
     MOCK_EXAM_PLAN_NAME,
     ExpiredAttempt,
@@ -52,6 +53,7 @@ def build_mock_exam_router(
             identity,
             username,
             MOCK_EXAM_PLAN,
+            True,
             timeout=8,
             limit_concurrency=False,
         )
@@ -78,7 +80,7 @@ def build_mock_exam_router(
         exam = EXAMS.get(str(exam_id or "").strip())
         if exam is None:
             raise HTTPException(status_code=404, detail="This mock exam is not available.")
-        if not exam["is_free"] and not has_access:
+        if exam["id"] != FREE_MOCK_EXAM_ID and not has_access:
             response = private_json(
                 {
                     "success": False,

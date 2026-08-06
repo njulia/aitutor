@@ -91,3 +91,33 @@ def test_guided_frontend_replaces_long_child_profile_and_does_not_send_school() 
         "function saveLearningChoices()", 1
     )[1].split("function restoreLearningChoices()", 1)[0]
     assert "eleven-parent-notes" not in save_choices_body
+
+
+def test_guided_frontend_persists_minutes_and_migrates_old_question_counts() -> None:
+    html = Path("static/app.html").read_text(encoding="utf-8")
+    javascript = Path("static/js/app.js").read_text(encoding="utf-8")
+
+    assert "const ELEVEN_SESSION_QUESTIONS" in javascript
+    assert "10: 5" in javascript
+    assert "15: 8" in javascript
+
+    save_choices_body = javascript.split(
+        "function saveLearningChoices()", 1
+    )[1].split("function restoreLearningChoices()", 1)[0]
+    assert "value.elevenMinutes = elevenMinutes" in save_choices_body
+    assert "delete value.elevenQuestionCount" in save_choices_body
+
+    restore_choices_body = javascript.split(
+        "function restoreLearningChoices()", 1
+    )[1].split("function applyLandingPagePreset()", 1)[0]
+    assert "legacyElevenQuestionCount === 5" in restore_choices_body
+    assert "legacyElevenQuestionCount === 8" in restore_choices_body
+    assert "elevenGuideState.answers.session_minutes = elevenMinutes" in restore_choices_body
+
+    generate_body = javascript.split(
+        "async function generateCustomHomeworkEleven()", 1
+    )[1].split("function formatQuestions", 1)[0]
+    assert "const questionCount = ELEVEN_SESSION_QUESTIONS[sessionMinutes]" in generate_body
+    assert "question_count: questionCount" in generate_body
+    assert "Number(answers.question_count)" not in generate_body
+    assert "11plus-saved-plan" in html

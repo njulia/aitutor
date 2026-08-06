@@ -22,6 +22,7 @@ from src.webapp.runtime import owner_key
 
 MOCK_EXAM_PLAN = "elevenplus_monthly"
 MOCK_EXAM_PLAN_NAME = "11+ Premium"
+FREE_MOCK_EXAM_ID = "common-diagnostic-1"
 CONTENT_VERSION = 1
 
 PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
@@ -649,7 +650,8 @@ def _exam(exam_id: str) -> Dict[str, Any]:
 def _public_exam(exam: Mapping[str, Any], has_mock_access: bool) -> Dict[str, Any]:
     question_ids = tuple(exam["question_ids"])
     subject_counts = Counter(_QUESTION_BY_ID[item]["subject"] for item in question_ids)
-    is_available = bool(exam["is_free"] or has_mock_access)
+    is_free = exam["id"] == FREE_MOCK_EXAM_ID
+    is_available = bool(is_free or has_mock_access)
     return {
         "id": exam["id"],
         "category": exam["category"],
@@ -660,10 +662,10 @@ def _public_exam(exam: Mapping[str, Any], has_mock_access: bool) -> Dict[str, An
         "duration_minutes": exam["duration_minutes"],
         "question_count": len(question_ids),
         "subject_counts": dict(subject_counts),
-        "is_free": bool(exam["is_free"]),
+        "is_free": is_free,
         "available": is_available,
-        "required_plan": None if is_available else MOCK_EXAM_PLAN,
-        "required_plan_name": None if is_available else MOCK_EXAM_PLAN_NAME,
+        "required_plan": None if is_free else MOCK_EXAM_PLAN,
+        "required_plan_name": None if is_free else MOCK_EXAM_PLAN_NAME,
         "format_note": exam["format_note"],
         "last_verified": exam["last_verified"],
         "sources": [
@@ -920,6 +922,15 @@ def score_mock_exam(
 
 def validate_mock_exam_content() -> None:
     """Fail fast during tests if an exam leaks, duplicates or references bad data."""
+    free_exam_ids = {
+        exam_id for exam_id, exam in EXAMS.items() if bool(exam.get("is_free"))
+    }
+    if free_exam_ids != {FREE_MOCK_EXAM_ID}:
+        raise ValueError(
+            "Only the Common 11+ Diagnostic may be marked as a free mock exam"
+        )
+    if EXAMS[FREE_MOCK_EXAM_ID]["title"] != "Common 11+ Diagnostic":
+        raise ValueError("The free mock must be the Common 11+ Diagnostic")
     for exam_id, exam in EXAMS.items():
         question_ids = tuple(exam["question_ids"])
         if not question_ids or len(question_ids) != len(set(question_ids)):
