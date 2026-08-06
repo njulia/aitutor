@@ -77,8 +77,92 @@ def test_every_exam_is_unique_and_uses_only_declared_public_sources() -> None:
                 "warwickshire.gov.uk",
                 "qebarnet.co.uk",
                 "tiffinschool.co.uk",
+                "kent.gov.uk",
+                "buckinghamshire.gov.uk",
+                "greenshaw.co.uk",
+                "westmidlandsgrammarschools.co.uk",
+                "csse.org.uk",
+                "lrgs.org.uk",
             )
         )
+
+
+def test_expanded_catalogue_has_ten_new_mocks_and_128_new_questions() -> None:
+    expected_new_exams = {
+        "common-full-3",
+        "common-full-4",
+        "buckinghamshire-transfer-1",
+        "kent-test-1",
+        "sutton-set-1",
+        "common-full-5",
+        "common-full-6",
+        "west-midlands-grammar-1",
+        "csse-essex-1",
+        "lancaster-royal-grammar-1",
+    }
+
+    assert len(mocks.EXAMS) == 15
+    assert len(mocks._QUESTIONS) == 192
+    assert expected_new_exams <= set(mocks.EXAMS)
+    assert all(not mocks.EXAMS[exam_id]["is_free"] for exam_id in expected_new_exams)
+    assert {
+        mocks.EXAMS[exam_id]["last_verified"] for exam_id in expected_new_exams
+    } == {"2026-08-06"}
+
+    for prefix in ("m", "e", "v", "n"):
+        assert {
+            f"{prefix}{number:02d}" for number in range(17, 49)
+        } <= set(mocks._QUESTION_BY_ID)
+
+
+def test_new_area_target_mocks_match_their_declared_subject_scope() -> None:
+    expected_subjects = {
+        "buckinghamshire-transfer-1": {
+            "English",
+            "Verbal Reasoning",
+            "Maths",
+            "Non-Verbal Reasoning",
+        },
+        "kent-test-1": {
+            "English",
+            "Verbal Reasoning",
+            "Maths",
+            "Non-Verbal Reasoning",
+        },
+        "sutton-set-1": {"English", "Maths"},
+        "west-midlands-grammar-1": {
+            "English",
+            "Verbal Reasoning",
+            "Maths",
+            "Non-Verbal Reasoning",
+        },
+        "csse-essex-1": {"English", "Maths"},
+        "lancaster-royal-grammar-1": {
+            "English",
+            "Maths",
+            "Verbal Reasoning",
+        },
+    }
+
+    for exam_id, subjects in expected_subjects.items():
+        exam = mocks.EXAMS[exam_id]
+        actual = {
+            mocks._QUESTION_BY_ID[question_id]["subject"]
+            for question_id in exam["question_ids"]
+        }
+        assert actual == subjects
+        assert exam["category"] == "school_target"
+        assert exam["is_free"] is False
+
+
+def test_validation_rejects_reordered_duplicate_exam_content(monkeypatch) -> None:
+    duplicate = dict(mocks.EXAMS["common-full-5"])
+    duplicate["id"] = "reordered-duplicate"
+    duplicate["question_ids"] = tuple(reversed(duplicate["question_ids"]))
+    monkeypatch.setitem(mocks.EXAMS, duplicate["id"], duplicate)
+
+    with pytest.raises(ValueError, match="repeats the question set"):
+        mocks.validate_mock_exam_content()
 
 
 def test_paid_common_full_mocks_do_not_repeat_questions() -> None:

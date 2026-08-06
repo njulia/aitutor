@@ -130,7 +130,7 @@ def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None
     types = {item["@type"] for item in graph}
     assert {"WebPage", "SoftwareApplication", "BreadcrumbList", "FAQPage"} <= types
     faq = next(item for item in graph if item["@type"] == "FAQPage")
-    assert len(faq["mainEntity"]) == 4
+    assert len(faq["mainEntity"]) == 5
     assert all(item["name"] in source for item in faq["mainEntity"])
     application = next(item for item in graph if item["@type"] == "SoftwareApplication")
     assert {offer["price"] for offer in application["offers"]} == {"0", "9.99"}
@@ -138,6 +138,19 @@ def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None
     assert "free diagnostic" in source.casefold()
     assert "Only the Common 11+ Diagnostic is free" in source
     assert "every other mock" in source.casefold()
+    assert "15 online 11 Plus mock exams" in source
+    assert "192 original questions" in source
+    assert all(
+        area in source
+        for area in (
+            "Kent",
+            "Buckinghamshire",
+            "Sutton",
+            "West Midlands",
+            "CSSE Essex",
+            "Lancaster",
+        )
+    )
 
 
 def test_mock_exam_frontend_and_pricing_name_the_premium_boundary() -> None:

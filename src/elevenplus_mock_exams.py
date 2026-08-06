@@ -17,6 +17,11 @@ import time
 from collections import Counter
 from typing import Any, Dict, Iterable, Mapping
 
+from src.elevenplus_mock_exam_expansion import (
+    ADDITIONAL_EXAMS,
+    ADDITIONAL_PUBLIC_SOURCES,
+    ADDITIONAL_QUESTIONS,
+)
 from src.webapp.runtime import owner_key
 
 
@@ -53,6 +58,7 @@ PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
         ),
     },
 }
+PUBLIC_SOURCES.update(ADDITIONAL_PUBLIC_SOURCES)
 
 
 class MockExamError(ValueError):
@@ -541,6 +547,7 @@ _QUESTIONS = [
         "One more 45° clockwise turn from ↘ makes the arrow point down.",
     ),
 ]
+_QUESTIONS.extend(ADDITIONAL_QUESTIONS)
 
 _QUESTION_BY_ID = {question["id"]: question for question in _QUESTIONS}
 if len(_QUESTION_BY_ID) != len(_QUESTIONS):
@@ -638,6 +645,7 @@ EXAMS: Dict[str, Dict[str, Any]] = {
         "last_verified": "2026-07-28",
     },
 }
+EXAMS.update(ADDITIONAL_EXAMS)
 
 
 def _exam(exam_id: str) -> Dict[str, Any]:
@@ -931,10 +939,20 @@ def validate_mock_exam_content() -> None:
         )
     if EXAMS[FREE_MOCK_EXAM_ID]["title"] != "Common 11+ Diagnostic":
         raise ValueError("The free mock must be the Common 11+ Diagnostic")
+    seen_question_sets: Dict[frozenset[str], str] = {}
     for exam_id, exam in EXAMS.items():
+        if exam.get("id") != exam_id:
+            raise ValueError(f"{exam_id} has a mismatched exam identifier")
         question_ids = tuple(exam["question_ids"])
         if not question_ids or len(question_ids) != len(set(question_ids)):
             raise ValueError(f"{exam_id} contains duplicate or missing questions")
+        question_set = frozenset(question_ids)
+        duplicate_exam_id = seen_question_sets.get(question_set)
+        if duplicate_exam_id:
+            raise ValueError(
+                f"{exam_id} repeats the question set from {duplicate_exam_id}"
+            )
+        seen_question_sets[question_set] = exam_id
         unknown = [item for item in question_ids if item not in _QUESTION_BY_ID]
         if unknown:
             raise ValueError(f"{exam_id} references unknown questions: {unknown}")
@@ -943,6 +961,8 @@ def validate_mock_exam_content() -> None:
         for source_id in exam["source_ids"]:
             if source_id not in PUBLIC_SOURCES:
                 raise ValueError(f"{exam_id} references an unknown source")
+            if not PUBLIC_SOURCES[source_id]["url"].startswith("https://"):
+                raise ValueError(f"{exam_id} references a non-HTTPS source")
     for question in _QUESTIONS:
         # Capitalisation can be the tested distinction in English questions,
         # so only reject byte-for-byte duplicate visible choices here.

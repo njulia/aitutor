@@ -145,7 +145,11 @@ def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> Non
     assert all(item["available"] is True for item in paid)
     assert all(item["required_plan"] == "elevenplus_monthly" for item in paid)
 
-    started = authenticated_client.post(
-        "/api/elevenplus/mock-exams/common-full-1/start"
-    )
-    assert started.status_code == 200, started.text
+    for exam in paid:
+        started = authenticated_client.post(
+            f"/api/elevenplus/mock-exams/{exam['id']}/start"
+        )
+        assert started.status_code == 200, started.text
+        payload = started.json()
+        assert len(payload["questions"]) == exam["question_count"]
+        assert not _contains_private_key(payload)
