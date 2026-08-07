@@ -24,7 +24,7 @@
     .muted { color: #65708a; }
     #status { min-height: 1.5rem; font-weight: 650; }
   </style>
-  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260806-kid-avatar">
 </head>
 <body class="hm-page">
   <header>
@@ -36,7 +36,7 @@
         <a href="/elevenplus-practice">11+</a>
         <a href="/progress">Progress</a>
         <a href="/rewards">Rewards</a>
-        <a href="/parent-dashboard" id="parent-dashboard-link">Parent Dashboard</a>
+        <a href="/parent-dashboard" id="parent-dashboard-link">Parent dashboard</a>
         <a href="#" id="parent-logout">Log out</a>
       </nav>
     </div>
@@ -122,5 +122,6 @@ document.getElementById('clear').onclick=async()=>{if(!confirm('Delete all remem
 document.getElementById('export').onclick=async()=>{try{const data=await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}/export`);const blob=new Blob([JSON.stringify(data.memory_export,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='learning-memory.json';a.click();URL.revokeObjectURL(a.href);status('Memory export created.');}catch(e){status(e.message,true);}};
 start();
 </script>
+<script src="/static/js/auth-nav.js?v=20260806-kid-avatar" defer></script>
 </body>
 </html>

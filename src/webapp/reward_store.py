@@ -54,21 +54,21 @@ DEFAULT_REWARDS: tuple[dict[str, Any], ...] = (
         "code": "homework_magic_stickers",
         "name": "Homework Magic sticker pack",
         "icon": "⭐",
-        "points_cost": 500,
+        "points_cost": 1000,
         "description": "A colourful pack of Homework Magic logo stickers.",
     },
     {
         "code": "homework_magic_pen",
         "name": "Homework Magic pen",
         "icon": "✏️",
-        "points_cost": 1000,
+        "points_cost": 2000,
         "description": "A Homework Magic logo pen for learning adventures.",
     },
     {
         "code": "homework_magic_notebook",
         "name": "Homework Magic notebook",
         "icon": "📓",
-        "points_cost": 2000,
+        "points_cost": 5000,
         "description": "A Homework Magic logo notebook for ideas and practice.",
     },
 )
@@ -84,28 +84,28 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
     {
         "code": "curious_explorer",
         "title": "Curious Explorer",
-        "threshold": 250,
+        "threshold": 500,
         "icon": "🧭",
         "message": "for exploring learning quests with courage and curiosity",
     },
     {
         "code": "homework_hero",
         "title": "Homework Hero",
-        "threshold": 500,
+        "threshold": 1000,
         "icon": "🦸",
         "message": "for keeping going and building a strong learning habit",
     },
     {
         "code": "quest_champion",
         "title": "Quest Champion",
-        "threshold": 1_000,
+        "threshold": 2_000,
         "icon": "🏆",
         "message": "for completing many learning quests with wonderful effort",
     },
     {
         "code": "learning_legend",
         "title": "Learning Legend",
-        "threshold": 2_000,
+        "threshold": 5_000,
         "icon": "🌟",
         "message": "for an amazing journey of practice, patience and progress",
     },
@@ -114,10 +114,10 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
 LEVELS: tuple[dict[str, Any], ...] = (
     {"number": 1, "name": "Spark", "threshold": 0, "icon": "✨"},
     {"number": 2, "name": "Explorer", "threshold": 100, "icon": "🧭"},
-    {"number": 3, "name": "Builder", "threshold": 250, "icon": "🧱"},
-    {"number": 4, "name": "Champion", "threshold": 500, "icon": "🏆"},
-    {"number": 5, "name": "Superstar", "threshold": 1_000, "icon": "🌠"},
-    {"number": 6, "name": "Legend", "threshold": 2_000, "icon": "🌟"},
+    {"number": 3, "name": "Builder", "threshold": 500, "icon": "🧱"},
+    {"number": 4, "name": "Champion", "threshold": 1000, "icon": "🏆"},
+    {"number": 5, "name": "Superstar", "threshold": 2_000, "icon": "🌠"},
+    {"number": 6, "name": "Legend", "threshold": 5_000, "icon": "🌟"},
 )
 
 DAILY_QUESTS: tuple[dict[str, Any], ...] = (

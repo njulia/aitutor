@@ -27,7 +27,7 @@
     "publisher": {"@type": "Organization", "name": "Homework Magic"}
   }
   </script>
-  <link rel="stylesheet" href="/static/css/theme.css">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260806-kid-avatar">
   <style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #25304a; background: #f4f6fb; }
     * { box-sizing: border-box; }
@@ -72,12 +72,13 @@
   <div class="hm-nav-wrap">
     <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
     <nav class="hm-main-nav" aria-label="Main navigation">
-      <a href="/parent-dashboard" id="parent-dashboard-link">Parent dashboard</a>
-      <a href="/memory">Learning memory</a>
+      <a href="/parent-dashboard">Parent dashboard</a>
+      <a href="/memory">Memory</a>
       <a href="/progress">Progress</a>
-      <a href="/login?next=/pricing" id="pricing-nav-login">Parent sign in</a>
+      <a href="/rewards">Rewards</a>
+      <a href="/login?next=/pricing" id="pricing-nav-login">Login</a>
       <a href="/app" id="pricing-nav-learning" hidden>My learning</a>
-      <a href="#" id="pricing-nav-logout" hidden>Log out</a>
+      <a href="#" id="pricing-nav-logout" hidden>Logout</a>
       <a class="hm-nav-cta" href="/register" id="pricing-nav-register">Create account</a>
     </nav>
   </div>
@@ -172,5 +173,6 @@
 </main>
 
 <script src="/static/js/pricing.js?v=20260806-secure-checkout" defer></script>
+<script src="/static/js/auth-nav.js?v=20260806-kid-avatar" defer></script>
 </body>
 </html>

@@ -1272,7 +1272,7 @@
         document.addEventListener('DOMContentLoaded', async function() {
             try {
                 const sessionContext = window.HomeworkMagicSession
-                    ? await window.HomeworkMagicSession.get(true)
+                    ? await window.HomeworkMagicSession.get(false)
                     : {authenticated: false, role: 'anonymous'};
                 currentSessionRole = sessionContext.role || 'anonymous';
                 if (currentSessionRole === 'kid' && sessionContext.student) {
@@ -1324,7 +1324,10 @@
             const appRegisterLink = document.querySelector('nav.nav-links a[href="/register"]');
             const appParentLink = document.getElementById('parent-dashboard-link');
             const authenticated = Boolean(currentStudentId);
-            if (appLogoutLink) appLogoutLink.style.display = authenticated ? 'block' : 'none';
+            if (appLogoutLink) {
+                appLogoutLink.style.display = authenticated && currentSessionRole !== 'kid'
+                    ? 'block' : 'none';
+            }
             if (appLoginLink) appLoginLink.style.display = authenticated ? 'none' : '';
             if (appRegisterLink) appRegisterLink.style.display = authenticated ? 'none' : '';
             if (appParentLink) appParentLink.style.display = currentSessionRole === 'parent' ? '' : 'none';
