@@ -84,28 +84,28 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
     {
         "code": "curious_explorer",
         "title": "Curious Explorer",
-        "threshold": 250,
+        "threshold": 500,
         "icon": "🧭",
         "message": "for exploring learning quests with courage and curiosity",
     },
     {
         "code": "homework_hero",
         "title": "Homework Hero",
-        "threshold": 500,
+        "threshold": 1000,
         "icon": "🦸",
         "message": "for keeping going and building a strong learning habit",
     },
     {
         "code": "quest_champion",
         "title": "Quest Champion",
-        "threshold": 1_000,
+        "threshold": 2_000,
         "icon": "🏆",
         "message": "for completing many learning quests with wonderful effort",
     },
     {
         "code": "learning_legend",
         "title": "Learning Legend",
-        "threshold": 2_000,
+        "threshold": 5_000,
         "icon": "🌟",
         "message": "for an amazing journey of practice, patience and progress",
     },
@@ -114,31 +114,98 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
 LEVELS: tuple[dict[str, Any], ...] = (
     {"number": 1, "name": "Spark", "threshold": 0, "icon": "✨"},
     {"number": 2, "name": "Explorer", "threshold": 100, "icon": "🧭"},
-    {"number": 3, "name": "Builder", "threshold": 250, "icon": "🧱"},
-    {"number": 4, "name": "Champion", "threshold": 500, "icon": "🏆"},
-    {"number": 5, "name": "Superstar", "threshold": 1_000, "icon": "🌠"},
-    {"number": 6, "name": "Legend", "threshold": 2_000, "icon": "🌟"},
+    {"number": 3, "name": "Builder", "threshold": 500, "icon": "🧱"},
+    {"number": 4, "name": "Champion", "threshold": 1000, "icon": "🏆"},
+    {"number": 5, "name": "Superstar", "threshold": 2_000, "icon": "🌠"},
+    {"number": 6, "name": "Legend", "threshold": 5_000, "icon": "🌟"},
 )
 
-AVATAR_COLOURS: dict[str, str] = {
-    "purple": "Magic purple",
-    "teal": "Forest teal",
-    "rose": "Berry pink",
-    "blue": "Sky blue",
+AVATAR_CHARACTER_TYPES: dict[str, str] = {
+    "girl": "Girl character",
+    "boy": "Boy character",
 }
-AVATAR_ACCESSORIES: dict[str, str] = {
-    "star": "Shiny star",
-    "apple": "Learning apple",
-    "bow": "Bright bow",
-    "crown": "Quest crown",
+AVATAR_CLOTHES: dict[str, str] = {
+    "purple_hoodie": "Purple hoodie",
+    "blue_tshirt": "Blue T-shirt",
+    "green_jumper": "Green jumper",
+    "pink_dress": "Pink dress",
+}
+AVATAR_SHOES: dict[str, str] = {
+    "trainers": "Colourful trainers",
+    "boots": "Adventure boots",
+    "school_shoes": "Smart school shoes",
+}
+AVATAR_SKIN_TONES: dict[str, str] = {
+    "light": "Light",
+    "warm": "Warm",
+    "tan": "Tan",
+    "deep": "Deep",
+}
+AVATAR_HAIR_COLOURS: dict[str, str] = {
+    "black": "Black",
+    "brown": "Brown",
+    "blonde": "Blonde",
+    "red": "Red",
+}
+AVATAR_HAIR_LENGTHS: dict[str, str] = {
+    "short": "Short",
+    "medium": "Medium",
+    "long": "Long",
+}
+AVATAR_HAIR_STYLES: dict[str, str] = {
+    "straight": "Straight",
+    "curly": "Curly",
+    "ponytail": "Ponytail",
+    "spiky": "Spiky",
+}
+AVATAR_EYE_SHAPES: dict[str, str] = {
+    "round": "Round",
+    "almond": "Almond",
+    "smiling": "Smiling",
+}
+AVATAR_EYE_COLOURS: dict[str, str] = {
+    "brown": "Brown",
+    "blue": "Blue",
+    "green": "Green",
+    "grey": "Grey",
+}
+AVATAR_NOSE_SHAPES: dict[str, str] = {
+    "button": "Button",
+    "small": "Small",
+    "round": "Round",
+}
+AVATAR_MOUTH_SHAPES: dict[str, str] = {
+    "smile": "Smile",
+    "grin": "Grin",
+    "open": "Open smile",
+    "calm": "Calm",
+}
+AVATAR_EYEBROW_SHAPES: dict[str, str] = {
+    "soft": "Soft",
+    "straight": "Straight",
+    "arched": "Arched",
+}
+AVATAR_PROFILE_DEFAULTS: dict[str, str] = {
+    "character": "girl",
+    "clothes": "pink_dress",
+    "shoes": "trainers",
+    "skin_tone": "warm",
+    "hair_colour": "brown",
+    "hair_length": "long",
+    "hair_style": "ponytail",
+    "eye_shape": "round",
+    "eye_colour": "green",
+    "nose": "button",
+    "mouth": "smile",
+    "eyebrows": "arched",
 }
 AVATAR_GROWTH_NAMES: dict[int, str] = {
-    1: "Tiny Capybara",
-    2: "Curious Cub",
-    3: "Growing Explorer",
-    4: "Clever Capybara",
-    5: "Star Capybara",
-    6: "Legendary Capybara",
+    1: "Little Learner",
+    2: "Curious Explorer",
+    3: "Growing Star",
+    4: "Clever Champion",
+    5: "Super Scholar",
+    6: "Learning Legend",
 }
 
 DAILY_QUESTS: tuple[dict[str, Any], ...] = (
@@ -366,19 +433,38 @@ def _level_status(lifetime_xp: int) -> dict[str, Any]:
 def _avatar_payload(
     lifetime_xp: int,
     *,
-    colour: str = "purple",
-    accessory: str = "star",
+    profile: Mapping[str, Any] | None = None,
     customised: bool = False,
 ) -> dict[str, Any]:
     points = max(0, int(lifetime_xp or 0))
     level = _level_status(points)
     next_level = level.get("next")
+    supplied = profile or {}
+    options = {
+        "character": AVATAR_CHARACTER_TYPES,
+        "clothes": AVATAR_CLOTHES,
+        "shoes": AVATAR_SHOES,
+        "skin_tone": AVATAR_SKIN_TONES,
+        "hair_colour": AVATAR_HAIR_COLOURS,
+        "hair_length": AVATAR_HAIR_LENGTHS,
+        "hair_style": AVATAR_HAIR_STYLES,
+        "eye_shape": AVATAR_EYE_SHAPES,
+        "eye_colour": AVATAR_EYE_COLOURS,
+        "nose": AVATAR_NOSE_SHAPES,
+        "mouth": AVATAR_MOUTH_SHAPES,
+        "eyebrows": AVATAR_EYEBROW_SHAPES,
+    }
+    safe_profile = {
+        key: (
+            str(supplied.get(key) or default)
+            if str(supplied.get(key) or default) in options[key]
+            else default
+        )
+        for key, default in AVATAR_PROFILE_DEFAULTS.items()
+    }
     return {
         "profile": {
-            "colour": colour if colour in AVATAR_COLOURS else "purple",
-            "accessory": (
-                accessory if accessory in AVATAR_ACCESSORIES else "star"
-            ),
+            **safe_profile,
             "customised": bool(customised),
         },
         "growth": {
@@ -473,6 +559,28 @@ class RewardStore:
             Column("account_id", String(80), nullable=False, index=True),
             Column("colour", String(20), nullable=False),
             Column("accessory", String(20), nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        )
+        # Character profiles use a separate table so deployments that already
+        # have the original capybara table do not need a blocking ALTER TABLE.
+        self.character_profiles = Table(
+            "reward_character_profiles",
+            self.metadata,
+            Column("student_id", String(80), primary_key=True),
+            Column("account_id", String(80), nullable=False, index=True),
+            Column("character", String(20), nullable=False),
+            Column("clothes", String(30), nullable=False),
+            Column("shoes", String(30), nullable=False),
+            Column("skin_tone", String(20), nullable=False),
+            Column("hair_colour", String(20), nullable=False),
+            Column("hair_length", String(20), nullable=False),
+            Column("hair_style", String(20), nullable=False),
+            Column("eye_shape", String(20), nullable=False),
+            Column("eye_colour", String(20), nullable=False),
+            Column("nose", String(20), nullable=False),
+            Column("mouth", String(20), nullable=False),
+            Column("eyebrows", String(20), nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
             Column("updated_at", DateTime(timezone=True), nullable=False),
         )
@@ -1143,20 +1251,20 @@ class RewardStore:
         """Return the small avatar payload used by role-aware navigation."""
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
+        profile_fields = tuple(AVATAR_PROFILE_DEFAULTS)
         with self.engine.begin() as conn:
             row = conn.execute(
                 select(
                     self.wallets.c.lifetime_xp,
-                    self.avatar_profiles.c.colour,
-                    self.avatar_profiles.c.accessory,
+                    *(getattr(self.character_profiles.c, key) for key in profile_fields),
                 )
                 .select_from(
                     self.wallets.outerjoin(
-                        self.avatar_profiles,
+                        self.character_profiles,
                         and_(
-                            self.avatar_profiles.c.student_id
+                            self.character_profiles.c.student_id
                             == self.wallets.c.student_id,
-                            self.avatar_profiles.c.account_id
+                            self.character_profiles.c.account_id
                             == self.wallets.c.account_id,
                         ),
                     )
@@ -1171,11 +1279,13 @@ class RewardStore:
         if row is None:
             return _avatar_payload(0)
         data = row._mapping
-        customised = bool(data.get("colour") and data.get("accessory"))
+        customised = bool(data.get("character"))
         return _avatar_payload(
             int(data.get("lifetime_xp") or 0),
-            colour=str(data.get("colour") or "purple"),
-            accessory=str(data.get("accessory") or "star"),
+            profile={
+                key: data.get(key) or AVATAR_PROFILE_DEFAULTS[key]
+                for key in profile_fields
+            },
             customised=customised,
         )
 
@@ -1184,69 +1294,98 @@ class RewardStore:
         *,
         account_id: str,
         student_id: str,
-        colour: str,
-        accessory: str,
+        character: str,
+        clothes: str,
+        shoes: str,
+        skin_tone: str,
+        hair_colour: str,
+        hair_length: str,
+        hair_style: str,
+        eye_shape: str,
+        eye_colour: str,
+        nose: str,
+        mouth: str,
+        eyebrows: str,
     ) -> dict[str, Any]:
         """Persist a bounded, child-safe avatar choice for one learner."""
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
-        chosen_colour = str(colour or "").strip().lower()
-        chosen_accessory = str(accessory or "").strip().lower()
-        if chosen_colour not in AVATAR_COLOURS:
-            raise ValueError("Choose one of the available avatar colours")
-        if chosen_accessory not in AVATAR_ACCESSORIES:
-            raise ValueError("Choose one of the available avatar accessories")
+        raw_profile = {
+            "character": character,
+            "clothes": clothes,
+            "shoes": shoes,
+            "skin_tone": skin_tone,
+            "hair_colour": hair_colour,
+            "hair_length": hair_length,
+            "hair_style": hair_style,
+            "eye_shape": eye_shape,
+            "eye_colour": eye_colour,
+            "nose": nose,
+            "mouth": mouth,
+            "eyebrows": eyebrows,
+        }
+        option_sets = {
+            "character": (AVATAR_CHARACTER_TYPES, "characters"),
+            "clothes": (AVATAR_CLOTHES, "clothes"),
+            "shoes": (AVATAR_SHOES, "shoes"),
+            "skin_tone": (AVATAR_SKIN_TONES, "skin tones"),
+            "hair_colour": (AVATAR_HAIR_COLOURS, "hair colours"),
+            "hair_length": (AVATAR_HAIR_LENGTHS, "hair lengths"),
+            "hair_style": (AVATAR_HAIR_STYLES, "hair styles"),
+            "eye_shape": (AVATAR_EYE_SHAPES, "eye shapes"),
+            "eye_colour": (AVATAR_EYE_COLOURS, "eye colours"),
+            "nose": (AVATAR_NOSE_SHAPES, "nose shapes"),
+            "mouth": (AVATAR_MOUTH_SHAPES, "mouth shapes"),
+            "eyebrows": (AVATAR_EYEBROW_SHAPES, "eyebrow shapes"),
+        }
+        chosen_profile: dict[str, str] = {}
+        for key, value in raw_profile.items():
+            chosen = str(value or "").strip().lower()
+            allowed, label = option_sets[key]
+            if chosen not in allowed:
+                raise ValueError(f"Choose one of the available avatar {label}")
+            chosen_profile[key] = chosen
 
         now = _now()
         with self.engine.begin() as conn:
             wallet = self._ensure_wallet(conn, account, learner, lock=False)
             result = conn.execute(
-                update(self.avatar_profiles)
+                update(self.character_profiles)
                 .where(
                     and_(
-                        self.avatar_profiles.c.account_id == account,
-                        self.avatar_profiles.c.student_id == learner,
+                        self.character_profiles.c.account_id == account,
+                        self.character_profiles.c.student_id == learner,
                     )
                 )
-                .values(
-                    colour=chosen_colour,
-                    accessory=chosen_accessory,
-                    updated_at=now,
-                )
+                .values(**chosen_profile, updated_at=now)
             )
             if not result.rowcount:
                 try:
                     with conn.begin_nested():
                         conn.execute(
-                            insert(self.avatar_profiles).values(
+                            insert(self.character_profiles).values(
                                 student_id=learner,
                                 account_id=account,
-                                colour=chosen_colour,
-                                accessory=chosen_accessory,
+                                **chosen_profile,
                                 created_at=now,
                                 updated_at=now,
                             )
                         )
                 except IntegrityError:
                     conn.execute(
-                        update(self.avatar_profiles)
+                        update(self.character_profiles)
                         .where(
                             and_(
-                                self.avatar_profiles.c.account_id == account,
-                                self.avatar_profiles.c.student_id == learner,
+                                self.character_profiles.c.account_id == account,
+                                self.character_profiles.c.student_id == learner,
                             )
                         )
-                        .values(
-                            colour=chosen_colour,
-                            accessory=chosen_accessory,
-                            updated_at=now,
-                        )
+                        .values(**chosen_profile, updated_at=now)
                     )
             lifetime_xp = int(wallet._mapping["lifetime_xp"] or 0)
         return _avatar_payload(
             lifetime_xp,
-            colour=chosen_colour,
-            accessory=chosen_accessory,
+            profile=chosen_profile,
             customised=True,
         )
 
@@ -1871,6 +2010,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("character_profiles", self.character_profiles),
                 ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),
             ):
@@ -1894,6 +2034,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("character_profiles", self.character_profiles),
                 ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),
                 ("catalog_items", self.catalog),

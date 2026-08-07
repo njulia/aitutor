@@ -16,6 +16,20 @@ DELIVERY_ADDRESS = {
     "adult_recipient_confirmed": True,
 }
 DELIVERY_SECRET = "unit-test-delivery-secret-with-32-characters"
+CUSTOM_CHARACTER = {
+    "character": "boy",
+    "clothes": "green_jumper",
+    "shoes": "boots",
+    "skin_tone": "tan",
+    "hair_colour": "black",
+    "hair_length": "short",
+    "hair_style": "curly",
+    "eye_shape": "almond",
+    "eye_colour": "green",
+    "nose": "small",
+    "mouth": "grin",
+    "eyebrows": "arched",
+}
 
 
 def _fingerprint(seed: str) -> str:
@@ -180,7 +194,7 @@ def test_everyone_earns_xp_but_free_learners_do_not_earn_gift_points(
         )
 
 
-def test_capybara_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> None:
+def test_character_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'avatar.db'}"
     store = RewardStore(database_url)
     account_id = "acct_avatar"
@@ -191,22 +205,30 @@ def test_capybara_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> N
         student_id=student_id,
     )
     assert initial["profile"] == {
-        "colour": "purple",
-        "accessory": "star",
+        "character": "girl",
+        "clothes": "pink_dress",
+        "shoes": "trainers",
+        "skin_tone": "warm",
+        "hair_colour": "brown",
+        "hair_length": "long",
+        "hair_style": "ponytail",
+        "eye_shape": "round",
+        "eye_colour": "green",
+        "nose": "button",
+        "mouth": "smile",
+        "eyebrows": "arched",
         "customised": False,
     }
     assert initial["growth"]["stage"] == 1
-    assert initial["growth"]["name"] == "Tiny Capybara"
+    assert initial["growth"]["name"] == "Little Learner"
 
     customised = store.update_avatar(
         account_id=account_id,
         student_id=student_id,
-        colour="rose",
-        accessory="crown",
+        **CUSTOM_CHARACTER,
     )
     assert customised["profile"] == {
-        "colour": "rose",
-        "accessory": "crown",
+        **CUSTOM_CHARACTER,
         "customised": True,
     }
     assert customised["growth"]["stage"] == 1
@@ -227,7 +249,7 @@ def test_capybara_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> N
     )
     assert grown["growth"]["lifetime_xp"] == 640
     assert grown["growth"]["stage"] == 4
-    assert grown["growth"]["name"] == "Clever Capybara"
+    assert grown["growth"]["name"] == "Clever Champion"
 
     reloaded = RewardStore(database_url).avatar_summary(
         account_id=account_id,
@@ -235,32 +257,30 @@ def test_capybara_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> N
     )
     assert reloaded == grown
 
-    with pytest.raises(ValueError, match="available avatar colours"):
+    with pytest.raises(ValueError, match="available avatar hair colours"):
         store.update_avatar(
             account_id=account_id,
             student_id=student_id,
-            colour="unsafe-choice",
-            accessory="star",
+            **{**CUSTOM_CHARACTER, "hair_colour": "unsafe-choice"},
         )
 
     erased = store.delete_learner(
         account_id=account_id,
         student_id=student_id,
     )
-    assert erased["avatar_profiles"] == 1
+    assert erased["character_profiles"] == 1
     with store.engine.begin() as conn:
-        assert conn.execute(store.avatar_profiles.select()).first() is None
+        assert conn.execute(store.character_profiles.select()).first() is None
 
     store.update_avatar(
         account_id=account_id,
         student_id="stu_avatar_sibling",
-        colour="teal",
-        accessory="apple",
+        **{**CUSTOM_CHARACTER, "character": "girl"},
     )
     account_erased = store.delete_account(account_id)
-    assert account_erased["avatar_profiles"] == 1
+    assert account_erased["character_profiles"] == 1
     with store.engine.begin() as conn:
-        assert conn.execute(store.avatar_profiles.select()).first() is None
+        assert conn.execute(store.character_profiles.select()).first() is None
 
 
 def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> None:

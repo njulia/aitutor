@@ -32,7 +32,9 @@
     .kid-title { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
     .kid-title h3 { margin: 0; }
     .default-badge { background: #e7e5ff; border-radius: 999px; color: #4e46b9; font-size: .72rem; padding: 3px 8px; }
-    .kid-code { background: #fff; border: 1px dashed #adb8cd; border-radius: 8px; color: #413aa9; font-family: ui-monospace, monospace; margin: 10px 0; padding: 9px; word-break: break-all; }
+    .kid-code { align-items: center; background: #fff; border: 1px dashed #adb8cd; border-radius: 8px; color: #413aa9; display: flex; font-family: ui-monospace, monospace; gap: 7px; justify-content: space-between; margin: 10px 0; padding: 7px 8px; word-break: normal; }
+    .kid-code-value { min-width: 0; white-space: nowrap; }
+    .copy-code-button { flex: 0 0 auto; font-size: .7rem; line-height: 1; min-height: 0; padding: 5px 8px; }
     .metrics { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); margin: 14px 0; }
     .metric { background: #fff; border-radius: 8px; padding: 9px 5px; text-align: center; }
     .metric strong { color: #5149c4; display: block; font-size: 1.15rem; }
@@ -51,6 +53,15 @@
     .item-title { font-weight: 700; }
     .item-meta { color: #6f7c92; font-size: .82rem; margin-top: 3px; }
     .empty { color: #718096; padding: 22px; text-align: center; }
+    .score-trend-figure { margin: 4px 0 0; }
+    .score-trend-plot { background: #f8f9ff; border: 1px solid #e1e5f1; border-radius: 12px; height: 320px; height: clamp(250px, 40vw, 340px); overflow: hidden; position: relative; }
+    .score-trend-plot canvas { display: block; height: 100% !important; max-width: 100%; width: 100% !important; }
+    .score-trend-plot canvas[hidden], .score-trend-empty[hidden] { display: none; }
+    .score-trend-empty { align-items: center; color: #68758d; display: flex; height: 100%; justify-content: center; margin: 0; padding: 24px; text-align: center; }
+    .score-trend-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; list-style: none; margin: 16px 0 8px; padding: 0; }
+    .score-trend-legend li { align-items: center; color: #4c5872; display: flex; font-size: .86rem; gap: 7px; }
+    .score-trend-swatch { border-radius: 999px; display: inline-block; height: 4px; width: 22px; }
+    .score-trend-caption { color: #718096; font-size: .8rem; line-height: 1.5; }
     .modal-overlay { align-items: center; background: #17213c99; display: none; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 1000; }
     .modal-overlay.show { display: flex; }
     .modal { background: #fff; border-radius: 13px; max-width: 420px; padding: 24px; width: 100%; }
@@ -120,6 +131,19 @@
       <div class="kids-grid" id="kids-grid"><div class="empty">Loading learner profiles…</div></div>
     </section>
 
+    <section class="section" aria-labelledby="score-trend-title">
+      <h2 id="score-trend-title">Score Trend Over Time</h2>
+      <p class="muted">Compare marked homework scores for all children in the family.</p>
+      <figure class="score-trend-figure">
+        <div class="score-trend-plot">
+          <canvas id="family-score-trend-chart" role="img" aria-label="Score trend for all children" aria-describedby="score-trend-caption" hidden></canvas>
+          <p class="score-trend-empty" id="family-score-trend-empty" role="status">Loading score trends…</p>
+        </div>
+        <ul class="score-trend-legend" id="family-score-trend-legend" aria-label="Children shown in the score trend"></ul>
+        <figcaption class="score-trend-caption" id="score-trend-caption">Each point is that child’s average marked score for the day. Children without marked scores are still listed below the chart.</figcaption>
+      </figure>
+    </section>
+
     <section class="section" aria-labelledby="digest-title">
       <div class="section-heading">
         <div><h2 id="digest-title">Learning summary</h2><p class="muted">Activity from the last 24 hours, with a seven-day subject fallback.</p></div>
@@ -160,7 +184,8 @@
     </form>
   </div>
 
+  <script src="/static/js/chart-lite.js?v=20260807" defer></script>
   <script src="/static/js/session-context.js?v=20260806" defer></script>
-  <script src="/static/js/parent-dashboard.js?v=20260806" defer></script>
+  <script src="/static/js/parent-dashboard.js?v=20260807" defer></script>
 </body>
 </html>

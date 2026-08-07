@@ -26,25 +26,138 @@
   let avatarSavePending = false;
   let logoutPending = false;
 
-  const AVATAR_COLOURS = [
-    {value: 'purple', label: 'Magic purple', symbol: '●', index: '0'},
-    {value: 'teal', label: 'Forest teal', symbol: '●', index: '1'},
-    {value: 'rose', label: 'Berry pink', symbol: '●', index: '2'},
-    {value: 'blue', label: 'Sky blue', symbol: '●', index: '3'},
-  ];
-  const AVATAR_ACCESSORIES = [
-    {value: 'star', label: 'Shiny star', symbol: '★'},
-    {value: 'apple', label: 'Learning apple', symbol: '🍎'},
-    {value: 'bow', label: 'Bright bow', symbol: '🎀'},
-    {value: 'crown', label: 'Quest crown', symbol: '👑'},
-  ];
+  const AVATAR_DEFAULTS = {
+    character: 'girl',
+    clothes: 'pink_dress',
+    shoes: 'trainers',
+    skin_tone: 'warm',
+    hair_colour: 'brown',
+    hair_length: 'long',
+    hair_style: 'ponytail',
+    eye_shape: 'round',
+    eye_colour: 'green',
+    nose: 'button',
+    mouth: 'smile',
+    eyebrows: 'arched',
+  };
+
+  const CHARACTER_PRESETS = {
+    girl: {
+      clothes: 'pink_dress',
+      shoes: 'trainers',
+      hair_colour: 'brown',
+      hair_length: 'long',
+      hair_style: 'ponytail',
+      eye_shape: 'round',
+      eye_colour: 'green',
+      nose: 'button',
+      mouth: 'smile',
+      eyebrows: 'arched',
+    },
+    boy: {
+      clothes: 'blue_tshirt',
+      shoes: 'boots',
+      hair_colour: 'black',
+      hair_length: 'short',
+      hair_style: 'spiky',
+      eye_shape: 'almond',
+      eye_colour: 'blue',
+      nose: 'small',
+      mouth: 'grin',
+      eyebrows: 'straight',
+    },
+  };
+
+  const AVATAR_OPTIONS = {
+    character: [
+      {value: 'girl', label: 'Girl character', symbol: '👧'},
+      {value: 'boy', label: 'Boy character', symbol: '👦'},
+    ],
+    clothes: [
+      {value: 'purple_hoodie', label: 'Purple', symbol: '🧥'},
+      {value: 'blue_tshirt', label: 'Blue', symbol: '👕'},
+      {value: 'green_jumper', label: 'Green', symbol: '🟢'},
+      {value: 'pink_dress', label: 'Pink', symbol: '👗'},
+    ],
+    shoes: [
+      {value: 'trainers', label: 'Trainers', symbol: '👟'},
+      {value: 'boots', label: 'Boots', symbol: '🥾'},
+      {value: 'school_shoes', label: 'Flats', symbol: '👞'},
+    ],
+    skin_tone: [
+      {value: 'light', label: 'Light skin tone', symbol: '●', swatch: '#f2c9aa'},
+      {value: 'warm', label: 'Warm skin tone', symbol: '●', swatch: '#d99a70'},
+      {value: 'tan', label: 'Tan skin tone', symbol: '●', swatch: '#ae704d'},
+      {value: 'deep', label: 'Deep skin tone', symbol: '●', swatch: '#70462f'},
+    ],
+    hair_colour: [
+      {value: 'black', label: 'Black hair', symbol: '●', swatch: '#28242a'},
+      {value: 'brown', label: 'Brown hair', symbol: '●', swatch: '#6f442d'},
+      {value: 'blonde', label: 'Blonde hair', symbol: '●', swatch: '#e3bd62'},
+      {value: 'red', label: 'Red hair', symbol: '●', swatch: '#ad4e32'},
+    ],
+    hair_length: [
+      {value: 'short', label: 'Short'},
+      {value: 'medium', label: 'Medium'},
+      {value: 'long', label: 'Long'},
+    ],
+    hair_style: [
+      {value: 'straight', label: 'Straight'},
+      {value: 'curly', label: 'Curly'},
+      {value: 'ponytail', label: 'Ponytail'},
+      {value: 'spiky', label: 'Spiky'},
+    ],
+    eye_shape: [
+      {value: 'round', label: 'Round'},
+      {value: 'almond', label: 'Almond'},
+      {value: 'smiling', label: 'Smiling'},
+    ],
+    eye_colour: [
+      {value: 'brown', label: 'Brown eyes', symbol: '●', swatch: '#6a432e'},
+      {value: 'blue', label: 'Blue eyes', symbol: '●', swatch: '#3f85bc'},
+      {value: 'green', label: 'Green eyes', symbol: '●', swatch: '#4d8a62'},
+      {value: 'grey', label: 'Grey eyes', symbol: '●', swatch: '#7d8490'},
+    ],
+    nose: [
+      {value: 'button', label: 'Button nose'},
+      {value: 'small', label: 'Small nose'},
+      {value: 'round', label: 'Round nose'},
+    ],
+    mouth: [
+      {value: 'smile', label: 'Smile'},
+      {value: 'grin', label: 'Toothy grin'},
+      {value: 'open', label: 'Open smile'},
+      {value: 'calm', label: 'Calm'},
+    ],
+    eyebrows: [
+      {value: 'soft', label: 'Soft eyebrows'},
+      {value: 'straight', label: 'Straight eyebrows'},
+      {value: 'arched', label: 'Arched eyebrows'},
+    ],
+  };
+
+  const AVATAR_ATTRIBUTES = {
+    character: 'data-character',
+    clothes: 'data-clothes',
+    shoes: 'data-shoes',
+    skin_tone: 'data-skin-tone',
+    hair_colour: 'data-hair-colour',
+    hair_length: 'data-hair-length',
+    hair_style: 'data-hair-style',
+    eye_shape: 'data-eye-shape',
+    eye_colour: 'data-eye-colour',
+    nose: 'data-nose',
+    mouth: 'data-mouth',
+    eyebrows: 'data-eyebrows',
+  };
+
   const AVATAR_GROWTH_STAGES = [
-    {stage: 1, threshold: 0, name: 'Tiny Capybara'},
-    {stage: 2, threshold: 100, name: 'Curious Cub'},
-    {stage: 3, threshold: 250, name: 'Growing Explorer'},
-    {stage: 4, threshold: 500, name: 'Clever Capybara'},
-    {stage: 5, threshold: 1000, name: 'Star Capybara'},
-    {stage: 6, threshold: 2000, name: 'Legendary Capybara'},
+    {stage: 1, threshold: 0, name: 'Little Learner'},
+    {stage: 2, threshold: 100, name: 'Curious Explorer'},
+    {stage: 3, threshold: 500, name: 'Growing Star'},
+    {stage: 4, threshold: 1000, name: 'Clever Champion'},
+    {stage: 5, threshold: 2000, name: 'Super Scholar'},
+    {stage: 6, threshold: 5000, name: 'Learning Legend'},
   ];
 
   function setVisible(nodes, visible) {
@@ -60,6 +173,10 @@
     node.textContent = text;
     parent.appendChild(node);
     return node;
+  }
+
+  function appendFigurePart(parent, className) {
+    return appendTextElement(parent, 'span', className, '');
   }
 
   function closeAvatarMenu(returnFocus) {
@@ -78,14 +195,6 @@
     button.setAttribute('aria-expanded', 'false');
     avatarRoot.classList.remove('is-open');
     if (returnFocus) button.focus();
-  }
-
-  function avatarColour(name) {
-    let score = 0;
-    for (let index = 0; index < name.length; index += 1) {
-      score = (score + name.charCodeAt(index) * (index + 1)) % 4;
-    }
-    return String(score);
   }
 
   function growthForXp(value) {
@@ -114,9 +223,19 @@
     };
   }
 
-  function validAvatarValue(options, value, fallback) {
+  function validAvatarValue(group, value) {
+    const options = AVATAR_OPTIONS[group] || [];
     const selected = options.find((option) => option.value === value);
-    return selected ? selected.value : fallback;
+    return selected ? selected.value : AVATAR_DEFAULTS[group];
+  }
+
+  function avatarProfileCopy(profile) {
+    const safe = {};
+    Object.keys(AVATAR_DEFAULTS).forEach((group) => {
+      safe[group] = validAvatarValue(group, profile && profile[group]);
+    });
+    safe.customised = Boolean(profile && profile.customised);
+    return safe;
   }
 
   function normaliseAvatarState(summary) {
@@ -126,34 +245,18 @@
     const growth = source.growth && typeof source.growth === 'object'
       ? source.growth : {};
     return {
-      profile: {
-        colour: validAvatarValue(AVATAR_COLOURS, profile.colour, 'purple'),
-        accessory: validAvatarValue(
-          AVATAR_ACCESSORIES, profile.accessory, 'star'
-        ),
-        customised: Boolean(profile.customised),
-      },
+      profile: avatarProfileCopy(profile),
       growth: growthForXp(growth.lifetime_xp),
     };
   }
 
   function applyAvatarAppearance(profile) {
     if (!avatarRoot) return;
-    const selected = profile && profile.customised
-      ? AVATAR_COLOURS.find((option) => option.value === profile.colour)
-      : null;
-    avatarRoot.setAttribute(
-      'data-avatar-colour', selected ? selected.index : avatarColour(activeLearnerName)
-    );
-    const accessoryValue = validAvatarValue(
-      AVATAR_ACCESSORIES, profile && profile.accessory, 'star'
-    );
-    const accessory = AVATAR_ACCESSORIES.find(
-      (option) => option.value === accessoryValue
-    );
-    avatarRoot.setAttribute('data-avatar-accessory', accessoryValue);
-    avatarRoot.querySelectorAll('[data-avatar-accessory-symbol]').forEach((node) => {
-      node.textContent = accessory ? accessory.symbol : '★';
+    const safeProfile = avatarProfileCopy(profile);
+    avatarRoot.querySelectorAll('[data-character-figure]').forEach((figure) => {
+      Object.keys(AVATAR_ATTRIBUTES).forEach((group) => {
+        figure.setAttribute(AVATAR_ATTRIBUTES[group], safeProfile[group]);
+      });
     });
   }
 
@@ -174,11 +277,11 @@
     if (next) {
       next.textContent = safeGrowth.next_stage
         ? `${safeGrowth.xp_to_next} XP until ${safeGrowth.next_stage.name}`
-        : 'Your capybara is fully grown—legendary!';
+        : 'Your character is fully grown—a learning legend!';
     }
   }
 
-  function updateAvatarChoiceButtons() {
+  function updateAvatarControls() {
     if (!avatarRoot || !avatarDraft) return;
     avatarRoot.querySelectorAll('[data-avatar-choice]').forEach((button) => {
       const group = button.getAttribute('data-avatar-choice-group');
@@ -186,17 +289,58 @@
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       button.classList.toggle('is-selected', selected);
     });
+    avatarRoot.querySelectorAll('[data-avatar-select]').forEach((select) => {
+      const group = select.getAttribute('data-avatar-select');
+      select.value = avatarDraft[group];
+    });
   }
 
   function applyAvatarState(summary) {
     avatarState = normaliseAvatarState(summary);
     applyAvatarAppearance(avatarState.profile);
     renderAvatarGrowth(avatarState.growth);
-    avatarDraft = {
-      colour: avatarState.profile.colour,
-      accessory: avatarState.profile.accessory,
-    };
-    updateAvatarChoiceButtons();
+    avatarDraft = avatarProfileCopy(avatarState.profile);
+    updateAvatarControls();
+  }
+
+  function createCharacterFigure(extraClass) {
+    const figure = document.createElement('span');
+    figure.className = `hm-character-avatar ${extraClass || ''}`.trim();
+    figure.setAttribute('data-character-figure', '');
+    figure.setAttribute('aria-hidden', 'true');
+
+    appendFigurePart(figure, 'hm-character-hair-back');
+    appendFigurePart(figure, 'hm-character-ear hm-character-ear-left');
+    appendFigurePart(figure, 'hm-character-ear hm-character-ear-right');
+    appendFigurePart(figure, 'hm-character-neck');
+    appendFigurePart(figure, 'hm-character-arm hm-character-arm-left');
+    appendFigurePart(figure, 'hm-character-arm hm-character-arm-right');
+    appendFigurePart(figure, 'hm-character-leg hm-character-leg-left');
+    appendFigurePart(figure, 'hm-character-leg hm-character-leg-right');
+    appendFigurePart(figure, 'hm-character-shoe hm-character-shoe-left');
+    appendFigurePart(figure, 'hm-character-shoe hm-character-shoe-right');
+    const body = appendFigurePart(figure, 'hm-character-body');
+    appendFigurePart(body, 'hm-character-clothes-detail');
+
+    const head = appendFigurePart(figure, 'hm-character-head');
+    appendFigurePart(head, 'hm-character-hair-front');
+    appendFigurePart(head, 'hm-character-eyebrow hm-character-eyebrow-left');
+    appendFigurePart(head, 'hm-character-eyebrow hm-character-eyebrow-right');
+    const leftEye = appendFigurePart(head, 'hm-character-eye hm-character-eye-left');
+    appendFigurePart(leftEye, 'hm-character-pupil');
+    const rightEye = appendFigurePart(head, 'hm-character-eye hm-character-eye-right');
+    appendFigurePart(rightEye, 'hm-character-pupil');
+    appendFigurePart(head, 'hm-character-cheek hm-character-cheek-left');
+    appendFigurePart(head, 'hm-character-cheek hm-character-cheek-right');
+    appendFigurePart(head, 'hm-character-nose');
+    appendFigurePart(head, 'hm-character-mouth');
+    appendFigurePart(head, 'hm-character-face-detail');
+    return figure;
+  }
+
+  function previewAvatarDraft() {
+    if (!avatarDraft) return;
+    applyAvatarAppearance(Object.assign({}, avatarDraft, {customised: true}));
   }
 
   function createAvatarChoice(group, option) {
@@ -206,21 +350,73 @@
     button.setAttribute('data-avatar-choice', option.value);
     button.setAttribute('data-avatar-choice-group', group);
     button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-label', option.label);
     button.title = option.label;
-    appendTextElement(button, 'span', 'hm-kid-avatar-choice-symbol', option.symbol)
+    if (option.swatch) button.style.setProperty('--hm-choice-colour', option.swatch);
+    appendTextElement(button, 'span', 'hm-kid-avatar-choice-symbol', option.symbol || '◆')
       .setAttribute('aria-hidden', 'true');
     appendTextElement(button, 'span', 'hm-kid-avatar-choice-label', option.label);
     button.addEventListener('click', () => {
       if (!avatarDraft || avatarSavePending) return;
-      avatarDraft[group] = option.value;
-      updateAvatarChoiceButtons();
-      applyAvatarAppearance({
-        colour: avatarDraft.colour,
-        accessory: avatarDraft.accessory,
-        customised: true,
-      });
+      if (group === 'character' && CHARACTER_PRESETS[option.value]) {
+        const skinTone = avatarDraft.skin_tone;
+        avatarDraft = Object.assign(
+          {}, avatarDraft, CHARACTER_PRESETS[option.value], {
+            character: option.value,
+            skin_tone: skinTone,
+          }
+        );
+      } else {
+        avatarDraft[group] = option.value;
+      }
+      updateAvatarControls();
+      previewAvatarDraft();
     });
     return button;
+  }
+
+  function createChoiceFieldset(label, group, extraClass) {
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = `hm-kid-avatar-choice-group ${extraClass || ''}`.trim();
+    appendTextElement(fieldset, 'legend', '', label);
+    const grid = document.createElement('div');
+    grid.className = 'hm-kid-avatar-choice-grid';
+    (AVATAR_OPTIONS[group] || []).forEach((option) => {
+      grid.appendChild(createAvatarChoice(group, option));
+    });
+    fieldset.appendChild(grid);
+    return fieldset;
+  }
+
+  function createAvatarSelect(group, label) {
+    const wrapper = document.createElement('label');
+    wrapper.className = 'hm-kid-avatar-select-field';
+    appendTextElement(wrapper, 'span', '', label);
+    const select = document.createElement('select');
+    select.setAttribute('data-avatar-select', group);
+    select.setAttribute('aria-label', label);
+    (AVATAR_OPTIONS[group] || []).forEach((option) => {
+      const node = document.createElement('option');
+      node.value = option.value;
+      node.textContent = option.label;
+      select.appendChild(node);
+    });
+    select.addEventListener('change', () => {
+      if (!avatarDraft || avatarSavePending) return;
+      avatarDraft[group] = validAvatarValue(group, select.value);
+      updateAvatarControls();
+      previewAvatarDraft();
+    });
+    wrapper.appendChild(select);
+    return wrapper;
+  }
+
+  function createCustomiserSection(label, open) {
+    const section = document.createElement('details');
+    section.className = 'hm-kid-avatar-editor-section';
+    section.open = Boolean(open);
+    appendTextElement(section, 'summary', '', label);
+    return section;
   }
 
   async function saveAvatarPreferences(trigger) {
@@ -232,24 +428,25 @@
     const originalText = trigger.textContent;
     trigger.disabled = true;
     trigger.textContent = 'Saving…';
-    if (status) status.textContent = 'Saving your capybara style…';
+    if (status) status.textContent = 'Saving your character…';
     try {
+      const requestProfile = {};
+      Object.keys(AVATAR_DEFAULTS).forEach((group) => {
+        requestProfile[group] = avatarDraft[group];
+      });
       const response = await fetch('/api/rewards/avatar', {
         method: 'PUT',
         credentials: 'same-origin',
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          colour: avatarDraft.colour,
-          accessory: avatarDraft.accessory,
-        }),
+        body: JSON.stringify(requestProfile),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success || !data.avatar) {
-        throw new Error(data.detail || data.error || 'Avatar save failed.');
+        throw new Error(data.detail || data.error || 'Character save failed.');
       }
       applyAvatarState(data.avatar);
       if (window.HomeworkMagicSession) window.HomeworkMagicSession.clear();
-      if (status) status.textContent = data.message || 'Your capybara style is saved!';
+      if (status) status.textContent = data.message || 'Your character style is saved!';
     } catch (error) {
       console.error('Could not save avatar choices:', error);
       if (status) status.textContent = 'We could not save that style. Please try again.';
@@ -265,7 +462,6 @@
     const link = document.createElement('a');
     link.className = 'hm-kid-avatar-action';
     link.href = href;
-
     appendTextElement(link, 'span', 'hm-kid-avatar-action-icon', icon)
       .setAttribute('aria-hidden', 'true');
     const copy = document.createElement('span');
@@ -291,14 +487,7 @@
     button.setAttribute('aria-haspopup', 'true');
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('aria-controls', 'kid-avatar-menu');
-
-    const face = document.createElement('span');
-    face.className = 'hm-kid-avatar-face';
-    face.setAttribute('aria-hidden', 'true');
-    appendTextElement(
-      face, 'span', 'hm-kid-avatar-star hm-kid-avatar-accessory', '★'
-    ).setAttribute('data-avatar-accessory-symbol', '');
-    button.appendChild(face);
+    button.appendChild(createCharacterFigure('hm-character-avatar-button-figure'));
     avatarRoot.appendChild(button);
 
     const menu = document.createElement('section');
@@ -310,13 +499,7 @@
 
     const welcome = document.createElement('div');
     welcome.className = 'hm-kid-avatar-welcome';
-    const miniFace = document.createElement('span');
-    miniFace.className = 'hm-kid-avatar-face hm-kid-avatar-face-small';
-    miniFace.setAttribute('aria-hidden', 'true');
-    appendTextElement(
-      miniFace, 'span', 'hm-kid-avatar-star hm-kid-avatar-accessory', '★'
-    ).setAttribute('data-avatar-accessory-symbol', '');
-    welcome.appendChild(miniFace);
+    welcome.appendChild(createCharacterFigure('hm-character-avatar-mini'));
     const welcomeCopy = document.createElement('div');
     appendTextElement(welcomeCopy, 'strong', 'hm-kid-avatar-name', 'Hi, Learner!')
       .setAttribute('data-kid-avatar-name', '');
@@ -327,10 +510,10 @@
 
     const growth = document.createElement('section');
     growth.className = 'hm-kid-avatar-growth';
-    growth.setAttribute('aria-label', 'Capybara growth');
+    growth.setAttribute('aria-label', 'Character growth');
     const growthHeading = document.createElement('div');
     appendTextElement(
-      growthHeading, 'strong', 'hm-kid-avatar-growth-name', 'Tiny Capybara'
+      growthHeading, 'strong', 'hm-kid-avatar-growth-name', 'Little Learner'
     ).setAttribute('data-avatar-growth-name', '');
     appendTextElement(
       growthHeading, 'span', 'hm-kid-avatar-growth-xp', '0 XP'
@@ -341,10 +524,10 @@
     growthProgress.max = 100;
     growthProgress.value = 0;
     growthProgress.setAttribute('data-avatar-growth-progress', '');
-    growthProgress.setAttribute('aria-label', 'Progress to the next capybara stage');
+    growthProgress.setAttribute('aria-label', 'Progress to the next character stage');
     growth.appendChild(growthProgress);
     appendTextElement(
-      growth, 'small', 'hm-kid-avatar-growth-next', '100 XP until Curious Cub'
+      growth, 'small', 'hm-kid-avatar-growth-next', '100 XP until Curious Explorer'
     ).setAttribute('data-avatar-growth-next', '');
     menu.appendChild(growth);
 
@@ -363,7 +546,7 @@
     menu.appendChild(actions);
 
     const customiseToggle = appendTextElement(
-      menu, 'button', 'hm-kid-avatar-customise-toggle', '🎨 Customise my capybara'
+      menu, 'button', 'hm-kid-avatar-customise-toggle', '🎨 Customise my character'
     );
     customiseToggle.type = 'button';
     customiseToggle.setAttribute('aria-expanded', 'false');
@@ -373,31 +556,41 @@
     customiser.id = 'kid-avatar-customiser';
     customiser.className = 'hm-kid-avatar-customiser';
     customiser.hidden = true;
+    const preview = document.createElement('div');
+    preview.className = 'hm-kid-avatar-editor-preview';
+    preview.setAttribute('aria-label', 'Character preview');
+    preview.appendChild(createCharacterFigure('hm-character-avatar-preview'));
+    customiser.appendChild(preview);
+    customiser.appendChild(createChoiceFieldset('Choose a character', 'character'));
 
-    const colourChoices = document.createElement('fieldset');
-    colourChoices.className = 'hm-kid-avatar-choice-group';
-    appendTextElement(colourChoices, 'legend', '', 'Favourite colour');
-    const colourGrid = document.createElement('div');
-    colourGrid.className = 'hm-kid-avatar-choice-grid';
-    AVATAR_COLOURS.forEach((option) => {
-      colourGrid.appendChild(createAvatarChoice('colour', option));
-    });
-    colourChoices.appendChild(colourGrid);
-    customiser.appendChild(colourChoices);
+    const hairSection = createCustomiserSection('💇 Hair', true);
+    hairSection.appendChild(createChoiceFieldset('Hair colour', 'hair_colour', 'hm-avatar-swatch-group'));
+    const hairSelects = document.createElement('div');
+    hairSelects.className = 'hm-kid-avatar-select-grid';
+    hairSelects.appendChild(createAvatarSelect('hair_length', 'Hair length'));
+    hairSelects.appendChild(createAvatarSelect('hair_style', 'Hair style'));
+    hairSection.appendChild(hairSelects);
+    customiser.appendChild(hairSection);
 
-    const accessoryChoices = document.createElement('fieldset');
-    accessoryChoices.className = 'hm-kid-avatar-choice-group';
-    appendTextElement(accessoryChoices, 'legend', '', 'Accessory');
-    const accessoryGrid = document.createElement('div');
-    accessoryGrid.className = 'hm-kid-avatar-choice-grid';
-    AVATAR_ACCESSORIES.forEach((option) => {
-      accessoryGrid.appendChild(createAvatarChoice('accessory', option));
-    });
-    accessoryChoices.appendChild(accessoryGrid);
-    customiser.appendChild(accessoryChoices);
+    const faceSection = createCustomiserSection('🙂 Face', false);
+    faceSection.appendChild(createChoiceFieldset('Skin tone', 'skin_tone', 'hm-avatar-swatch-group'));
+    faceSection.appendChild(createChoiceFieldset('Eye colour', 'eye_colour', 'hm-avatar-swatch-group'));
+    const faceSelects = document.createElement('div');
+    faceSelects.className = 'hm-kid-avatar-select-grid';
+    faceSelects.appendChild(createAvatarSelect('eye_shape', 'Eye shape'));
+    faceSelects.appendChild(createAvatarSelect('eyebrows', 'Eyebrows'));
+    faceSelects.appendChild(createAvatarSelect('nose', 'Nose'));
+    faceSelects.appendChild(createAvatarSelect('mouth', 'Mouth'));
+    faceSection.appendChild(faceSelects);
+    customiser.appendChild(faceSection);
+
+    const outfitSection = createCustomiserSection('👕 Clothes & shoes', false);
+    outfitSection.appendChild(createChoiceFieldset('Clothes', 'clothes'));
+    outfitSection.appendChild(createChoiceFieldset('Shoes', 'shoes'));
+    customiser.appendChild(outfitSection);
 
     const saveAvatarButton = appendTextElement(
-      customiser, 'button', 'hm-kid-avatar-save', 'Save my style'
+      customiser, 'button', 'hm-kid-avatar-save', 'Save my character'
     );
     saveAvatarButton.type = 'button';
     saveAvatarButton.addEventListener('click', () => {
@@ -416,15 +609,12 @@
       customiser.hidden = !opening;
       customiseToggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
       if (opening) {
-        const profile = avatarState ? avatarState.profile : {
-          colour: 'purple', accessory: 'star'
-        };
-        avatarDraft = {
-          colour: profile.colour,
-          accessory: profile.accessory,
-        };
+        avatarDraft = avatarProfileCopy(
+          avatarState ? avatarState.profile : AVATAR_DEFAULTS
+        );
         customiseStatus.textContent = '';
-        updateAvatarChoiceButtons();
+        updateAvatarControls();
+        previewAvatarDraft();
       } else if (avatarState) {
         applyAvatarAppearance(avatarState.profile);
       }
@@ -514,7 +704,6 @@
     activeRole = loggedIn ? context.role : 'anonymous';
 
     setVisible(loginLinks, !loggedIn);
-    // Kids use the avatar menu, which keeps the crowded header simpler.
     setVisible(logoutLinks, loggedIn && !isKid);
     setVisible(registerLinks, !loggedIn);
     setVisible(parentDashboardLinks, isParent);

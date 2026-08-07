@@ -7,7 +7,14 @@ const familyState = {
   canAdd: false,
   editingId: null,
   pendingPasswordAction: null,
+  scoreTrendChart: null,
+  scoreTrendResizeTimer: null,
+  overviewLoaded: false,
 };
+
+const SCORE_TREND_COLOURS = [
+  '#5d56d8', '#d23c77', '#087f8c', '#d66c00', '#2878b5', '#7d5a3a',
+];
 
 function byId(id) { return document.getElementById(id); }
 
@@ -64,6 +71,153 @@ function metric(value, label) {
   return card;
 }
 
+function scorePoint(item) {
+  if (!item || item.score === null || item.score === undefined || !item.created_at) return null;
+  const score = Number(item && item.score);
+  const maxScore = Number(item && item.max_score);
+  const date = new Date(item && item.created_at);
+  if (!Number.isFinite(score) || !Number.isFinite(maxScore) || maxScore <= 0
+      || Number.isNaN(date.getTime())) return null;
+  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return {
+    day,
+    date,
+    score: Math.max(0, Math.min(100, Math.round((score / maxScore) * 1000) / 10)),
+  };
+}
+
+function scoreSeries(kid, index) {
+  const days = new Map();
+  const history = kid.progress && Array.isArray(kid.progress.score_history)
+    ? kid.progress.score_history : [];
+  history.forEach((item) => {
+    const point = scorePoint(item);
+    if (!point) return;
+    const current = days.get(point.day) || {day: point.day, date: point.date, total: 0, count: 0};
+    current.total += point.score;
+    current.count += 1;
+    if (point.date > current.date) current.date = point.date;
+    days.set(point.day, current);
+  });
+  const points = Array.from(days.values())
+    .map((item) => ({
+      day: item.day,
+      date: item.date,
+      score: Math.round((item.total / item.count) * 10) / 10,
+    }))
+    .sort((a, b) => a.date - b.date);
+  return {
+    id: kid.id,
+    name: kid.name || 'Learner',
+    colour: SCORE_TREND_COLOURS[index % SCORE_TREND_COLOURS.length],
+    points,
+  };
+}
+
+function formatTrendDate(date) {
+  return date.toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+}
+
+function destroyScoreTrendChart() {
+  if (!familyState.scoreTrendChart) return;
+  try { familyState.scoreTrendChart.destroy(); } catch (error) {
+    console.debug('Score trend cleanup skipped:', error);
+  }
+  familyState.scoreTrendChart = null;
+}
+
+function renderScoreTrend() {
+  const canvas = byId('family-score-trend-chart');
+  const empty = byId('family-score-trend-empty');
+  const legend = byId('family-score-trend-legend');
+  const series = Array.from(familyState.kids.values()).map(scoreSeries);
+  destroyScoreTrendChart();
+  clearNode(legend);
+
+  series.forEach((item) => {
+    const entry = node('li');
+    const swatch = node('span', 'score-trend-swatch');
+    swatch.style.backgroundColor = item.colour;
+    const latest = item.points[item.points.length - 1];
+    const detail = latest
+//          ? `${item.name}: latest ${latest.score}% on ${formatTrendDate(latest.date)}`
+      ? `${item.name}`
+      : `${item.name}: no marked scores yet`;
+    entry.append(swatch, node('span', '', detail));
+    legend.append(entry);
+  });
+
+  const scoredSeries = series.filter((item) => item.points.length > 0);
+  if (!scoredSeries.length) {
+    canvas.hidden = true;
+    empty.hidden = false;
+    empty.textContent = series.length
+      ? 'No marked scores are available yet. The chart will appear after homework is reviewed.'
+      : 'Add a learner profile to start tracking score trends.';
+    canvas.setAttribute('aria-label', 'No marked scores are available for the family yet.');
+    return;
+  }
+  if (typeof window.Chart !== 'function') {
+    canvas.hidden = true;
+    empty.hidden = false;
+    empty.textContent = 'The score chart could not be displayed. Please refresh the page.';
+    return;
+  }
+
+  const days = new Map();
+  scoredSeries.forEach((item) => item.points.forEach((point) => {
+    if (!days.has(point.day)) days.set(point.day, point.date);
+  }));
+  const timeline = Array.from(days, ([day, date]) => ({day, date}))
+    .sort((a, b) => a.date - b.date);
+  canvas.hidden = false;
+  empty.hidden = true;
+  const plot = canvas.parentElement;
+  const maxLabels = Math.max(3, Math.floor((plot.clientWidth || window.innerWidth) / 90));
+  const labelStep = Math.max(1, Math.ceil(timeline.length / maxLabels));
+  const labels = timeline.map((item, index) => (
+    index % labelStep === 0 || index === timeline.length - 1
+      ? formatTrendDate(item.date) : ''
+  ));
+  const summaries = series.map((item) => {
+    const latest = item.points[item.points.length - 1];
+    return latest ? `${item.name}, latest ${latest.score}%` : `${item.name}, no marked scores`;
+  });
+  canvas.setAttribute('aria-label', `Score trend over time. ${summaries.join('; ')}.`);
+
+  familyState.scoreTrendChart = new window.Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: scoredSeries.map((item) => {
+        const values = new Map(item.points.map((point) => [point.day, point.score]));
+        return {
+          label: item.name,
+          data: timeline.map((point) => values.has(point.day) ? values.get(point.day) : null),
+          borderColor: item.colour,
+          pointBackgroundColor: item.colour,
+          borderWidth: 3,
+          pointRadius: 4,
+          spanGaps: true,
+          fill: false,
+        };
+      }),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {display: false}},
+      scales: {y: {beginAtZero: true, max: 100}},
+    },
+  });
+}
+
+function scheduleScoreTrendResize() {
+  if (!familyState.overviewLoaded) return;
+  window.clearTimeout(familyState.scoreTrendResizeTimer);
+  familyState.scoreTrendResizeTimer = window.setTimeout(renderScoreTrend, 180);
+}
+
 function renderKids() {
   const grid = byId('kids-grid');
   clearNode(grid);
@@ -77,15 +231,20 @@ function renderKids() {
     const title = node('div', 'kid-title');
     title.append(node('h3', '', kid.name || 'Learner'));
     if (kid.is_default) title.append(node('span', 'default-badge', 'Default'));
-    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`));
+    const edit = node('button', 'btn btn-secondary', 'Edit profile');
+    edit.type = 'button';
+    edit.addEventListener('click', () => showProfileForm(kid));
+    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`), edit);
 
     const codeValue = combinedLoginCode(kid.kid_code);
     const code = node('div', 'kid-code');
-    code.append(node('span', '', 'Kid login: '), node('strong', '', codeValue || 'Not assigned'));
+    const codeText = node('span', 'kid-code-value');
+    codeText.append(node('span', '', 'Kid login: '), node('strong', '', codeValue || 'Not assigned'));
+    code.append(codeText);
     if (codeValue) {
-      const copy = node('button', 'btn btn-secondary', 'Copy');
+      const copy = node('button', 'btn btn-secondary copy-code-button', 'Copy');
       copy.type = 'button';
-      copy.style.marginLeft = '8px';
+      copy.setAttribute('aria-label', `Copy kid login for ${kid.name || 'learner'}`);
       copy.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(codeValue);
@@ -118,10 +277,11 @@ function renderKids() {
     progressLink.href = `/progress?student_id=${encodeURIComponent(kid.id)}`;
     const rewardLink = node('a', 'btn-link', 'Rewards');
     rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
-    const edit = node('button', 'btn btn-secondary', 'Edit profile');
-    edit.type = 'button';
-    edit.addEventListener('click', () => showProfileForm(kid));
-    actions.append(progressLink, rewardLink, edit);
+    actions.append(progressLink, rewardLink);
+//    const edit = node('button', 'btn btn-secondary', 'Edit profile');
+//    edit.type = 'button';
+//    edit.addEventListener('click', () => showProfileForm(kid));
+//    actions.append(progressLink, rewardLink, edit);
     if (Number(wallet.pending_rewards || 0) > 0) {
       actions.append(node('span', 'default-badge', `${wallet.pending_rewards} pending gift`));
     }
@@ -171,11 +331,13 @@ async function loadOverview() {
   familyState.limit = Number(data.student_limit || 0);
   familyState.canAdd = data.can_add_student === true;
   familyState.kids = new Map((data.kids || []).map((kid) => [kid.id, kid]));
+  familyState.overviewLoaded = true;
   byId('family-limit-note').textContent = familyState.limit
     ? `${familyState.kids.size} of ${familyState.limit} learner profiles used.` : '';
   byId('add-child-button').disabled = !familyState.canAdd;
   byId('add-child-button').title = familyState.canAdd ? '' : 'Your current plan has reached its learner limit.';
   renderKids();
+  renderScoreTrend();
 }
 
 function showProfileForm(kid = null) {
@@ -359,5 +521,7 @@ byId('parent-logout').addEventListener('click', async (event) => {
   window.HomeworkMagicSession.clear();
   window.location.assign('/');
 });
+
+window.addEventListener('resize', scheduleScoreTrendResize, {passive: true});
 
 initialise();

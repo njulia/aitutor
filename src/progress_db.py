@@ -262,11 +262,14 @@ def get_progress_summary(student_id: str) -> Dict[str, Any]:
             .order_by(homework_sessions.c.created_at.desc())
         ).all()
     graded = []
+    score_history = []
     by_subject: Dict[str, List[float]] = defaultdict(list)
     for row in rows:
         data = row._mapping
         if data["score"] is None or not data["max_score"]:
             continue
+        if len(score_history) < 50:
+            score_history.append(dict(data))
         ratio = max(0.0, min(float(data["score"]) / float(data["max_score"]), 1.0))
         graded.append(ratio)
         by_subject[str(data["subject"])].append(ratio)
@@ -289,6 +292,9 @@ def get_progress_summary(student_id: str) -> Dict[str, Any]:
         "average_score": overall_accuracy,
         "subjects": subjects,
         "latest_session": dict(latest) if latest else None,
+        # The parent dashboard reuses rows already loaded for this summary,
+        # avoiding one extra score-history query for every learner profile.
+        "score_history": score_history,
     }
 
 

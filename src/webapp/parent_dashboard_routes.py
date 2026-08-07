@@ -123,6 +123,15 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
                     "total_sessions": int(progress.get("total_sessions") or 0),
                     "average_accuracy": float(progress.get("average_accuracy") or 0),
                     "current_streak": int(streak.get("current_streak") or 0),
+                    "score_history": [
+                        {
+                            "subject": str(item.get("subject") or ""),
+                            "score": float(item.get("score") or 0),
+                            "max_score": float(item.get("max_score") or 0),
+                            "created_at": item.get("created_at"),
+                        }
+                        for item in (progress.get("score_history") or [])
+                    ],
                 },
             }
 

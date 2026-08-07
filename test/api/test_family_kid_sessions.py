@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from src.progress_db import save_homework_session
 from src.webapp.account_store import create_subscription
 from src.webapp.reward_store import get_reward_store, review_fingerprint
 
@@ -53,10 +54,37 @@ def test_parent_can_add_edit_and_select_multiple_learners(
         json={"name": "Leo", "year_group": 2, "age": 6},
     )
     assert added.status_code == 200, added.text
+    save_homework_session(
+        student_id=first["id"],
+        subject="Maths",
+        year_group=4,
+        homework_content="8 + 2",
+        student_answers="10",
+        score=8,
+        max_score=10,
+        review_text="Good effort",
+    )
+    save_homework_session(
+        student_id=added.json()["student"]["id"],
+        subject="English",
+        year_group=2,
+        homework_content="Choose the noun",
+        student_answers="cat",
+        score=9,
+        max_score=10,
+        review_text="Well done",
+    )
     overview = authenticated_client.get("/api/parent/overview")
     assert overview.status_code == 200, overview.text
     assert {kid["name"] for kid in overview.json()["kids"]} == {"Ava", "Leo"}
     assert all("progress" in kid and "wallet" in kid for kid in overview.json()["kids"])
+    histories = {
+        kid["name"]: kid["progress"]["score_history"]
+        for kid in overview.json()["kids"]
+    }
+    assert histories["Ava"][0]["score"] == 8.0
+    assert histories["Leo"][0]["score"] == 9.0
+    assert all(history[0]["created_at"] for history in histories.values())
 
 
 def test_kid_session_is_limited_to_own_progress_rewards_and_mock_access(
@@ -99,26 +127,40 @@ def test_kid_session_is_limited_to_own_progress_rewards_and_mock_access(
     assert "kid_code" not in context.text and "family_code" not in context.text
     assert authenticated_client.get("/api/account").status_code == 401
 
+    character_profile = {
+        "character": "boy",
+        "clothes": "blue_tshirt",
+        "shoes": "school_shoes",
+        "skin_tone": "deep",
+        "hair_colour": "black",
+        "hair_length": "short",
+        "hair_style": "spiky",
+        "eye_shape": "almond",
+        "eye_colour": "blue",
+        "nose": "round",
+        "mouth": "grin",
+        "eyebrows": "straight",
+    }
     customised_avatar = authenticated_client.put(
         "/api/rewards/avatar",
-        json={"colour": "teal", "accessory": "apple"},
+        json=character_profile,
     )
     assert customised_avatar.status_code == 200, customised_avatar.text
     assert customised_avatar.json()["avatar"]["profile"] == {
-        "colour": "teal",
-        "accessory": "apple",
+        **character_profile,
         "customised": True,
     }
     refreshed_context = authenticated_client.get("/api/session-context").json()
-    assert refreshed_context["avatar"]["profile"]["colour"] == "teal"
-    assert refreshed_context["avatar"]["profile"]["accessory"] == "apple"
+    assert refreshed_context["avatar"]["profile"] == {
+        **character_profile,
+        "customised": True,
+    }
 
     sibling_avatar = authenticated_client.put(
         "/api/rewards/avatar",
         json={
             "student_id": sibling["id"],
-            "colour": "rose",
-            "accessory": "bow",
+            **character_profile,
         },
     )
     assert sibling_avatar.status_code == 403

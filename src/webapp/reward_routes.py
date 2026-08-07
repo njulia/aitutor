@@ -67,8 +67,18 @@ class ParentPasswordRequest(BaseModel):
 
 class AvatarPreferenceRequest(BaseModel):
     student_id: str | None = Field(default=None, max_length=80)
-    colour: str = Field(max_length=20)
-    accessory: str = Field(max_length=20)
+    character: str = Field(default="girl", max_length=20)
+    clothes: str = Field(default="pink_dress", max_length=30)
+    shoes: str = Field(default="trainers", max_length=30)
+    skin_tone: str = Field(default="warm", max_length=20)
+    hair_colour: str = Field(default="brown", max_length=20)
+    hair_length: str = Field(default="long", max_length=20)
+    hair_style: str = Field(default="ponytail", max_length=20)
+    eye_shape: str = Field(default="round", max_length=20)
+    eye_colour: str = Field(default="green", max_length=20)
+    nose: str = Field(default="button", max_length=20)
+    mouth: str = Field(default="smile", max_length=20)
+    eyebrows: str = Field(default="arched", max_length=20)
 
 
 def build_reward_router(
@@ -224,15 +234,25 @@ def build_reward_router(
                 get_reward_store().update_avatar,
                 account_id=account["id"],
                 student_id=learner["id"],
-                colour=body.colour,
-                accessory=body.accessory,
+                character=body.character,
+                clothes=body.clothes,
+                shoes=body.shoes,
+                skin_tone=body.skin_tone,
+                hair_colour=body.hair_colour,
+                hair_length=body.hair_length,
+                hair_style=body.hair_style,
+                eye_shape=body.eye_shape,
+                eye_colour=body.eye_colour,
+                nose=body.nose,
+                mouth=body.mouth,
+                eyebrows=body.eyebrows,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {
             "success": True,
             "avatar": avatar,
-            "message": "Your capybara style is saved!",
+            "message": "Your character style is saved!",
         }
 
     @router.post("/api/rewards/redemptions")

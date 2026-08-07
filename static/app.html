@@ -1065,7 +1065,7 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=20260806-growing-avatar-review-stable">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20260807-cute-character-avatar-review-stable">
 </head>
 <body class="hm-app">
     <a class="hm-skip-link" href="#homework">Skip to learning choices</a>
@@ -1076,8 +1076,8 @@
   <a href="/ks1-homework">KS1</a>
   <a href="/ks2-homework">KS2</a>
   <a href="/elevenplus-practice">11+</a>
-  <a href="/elevenplus-mock-exams">11+ mock</a>
-  <a href="/elevenplus/articles">11+ articles</a>
+<!--  <a href="/elevenplus-mock-exams">11+ mock</a>-->
+<!--  <a href="/elevenplus/articles">11+ articles</a>-->
   <a href="/progress" target="_blank" rel="noopener noreferrer">Progress</a>
   <a href="/rewards">Rewards</a>
 <!--  <a href="/pricing" id="billing-link">Parent plans</a>-->
@@ -1104,18 +1104,22 @@
             <button class="tab" data-tab="eleven" onclick="switchTab('eleven', this)">
                 🎯 11+ practice
             </button>
+            <button class="tab" type="button" onclick="window.location.href='/elevenplus-mock-exams'">
+                📝 11+ mock exams
+            </button>
             <button class="tab" type="button" onclick="window.location.href='/elevenplus-year-round-plan'">
                 📝 11+ year-round plan
             </button>
+
 <!--            <button class="tab" type="button" onclick="window.location.href='/elevenplus-topic-mastery'">-->
 <!--                🏆 11+ topic mastery-->
 <!--            </button>-->
             <button class="tab active" data-tab="homework" onclick="switchTab('homework', this)">
                 ⚡ Make homework
             </button>
-            <button class="tab" data-tab="review" onclick="switchTab('review', this)">
-                ✅ Check my work
-            </button>
+<!--            <button class="tab" data-tab="review" onclick="switchTab('review', this)">-->
+<!--                ✅ Check my work-->
+<!--            </button>-->
             <button class="tab" data-tab="admin-tools" id="admin-tools-tab" style="display:none;" onclick="switchTab('admin-tools', this)">
                 🛠️ Admin Tools
             </button> <!-- New Admin Tools tab -->
@@ -1127,7 +1131,7 @@
                 <div class="homework-guide" id="homework-guide-panel" aria-labelledby="homework-guide-title">
                     <div class="guide-heading">
                         <h2 id="homework-guide-title">Make today’s homework with me</h2>
-                        <p>Your Magic Teacher will ask one short question at a time. Just tap your answers—no long typing.</p>
+<!--                        <p>Your Magic Teacher will ask one short question at a time. Just tap your answers—no long typing.</p>-->
                     </div>
 
                     <div class="guide-step-label" id="homework-guide-step-label" aria-live="polite">Step 1 of 5</div>
@@ -1251,7 +1255,7 @@
                 <div class="eleven-guide" aria-labelledby="eleven-guide-title">
                     <div class="guide-heading">
                         <h2 id="eleven-guide-title">Plan my practice with me</h2>
-                        <p>Your Magic Teacher will ask one short question at a time. You do not need to type a long answer.</p>
+<!--                        <p>Your Magic Teacher will ask one short question at a time. You do not need to type a long answer.</p>-->
                     </div>
 
                     <div class="guide-step-label" id="eleven-guide-step-label" aria-live="polite">Step 1 of 5</div>
@@ -1586,9 +1590,9 @@
     </div>
 
     <script src="/static/js/session-context.js?v=20260806" defer></script>
-    <script src="/static/js/auth-nav.js?v=20260806-growing-avatar-review-stable" defer></script>
+    <script src="/static/js/auth-nav.js?v=20260807-cute-character-avatar-review-stable" defer></script>
     <script src="/static/js/text-to-speech.js?v=20260806" defer></script>
-    <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp-20260806-family-tts-mocks-make-homework-render-fix-11plus-saved-plan-kid-avatar-review-stable-growing-avatar" defer></script>
+    <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp-20260806-family-tts-mocks-make-homework-render-fix-11plus-saved-plan-kid-avatar-review-stable-cute-character-avatar" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
 </body>
 </html>

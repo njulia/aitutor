@@ -16,6 +16,12 @@
     return datasets.length ? (datasets[0].data || []).map(Number) : [];
   }
 
+  function finiteNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   function labels(config) {
     return ((((config || {}).data || {}).labels) || []).map(String);
   }
@@ -94,27 +100,66 @@
     });
   }
 
-  function drawLine(ctx, width, height, data, chartLabels, dataset) {
-    const max = Math.max(100, ...data, 1);
+  function drawLines(ctx, width, height, datasets, chartLabels) {
+    const numericValues = [];
+    let pointCount = chartLabels.length;
+    datasets.forEach((dataset) => {
+      const data = dataset.data || [];
+      pointCount = Math.max(pointCount, data.length);
+      data.forEach((value) => {
+        const parsed = finiteNumber(value);
+        if (parsed !== null) numericValues.push(parsed);
+      });
+    });
+    const max = Math.max(100, ...numericValues, 1);
     const box = axes(ctx, width, height, max);
-    const span = Math.max(data.length - 1, 1);
-    const points = data.map((value, i) => ({
-      x: box.left + ((box.right - box.left) * i / span),
-      y: box.bottom - (Math.max(0, value) / max) * (box.bottom - box.top),
-    }));
-    ctx.strokeStyle = dataset.borderColor || '#667eea';
-    ctx.lineWidth = Number(dataset.borderWidth || 3);
-    ctx.beginPath();
-    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.stroke();
-    const pointColours = Array.isArray(dataset.pointBackgroundColor) ? dataset.pointBackgroundColor : [];
-    points.forEach((p, i) => {
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = pointColours[i] || dataset.borderColor || '#667eea'; ctx.fill();
-      if (chartLabels[i]) {
-        ctx.fillStyle = '#46516b'; ctx.textAlign = 'center';
-        ctx.fillText(chartLabels[i].slice(0, 12), p.x, box.bottom + 18);
-      }
+    const span = Math.max(pointCount - 1, 1);
+
+    datasets.forEach((dataset) => {
+      const data = dataset.data || [];
+      const points = data.map((value, i) => {
+        const parsed = finiteNumber(value);
+        if (parsed === null) return null;
+        return {
+          x: box.left + ((box.right - box.left) * i / span),
+          y: box.bottom - (Math.max(0, parsed) / max) * (box.bottom - box.top),
+        };
+      });
+      ctx.strokeStyle = dataset.borderColor || '#667eea';
+      ctx.lineWidth = Number(dataset.borderWidth || 3);
+      ctx.beginPath();
+      let drawing = false;
+      points.forEach((point) => {
+        if (!point) {
+          if (dataset.spanGaps !== true) drawing = false;
+          return;
+        }
+        if (drawing) ctx.lineTo(point.x, point.y);
+        else ctx.moveTo(point.x, point.y);
+        drawing = true;
+      });
+      ctx.stroke();
+
+      const pointColours = Array.isArray(dataset.pointBackgroundColor)
+        ? dataset.pointBackgroundColor : [];
+      const pointRadius = Math.max(1, Number(dataset.pointRadius || 4));
+      points.forEach((point, i) => {
+        if (!point) return;
+        ctx.beginPath(); ctx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
+        ctx.fillStyle = pointColours[i]
+          || dataset.pointBackgroundColor
+          || dataset.borderColor
+          || '#667eea';
+        ctx.fill();
+      });
+    });
+
+    chartLabels.forEach((label, i) => {
+      if (!label) return;
+      const x = box.left + ((box.right - box.left) * i / span);
+      ctx.fillStyle = '#46516b';
+      ctx.textAlign = 'center';
+      ctx.fillText(label.slice(0, 12), x, box.bottom + 18);
     });
   }
 
@@ -128,11 +173,12 @@
     };
     if (!this.canvas || !this.canvas.getContext) return;
     const view = setup(this.canvas);
-    const dataset = ((((this.config || {}).data || {}).datasets || [])[0]) || {};
+    const datasets = ((((this.config || {}).data || {}).datasets || []));
+    const dataset = datasets[0] || {};
     const data = values(this.config);
     const chartLabels = labels(this.config);
     if (this.config.type === 'doughnut') drawDoughnut(view.ctx, view.width, view.height, data, dataset);
-    else if (this.config.type === 'line') drawLine(view.ctx, view.width, view.height, data, chartLabels, dataset);
+    else if (this.config.type === 'line') drawLines(view.ctx, view.width, view.height, datasets, chartLabels);
     else drawBar(view.ctx, view.width, view.height, data, chartLabels, dataset);
   }
 

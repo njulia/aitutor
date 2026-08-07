@@ -53,21 +53,53 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     assert "'/app', '🚀', 'Start a quest'" in script
     assert "'/progress', '📈', 'My progress'" in script
     assert "'/rewards', '🎁', 'My rewards'" in script
-    assert "Customise my capybara" in script
-    assert "Save my style" in script
+    assert "Customise my character" in script
+    assert "Save my character" in script
     assert "'/api/rewards/avatar'" in script
     assert "homeworkmagic:xp-updated" in script
-    assert "Tiny Capybara" in script
-    assert "Legendary Capybara" in script
+    assert "Little Learner" in script
+    assert "Learning Legend" in script
+    assert "createCharacterFigure" in script
+    assert "CHARACTER_PRESETS" in script
+    assert "Girl character" in script
+    assert "Boy character" in script
+    assert "hm-character-cheek" in script
+    assert "hm-character-face-detail" in script
+    for field in (
+        "character",
+        "clothes",
+        "shoes",
+        "skin_tone",
+        "hair_colour",
+        "hair_length",
+        "hair_style",
+        "eye_shape",
+        "eye_colour",
+        "nose",
+        "mouth",
+        "eyebrows",
+    ):
+        assert f"{field}:" in script
+    assert "capybara" not in script.lower()
     assert "activeRole === 'kid' ? '/api/kid-logout' : '/api/logout'" in script
     assert "innerHTML" not in script
 
 
-def test_kid_avatar_uses_the_supplied_mascot_and_touch_sized_styles() -> None:
+def test_kid_avatar_uses_css_character_layers_and_touch_sized_styles() -> None:
     stylesheet = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
 
-    assert '.hm-kid-avatar[data-avatar-colour="1"]' in stylesheet
-    assert 'background-image: url("/static/images/homework-magic-logo.webp")' in stylesheet
+    assert ".hm-character-avatar" in stylesheet
+    assert '.hm-character-avatar[data-character="girl"]' in stylesheet
+    assert '.hm-character-avatar[data-character="boy"]' in stylesheet
+    assert '.hm-character-avatar[data-character="girl"] .hm-character-face-detail' in stylesheet
+    assert '.hm-character-avatar[data-character="boy"] .hm-character-face-detail' in stylesheet
+    assert '.hm-character-avatar[data-character="boy"] .hm-character-cheek' in stylesheet
+    assert '.hm-character-avatar[data-hair-style="ponytail"]' in stylesheet
+    assert '.hm-character-avatar[data-hair-style="curly"]' in stylesheet
+    assert '.hm-character-avatar[data-eye-shape="almond"]' in stylesheet
+    assert '.hm-character-avatar[data-mouth="grin"]' in stylesheet
+    assert '.hm-character-avatar[data-clothes="pink_dress"]' in stylesheet
+    assert '.hm-character-avatar[data-shoes="boots"]' in stylesheet
     assert ".hm-kid-avatar-button" in stylesheet
     assert "width: 56px;" in stylesheet
     assert ".hm-kid-avatar-menu[hidden]" in stylesheet
@@ -75,6 +107,9 @@ def test_kid_avatar_uses_the_supplied_mascot_and_touch_sized_styles() -> None:
     assert '.hm-kid-avatar[data-growth-stage="6"]' in stylesheet
     assert ".hm-kid-avatar-growth-progress" in stylesheet
     assert ".hm-kid-avatar-customiser" in stylesheet
+    assert ".hm-kid-avatar-editor-preview" in stylesheet
+    assert ".hm-kid-avatar-editor-section" in stylesheet
+    assert ".hm-kid-avatar-select-field" in stylesheet
     assert ".hm-kid-avatar-choice.is-selected" in stylesheet
     assert "@media (prefers-reduced-motion: reduce)" in stylesheet
     assert ".hm-kid-avatar { display: none !important; }" in stylesheet
@@ -84,8 +119,8 @@ def test_kid_avatar_uses_the_supplied_mascot_and_touch_sized_styles() -> None:
 def test_role_aware_pages_load_fresh_avatar_assets(relative_path: str) -> None:
     page = (ROOT / "static" / relative_path).read_text(encoding="utf-8")
 
-    assert "/static/css/theme.css?v=20260806-growing-avatar-review-stable" in page
-    assert "/static/js/auth-nav.js?v=20260806-growing-avatar-review-stable" in page
+    assert "/static/css/theme.css?v=20260807-cute-character-avatar-review-stable" in page
+    assert "/static/js/auth-nav.js?v=20260807-cute-character-avatar-review-stable" in page
 
 
 def test_learning_app_reuses_shared_session_request_for_avatar() -> None:

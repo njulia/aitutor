@@ -596,7 +596,7 @@ gcloud run services update "${SERVICE}" \
   --min-instances=0 \
   --max-instances=10 \
   --cpu-boost \
-  --update-env-vars="BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL},ADMIN_EMAILS=${ADMIN_EMAILS}" \
+  --update-env-vars="^#^BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}#ADMIN_EMAILS=${ADMIN_EMAILS}" \
   --update-secrets="DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \
