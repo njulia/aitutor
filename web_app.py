@@ -195,13 +195,15 @@ async def lifespan(_app: FastAPI):
     """Validate configuration and perform small bounded maintenance tasks."""
     validate_production_configuration()
     initialize()
-    # 初始化账号和孩子会话数据库，确保新增列已添加
+    # Initialise account, kid-session and reward/avatar tables before traffic.
     try:
         from src.webapp.account_store import init_account_db
         from src.webapp.kid_session_store import init_kid_session_db
+        from src.webapp.reward_store import get_reward_store
         await asyncio.gather(
             asyncio.to_thread(init_account_db),
             asyncio.to_thread(init_kid_session_db),
+            asyncio.to_thread(get_reward_store),
         )
     except Exception:
         logger.exception("Account database initialization failed")
@@ -2545,11 +2547,26 @@ async def session_context_api(req: Request):
                 limit_concurrency=False,
             )
             if learner and bool(learner.get("is_active")):
-                return {
+                context = {
                     "authenticated": True,
                     "role": "kid",
                     "student": _public_session_student(learner),
                 }
+                try:
+                    from src.webapp.reward_store import get_reward_store
+
+                    context["avatar"] = await run_blocking(
+                        get_reward_store().avatar_summary,
+                        account_id=str(learner["account_id"]),
+                        student_id=str(learner["id"]),
+                        timeout=3,
+                        limit_concurrency=False,
+                    )
+                except Exception:
+                    # Navigation and kid login must remain available if the
+                    # optional reward/avatar lookup is temporarily unavailable.
+                    logger.exception("Could not load the learner avatar summary")
+                return context
 
     username = _resolve_username(req)
     if username:

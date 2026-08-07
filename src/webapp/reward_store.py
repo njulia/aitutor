@@ -54,21 +54,21 @@ DEFAULT_REWARDS: tuple[dict[str, Any], ...] = (
         "code": "homework_magic_stickers",
         "name": "Homework Magic sticker pack",
         "icon": "⭐",
-        "points_cost": 1000,
+        "points_cost": 500,
         "description": "A colourful pack of Homework Magic logo stickers.",
     },
     {
         "code": "homework_magic_pen",
         "name": "Homework Magic pen",
         "icon": "✏️",
-        "points_cost": 2000,
+        "points_cost": 1000,
         "description": "A Homework Magic logo pen for learning adventures.",
     },
     {
         "code": "homework_magic_notebook",
         "name": "Homework Magic notebook",
         "icon": "📓",
-        "points_cost": 5000,
+        "points_cost": 2000,
         "description": "A Homework Magic logo notebook for ideas and practice.",
     },
 )
@@ -84,28 +84,28 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
     {
         "code": "curious_explorer",
         "title": "Curious Explorer",
-        "threshold": 500,
+        "threshold": 250,
         "icon": "🧭",
         "message": "for exploring learning quests with courage and curiosity",
     },
     {
         "code": "homework_hero",
         "title": "Homework Hero",
-        "threshold": 1000,
+        "threshold": 500,
         "icon": "🦸",
         "message": "for keeping going and building a strong learning habit",
     },
     {
         "code": "quest_champion",
         "title": "Quest Champion",
-        "threshold": 2_000,
+        "threshold": 1_000,
         "icon": "🏆",
         "message": "for completing many learning quests with wonderful effort",
     },
     {
         "code": "learning_legend",
         "title": "Learning Legend",
-        "threshold": 5_000,
+        "threshold": 2_000,
         "icon": "🌟",
         "message": "for an amazing journey of practice, patience and progress",
     },
@@ -114,11 +114,32 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
 LEVELS: tuple[dict[str, Any], ...] = (
     {"number": 1, "name": "Spark", "threshold": 0, "icon": "✨"},
     {"number": 2, "name": "Explorer", "threshold": 100, "icon": "🧭"},
-    {"number": 3, "name": "Builder", "threshold": 500, "icon": "🧱"},
-    {"number": 4, "name": "Champion", "threshold": 1000, "icon": "🏆"},
-    {"number": 5, "name": "Superstar", "threshold": 2_000, "icon": "🌠"},
-    {"number": 6, "name": "Legend", "threshold": 5_000, "icon": "🌟"},
+    {"number": 3, "name": "Builder", "threshold": 250, "icon": "🧱"},
+    {"number": 4, "name": "Champion", "threshold": 500, "icon": "🏆"},
+    {"number": 5, "name": "Superstar", "threshold": 1_000, "icon": "🌠"},
+    {"number": 6, "name": "Legend", "threshold": 2_000, "icon": "🌟"},
 )
+
+AVATAR_COLOURS: dict[str, str] = {
+    "purple": "Magic purple",
+    "teal": "Forest teal",
+    "rose": "Berry pink",
+    "blue": "Sky blue",
+}
+AVATAR_ACCESSORIES: dict[str, str] = {
+    "star": "Shiny star",
+    "apple": "Learning apple",
+    "bow": "Bright bow",
+    "crown": "Quest crown",
+}
+AVATAR_GROWTH_NAMES: dict[int, str] = {
+    1: "Tiny Capybara",
+    2: "Curious Cub",
+    3: "Growing Explorer",
+    4: "Clever Capybara",
+    5: "Star Capybara",
+    6: "Legendary Capybara",
+}
 
 DAILY_QUESTS: tuple[dict[str, Any], ...] = (
     {
@@ -342,6 +363,43 @@ def _level_status(lifetime_xp: int) -> dict[str, Any]:
     }
 
 
+def _avatar_payload(
+    lifetime_xp: int,
+    *,
+    colour: str = "purple",
+    accessory: str = "star",
+    customised: bool = False,
+) -> dict[str, Any]:
+    points = max(0, int(lifetime_xp or 0))
+    level = _level_status(points)
+    next_level = level.get("next")
+    return {
+        "profile": {
+            "colour": colour if colour in AVATAR_COLOURS else "purple",
+            "accessory": (
+                accessory if accessory in AVATAR_ACCESSORIES else "star"
+            ),
+            "customised": bool(customised),
+        },
+        "growth": {
+            "stage": int(level["number"]),
+            "name": AVATAR_GROWTH_NAMES[int(level["number"])],
+            "lifetime_xp": points,
+            "progress_percent": int(level["progress_percent"]),
+            "xp_to_next": int(level["xp_to_next"]),
+            "next_stage": (
+                {
+                    "stage": int(next_level["number"]),
+                    "name": AVATAR_GROWTH_NAMES[int(next_level["number"])],
+                    "threshold": int(next_level["threshold"]),
+                }
+                if next_level
+                else None
+            ),
+        },
+    }
+
+
 def review_fingerprint(
     *,
     homework: str,
@@ -405,6 +463,16 @@ class RewardStore:
             Column("account_id", String(80), nullable=False, index=True),
             Column("lifetime_xp", Integer, nullable=False, default=0),
             Column("spendable_xp", Integer, nullable=False, default=0),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        )
+        self.avatar_profiles = Table(
+            "reward_avatar_profiles",
+            self.metadata,
+            Column("student_id", String(80), primary_key=True),
+            Column("account_id", String(80), nullable=False, index=True),
+            Column("colour", String(20), nullable=False),
+            Column("accessory", String(20), nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
             Column("updated_at", DateTime(timezone=True), nullable=False),
         )
@@ -1071,6 +1139,117 @@ class RewardStore:
             "pending_rewards": int(pending),
         }
 
+    def avatar_summary(self, *, account_id: str, student_id: str) -> dict[str, Any]:
+        """Return the small avatar payload used by role-aware navigation."""
+        account = _clean_id(account_id, maximum=80)
+        learner = _clean_id(student_id, maximum=80)
+        with self.engine.begin() as conn:
+            row = conn.execute(
+                select(
+                    self.wallets.c.lifetime_xp,
+                    self.avatar_profiles.c.colour,
+                    self.avatar_profiles.c.accessory,
+                )
+                .select_from(
+                    self.wallets.outerjoin(
+                        self.avatar_profiles,
+                        and_(
+                            self.avatar_profiles.c.student_id
+                            == self.wallets.c.student_id,
+                            self.avatar_profiles.c.account_id
+                            == self.wallets.c.account_id,
+                        ),
+                    )
+                )
+                .where(
+                    and_(
+                        self.wallets.c.account_id == account,
+                        self.wallets.c.student_id == learner,
+                    )
+                )
+            ).first()
+        if row is None:
+            return _avatar_payload(0)
+        data = row._mapping
+        customised = bool(data.get("colour") and data.get("accessory"))
+        return _avatar_payload(
+            int(data.get("lifetime_xp") or 0),
+            colour=str(data.get("colour") or "purple"),
+            accessory=str(data.get("accessory") or "star"),
+            customised=customised,
+        )
+
+    def update_avatar(
+        self,
+        *,
+        account_id: str,
+        student_id: str,
+        colour: str,
+        accessory: str,
+    ) -> dict[str, Any]:
+        """Persist a bounded, child-safe avatar choice for one learner."""
+        account = _clean_id(account_id, maximum=80)
+        learner = _clean_id(student_id, maximum=80)
+        chosen_colour = str(colour or "").strip().lower()
+        chosen_accessory = str(accessory or "").strip().lower()
+        if chosen_colour not in AVATAR_COLOURS:
+            raise ValueError("Choose one of the available avatar colours")
+        if chosen_accessory not in AVATAR_ACCESSORIES:
+            raise ValueError("Choose one of the available avatar accessories")
+
+        now = _now()
+        with self.engine.begin() as conn:
+            wallet = self._ensure_wallet(conn, account, learner, lock=False)
+            result = conn.execute(
+                update(self.avatar_profiles)
+                .where(
+                    and_(
+                        self.avatar_profiles.c.account_id == account,
+                        self.avatar_profiles.c.student_id == learner,
+                    )
+                )
+                .values(
+                    colour=chosen_colour,
+                    accessory=chosen_accessory,
+                    updated_at=now,
+                )
+            )
+            if not result.rowcount:
+                try:
+                    with conn.begin_nested():
+                        conn.execute(
+                            insert(self.avatar_profiles).values(
+                                student_id=learner,
+                                account_id=account,
+                                colour=chosen_colour,
+                                accessory=chosen_accessory,
+                                created_at=now,
+                                updated_at=now,
+                            )
+                        )
+                except IntegrityError:
+                    conn.execute(
+                        update(self.avatar_profiles)
+                        .where(
+                            and_(
+                                self.avatar_profiles.c.account_id == account,
+                                self.avatar_profiles.c.student_id == learner,
+                            )
+                        )
+                        .values(
+                            colour=chosen_colour,
+                            accessory=chosen_accessory,
+                            updated_at=now,
+                        )
+                    )
+            lifetime_xp = int(wallet._mapping["lifetime_xp"] or 0)
+        return _avatar_payload(
+            lifetime_xp,
+            colour=chosen_colour,
+            accessory=chosen_accessory,
+            customised=True,
+        )
+
     def dashboard(self, *, account_id: str, student_id: str) -> dict[str, Any]:
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
@@ -1692,6 +1871,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),
             ):
                 result = conn.execute(
@@ -1714,6 +1894,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),
                 ("catalog_items", self.catalog),
             ):

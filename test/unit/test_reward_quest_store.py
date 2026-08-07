@@ -180,6 +180,89 @@ def test_everyone_earns_xp_but_free_learners_do_not_earn_gift_points(
         )
 
 
+def test_capybara_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'avatar.db'}"
+    store = RewardStore(database_url)
+    account_id = "acct_avatar"
+    student_id = "stu_avatar"
+
+    initial = store.avatar_summary(
+        account_id=account_id,
+        student_id=student_id,
+    )
+    assert initial["profile"] == {
+        "colour": "purple",
+        "accessory": "star",
+        "customised": False,
+    }
+    assert initial["growth"]["stage"] == 1
+    assert initial["growth"]["name"] == "Tiny Capybara"
+
+    customised = store.update_avatar(
+        account_id=account_id,
+        student_id=student_id,
+        colour="rose",
+        accessory="crown",
+    )
+    assert customised["profile"] == {
+        "colour": "rose",
+        "accessory": "crown",
+        "customised": True,
+    }
+    assert customised["growth"]["stage"] == 1
+
+    # XP is normally changed only by checked learning activities. Set a known
+    # wallet total directly here so this isolated persistence test remains
+    # deterministic without needing to create unrelated quest events.
+    with store.engine.begin() as conn:
+        conn.execute(
+            store.wallets.update()
+            .where(store.wallets.c.student_id == student_id)
+            .where(store.wallets.c.account_id == account_id)
+            .values(lifetime_xp=640)
+        )
+    grown = store.avatar_summary(
+        account_id=account_id,
+        student_id=student_id,
+    )
+    assert grown["growth"]["lifetime_xp"] == 640
+    assert grown["growth"]["stage"] == 4
+    assert grown["growth"]["name"] == "Clever Capybara"
+
+    reloaded = RewardStore(database_url).avatar_summary(
+        account_id=account_id,
+        student_id=student_id,
+    )
+    assert reloaded == grown
+
+    with pytest.raises(ValueError, match="available avatar colours"):
+        store.update_avatar(
+            account_id=account_id,
+            student_id=student_id,
+            colour="unsafe-choice",
+            accessory="star",
+        )
+
+    erased = store.delete_learner(
+        account_id=account_id,
+        student_id=student_id,
+    )
+    assert erased["avatar_profiles"] == 1
+    with store.engine.begin() as conn:
+        assert conn.execute(store.avatar_profiles.select()).first() is None
+
+    store.update_avatar(
+        account_id=account_id,
+        student_id="stu_avatar_sibling",
+        colour="teal",
+        accessory="apple",
+    )
+    account_erased = store.delete_account(account_id)
+    assert account_erased["avatar_profiles"] == 1
+    with store.engine.begin() as conn:
+        assert conn.execute(store.avatar_profiles.select()).first() is None
+
+
 def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> None:
     store = RewardStore(
         f"sqlite+pysqlite:///{tmp_path / 'spend.db'}",

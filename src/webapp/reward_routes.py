@@ -65,6 +65,12 @@ class ParentPasswordRequest(BaseModel):
     parent_password: SecretStr
 
 
+class AvatarPreferenceRequest(BaseModel):
+    student_id: str | None = Field(default=None, max_length=80)
+    colour: str = Field(max_length=20)
+    accessory: str = Field(max_length=20)
+
+
 def build_reward_router(
     resolve_username,
     require_admin=None,
@@ -193,6 +199,40 @@ def build_reward_router(
                 "note": GIFT_ACCESS_NOTE,
             },
             **dashboard,
+        }
+
+    @router.get("/api/rewards/avatar")
+    async def avatar_profile(
+        request: Request,
+        student_id: str | None = Query(default=None, max_length=80),
+    ):
+        account, learner = await authenticated_learner_context(request, student_id)
+        avatar = await asyncio.to_thread(
+            get_reward_store().avatar_summary,
+            account_id=account["id"],
+            student_id=learner["id"],
+        )
+        return {"success": True, "avatar": avatar}
+
+    @router.put("/api/rewards/avatar")
+    async def customise_avatar(request: Request, body: AvatarPreferenceRequest):
+        account, learner = await authenticated_learner_context(
+            request, body.student_id
+        )
+        try:
+            avatar = await asyncio.to_thread(
+                get_reward_store().update_avatar,
+                account_id=account["id"],
+                student_id=learner["id"],
+                colour=body.colour,
+                accessory=body.accessory,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "success": True,
+            "avatar": avatar,
+            "message": "Your capybara style is saved!",
         }
 
     @router.post("/api/rewards/redemptions")

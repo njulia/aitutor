@@ -137,7 +137,7 @@
                     item[key] || item.label || JSON.stringify(item), item
                 ])).values()
             );
-            return {
+            const combined = {
                 awarded_xp: valid.reduce(
                     (total, update) => total + Number(update.awarded_xp || 0), 0
                 ),
@@ -148,9 +148,38 @@
                     valid.flatMap(update => update.new_certificates || []), 'code'
                 )
             };
+            const lifetimeUpdates = valid.filter(
+                update => Number.isFinite(Number(update.lifetime_xp))
+            );
+            if (lifetimeUpdates.length) {
+                const latest = lifetimeUpdates.reduce((highest, update) => (
+                    Number(update.lifetime_xp) > Number(highest.lifetime_xp)
+                        ? update : highest
+                ));
+                combined.lifetime_xp = Number(latest.lifetime_xp);
+                combined.level = latest.level || null;
+            }
+            return combined;
+        }
+
+        function notifyAvatarXp(update) {
+            if (!update || !Number.isFinite(Number(update.lifetime_xp))) return;
+            const detail = {
+                lifetime_xp: Number(update.lifetime_xp),
+                level: update.level || null
+            };
+            let xpEvent;
+            try {
+                xpEvent = new CustomEvent('homeworkmagic:xp-updated', {detail: detail});
+            } catch (error) {
+                xpEvent = document.createEvent('CustomEvent');
+                xpEvent.initCustomEvent('homeworkmagic:xp-updated', false, false, detail);
+            }
+            window.dispatchEvent(xpEvent);
         }
 
         function showRewardCelebration(update) {
+            notifyAvatarXp(update);
             if (!update || Number(update.awarded_xp || 0) <= 0) return;
             let toast = document.getElementById('xp-celebration');
             if (!toast) {
@@ -1751,8 +1780,69 @@
             revealLearningPanel(loading);
         }
 
+        let reviewInteractionSnapshot = [];
+
+        function lockSubmittedWorkForReview() {
+            reviewInteractionSnapshot = [];
+            document.querySelectorAll(
+                '#homework-results input, #homework-results textarea, #homework-results select, ' +
+                '#homework-buttons button, #tutor-mode-buttons button, ' +
+                '#review input, #review textarea, #review select, #review button'
+            ).forEach(control => {
+                reviewInteractionSnapshot.push({
+                    control: control,
+                    disabled: Boolean(control.disabled),
+                    readOnly: Boolean(control.readOnly)
+                });
+                const tagName = String(control.tagName || '').toLowerCase();
+                const inputType = String(control.type || '').toLowerCase();
+                const canBeReadOnly = tagName === 'textarea' || (
+                    tagName === 'input' && !['button', 'checkbox', 'file', 'radio', 'submit'].includes(inputType)
+                );
+                if (canBeReadOnly) control.readOnly = true;
+                else control.disabled = true;
+            });
+        }
+
+        function unlockSubmittedWorkAfterReview() {
+            reviewInteractionSnapshot.forEach(item => {
+                if (!item.control || !item.control.isConnected) return;
+                item.control.disabled = item.disabled;
+                item.control.readOnly = item.readOnly;
+            });
+            reviewInteractionSnapshot = [];
+        }
+
+        function showReviewLoading(message = 'Checking your answers…') {
+            stopSpeechPlayback();
+            if (sttSupported && isListening && recognizer) {
+                try { recognizer.stop(); } catch (e) {}
+                isListening = false;
+            }
+
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const reviewContainer = document.getElementById('review-result');
+            loading.style.display = 'none';
+            results.style.display = 'block';
+            results.setAttribute('aria-busy', 'true');
+            lockSubmittedWorkForReview();
+
+            reviewContainer.innerHTML = `
+                <section class="review-pending" data-review-pending role="status" aria-live="polite">
+                    <span class="review-pending-spinner" aria-hidden="true"></span>
+                    <span>${escapeHomeworkText(message)}</span>
+                </section>
+            `;
+        }
+
         function hideLoading() {
             document.getElementById('loading').style.display = 'none';
+            const results = document.getElementById('results');
+            if (results) results.removeAttribute('aria-busy');
+            const pendingReview = document.querySelector('[data-review-pending]');
+            if (pendingReview) pendingReview.remove();
+            unlockSubmittedWorkAfterReview();
         }
 
         function showResults() {
@@ -2460,7 +2550,7 @@
                 : HOMEWORK_PREMIUM_PLAN;
             if (!await requireSubscription('Review Question', false, requiredPlan)) return;
 
-            showLoading();
+            showReviewLoading('Checking this answer…');
 
             try {
                 const response = await fetch('/api/review', {
@@ -2615,7 +2705,7 @@
             }
 
             currentSubject = reviewItems[0].homeworkItem.subject || 'Maths';
-            showLoading();
+            showReviewLoading('Checking all your answers…');
             try {
                 const results = await Promise.all(reviewItems.map(async ({ homeworkItem, index, answer }) => {
                     const response = await fetch('/api/review', {
@@ -2742,7 +2832,7 @@
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null, submittedWork = null) {
 
-            showLoading();
+            showReviewLoading('Checking your homework…');
 
             try {
                 const requestBody = {
@@ -3158,7 +3248,7 @@
                 return;
             }
 
-            showLoading();
+            showReviewLoading('Checking your practice answers…');
 
             fetch('/api/review', {
                 method: 'POST',

@@ -94,8 +94,34 @@ def test_kid_session_is_limited_to_own_progress_rewards_and_mock_access(
     assert context.status_code == 200
     assert context.json()["role"] == "kid"
     assert context.json()["student"]["id"] == first["id"]
+    assert context.json()["avatar"]["growth"]["lifetime_xp"] >= 500
+    assert context.json()["avatar"]["growth"]["stage"] >= 4
     assert "kid_code" not in context.text and "family_code" not in context.text
     assert authenticated_client.get("/api/account").status_code == 401
+
+    customised_avatar = authenticated_client.put(
+        "/api/rewards/avatar",
+        json={"colour": "teal", "accessory": "apple"},
+    )
+    assert customised_avatar.status_code == 200, customised_avatar.text
+    assert customised_avatar.json()["avatar"]["profile"] == {
+        "colour": "teal",
+        "accessory": "apple",
+        "customised": True,
+    }
+    refreshed_context = authenticated_client.get("/api/session-context").json()
+    assert refreshed_context["avatar"]["profile"]["colour"] == "teal"
+    assert refreshed_context["avatar"]["profile"]["accessory"] == "apple"
+
+    sibling_avatar = authenticated_client.put(
+        "/api/rewards/avatar",
+        json={
+            "student_id": sibling["id"],
+            "colour": "rose",
+            "accessory": "bow",
+        },
+    )
+    assert sibling_avatar.status_code == 403
 
     own_progress = authenticated_client.get(f"/api/progress/{first['id']}")
     assert own_progress.status_code == 200, own_progress.text

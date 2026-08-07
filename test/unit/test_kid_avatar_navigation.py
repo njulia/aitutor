@@ -53,6 +53,12 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     assert "'/app', '🚀', 'Start a quest'" in script
     assert "'/progress', '📈', 'My progress'" in script
     assert "'/rewards', '🎁', 'My rewards'" in script
+    assert "Customise my capybara" in script
+    assert "Save my style" in script
+    assert "'/api/rewards/avatar'" in script
+    assert "homeworkmagic:xp-updated" in script
+    assert "Tiny Capybara" in script
+    assert "Legendary Capybara" in script
     assert "activeRole === 'kid' ? '/api/kid-logout' : '/api/logout'" in script
     assert "innerHTML" not in script
 
@@ -66,6 +72,10 @@ def test_kid_avatar_uses_the_supplied_mascot_and_touch_sized_styles() -> None:
     assert "width: 56px;" in stylesheet
     assert ".hm-kid-avatar-menu[hidden]" in stylesheet
     assert ".hm-kid-avatar-action" in stylesheet
+    assert '.hm-kid-avatar[data-growth-stage="6"]' in stylesheet
+    assert ".hm-kid-avatar-growth-progress" in stylesheet
+    assert ".hm-kid-avatar-customiser" in stylesheet
+    assert ".hm-kid-avatar-choice.is-selected" in stylesheet
     assert "@media (prefers-reduced-motion: reduce)" in stylesheet
     assert ".hm-kid-avatar { display: none !important; }" in stylesheet
 
@@ -74,8 +84,8 @@ def test_kid_avatar_uses_the_supplied_mascot_and_touch_sized_styles() -> None:
 def test_role_aware_pages_load_fresh_avatar_assets(relative_path: str) -> None:
     page = (ROOT / "static" / relative_path).read_text(encoding="utf-8")
 
-    assert "/static/css/theme.css?v=20260806-kid-avatar" in page
-    assert "/static/js/auth-nav.js?v=20260806-kid-avatar" in page
+    assert "/static/css/theme.css?v=20260806-growing-avatar-review-stable" in page
+    assert "/static/js/auth-nav.js?v=20260806-growing-avatar-review-stable" in page
 
 
 def test_learning_app_reuses_shared_session_request_for_avatar() -> None:

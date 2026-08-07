@@ -80,35 +80,6 @@
             margin-bottom: 30px;
         }
 
-        .login-card {
-          max-width: 600px;
-          margin: 70px auto;
-          padding: 42px;
-          text-align: center;
-          background: white;
-          border-radius: 26px;
-          box-shadow: 0 18px 55px #39237520;
-        }
-
-        .login-icon { font-size: 3.5rem; }
-        .login-card h1 { color: #432887; }
-.progress-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  padding: 9px 15px;
-  color: white;
-  background: #432887;
-  border: 0;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: .92rem;
-  font-weight: 800;
-  line-height: 1.2;
-  text-decoration: none;
-  cursor: pointer;
-}
         .page-status {
             margin-top: 18px;
             padding: 16px 18px;
@@ -756,11 +727,12 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=20260806-kid-avatar">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20260806-growing-avatar-review-stable">
 </head>
 <body class="hm-app hm-progress">
     <div class="header">
         <div class="header-content">
+<!--              <a class="hm-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>-->
             <a class="logo" href="/" aria-label="Homework Magic home"><span aria-hidden="true">✨</span> Homework Magic</a>
             <nav class="nav-links">
               <a href="/ks1-homework">KS1</a>
@@ -789,9 +761,14 @@
             </label>
             <div class="app-welcome-tip">Progress, not perfection</div>
         </section>
+<!--        <div class="card">-->
+<!--            <p id="progress-intro" style="color: #666;">-->
+<!--                Loading progress for your signed-in learner profile.-->
+<!--            </p>-->
             <div id="page-status" class="page-status" role="status" aria-live="polite">
                 Getting the latest results…
             </div>
+<!--        </div>-->
 
         <div id="progress-content" class="hidden">
             <div class="progress-dashboard">
@@ -1082,7 +1059,7 @@
                     if (currentSessionRole === 'kid') {
                         showPageStatus('Your login has expired. Please ask a grown-up for your <a href="/kid-login">login code</a>.', true);
                     } else {
-                        showPageStatus('A parent or guardian needs to <a href="/login?next=/progress">sign in</a> to see progress.', true);
+                        showPageStatus('A parent or guardian needs to <a href="/login">sign in</a> to see progress.', true);
                     }
                     return;
                 }
@@ -1636,6 +1613,6 @@
         }
     </script>
     <script src="/static/js/session-context.js?v=20260806" defer></script>
-    <script src="/static/js/auth-nav.js?v=20260806-kid-avatar" defer></script>
+    <script src="/static/js/auth-nav.js?v=20260806-growing-avatar-review-stable" defer></script>
 </body>
 </html>
