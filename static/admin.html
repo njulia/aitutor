@@ -442,11 +442,13 @@
                 <div style="display:flex;gap:8px;align-items:center;">
                     <input class="search-box" type="text" placeholder="Search auth users..." id="authUserSearch" oninput="filterAuthUsers()">
                     <button class="btn btn-primary" onclick="loadAuthUsers()">Refresh</button>
+                    <button class="btn btn-primary" id="broadcastBtn" onclick="openBroadcastModal()" disabled>Send Message</button>
                 </div>
             </div>
             <table>
                 <thead>
                     <tr>
+                        <th style="width:40px"><input type="checkbox" id="selectAllAuthUsers" onchange="toggleSelectAll()" title="Select all"></th>
                         <th>Username</th>
                         <th>Created</th>
                         <th>Test Account</th>
@@ -455,6 +457,27 @@
                 </thead>
                 <tbody id="authUsersTable"></tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Broadcast Message Modal -->
+    <div class="modal-overlay" id="broadcastModal">
+        <div class="modal">
+            <h3>Send Message to Users</h3>
+            <div id="broadcastSelectedInfo" style="font-size:13px;color:#888;margin-bottom:12px;"></div>
+            <div class="form-group">
+                <label>Subject</label>
+                <input type="text" id="broadcastSubject" placeholder="Message subject">
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea id="broadcastMessage" placeholder="Write your message..." style="width:100%;height:120px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
+            </div>
+            <div id="broadcastStatus" style="font-size:13px;margin-bottom:8px;"></div>
+            <div class="actions">
+                <button class="btn" onclick="closeBroadcastModal()">Cancel</button>
+                <button class="btn btn-primary" id="broadcastSendBtn" onclick="sendBroadcast()">Send</button>
+            </div>
         </div>
     </div>
 
@@ -877,26 +900,112 @@
                 renderAuthUsers(authUsers);
             }catch(e){
                 console.error("loadAuthUsers error:", e);
-                document.getElementById('authUsersTable').innerHTML = '<tr><td colspan="4" style="color:#c53030">Error: '+e.message+'</td></tr>';
+                document.getElementById('authUsersTable').innerHTML = '<tr><td colspan="5" style="color:#c53030">Error: '+e.message+'</td></tr>';
             }
         }
 
         function renderAuthUsers(users){
             document.getElementById('authUsersTable').innerHTML = users.map(u=>`
                 <tr>
-                    <td><code>${u.username}</code></td>
+                    <td><input type="checkbox" class="auth-user-checkbox" value="${escapeHtml(u.username)}" onchange="updateBroadcastButton()"></td>
+                    <td><code>${escapeHtml(u.username)}</code></td>
                     <td>${new Date(u.created_at).toLocaleString()}</td>
                     <td>${u.is_test ? '<span class="badge badge-blue">Test</span>' : '<span class="badge">Regular</span>'}</td>
                     <td>
-                        <button class="btn btn-sm" onclick="toggleTest('${u.username}', ${u.is_test ? 'false' : 'true'})">${u.is_test ? 'Unmark Test' : 'Mark Test'}</button>
+                        <button class="btn btn-sm" onclick="toggleTest('${escapeHtml(u.username)}', ${u.is_test ? 'false' : 'true'})">${u.is_test ? 'Unmark Test' : 'Mark Test'}</button>
                     </td>
                 </tr>
-            `).join('')
+            `).join('');
+            updateBroadcastButton();
         }
 
         function filterAuthUsers(){
             const q = document.getElementById('authUserSearch').value.toLowerCase();
             renderAuthUsers(authUsers.filter(u => (u.username||'').toLowerCase().includes(q)));
+        }
+
+        function getSelectedAuthUsers(){
+            const boxes = document.querySelectorAll('#authUsersTable .auth-user-checkbox:checked');
+            return Array.from(boxes).map(cb => cb.value);
+        }
+
+        function updateBroadcastButton(){
+            const selected = getSelectedAuthUsers();
+            const btn = document.getElementById('broadcastBtn');
+            btn.disabled = selected.length === 0;
+            btn.textContent = selected.length > 0 ? `Send Message (${selected.length})` : 'Send Message';
+        }
+
+        function toggleSelectAll(){
+            const selectAll = document.getElementById('selectAllAuthUsers');
+            const boxes = document.querySelectorAll('#authUsersTable .auth-user-checkbox');
+            boxes.forEach(cb => { cb.checked = selectAll.checked; });
+            updateBroadcastButton();
+        }
+
+        function openBroadcastModal(){
+            const selected = getSelectedAuthUsers();
+            if(selected.length === 0) return;
+            document.getElementById('broadcastSelectedInfo').textContent = `Sending to ${selected.length} user(s): ${selected.join(', ')}`;
+            document.getElementById('broadcastSubject').value = '';
+            document.getElementById('broadcastMessage').value = '';
+            document.getElementById('broadcastStatus').innerHTML = '';
+            document.getElementById('broadcastSendBtn').disabled = false;
+            document.getElementById('broadcastModal').classList.add('show');
+        }
+
+        function closeBroadcastModal(){
+            document.getElementById('broadcastModal').classList.remove('show');
+        }
+
+        async function sendBroadcast(){
+            const selected = getSelectedAuthUsers();
+            const subject = document.getElementById('broadcastSubject').value.trim();
+            const message = document.getElementById('broadcastMessage').value.trim();
+            const statusEl = document.getElementById('broadcastStatus');
+            const sendBtn = document.getElementById('broadcastSendBtn');
+
+            if(!subject || !message){
+                statusEl.innerHTML = '<span style="color:#c53030">Please fill in both subject and message.</span>';
+                return;
+            }
+
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            statusEl.innerHTML = '<span style="color:#888">Sending messages...</span>';
+
+            try {
+                const resp = await fetch('/api/admin/broadcast-message', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ usernames: selected, subject, message })
+                });
+                const data = await resp.json();
+                if(!resp.ok){
+                    statusEl.innerHTML = `<span style="color:#c53030">${escapeHtml(data.detail || 'Error sending messages')}</span>`;
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send';
+                    return;
+                }
+                const successCount = data.results.filter(r => !r.error).length;
+                const emailSent = data.results.filter(r => r.email_status === 'sent').length;
+                const emailFailed = data.results.filter(r => r.email_status === 'failed' || r.email_status === 'skipped').length;
+                const errors = data.results.filter(r => r.error).length;
+                let msg = `<span style="color:#1a8a4a">Sent to ${successCount} user(s). Messages saved.</span>`;
+                if(emailSent > 0) msg += ` <span style="color:#1a8a4a">Email sent to ${emailSent}.</span>`;
+                if(emailFailed > 0) msg += ` <span style="color:#f59e0b">Email unavailable for ${emailFailed}.</span>`;
+                if(errors > 0) msg += ` <span style="color:#c53030">Failed for ${errors}.</span>`;
+                statusEl.innerHTML = msg;
+                sendBtn.textContent = 'Sent';
+                // 刷新消息计数
+                loadAdminMessageCount();
+                // 延迟关闭弹窗
+                setTimeout(closeBroadcastModal, 2000);
+            } catch(e){
+                statusEl.innerHTML = `<span style="color:#c53030">Error: ${escapeHtml(e.message)}</span>`;
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+            }
         }
 
         async function toggleTest(username, enable){

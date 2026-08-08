@@ -73,8 +73,8 @@ def test_beta_account_earns_xp_for_each_new_generated_activity(
     assert first.status_code == 200, first.text
     first_reward = first.json()["reward_update"]
     assert first_reward["awarded_xp"] > 0
-    assert first_reward["awarded_gift_points"] == 0
-    assert first_reward["gift_points_eligible"] is False
+    assert first_reward["awarded_gift_points"] > 0
+    assert first_reward["gift_points_eligible"] is True
 
     repeated = authenticated_client.post(
         "/api/review",
@@ -91,7 +91,7 @@ def test_beta_account_earns_xp_for_each_new_generated_activity(
     assert second.status_code == 200, second.text
     second_reward = second.json()["reward_update"]
     assert second_reward["awarded_xp"] > 0
-    assert second_reward["awarded_gift_points"] == 0
+    assert second_reward["awarded_gift_points"] > 0
 
     # The Gift Points scheme has a daily activity limit, but lifetime XP must
     # continue for every new checked activity. This catches the production bug

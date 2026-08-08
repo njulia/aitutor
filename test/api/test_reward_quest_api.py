@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from src.webapp.account_store import create_subscription
 from src.webapp.reward_store import get_reward_store, review_fingerprint
 
 DELIVERY_ADDRESS = {
@@ -46,15 +45,6 @@ def _award_sticker_points(account_id: str, student_id: str) -> None:
             )
 
 
-def _activate_reward_subscription(account_id: str) -> None:
-    create_subscription(
-        account_id=account_id,
-        plan="homework_monthly",
-        status="active",
-        duration_days=30,
-    )
-
-
 def test_reward_dashboard_requires_a_parent_account(client) -> None:
     response = client.get("/api/rewards")
     assert response.status_code == 401
@@ -69,7 +59,6 @@ def test_reward_request_parent_approval_and_certificate(
     account_body = account_response.json()
     account = account_body["account"]
     learner = account_body["students"][0]
-    _activate_reward_subscription(account["id"])
     _award_sticker_points(account["id"], learner["id"])
 
     dashboard = authenticated_client.get(
@@ -138,7 +127,6 @@ def test_admin_can_dispatch_without_exposing_address_to_child(
     account_body = authenticated_client.get("/api/account").json()
     account = account_body["account"]
     learner = account_body["students"][0]
-    _activate_reward_subscription(account["id"])
     _award_sticker_points(account["id"], learner["id"])
     requested = authenticated_client.post(
         "/api/rewards/redemptions",
@@ -217,7 +205,7 @@ def test_family_cannot_read_another_learners_rewards(
     assert forbidden.status_code == 404
 
 
-def test_successful_review_returns_immediate_effort_xp(
+def test_successful_review_returns_immediate_effort_xp_and_gift_points(
     authenticated_client, app_module, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -240,23 +228,14 @@ def test_successful_review_returns_immediate_effort_xp(
     first = authenticated_client.post("/api/review", json=payload)
     assert first.status_code == 200, first.text
     assert first.json()["reward_update"]["awarded_xp"] >= 20
-    assert first.json()["reward_update"]["awarded_gift_points"] == 0
-    assert first.json()["reward_update"]["gift_points_eligible"] is False
+    assert first.json()["reward_update"]["awarded_gift_points"] >= 20
+    assert first.json()["reward_update"]["gift_points_eligible"] is True
 
     dashboard = authenticated_client.get("/api/rewards")
     assert dashboard.status_code == 200
-    assert dashboard.json()["gift_access"]["eligible"] is False
+    assert dashboard.json()["gift_access"]["eligible"] is True
     assert dashboard.json()["wallet"]["lifetime_xp"] >= 20
-    assert dashboard.json()["wallet"]["gift_points"] == 0
-    blocked = authenticated_client.post(
-        "/api/rewards/redemptions",
-        json={
-            "student_id": dashboard.json()["learner"]["id"],
-            "reward_code": "homework_magic_stickers",
-        },
-    )
-    assert blocked.status_code == 403
-    assert "subscription" in blocked.text.lower()
+    assert dashboard.json()["wallet"]["gift_points"] >= 20
 
     repeated = authenticated_client.post("/api/review", json=payload)
     assert repeated.status_code == 200
@@ -264,11 +243,9 @@ def test_successful_review_returns_immediate_effort_xp(
     assert repeated.json()["reward_update"]["already_awarded"] is True
 
 
-def test_active_subscription_review_earns_xp_and_gift_points(
+def test_registered_account_review_earns_both_xp_and_gift_points(
     authenticated_client, app_module, monkeypatch
 ) -> None:
-    account_body = authenticated_client.get("/api/account").json()
-    _activate_reward_subscription(account_body["account"]["id"])
     monkeypatch.setattr(
         app_module,
         "review_homework",

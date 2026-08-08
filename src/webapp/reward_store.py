@@ -1560,7 +1560,7 @@ class RewardStore:
     ) -> dict[str, Any]:
         if not gift_points_eligible:
             raise PermissionError(
-                "An active Homework Magic subscription is needed to claim gifts"
+                "A parent account is needed to claim gifts"
             )
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
@@ -1727,7 +1727,7 @@ class RewardStore:
         if action == "approve":
             if not gift_points_eligible:
                 raise PermissionError(
-                    "An active Homework Magic subscription is needed to approve a gift"
+                    "A parent account is needed to approve a gift"
                 )
             if delivery_address is None:
                 raise ValueError(

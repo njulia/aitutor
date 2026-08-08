@@ -166,7 +166,7 @@ def test_effort_xp_is_uncapped_but_gift_points_keep_daily_cap(
     assert certificate and certificate["title"] == "Brilliant Beginner"
 
 
-def test_everyone_earns_xp_but_free_learners_do_not_earn_gift_points(
+def test_gift_points_not_awarded_when_not_eligible(
     tmp_path,
 ) -> None:
     store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'free-rewards.db'}")
@@ -186,7 +186,7 @@ def test_everyone_earns_xp_but_free_learners_do_not_earn_gift_points(
     dashboard = store.dashboard(account_id="acct_free", student_id="stu_free")
     assert dashboard["wallet"]["lifetime_xp"] == 30
     assert dashboard["wallet"]["gift_points"] == 0
-    with pytest.raises(PermissionError, match="active Homework Magic subscription"):
+    with pytest.raises(PermissionError, match="parent account is needed"):
         store.request_redemption(
             account_id="acct_free",
             student_id="stu_free",
@@ -299,7 +299,7 @@ def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> No
     assert requested["status"] == "pending"
     assert before["gift_points"] >= 500
 
-    with pytest.raises(PermissionError, match="active Homework Magic subscription"):
+    with pytest.raises(PermissionError, match="parent account is needed"):
         store.decide_redemption(
             account_id="acct_family",
             redemption_id=requested["id"],

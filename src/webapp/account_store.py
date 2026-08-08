@@ -829,21 +829,12 @@ def get_active_subscription(account_id: str) -> Optional[Dict[str, Any]]:
 
 
 def account_has_active_reward_subscription(account_id: str) -> bool:
-    """Return whether a recurring plan currently includes physical rewards.
+    """Return whether the account can earn Gift Points.
 
-    The five-day pass is a non-renewing purchase rather than a subscription.
-    It continues to unlock its advertised learning features, but it does not
-    earn Gift Points or unlock physical gift claims.
+    父母注册账户后即可获得 Gift Points，不需要付费订阅。
     """
-    subscription = get_active_subscription(account_id)
-    if not subscription:
-        return False
-    plan = str(subscription.get("plan") or "").strip().lower()
-    return bool(
-        plan
-        and plan not in {"trial_5day", BETA_PLAN}
-        and plan.endswith("_monthly")
-    )
+    account = get_account(account_id)
+    return account is not None
 
 
 def beta_access_enabled() -> bool:

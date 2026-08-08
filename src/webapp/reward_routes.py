@@ -35,8 +35,8 @@ GIFT_ACCESS_NOTE = (
     "Everyone can earn XP. A grown-up manages Gift Points, gifts and plans."
 )
 PARENT_GIFT_PLAN_NOTE = (
-    "Gift Points and gift approvals require an eligible monthly plan. "
-    "The five-day pass and free beta access do not include physical gifts."
+    "Gift Points are available to all registered families. "
+    "A grown-up manages gift approvals and delivery."
 )
 
 
@@ -366,7 +366,7 @@ def build_reward_router(
             "success": True,
             "gift_points_name": "Gift Points",
             "gift_points_eligible": eligible,
-            "gift_points_requires_active_subscription": True,
+            "gift_points_requires_active_subscription": False,
             "gift_subscription_note": PARENT_GIFT_PLAN_NOTE,
             "delivery_country": "GB",
             "requires_parent_delivery_address": True,

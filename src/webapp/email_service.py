@@ -352,3 +352,67 @@ def send_xp_digest_email(
     email.add_alternative(html_content, subtype="html")
 
     return _deliver_transactional_email(email, "XP digest")
+
+
+def send_admin_broadcast_email(
+    *,
+    to_email: str,
+    subject: str,
+    message: str,
+) -> Tuple[str, Optional[str]]:
+    """管理员通过 info@homeworkmagic.co.uk 向用户发送通知邮件。"""
+    host = (os.getenv("SMTP_HOST") or "").strip()
+    username = (os.getenv("SMTP_USERNAME") or "").strip()
+    password = os.getenv("SMTP_PASSWORD") or ""
+    sender = "info@homeworkmagic.co.uk"
+    if not host:
+        return "skipped", "SMTP is not configured."
+
+    port = int(os.getenv("SMTP_PORT") or (465 if _as_bool("SMTP_USE_SSL") else 587))
+    timeout = float(os.getenv("SMTP_TIMEOUT_SECONDS") or "15")
+    messages_link = _public_link("/messages")
+    safe_messages_link = escape(messages_link, quote=True)
+    safe_message = escape(message)
+
+    email = EmailMessage()
+    email["From"] = sender
+    email["To"] = to_email
+    email["Subject"] = f"Homework Magic: {subject[:120]}"
+    email.set_content(
+        "Hello,\n\n"
+        "You have a new message from the Homework Magic team:\n\n"
+        f"{message.strip()}\n\n"
+        f"You can view this message in your message box: {messages_link}\n\n"
+        "Homework Magic"
+    )
+    email.add_alternative(
+        "<!doctype html><html><body style=\"font-family:Arial,sans-serif;color:#263238;line-height:1.55\">"
+        "<div style=\"max-width:600px;margin:auto;padding:24px\">"
+        "<h1 style=\"color:#6b46c1\">New message from Homework Magic</h1>"
+        f"<p style=\"white-space:pre-wrap\">{safe_message}</p>"
+        f"<p><a href=\"{safe_messages_link}\" style=\"background:#6b46c1;color:#fff;padding:12px 18px;"
+        "text-decoration:none;border-radius:8px;display:inline-block\">View your message box</a></p>"
+        "<p>Homework Magic</p></div></body></html>",
+        subtype="html",
+    )
+
+    try:
+        if _as_bool("SMTP_USE_SSL"):
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=timeout, context=context) as smtp:
+                if username:
+                    smtp.login(username, password)
+                smtp.send_message(email)
+        else:
+            with smtplib.SMTP(host, port, timeout=timeout) as smtp:
+                smtp.ehlo()
+                if _as_bool("SMTP_USE_TLS", True):
+                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.ehlo()
+                if username:
+                    smtp.login(username, password)
+                smtp.send_message(email)
+        return "sent", None
+    except Exception as exc:
+        logger.warning("Admin broadcast email to %s failed: %s", to_email, type(exc).__name__)
+        return "failed", f"Email delivery failed: {type(exc).__name__}"

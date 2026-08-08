@@ -111,22 +111,22 @@ def test_five_day_access_does_not_unlock_paid_mock_exams(
     assert paid_start.json()["required_plan_name"] == "11+ Premium"
 
 
-def test_free_test_account_does_not_unlock_paid_mock_exams(
+def test_test_account_unlocks_all_paid_mock_exams(
     authenticated_client,
     unique_email,
 ) -> None:
+    """Test users bypass the subscription check for all 11+ mock exams."""
     assert set_user_test_flag(unique_email, True)
 
     catalogue = authenticated_client.get("/api/elevenplus/mock-exams")
     paid = [item for item in catalogue.json()["exams"] if not item["is_free"]]
     assert paid
-    assert all(item["available"] is False for item in paid)
+    assert all(item["available"] is True for item in paid)
 
     started = authenticated_client.post(
         "/api/elevenplus/mock-exams/common-full-1/start"
     )
-    assert started.status_code == 402
-    assert started.json()["required_plan"] == "elevenplus_monthly"
+    assert started.status_code == 200
 
 
 def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> None:

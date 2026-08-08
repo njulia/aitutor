@@ -3234,6 +3234,70 @@ async def admin_auth_users(limit: int = 100, offset: int = 0):
     return {"success": True, "users": users}
 
 
+@app.post("/api/admin/broadcast-message")
+async def admin_broadcast_message(req: Request):
+    """管理员向选中的用户发送消息（同时显示在用户消息箱和发送邮件通知）"""
+    _require_admin(req)
+    try:
+        data = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    usernames = data.get("usernames", [])
+    subject = (data.get("subject") or "").strip()
+    message = (data.get("message") or "").strip()
+
+    if not isinstance(usernames, list) or len(usernames) == 0:
+        raise HTTPException(status_code=400, detail="Please select at least one user.")
+    if len(subject) < 2:
+        raise HTTPException(status_code=400, detail="Please enter a subject (at least 2 characters).")
+    if len(message) < 2:
+        raise HTTPException(status_code=400, detail="Please enter a message (at least 2 characters).")
+
+    from src.webapp.message_store import MessageStore
+    from src.webapp.email_service import send_admin_broadcast_email
+
+    store = MessageStore(project_root)
+    results = []
+
+    for username in usernames:
+        username = username.strip().lower()
+        if not username:
+            continue
+
+        owner_id = f"account:{username}"
+        try:
+            # 在用户消息箱中创建消息
+            msg_item, _token = await asyncio.to_thread(
+                store.create_message,
+                owner_id=owner_id,
+                contact_email=username,
+                category="general",
+                subject=subject,
+                message=message,
+            )
+            # 发送邮件通知
+            email_status, email_error = await asyncio.to_thread(
+                send_admin_broadcast_email,
+                to_email=username,
+                subject=subject,
+                message=message,
+            )
+            results.append({
+                "username": username,
+                "message_id": msg_item["id"],
+                "email_status": email_status,
+                "email_error": email_error,
+            })
+        except Exception as e:
+            results.append({
+                "username": username,
+                "error": str(e),
+            })
+
+    return {"success": True, "results": results}
+
+
 @app.get("/api/admin/embedding-cache/stats")
 async def admin_embedding_cache_stats():
     from src.embedding_cache import get_stats

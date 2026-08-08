@@ -44,6 +44,11 @@ def build_mock_exam_router(
 
     async def access_context(request: Request) -> tuple[str, Optional[str], Optional[str], bool]:
         identity, username, new_anon_id = resolve_identity(request)
+        # 测试用户可以直接访问 11+ mock exams，无需订阅检查
+        if username:
+            from src.progress_db import is_user_test
+            if is_user_test(username):
+                return identity, username, new_anon_id, True
         # ``identity`` is a real learner ID for both parent-selected and kid
         # sessions. The subscription helper resolves a kid's family plan from
         # that ID, so children do not need access to a parent's email/session.
@@ -86,9 +91,17 @@ def build_mock_exam_router(
         new_anon_id: Optional[str]
         has_access: bool
 
-        # 免费 diagnostic 考试不需要订阅检查，跳过数据库查询以减少延迟和故障点
+        # 免费 diagnostic 考试：不调用 resolve_identity（含数据库查询），直接使用 cookie 中的匿名 ID，
+        # 确保在任何情况下（包括数据库不可用时）任何用户都能访问免费诊断
         if is_free_mock:
-            identity, username, new_anon_id = resolve_identity(request)
+            anonymous_id = request.cookies.get("anon_session_id")
+            new_anon_id: Optional[str] = None
+            if not anonymous_id:
+                import uuid
+                anonymous_id = f"anon_{uuid.uuid4().hex}"
+                new_anon_id = anonymous_id
+            identity = anonymous_id
+            username = None
             has_access = True
         else:
             identity, username, new_anon_id, has_access = await access_context(request)
