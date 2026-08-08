@@ -986,13 +986,8 @@ class RewardStore:
         elif accuracy is not None and accuracy >= 0.8:
             # 正确率 >= 80% 时 XP 增加
             activity_xp = activity_xp + 5
-        # Lifetime XP is an effort record for every authenticated learner and
-        # must never depend on a plan or stop after a small number of
-        # activities. Keep the configurable cap only for subscriber Gift
-        # Points, which can be exchanged for physical rewards.
-        daily_gift_activity_cap = _bounded_env_int(
-            "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
-        )
+        # Lifetime XP 和 Gift Points 都是每次活动都会增加，没有每日上限。
+        # Gift Points 仅在兑换礼物时扣除。
         source_key = f"checked:{local_day}:{digest}"
         awarded_events: list[dict[str, Any]] = []
         already_awarded = False
@@ -1043,7 +1038,7 @@ class RewardStore:
                     lifetime_delta=activity_xp,
                     spendable_delta=(
                         activity_xp
-                        if gift_points_eligible and day_count < daily_gift_activity_cap
+                        if gift_points_eligible
                         else 0
                     ),
                     subject=subject,
@@ -1130,13 +1125,10 @@ class RewardStore:
             "gift_points_eligible": bool(gift_points_eligible),
             "activity_xp": activity_xp if activity_awarded else 0,
             "already_awarded": already_awarded,
-            # Keep the old response fields for deployed clients. They now
-            # describe the Gift Points activity cap; lifetime XP is uncapped.
-            "daily_cap_reached": day_count >= daily_gift_activity_cap,
-            "daily_reward_limit": daily_gift_activity_cap,
-            "daily_gift_activity_cap_reached": (
-                day_count >= daily_gift_activity_cap
-            ),
+            # Gift Points 没有每日上限，每次获得 XP 都会同时增加 Gift Points
+            # "daily_cap_reached": False,
+            # "daily_reward_limit": None,
+            # "daily_gift_activity_cap_reached": False,
             "xp_activity_cap": None,
             "lifetime_xp": wallet["lifetime_xp"],
             "gift_points": wallet["gift_points"],
@@ -1527,12 +1519,8 @@ class RewardStore:
                     1,
                     _bounded_env_int("REWARD_HOMEWORK_ACTIVITY_XP", 20, 1, 100) // 10,
                 ),
-                "daily_activity_cap": _bounded_env_int(
-                    "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
-                ),
-                "daily_gift_point_activity_cap": _bounded_env_int(
-                    "REWARD_DAILY_ACTIVITY_CAP", 3, 1, 10
-                ),
+                # "daily_activity_cap": None,
+                # "daily_gift_point_activity_cap": None,
                 "xp_activity_cap": None,
                 "gift_provider": "homework_magic",
                 "delivery_country": "GB",

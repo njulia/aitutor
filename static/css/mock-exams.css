@@ -460,6 +460,8 @@ body.mock-page {
   max-width: 850px;
   margin: 32px auto 0;
 }
+.exam-controls #previous-question,
+.exam-controls #next-question { width: 100%; }
 .exam-controls #next-question { justify-self: end; }
 
 .results-hero { max-width: 720px; margin: 0 auto 45px; text-align: center; }

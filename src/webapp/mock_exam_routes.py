@@ -150,6 +150,12 @@ def build_mock_exam_router(
     @router.post("/{exam_id}/submit")
     async def submit(exam_id: str, body: MockExamSubmission, request: Request):
         identity, _username, new_anon_id = resolve_identity(request)
+        # 免费 diagnostic 考试提交时，也使用 cookie 中的匿名 ID，与 start 时保持一致
+        exam = EXAMS.get(str(exam_id or "").strip())
+        if exam and exam["id"] == FREE_MOCK_EXAM_ID:
+            anonymous_id = request.cookies.get("anon_session_id")
+            if anonymous_id:
+                identity = anonymous_id
         try:
             result = score_mock_exam(
                 exam_id,
