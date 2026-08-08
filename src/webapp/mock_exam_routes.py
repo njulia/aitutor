@@ -76,11 +76,24 @@ def build_mock_exam_router(
 
     @router.post("/{exam_id}/start")
     async def start(exam_id: str, request: Request):
-        identity, username, new_anon_id, has_access = await access_context(request)
         exam = EXAMS.get(str(exam_id or "").strip())
         if exam is None:
             raise HTTPException(status_code=404, detail="This mock exam is not available.")
-        if exam["id"] != FREE_MOCK_EXAM_ID and not has_access:
+        is_free_mock = exam["id"] == FREE_MOCK_EXAM_ID
+
+        identity: str
+        username: Optional[str]
+        new_anon_id: Optional[str]
+        has_access: bool
+
+        # 免费 diagnostic 考试不需要订阅检查，跳过数据库查询以减少延迟和故障点
+        if is_free_mock:
+            identity, username, new_anon_id = resolve_identity(request)
+            has_access = True
+        else:
+            identity, username, new_anon_id, has_access = await access_context(request)
+
+        if not is_free_mock and not has_access:
             response = private_json(
                 {
                     "success": False,
@@ -107,7 +120,12 @@ def build_mock_exam_router(
         except MockExamNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
-            logger.exception("Unable to start 11+ mock exam")
+            logger.exception(
+                "Unable to start 11+ mock exam (exam_id=%s identity=%s): %s",
+                exam_id,
+                str(identity)[:20],
+                exc,
+            )
             raise HTTPException(
                 status_code=500,
                 detail="We could not start this mock just now. Please try again.",

@@ -15,12 +15,16 @@
   var portalButton = document.getElementById('portal-button');
   var existingBillingActions = document.getElementById('existing-billing-actions');
   var existingPortalButton = document.getElementById('existing-portal-button');
+  var checkoutHelp = document.getElementById('checkout-help');
   var navLogin = document.getElementById('pricing-nav-login');
   var navLearning = document.getElementById('pricing-nav-learning');
   var navLogout = document.getElementById('pricing-nav-logout');
   var navRegister = document.getElementById('pricing-nav-register');
   var billingButtons = [changePlanButton, cancelPlanButton, portalButton];
   var billingHelp = accountActions.querySelector('.billing-help');
+  var pricingTableSection = document.getElementById('stripe-pricing-table-section');
+  var pricingTableContainer = document.getElementById('stripe-pricing-table-container');
+  var pricingTableLoaded = false;
 
   function setStatus(message, isError) {
     statusEl.textContent = message;
@@ -39,6 +43,7 @@
   }
 
   function renderSignedInNavigation(signedIn) {
+    checkoutHelp.hidden = signedIn;
     navLogin.hidden = signedIn;
     navRegister.hidden = signedIn;
     navLearning.hidden = !signedIn;
@@ -108,21 +113,53 @@
 
   function configureCheckoutButtons(data) {
     var availability = data.plan_availability || {};
+    var unavailableCount = 0;
     checkoutButtons.forEach(function (button) {
       var plan = button.getAttribute('data-plan');
       var ready = availability[plan] === true;
-      button.dataset.checkoutReady = String(ready);
-      if (ready) {
-        button.textContent = button.getAttribute('data-checkout-label');
-        button.href = '#';
-        button.removeAttribute('aria-disabled');
-      } else {
-        button.textContent = plan === 'trial_5day'
-          ? 'Five-day access unavailable'
-          : 'Plan temporarily unavailable';
-        button.removeAttribute('href');
-        button.setAttribute('aria-disabled', 'true');
+      button.dataset.checkoutReady = 'true';
+      button.textContent = button.getAttribute('data-checkout-label');
+      button.href = '#';
+      button.removeAttribute('aria-disabled');
+      if (!ready) {
+        unavailableCount += 1;
       }
+    });
+    if (unavailableCount >= checkoutButtons.length) {
+      setStatus('Stripe billing may not be configured. You can still try to choose a plan.', true);
+    } else if (unavailableCount > 0) {
+      setStatus('Some plans may be temporarily unavailable.', true);
+    }
+  }
+
+  function loadStripePricingTable() {
+    if (pricingTableLoaded || !pricingTableSection || !pricingTableContainer) {
+      return;
+    }
+    fetch('/api/billing/pricing-table-session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'}
+    }).then(readJson).then(function (data) {
+      if (!data.client_secret || !data.pricing_table_id || !data.publishable_key) {
+        return;
+      }
+      var script = document.createElement('script');
+      script.src = 'https://js.stripe.com/v3/pricing-table.js';
+      script.async = true;
+      script.onload = function () {
+        var el = document.createElement('stripe-pricing-table');
+        el.setAttribute('client-reference-id', data.client_reference_id || '');
+        el.setAttribute('customer-session-client-secret', data.client_secret);
+        el.setAttribute('pricing-table-id', data.pricing_table_id);
+        el.setAttribute('publishable-key', data.publishable_key);
+        pricingTableContainer.appendChild(el);
+        pricingTableSection.hidden = false;
+        pricingTableLoaded = true;
+      };
+      document.head.appendChild(script);
+    }).catch(function () {
+      // 自定义卡片仍然是主要的结账方式，加载失败不影响页面功能
     });
   }
 
@@ -176,15 +213,17 @@
         trial.removeAttribute('href');
         trial.setAttribute('aria-disabled', 'true');
         trial.textContent = 'Five-day access unavailable';
-        setStatus('Your free beta access is active. A monthly plan is optional.');
+        loadStripePricingTable();
+        setStatus('Your free beta access is active. You can upgrade to a monthly plan below.');
         return;
       }
       accountActions.hidden = true;
       existingBillingActions.hidden = !(data.management && data.management.can_manage === true);
+      loadStripePricingTable();
       if (data.refresh && data.refresh.attempted && !data.refresh.succeeded) {
         setStatus('We could not refresh Stripe just now. You can still choose an available plan.', true);
       } else {
-        setStatus('Choose a plan above to continue to Stripe’s secure checkout.');
+        setStatus("Choose a plan above to continue to Stripe's secure checkout.");
       }
     }).catch(function (error) {
       if (error.status === 401) {
@@ -197,7 +236,11 @@
         setStatus(error.message);
         return;
       }
-      setStatus(error.message || 'Secure checkout is temporarily unavailable.', true);
+      // 非 401 错误：假设用户已登录（否则会返回 401），配置 UI 为已登录状态
+      renderSignedInNavigation(true);
+      configureCheckoutButtons({plan_availability: {}});
+      loadStripePricingTable();
+      setStatus(error.message || 'We could not verify plan details. You can still try — we will confirm at checkout.', true);
     });
   }
 

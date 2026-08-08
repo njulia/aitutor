@@ -102,7 +102,14 @@
         <p class="hm-kicker">Starter access</p>
         <h2>Five-day access</h2>
         <p class="price">£0.99 GBP / 5 days</p>
-        <ul><li>Years 1–6 homework support</li><li>11+ practice and study plan</li><li>Free Common 11+ Diagnostic (other mocks require 11+ Premium)</li><li>Detailed explanations</li><li>XP, levels and certificates (Gift Points are not included)</li></ul>
+        <ul>
+            <li>Years 1–6 homework support</li>
+            <li>11+ Maths, English and reasoning practice</li>
+            <li>11+ Year-round study plan</li>
+            <li>Free Common 11+ Diagnostic (other mocks require 11+ Premium)</li>
+            <li>Detailed explanations</li>
+            <li>XP, levels and certificates</li>
+        </ul>
         <p class="billing-term">This is a one-off five-day pass and does not renew automatically. Check the live Stripe payment screen before paying.</p>
         <a class="button checkout-button" id="trial-checkout-button" href="/login?next=/pricing" data-plan="trial_5day" data-checkout-label="Choose five-day access">Parent sign in to choose</a>
       </article>
@@ -110,7 +117,15 @@
         <p class="hm-kicker">Years 1–6 for 2 students</p>
         <h2>Homework Premium</h2>
         <p class="price">£4.99 GBP / month</p>
-        <ul><li>Tutor mode</li><li>Detailed explanations</li><li>Targeted practice</li><li>Progress and learning memory</li><li>Earn Gift Points and claim branded gifts</li></ul>
+        <ul>
+            <li>Years 1–6 homework support</li>
+            <li>Tutor mode</li>
+            <li>Detailed explanations</li>
+            <li>Targeted practice</li>
+            <li>Progress and learning memory</li>
+            <li>XP, levels and certificates</li>
+            <li>Earn Gift Points and claim gifts</li>
+        </ul>
         <p class="billing-term">£4.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
         <a class="button checkout-button" href="/login?next=/pricing" data-plan="homework_monthly" data-checkout-label="Choose Homework Premium">Parent sign in to choose</a>
       </article>
@@ -118,12 +133,26 @@
         <p class="hm-kicker">Years 1–6 &amp; 11+ for 4 students</p>
         <h2>11+ Premium</h2>
         <p class="price">£9.99 GBP / month</p>
-        <ul><li>Maths, English and reasoning practice</li><li>Year-round study plan</li><li>Progress and learning memory</li><li>Common four-subject mock exams</li><li>School-target Maths and English mocks</li><li>Instant local marking and topic breakdown</li></ul>
+        <ul>
+            <li>Years 1–6 homework support</li>
+            <li>11+ Maths, English and reasoning practice</li>
+            <li>11+ Year-round study plan</li>
+            <li>11+ Common four-subject mock exams</li>
+            <li>11+ School-target Maths and English mocks</li>
+            <li>Progress and learning memory</li>
+            <li>Instant local marking and topic breakdown</li>
+        </ul>
         <p class="billing-term">£9.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
         <a class="button checkout-button" href="/login?next=/pricing" data-plan="elevenplus_monthly" data-checkout-label="Choose 11+ Premium">Parent sign in to choose</a>
       </article>
     </div>
-    <section class="card checkout-help" aria-labelledby="secure-checkout-title">
+    <section id="stripe-pricing-table-section" hidden aria-labelledby="stripe-pricing-table-title">
+      <h2 id="stripe-pricing-table-title" hidden>Stripe pricing table</h2>
+      <div id="stripe-pricing-table-container" class="card" style="padding:0; background:transparent; box-shadow:none;"></div>
+<!--      <p class="billing-help" style="text-align:center">Or choose a Homework Magic plan card above.</p>-->
+    </section>
+
+    <section class="card checkout-help" id="checkout-help" aria-labelledby="secure-checkout-title">
       <h2 id="secure-checkout-title">Secure, parent-managed checkout</h2>
       <p>Sign in as a parent or guardian, choose a plan above, then review the exact purchase on Stripe’s hosted checkout page.</p>
       <a class="button" id="pricing-login-button" href="/login?next=/pricing">Parent sign in to choose</a>
@@ -172,7 +201,7 @@
   <p class="legal-links"><a href="/terms">Terms of Service</a> · <a href="/refund-policy">Refunds &amp; cancellation</a> · <a href="/privacy">Privacy</a> · <a href="/messages">Contact</a></p>
 </main>
 
-<script src="/static/js/pricing.js?v=20260806-secure-checkout" defer></script>
+<script src="/static/js/pricing.js?v=20260807-pricing-cards-only" defer></script>
 <script src="/static/js/auth-nav.js?v=20260807-cute-character-avatar-review-stable" defer></script>
 </body>
 </html>

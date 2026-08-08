@@ -248,3 +248,39 @@ def test_submission_reports_unanswered_topics_and_enforces_grace_period(monkeypa
             {},
             now=started["attempt"]["deadline"] + 901,
         )
+
+
+def test_start_response_matches_frontend_contract(monkeypatch) -> None:
+    """返回的 JSON 形状必须与 mock-exams.js 中 startExam 所期望的完全一致。"""
+    monkeypatch.setenv("SESSION_OWNER_SECRET", "unit-test-secret-that-is-long-enough-123")
+    result = mocks.start_mock_exam("common-diagnostic-1", "learner-a", now=1_000)
+
+    # data.success
+    assert result["success"] is True
+
+    # data.exam --- JS: state.exam = data.exam; examTitle = state.exam.title
+    exam = result["exam"]
+    assert isinstance(exam["id"], str) and len(exam["id"]) > 0
+    assert isinstance(exam["title"], str) and len(exam["title"]) > 0
+    assert isinstance(exam["duration_minutes"], int) and exam["duration_minutes"] > 0
+    assert isinstance(exam["question_count"], int) and exam["question_count"] > 0
+
+    # data.questions --- JS: state.questions = data.questions || []
+    questions = result["questions"]
+    assert isinstance(questions, list) and len(questions) > 0
+    first = questions[0]
+    assert isinstance(first["id"], str) and len(first["id"]) > 0
+    assert isinstance(first["subject"], str) and len(first["subject"]) > 0
+    assert isinstance(first["topic"], str) and len(first["topic"]) > 0
+    assert isinstance(first["prompt"], str) and len(first["prompt"]) > 0
+    # options: [{label, text}] --- JS: option.label, option.text
+    assert isinstance(first["options"], list) and len(first["options"]) >= 2
+    opt = first["options"][0]
+    assert isinstance(opt["label"], str) and len(opt["label"]) == 1
+    assert isinstance(opt["text"], str) and len(opt["text"]) > 0
+
+    # data.attempt --- JS: state.attemptToken = data.attempt.token; state.deadline = Number(data.attempt.deadline)
+    attempt = result["attempt"]
+    assert isinstance(attempt["token"], str) and len(attempt["token"]) > 20
+    assert isinstance(attempt["deadline"], int) and attempt["deadline"] > attempt.get("started_at", 0)
+    assert isinstance(attempt["started_at"], int)
