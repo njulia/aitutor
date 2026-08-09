@@ -858,7 +858,7 @@ def redeem_beta_access(account_id: str, invite_code: str) -> Dict[str, Any]:
     """Grant invite-only, non-renewing Year 1–6 beta access.
 
     A shared invite secret is suitable for the deliberately small parent
-    research cohort because this transaction enforces a hard maximum of 15
+    research cohort because this transaction enforces a hard maximum of 25
     family accounts. The code is compared in constant time and is never stored
     in the database or logs.
     """
@@ -872,7 +872,7 @@ def redeem_beta_access(account_id: str, invite_code: str) -> Dict[str, Any]:
         raise PermissionError("That beta invitation code is not recognised.")
 
     maximum_families = _bounded_beta_setting(
-        "BETA_ACCESS_MAX_FAMILIES", 15, 1, 15
+        "BETA_ACCESS_MAX_FAMILIES", 15, 1, 30
     )
     duration_days = _bounded_beta_setting(
         "BETA_ACCESS_DURATION_DAYS", 14, 1, 31

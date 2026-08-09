@@ -44,24 +44,30 @@ def build_mock_exam_router(
 
     async def access_context(request: Request) -> tuple[str, Optional[str], Optional[str], bool]:
         identity, username, new_anon_id = resolve_identity(request)
-        # 测试用户可以直接访问 11+ mock exams，无需订阅检查
-        if username:
-            from src.progress_db import is_user_test
-            if is_user_test(username):
-                return identity, username, new_anon_id, True
         # ``identity`` is a real learner ID for both parent-selected and kid
         # sessions. The subscription helper resolves a kid's family plan from
         # that ID, so children do not need access to a parent's email/session.
-        has_access = await run_blocking(
-            has_subscription,
-            request,
-            identity,
-            username,
-            MOCK_EXAM_PLAN,
-            True,
-            timeout=8,
-            limit_concurrency=False,
-        )
+        # It also owns the operator-controlled test-user bypass, including kid
+        # sessions where no parent email is exposed to this route.
+        try:
+            has_access = await run_blocking(
+                has_subscription,
+                request,
+                identity,
+                username,
+                MOCK_EXAM_PLAN,
+                True,
+                timeout=8,
+                limit_concurrency=False,
+            )
+        except Exception:
+            # Paid mocks fail closed, but the public diagnostic must remain in
+            # the catalogue even if an entitlement lookup is unavailable.
+            logger.exception(
+                "Unable to check 11+ mock access (identity=%s)",
+                str(identity)[:20],
+            )
+            has_access = False
         return identity, username, new_anon_id, bool(has_access)
 
     def private_json(content: Dict[str, Any], status_code: int = 200) -> JSONResponse:

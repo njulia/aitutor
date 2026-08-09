@@ -150,7 +150,7 @@ def production_configuration_issues() -> list[str]:
                 "BETA_ACCESS_CODE must contain at least 16 characters when the parent beta is enabled"
             )
         try:
-            beta_limit = int(os.getenv("BETA_ACCESS_MAX_FAMILIES", "15"))
+            beta_limit = int(os.getenv("BETA_ACCESS_MAX_FAMILIES", "25"))
         except ValueError:
             beta_limit = 0
         if beta_limit < 1 or beta_limit > 30:

@@ -40,6 +40,13 @@ PARENT_GIFT_PLAN_NOTE = (
 )
 
 
+def _avatar_age_context(learner: dict) -> dict[str, int]:
+    """Return only the learner fields needed for age-based avatar proportions."""
+    age = max(5, min(11, int(learner.get("age") or 7)))
+    year_group = max(1, min(6, int(learner.get("year_group") or age - 5)))
+    return {"age": age, "year_group": year_group}
+
+
 class CatalogItemRequest(BaseModel):
     name: str = Field(default="", max_length=40)
     icon: str = Field(default="gift", max_length=12)
@@ -69,6 +76,7 @@ class AvatarPreferenceRequest(BaseModel):
     student_id: str | None = Field(default=None, max_length=80)
     character: str = Field(default="girl", max_length=20)
     clothes: str = Field(default="pink_dress", max_length=30)
+    bottoms: str = Field(default="match_outfit", max_length=30)
     shoes: str = Field(default="trainers", max_length=30)
     skin_tone: str = Field(default="warm", max_length=20)
     hair_colour: str = Field(default="brown", max_length=20)
@@ -222,7 +230,11 @@ def build_reward_router(
             account_id=account["id"],
             student_id=learner["id"],
         )
-        return {"success": True, "avatar": avatar}
+        return {
+            "success": True,
+            "avatar": avatar,
+            "learner": _avatar_age_context(learner),
+        }
 
     @router.put("/api/rewards/avatar")
     async def customise_avatar(request: Request, body: AvatarPreferenceRequest):
@@ -236,6 +248,7 @@ def build_reward_router(
                 student_id=learner["id"],
                 character=body.character,
                 clothes=body.clothes,
+                bottoms=body.bottoms,
                 shoes=body.shoes,
                 skin_tone=body.skin_tone,
                 hair_colour=body.hair_colour,
@@ -252,6 +265,7 @@ def build_reward_router(
         return {
             "success": True,
             "avatar": avatar,
+            "learner": _avatar_age_context(learner),
             "message": "Your character style is saved!",
         }
 

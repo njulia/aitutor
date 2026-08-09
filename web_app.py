@@ -326,6 +326,16 @@ def user_has_subscription(
     # 孩子登录会话：通过学生 ID 查询家庭订阅
     if not username and student_id and not str(student_id).startswith("anon_"):
         try:
+            # 测试用户的孩子可以直接访问，无需订阅检查
+            from src.webapp.account_store import get_student, get_account
+            student = get_student(student_id)
+            if student:
+                account = get_account(student["account_id"])
+                # Test access is an operator-controlled entitlement. It must
+                # also bypass the strict plan check used by paid 11+ mocks.
+                if account and is_user_test(account.get("email", "")):
+                    return True
+
             from src.webapp.account_store import subscription_active_for_student
             required_plans = [required_plan] if required_plan else None
             return subscription_active_for_student(
@@ -339,7 +349,9 @@ def user_has_subscription(
     if not username or (student_id and str(student_id).startswith("anon_")):
         return False
     try:
-        if is_user_test(username) and not strict_plan:
+        # Test accounts can exercise every mock without creating Stripe data,
+        # including routes that deliberately use strict plan matching.
+        if is_user_test(username):
             return True
         from src.webapp.account_store import account_has_active_subscription
 
@@ -1242,6 +1254,11 @@ async def rewards_page():
 @app.get("/memory")
 async def memory_page():
     return _static_page("static", "memory.html", cache_control="no-store, private")
+
+
+@app.get("/character-customise")
+async def character_customise_page():
+    return _static_page("static", "character-customise.html", cache_control="no-store, private")
 
 
 @app.get("/app")

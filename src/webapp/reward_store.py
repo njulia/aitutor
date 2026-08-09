@@ -129,11 +129,22 @@ AVATAR_CLOTHES: dict[str, str] = {
     "blue_tshirt": "Blue T-shirt",
     "green_jumper": "Green jumper",
     "pink_dress": "Pink dress",
+    "star_jacket": "Star jacket",
+    "sunshine_dungarees": "Sunshine dungarees",
+}
+AVATAR_BOTTOMS: dict[str, str] = {
+    "match_outfit": "Match my outfit",
+    "navy_trousers": "Navy trousers",
+    "blue_jeans": "Blue jeans",
+    "purple_trousers": "Purple trousers",
+    "pink_dress": "Pink dress",
+    "purple_dress": "Purple dress",
 }
 AVATAR_SHOES: dict[str, str] = {
     "trainers": "Colourful trainers",
     "boots": "Adventure boots",
     "school_shoes": "Smart school shoes",
+    "rainbow_high_tops": "Rainbow high-tops",
 }
 AVATAR_SKIN_TONES: dict[str, str] = {
     "light": "Light",
@@ -146,6 +157,8 @@ AVATAR_HAIR_COLOURS: dict[str, str] = {
     "brown": "Brown",
     "blonde": "Blonde",
     "red": "Red",
+    "purple": "Purple",
+    "teal": "Teal",
 }
 AVATAR_HAIR_LENGTHS: dict[str, str] = {
     "short": "Short",
@@ -154,7 +167,6 @@ AVATAR_HAIR_LENGTHS: dict[str, str] = {
 }
 AVATAR_HAIR_STYLES: dict[str, str] = {
     "straight": "Straight",
-    "curly": "Curly",
     "ponytail": "Ponytail",
     "spiky": "Spiky",
 }
@@ -188,6 +200,7 @@ AVATAR_EYEBROW_SHAPES: dict[str, str] = {
 AVATAR_PROFILE_DEFAULTS: dict[str, str] = {
     "character": "girl",
     "clothes": "pink_dress",
+    "bottoms": "match_outfit",
     "shoes": "trainers",
     "skin_tone": "warm",
     "hair_colour": "brown",
@@ -443,6 +456,7 @@ def _avatar_payload(
     options = {
         "character": AVATAR_CHARACTER_TYPES,
         "clothes": AVATAR_CLOTHES,
+        "bottoms": AVATAR_BOTTOMS,
         "shoes": AVATAR_SHOES,
         "skin_tone": AVATAR_SKIN_TONES,
         "hair_colour": AVATAR_HAIR_COLOURS,
@@ -581,6 +595,17 @@ class RewardStore:
             Column("nose", String(20), nullable=False),
             Column("mouth", String(20), nullable=False),
             Column("eyebrows", String(20), nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        )
+        # Lower clothing is kept in a small companion table so existing
+        # production character profiles do not need a blocking ALTER TABLE.
+        self.character_bottom_profiles = Table(
+            "reward_character_bottom_profiles",
+            self.metadata,
+            Column("student_id", String(80), primary_key=True),
+            Column("account_id", String(80), nullable=False, index=True),
+            Column("bottoms", String(30), nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
             Column("updated_at", DateTime(timezone=True), nullable=False),
         )
@@ -1243,12 +1268,18 @@ class RewardStore:
         """Return the small avatar payload used by role-aware navigation."""
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
-        profile_fields = tuple(AVATAR_PROFILE_DEFAULTS)
+        character_fields = tuple(
+            key for key in AVATAR_PROFILE_DEFAULTS if key != "bottoms"
+        )
         with self.engine.begin() as conn:
             row = conn.execute(
                 select(
                     self.wallets.c.lifetime_xp,
-                    *(getattr(self.character_profiles.c, key) for key in profile_fields),
+                    *(
+                        getattr(self.character_profiles.c, key)
+                        for key in character_fields
+                    ),
+                    self.character_bottom_profiles.c.bottoms,
                 )
                 .select_from(
                     self.wallets.outerjoin(
@@ -1257,6 +1288,14 @@ class RewardStore:
                             self.character_profiles.c.student_id
                             == self.wallets.c.student_id,
                             self.character_profiles.c.account_id
+                            == self.wallets.c.account_id,
+                        ),
+                    ).outerjoin(
+                        self.character_bottom_profiles,
+                        and_(
+                            self.character_bottom_profiles.c.student_id
+                            == self.wallets.c.student_id,
+                            self.character_bottom_profiles.c.account_id
                             == self.wallets.c.account_id,
                         ),
                     )
@@ -1276,7 +1315,7 @@ class RewardStore:
             int(data.get("lifetime_xp") or 0),
             profile={
                 key: data.get(key) or AVATAR_PROFILE_DEFAULTS[key]
-                for key in profile_fields
+                for key in AVATAR_PROFILE_DEFAULTS
             },
             customised=customised,
         )
@@ -1288,6 +1327,7 @@ class RewardStore:
         student_id: str,
         character: str,
         clothes: str,
+        bottoms: str = "match_outfit",
         shoes: str,
         skin_tone: str,
         hair_colour: str,
@@ -1305,6 +1345,7 @@ class RewardStore:
         raw_profile = {
             "character": character,
             "clothes": clothes,
+            "bottoms": bottoms,
             "shoes": shoes,
             "skin_tone": skin_tone,
             "hair_colour": hair_colour,
@@ -1319,6 +1360,7 @@ class RewardStore:
         option_sets = {
             "character": (AVATAR_CHARACTER_TYPES, "characters"),
             "clothes": (AVATAR_CLOTHES, "clothes"),
+            "bottoms": (AVATAR_BOTTOMS, "trousers or dresses"),
             "shoes": (AVATAR_SHOES, "shoes"),
             "skin_tone": (AVATAR_SKIN_TONES, "skin tones"),
             "hair_colour": (AVATAR_HAIR_COLOURS, "hair colours"),
@@ -1339,6 +1381,9 @@ class RewardStore:
             chosen_profile[key] = chosen
 
         now = _now()
+        character_profile = {
+            key: value for key, value in chosen_profile.items() if key != "bottoms"
+        }
         with self.engine.begin() as conn:
             wallet = self._ensure_wallet(conn, account, learner, lock=False)
             result = conn.execute(
@@ -1349,7 +1394,7 @@ class RewardStore:
                         self.character_profiles.c.student_id == learner,
                     )
                 )
-                .values(**chosen_profile, updated_at=now)
+                .values(**character_profile, updated_at=now)
             )
             if not result.rowcount:
                 try:
@@ -1358,7 +1403,7 @@ class RewardStore:
                             insert(self.character_profiles).values(
                                 student_id=learner,
                                 account_id=account,
-                                **chosen_profile,
+                                **character_profile,
                                 created_at=now,
                                 updated_at=now,
                             )
@@ -1372,7 +1417,42 @@ class RewardStore:
                                 self.character_profiles.c.student_id == learner,
                             )
                         )
-                        .values(**chosen_profile, updated_at=now)
+                        .values(**character_profile, updated_at=now)
+                    )
+            bottoms_result = conn.execute(
+                update(self.character_bottom_profiles)
+                .where(
+                    and_(
+                        self.character_bottom_profiles.c.account_id == account,
+                        self.character_bottom_profiles.c.student_id == learner,
+                    )
+                )
+                .values(bottoms=chosen_profile["bottoms"], updated_at=now)
+            )
+            if not bottoms_result.rowcount:
+                try:
+                    with conn.begin_nested():
+                        conn.execute(
+                            insert(self.character_bottom_profiles).values(
+                                student_id=learner,
+                                account_id=account,
+                                bottoms=chosen_profile["bottoms"],
+                                created_at=now,
+                                updated_at=now,
+                            )
+                        )
+                except IntegrityError:
+                    conn.execute(
+                        update(self.character_bottom_profiles)
+                        .where(
+                            and_(
+                                self.character_bottom_profiles.c.account_id
+                                == account,
+                                self.character_bottom_profiles.c.student_id
+                                == learner,
+                            )
+                        )
+                        .values(bottoms=chosen_profile["bottoms"], updated_at=now)
                     )
             lifetime_xp = int(wallet._mapping["lifetime_xp"] or 0)
         return _avatar_payload(
@@ -1998,6 +2078,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("character_bottom_profiles", self.character_bottom_profiles),
                 ("character_profiles", self.character_profiles),
                 ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),
@@ -2022,6 +2103,7 @@ class RewardStore:
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
                 ("xp_events", self.events),
+                ("character_bottom_profiles", self.character_bottom_profiles),
                 ("character_profiles", self.character_profiles),
                 ("avatar_profiles", self.avatar_profiles),
                 ("wallets", self.wallets),

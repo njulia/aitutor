@@ -130,6 +130,7 @@ def test_kid_session_is_limited_to_own_progress_rewards_and_mock_access(
     character_profile = {
         "character": "boy",
         "clothes": "blue_tshirt",
+        "bottoms": "navy_trousers",
         "shoes": "school_shoes",
         "skin_tone": "deep",
         "hair_colour": "black",
@@ -146,9 +147,19 @@ def test_kid_session_is_limited_to_own_progress_rewards_and_mock_access(
         json=character_profile,
     )
     assert customised_avatar.status_code == 200, customised_avatar.text
+    assert customised_avatar.json()["learner"] == {
+        "age": first["age"],
+        "year_group": first["year_group"],
+    }
     assert customised_avatar.json()["avatar"]["profile"] == {
         **character_profile,
         "customised": True,
+    }
+    avatar_profile = authenticated_client.get("/api/rewards/avatar")
+    assert avatar_profile.status_code == 200, avatar_profile.text
+    assert avatar_profile.json()["learner"] == {
+        "age": first["age"],
+        "year_group": first["year_group"],
     }
     refreshed_context = authenticated_client.get("/api/session-context").json()
     assert refreshed_context["avatar"]["profile"] == {

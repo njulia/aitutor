@@ -81,50 +81,7 @@
         }
         .skip-link:focus { left: 8px; }
 
-        .site-header {
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            background: rgba(255, 255, 255, 0.96);
-            border-bottom: 1px solid var(--line);
-            backdrop-filter: blur(10px);
-        }
-        .header-inner {
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 14px 22px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 18px;
-        }
-        .brand {
-            text-decoration: none;
-            font-size: 1.18rem;
-            font-weight: 800;
-            color: var(--purple-dark);
-        }
-        .site-nav {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 8px;
-        }
-        .site-nav a {
-            text-decoration: none;
-            padding: 8px 12px;
-            border-radius: 999px;
-            color: var(--muted);
-            font-weight: 650;
-            font-size: 0.92rem;
-        }
-        .site-nav a:hover,
-        .site-nav a:focus-visible,
-        .site-nav a[aria-current="page"] {
-            color: var(--purple-dark);
-            background: var(--purple-soft);
-            outline: none;
-        }
+        .hm-nav-wrap.hm-kid-avatar-host .hm-main-nav { padding-top: 0; }
 
         main {
             max-width: 1180px;
@@ -625,26 +582,21 @@
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
         }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=20260807-cute-character-avatar-review-stable">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+    <link rel="stylesheet" href="/static/css/mock-exams.css?v=20260806-premium-access">
 </head>
 <body class="hm-eleven">
 <a class="skip-link" href="#main-content">Skip to the study plan</a>
-<header class="site-header">
-    <div class="header-inner">
-        <a class="brand" href="/">✨ Homework Magic</a>
-        <nav class="site-nav" aria-label="Main navigation">
+<header class="mock-header">
+    <div class="hm-nav-wrap">
+        <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+        <nav class="hm-main-nav" aria-label="Main navigation">
             <a href="/elevenplus-practice">11+ practice</a>
-            <a href="/elevenplus-mock-exams">11+ mock</a>
             <a href="/elevenplus/articles">11+ articles</a>
-<!--            <a href="/elevenplus-topic-mastery">Topic Mastery</a>-->
-<!--            <a href="/elevenplus-year-round-plan" aria-current="page">Year-round plan</a>-->
-            <a href="/progress" id="kid-progress-link">Progress</a>
-            <a href="/rewards" id="kid-rewards-link">Rewards</a>
-            <a href="/pricing" id="parent-plan-link">Parent plans</a>
-            <a href="/parent-dashboard" id="parent-dashboard-link">Parent dashboard</a>
-            <a href="/login" id="home-login-link">Login</a>
-            <a href="/register">Register</a>
-            <a href="#" id="home-logout-link" hidden>Logout</a>
+            <a href="/elevenplus-mock-exams">11+ mock exams</a>
+            <a href="/app">Homework</a>
+            <a href="/login" data-auth-login>Parent sign in</a>
+            <a href="#" data-auth-logout hidden>Log out</a>
         </nav>
     </div>
 </header>
@@ -1232,6 +1184,26 @@
         });
     }
 
+    function findFirstUnansweredPracticeQuestion() {
+        for (let index = 0; index < activeHomework.length; index += 1) {
+            const item = activeHomework[index];
+            const questions = getPracticeQuestions(item);
+            if (!questions.length) {
+                const textarea = document.getElementById('answer-' + index);
+                if (!textarea || !textarea.value.trim()) return textarea || document.querySelector('.practice-card[data-index="' + index + '"]');
+                continue;
+            }
+            const block = document.querySelector('.practice-card[data-index="' + index + '"]');
+            for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
+                const selected = block.querySelector('.practice-question[data-question-index="' + questionIndex + '"] input:checked');
+                if (!selected) {
+                    return block.querySelector('.practice-question[data-question-index="' + questionIndex + '"]');
+                }
+            }
+        }
+        return null;
+    }
+
     function collectAnswersForItem(item, homeworkIndex) {
         const questions = getPracticeQuestions(item);
         if (!questions.length) {
@@ -1256,7 +1228,14 @@
             return collectAnswersForItem(item, index);
         });
         if (answers.some(function (answer) { return !answer; })) {
-            showStatus('Please tick one answer for every question before checking.');
+            alert('Please answer every question before using Quick Review.');
+            const unanswered = findFirstUnansweredPracticeQuestion();
+            if (unanswered) {
+                if (unanswered.tagName === 'TEXTAREA' || unanswered.tagName === 'INPUT') {
+                    unanswered.focus();
+                }
+                unanswered.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             return;
         }
 
@@ -1364,6 +1343,7 @@
     });
 }());
 </script>
-  <script src="/static/js/auth-nav.js?v=20260807-cute-character-avatar-review-stable" defer></script>
+  <script src="/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1" defer></script>
+  <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
 </body>
 </html>

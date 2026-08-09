@@ -74,6 +74,7 @@
         let isPracticeMode = false;
         let currentPracticeContent = '';
         let currentPracticeSubject = 'Maths';
+        let practiceReturnMode = 'generated';
 
         // Homework mode and current question index
         let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
@@ -1159,6 +1160,18 @@
             </button>
         `;
 
+        const INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML = `
+            <button class="btn btn-secondary" onclick="ExplainDeep()">
+                Explain in Detail
+            </button>
+            <button class="btn btn-secondary" onclick="ImprovePractice()">
+                Help me improve
+            </button>
+            <button class="btn btn-secondary" onclick="TrackProgress()">
+                Track Progress
+            </button>
+        `;
+
         function resetHomeworkActionButtons() {
             const buttonArea = document.getElementById('homework-buttons');
             if (!buttonArea) return;
@@ -1813,7 +1826,7 @@
             reviewInteractionSnapshot = [];
         }
 
-        function showReviewLoading(message = 'Checking your answers…') {
+        function showReviewLoading(message = 'Checking your answers…', options = {}) {
             stopSpeechPlayback();
             if (sttSupported && isListening && recognizer) {
                 try { recognizer.stop(); } catch (e) {}
@@ -1828,12 +1841,19 @@
             results.setAttribute('aria-busy', 'true');
             lockSubmittedWorkForReview();
 
-            reviewContainer.innerHTML = `
+            const pendingMarkup = `
                 <section class="review-pending" data-review-pending role="status" aria-live="polite">
                     <span class="review-pending-spinner" aria-hidden="true"></span>
                     <span>${escapeHomeworkText(message)}</span>
                 </section>
             `;
+            if (options && options.preserveExisting) {
+                const previousPending = reviewContainer.querySelector('[data-review-pending]');
+                if (previousPending) previousPending.remove();
+                reviewContainer.insertAdjacentHTML('beforeend', pendingMarkup);
+            } else {
+                reviewContainer.innerHTML = pendingMarkup;
+            }
         }
 
         function hideLoading() {
@@ -1848,6 +1868,11 @@
         function showResults() {
             document.getElementById('loading').style.display = 'none';
             const results = document.getElementById('results');
+            const homeworkResults = document.getElementById('homework-results');
+            const resultsHeading = document.getElementById('results-heading');
+            if (homeworkResults) homeworkResults.hidden = false;
+            if (resultsHeading) resultsHeading.textContent = 'Your learning quest';
+            practiceReturnMode = 'generated';
             results.style.display = 'block';
             document.getElementById('review-result').innerHTML = '';
             activeReviewContext = null;
@@ -1864,6 +1889,7 @@
             currentHomework = [];
             isPracticeMode = false;
             currentPracticeContent = '';
+            practiceReturnMode = 'generated';
             currentHomeworkMode = 'homework';
             currentQuestionIndex = 0;
             currentQuestionAnswers = {};
@@ -2770,6 +2796,39 @@
             return 'General Homework';
         }
 
+        function prepareIndependentHomeworkReviewDisplay() {
+            // A pasted or uploaded review is a separate task. Remove the old
+            // generated quest so its questions, feedback and 11+ context can
+            // never appear underneath (or be reused by) this review.
+            currentHomework = [];
+            isPracticeMode = false;
+            currentPracticeContent = '';
+            practiceReturnMode = 'generated';
+            currentHomeworkMode = 'homework';
+            currentQuestionIndex = 0;
+            currentQuestionAnswers = {};
+            activeReviewContext = null;
+            clearSavedState();
+
+            const homeworkResults = document.getElementById('homework-results');
+            const reviewContainer = document.getElementById('review-result');
+            const resultsHeading = document.getElementById('results-heading');
+            const buttonArea = document.getElementById('homework-buttons');
+            const tutorButtons = document.getElementById('tutor-mode-buttons');
+
+            if (homeworkResults) {
+                homeworkResults.replaceChildren();
+                homeworkResults.hidden = true;
+            }
+            if (reviewContainer) reviewContainer.replaceChildren();
+            if (resultsHeading) resultsHeading.textContent = 'Your homework feedback';
+            if (buttonArea) {
+                buttonArea.innerHTML = INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML;
+                buttonArea.style.display = 'block';
+            }
+            if (tutorButtons) tutorButtons.style.display = 'none';
+        }
+
         async function reviewHomework() {
             if (!currentStudentId) {
                 saveStateToSessionStorage();
@@ -2831,7 +2890,7 @@
         }
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null, submittedWork = null) {
-
+            prepareIndependentHomeworkReviewDisplay();
             showReviewLoading('Checking your homework…');
 
             try {
@@ -2844,9 +2903,10 @@
                 };
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
-                    requestBody.is_eleven_plus = currentHomework.some(item => item.is_eleven_plus === true);
                 }
-                requestBody.is_eleven_plus = !!(currentHomework[0] && currentHomework[0].is_eleven_plus);
+                // Independent homework reviews must not inherit the last
+                // generated Make Homework or 11+ Practice session.
+                requestBody.is_eleven_plus = false;
 
                 const response = await fetch('/api/review', {
                     method: 'POST',
@@ -2887,7 +2947,8 @@
                         subject: subject || 'General Homework',
                         from_rag: Boolean(homeworkDocId),
                         homework_doc_id: homeworkDocId || null,
-                        is_eleven_plus: Boolean(requestBody.is_eleven_plus)
+                        is_eleven_plus: false,
+                        review_source: 'independent'
                     },
                     data.solution_methods || []
                 );
@@ -2993,7 +3054,9 @@
             const reviewEl = document.querySelector('#review-result .teacher-feedback-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
-            showLoading();
+            showReviewLoading('Making your step-by-step explanation…', {
+                preserveExisting: true
+            });
 
             try {
                 const response = await fetch('/api/explain-deep', {
@@ -3134,7 +3197,12 @@
 
                 const practiceContent = String(data.practice || '').trim();
                 if (response.ok && data.success && practiceContent) {
-                    displayPracticeQuestions(practiceContent, subject);
+                    displayPracticeQuestions(
+                        practiceContent,
+                        subject,
+                        reviewContext.review_source === 'independent'
+                            ? 'independent' : 'generated'
+                    );
                 } else {
                     const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) ||
                         'The AI tutor did not return any usable practice questions, so no new content was created. Please try again in a moment.';
@@ -3171,13 +3239,17 @@
             panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        function displayPracticeQuestions(practiceContent, subject) {
+        function displayPracticeQuestions(practiceContent, subject, returnMode = 'generated') {
             const container = document.getElementById('homework-results');
+            const resultsHeading = document.getElementById('results-heading');
             const renderer = window.HomeworkQuestionRenderer;
 
             currentPracticeContent = practiceContent;
             currentPracticeSubject = subject;
             isPracticeMode = true;
+            practiceReturnMode = returnMode === 'independent' ? 'independent' : 'generated';
+            container.hidden = false;
+            if (resultsHeading) resultsHeading.textContent = 'Your extra practice';
 
             const practiceItem = {
                 subject: subject,
@@ -3219,7 +3291,7 @@
                         Check Answers
                     </button>
                     <button class="btn btn-secondary" onclick="exitPracticeMode()">
-                        Back to Homework
+                        ${practiceReturnMode === 'independent' ? 'Back to Feedback' : 'Back to Homework'}
                     </button>
                 `;
             }
@@ -3282,8 +3354,28 @@
         }
 
         function exitPracticeMode() {
+            const returnToIndependentReview = practiceReturnMode === 'independent';
             isPracticeMode = false;
             currentPracticeContent = '';
+            practiceReturnMode = 'generated';
+
+            if (returnToIndependentReview) {
+                const homeworkResults = document.getElementById('homework-results');
+                const resultsHeading = document.getElementById('results-heading');
+                const buttonArea = document.getElementById('homework-buttons');
+                homeworkResults.replaceChildren();
+                homeworkResults.hidden = true;
+                if (resultsHeading) resultsHeading.textContent = 'Your homework feedback';
+                restoreSavedState();
+                if (buttonArea) {
+                    buttonArea.innerHTML = INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML;
+                    buttonArea.style.display = 'block';
+                }
+                clearSavedState();
+                document.getElementById('results').style.display = 'block';
+                return;
+            }
+
             displayHomework(currentHomework);
             restoreSavedState();
             resetHomeworkActionButtons();

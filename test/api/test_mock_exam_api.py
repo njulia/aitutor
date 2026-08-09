@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from src.webapp.account_store import create_subscription
+from src.webapp import mock_exam_routes
 from src.progress_db import set_user_test_flag
 
 
@@ -54,6 +55,35 @@ def test_free_mock_can_be_started_and_scored_without_exposing_key(client) -> Non
     assert result["score"]["answered"] == 12
     assert len(result["subject_breakdown"]) == 4
     assert all(item["correct_answer"] for item in result["questions"])
+
+
+def test_free_mock_stays_public_when_entitlement_lookup_is_unavailable(
+    client,
+    monkeypatch,
+) -> None:
+    """The public diagnostic never depends on a subscription lookup."""
+
+    async def unavailable(*_args, **_kwargs):
+        raise RuntimeError("subscription store unavailable")
+
+    monkeypatch.setattr(mock_exam_routes, "run_blocking", unavailable)
+
+    catalogue = client.get("/api/elevenplus/mock-exams")
+    assert catalogue.status_code == 200
+    exams = catalogue.json()["exams"]
+    diagnostic = next(item for item in exams if item["id"] == "common-diagnostic-1")
+    assert diagnostic["is_free"] is True
+    assert diagnostic["available"] is True
+    assert all(
+        item["available"] is False
+        for item in exams
+        if item["id"] != "common-diagnostic-1"
+    )
+
+    started = client.post(
+        "/api/elevenplus/mock-exams/common-diagnostic-1/start"
+    )
+    assert started.status_code == 200
 
 
 def test_tampered_attempt_token_is_rejected(client) -> None:
@@ -127,6 +157,34 @@ def test_test_account_unlocks_all_paid_mock_exams(
         "/api/elevenplus/mock-exams/common-full-1/start"
     )
     assert started.status_code == 200
+
+
+def test_test_account_kid_session_unlocks_all_paid_mock_exams(
+    authenticated_client,
+    unique_email,
+) -> None:
+    """A test parent's kid login inherits the mock-exam test entitlement."""
+    assert set_user_test_flag(unique_email, True)
+    account_data = authenticated_client.get("/api/account").json()
+    account = account_data["account"]
+    learner = account_data["students"][0]
+    login_code = f"{account['family_code']}-{learner['kid_code']}"
+
+    logged_in = authenticated_client.post(
+        "/api/kid-login",
+        json={"login_code": login_code},
+    )
+    assert logged_in.status_code == 200, logged_in.text
+
+    catalogue = authenticated_client.get("/api/elevenplus/mock-exams")
+    paid = [item for item in catalogue.json()["exams"] if not item["is_free"]]
+    assert paid
+    assert all(item["available"] is True for item in paid)
+
+    started = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-full-1/start"
+    )
+    assert started.status_code == 200, started.text
 
 
 def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> None:

@@ -42,6 +42,7 @@ ROLE_AWARE_PAGES = (
 
 def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     script = (ROOT / "static/js/auth-nav.js").read_text(encoding="utf-8")
+    renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
 
     assert "context.role === 'kid'" in script
     assert "context.student || {}" in script
@@ -54,20 +55,30 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     assert "'/progress', '📈', 'My progress'" in script
     assert "'/rewards', '🎁', 'My rewards'" in script
     assert "Customise my character" in script
-    assert "Save my character" in script
-    assert "'/api/rewards/avatar'" in script
     assert "homeworkmagic:xp-updated" in script
     assert "Little Learner" in script
-    assert "Learning Legend" in script
-    assert "createCharacterFigure" in script
-    assert "CHARACTER_PRESETS" in script
-    assert "Girl character" in script
-    assert "Boy character" in script
-    assert "hm-character-cheek" in script
-    assert "hm-character-face-detail" in script
+    assert "HomeworkMagicAvatar" in script
+    assert "Avatar.createFigure" in script
+    assert "Avatar.applyAll" in script
+    assert "data-avatar-reaction" in script
+    assert "createReaction('wave'" not in script
+    assert "createReaction('dance'" in script
+    assert "createReaction('celebrate'" in script
+    assert "Age ${age.age} look" in script
+    assert "CHARACTER_PRESETS" in renderer
+    assert "Girl character" in renderer
+    assert "Boy character" in renderer
+    assert "hm-avatar3d-cheek" in renderer
+    assert "feDropShadow" in renderer
+    assert "linearGradient" in renderer
+    assert "ageDetails" in renderer
+    assert "AGE_SCALES" in renderer
+    assert "enableTilt" in renderer
+    assert "prefers-reduced-motion: reduce" in renderer
     for field in (
         "character",
         "clothes",
+        "bottoms",
         "shoes",
         "skin_tone",
         "hair_colour",
@@ -79,38 +90,41 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
         "mouth",
         "eyebrows",
     ):
-        assert f"{field}:" in script
+        assert f"{field}:" in renderer
     assert "capybara" not in script.lower()
     assert "activeRole === 'kid' ? '/api/kid-logout' : '/api/logout'" in script
     assert "innerHTML" not in script
+    assert "innerHTML" not in renderer
 
 
 def test_kid_avatar_uses_css_character_layers_and_touch_sized_styles() -> None:
     stylesheet = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
 
     assert ".hm-character-avatar" in stylesheet
-    assert '.hm-character-avatar[data-character="girl"]' in stylesheet
-    assert '.hm-character-avatar[data-character="boy"]' in stylesheet
-    assert '.hm-character-avatar[data-character="girl"] .hm-character-face-detail' in stylesheet
-    assert '.hm-character-avatar[data-character="boy"] .hm-character-face-detail' in stylesheet
-    assert '.hm-character-avatar[data-character="boy"] .hm-character-cheek' in stylesheet
-    assert '.hm-character-avatar[data-hair-style="ponytail"]' in stylesheet
-    assert '.hm-character-avatar[data-hair-style="curly"]' in stylesheet
-    assert '.hm-character-avatar[data-eye-shape="almond"]' in stylesheet
-    assert '.hm-character-avatar[data-mouth="grin"]' in stylesheet
-    assert '.hm-character-avatar[data-clothes="pink_dress"]' in stylesheet
-    assert '.hm-character-avatar[data-shoes="boots"]' in stylesheet
+    assert '.hm-character-avatar[data-avatar-renderer="vivid-3d"]' in stylesheet
+    assert '.hm-character-avatar[data-character="boy"] .hm-avatar3d-face-boy' in stylesheet
+    assert '.hm-character-avatar[data-hair-style="ponytail"] .hm-avatar3d-ponytail' in stylesheet
+    assert 'data-hair-style="curly"' not in stylesheet
+    assert 'data-hair-style="space_buns"' not in stylesheet
+    assert "const whiteWidth = isGirl ? '10.5' : '13'" in (
+        ROOT / "static/js/avatar-character.js"
+    ).read_text(encoding="utf-8")
+    assert '.hm-character-avatar[data-mouth="grin"] .hm-avatar3d-mouth-grin' in stylesheet
+    assert '.hm-character-avatar[data-bottoms="pink_dress"] .hm-avatar3d-dress-skirt' in stylesheet
+    assert '.hm-character-avatar[data-shoes="rainbow_high_tops"]' in stylesheet
+    assert ".hm-avatar3d-rainbow-shoe-base" in stylesheet
+    assert '.hm-character-avatar[data-age-stage="1"] .hm-avatar3d-head-group' in stylesheet
+    assert '.hm-character-avatar[data-age-stage="4"] .hm-avatar3d-head-group' in stylesheet
+    assert "hm-avatar3d-wave" not in stylesheet
+    assert "hm-avatar3d-dance" in stylesheet
+    assert "hm-avatar3d-pop" in stylesheet
     assert ".hm-kid-avatar-button" in stylesheet
     assert "width: 56px;" in stylesheet
     assert ".hm-kid-avatar-menu[hidden]" in stylesheet
     assert ".hm-kid-avatar-action" in stylesheet
-    assert '.hm-kid-avatar[data-growth-stage="6"]' in stylesheet
+    assert '.hm-character-avatar[data-growth-stage="6"] .hm-avatar3d-sparkle' in stylesheet
     assert ".hm-kid-avatar-growth-progress" in stylesheet
-    assert ".hm-kid-avatar-customiser" in stylesheet
-    assert ".hm-kid-avatar-editor-preview" in stylesheet
-    assert ".hm-kid-avatar-editor-section" in stylesheet
-    assert ".hm-kid-avatar-select-field" in stylesheet
-    assert ".hm-kid-avatar-choice.is-selected" in stylesheet
+    assert ".hm-kid-avatar-reactions" in stylesheet
     assert "@media (prefers-reduced-motion: reduce)" in stylesheet
     assert ".hm-kid-avatar { display: none !important; }" in stylesheet
 
@@ -119,15 +133,21 @@ def test_kid_avatar_uses_css_character_layers_and_touch_sized_styles() -> None:
 def test_role_aware_pages_load_fresh_avatar_assets(relative_path: str) -> None:
     page = (ROOT / "static" / relative_path).read_text(encoding="utf-8")
 
-    assert "/static/css/theme.css?v=20260807-cute-character-avatar-review-stable" in page
-    assert "/static/js/auth-nav.js?v=20260807-cute-character-avatar-review-stable" in page
+    theme = "/static/css/theme.css?v=20260809-avatar-eyes-dresses-1"
+    renderer = "/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1"
+    navigation = "/static/js/auth-nav.js?v=20260809-avatar-polish-1"
+    assert theme in page
+    assert renderer in page
+    assert navigation in page
+    assert page.index(renderer) < page.index(navigation)
 
 
 def test_learning_app_reuses_shared_session_request_for_avatar() -> None:
     page = (ROOT / "static/app.html").read_text(encoding="utf-8")
     script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
 
-    assert page.index("session-context.js") < page.index("auth-nav.js")
+    assert page.index("session-context.js") < page.index("avatar-character.js")
+    assert page.index("avatar-character.js") < page.index("auth-nav.js")
     assert page.index("auth-nav.js") < page.index("app.js?v=")
     assert "HomeworkMagicSession.get(false)" in script
     assert "authenticated && currentSessionRole !== 'kid'" in script

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Customise your Homework Magic learning character.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Customise My Character | Homework Magic</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+  <link rel="stylesheet" href="/static/css/character-customise.css?v=20260809-avatar-polish-1">
+</head>
+<body class="hm-page">
+<header class="hm-site-header">
+  <div class="hm-nav-wrap">
+    <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+<!--    <nav class="hm-main-nav" aria-label="Main navigation">-->
+<!--      <a href="javascript:history.back()">← Back</a>-->
+<!--    </nav>-->
+  </div>
+</header>
+
+<main id="main-content" class="hm-char-customise-shell">
+  <section class="hm-char-customise-status" id="page-status" role="status" aria-live="polite">
+    Loading your character…
+  </section>
+
+  <section id="login-needed" hidden>
+    <div class="hm-char-customise-login-card">
+      <h1>Sign in to customise your character</h1>
+      <p>Kids can use their family login code. Grown-ups can sign in to switch between every learner.</p>
+      <a class="hm-char-customise-btn primary" href="/kid-login?next=/character-customise">Kid sign in</a>
+      <a class="hm-char-customise-btn" href="/login?next=/character-customise">Grown-up sign in</a>
+    </div>
+  </section>
+
+  <section id="customiser-content" hidden>
+    <h1>Customise my character</h1>
+    <p class="hm-char-customise-intro">
+      Make a character that feels like you. It grows with your age and gains a brighter learning glow as you earn XP.
+    </p>
+
+    <div class="hm-char-customise-layout">
+      <div class="hm-char-customise-preview-panel" id="character-playground" aria-label="Interactive character preview">
+        <span class="hm-char-preview-orbit hm-char-preview-orbit-one" aria-hidden="true"></span>
+        <span class="hm-char-preview-orbit hm-char-preview-orbit-two" aria-hidden="true"></span>
+        <button type="button" class="hm-char-character-stage" id="character-stage"
+                aria-label="Tap my character to cheer">
+          <span class="hm-character-avatar hm-character-avatar-preview" data-character-figure aria-hidden="true"></span>
+        </button>
+        <p class="hm-char-speech-bubble" id="character-message" role="status" aria-live="polite">
+          Tap me to cheer! ✨
+        </p>
+        <div class="hm-char-character-identity">
+          <p class="hm-char-customise-name" id="character-name"></p>
+          <span class="hm-char-age-badge" id="character-age-badge"></span>
+        </div>
+        <p class="hm-char-growth-note" id="character-growth-note"></p>
+        <div class="hm-char-reaction-buttons" aria-label="Play with my character">
+          <button type="button" data-character-action="dance">🎵 Dance</button>
+          <button type="button" data-character-action="celebrate">✨ Cheer</button>
+        </div>
+      </div>
+
+      <div class="hm-char-customise-editor-panel">
+        <div class="hm-char-customise-editor-scroll">
+          <fieldset class="hm-kid-avatar-choice-group" data-group="character">
+            <legend>Choose a character</legend>
+            <div class="hm-kid-avatar-choice-grid" data-choices="character"></div>
+          </fieldset>
+
+          <details class="hm-kid-avatar-editor-section" open>
+            <summary>💇 Hair</summary>
+            <fieldset class="hm-kid-avatar-choice-group hm-avatar-swatch-group" data-group="hair_colour">
+              <legend>Hair colour</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="hair_colour"></div>
+            </fieldset>
+            <div class="hm-kid-avatar-select-grid">
+              <label class="hm-kid-avatar-select-field">
+                <span>Hair length</span>
+                <select data-avatar-select="hair_length" aria-label="Hair length"></select>
+              </label>
+              <label class="hm-kid-avatar-select-field">
+                <span>Hair style</span>
+                <select data-avatar-select="hair_style" aria-label="Hair style"></select>
+              </label>
+            </div>
+          </details>
+
+          <details class="hm-kid-avatar-editor-section">
+            <summary>🙂 Face</summary>
+            <fieldset class="hm-kid-avatar-choice-group hm-avatar-swatch-group" data-group="skin_tone">
+              <legend>Skin tone</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="skin_tone"></div>
+            </fieldset>
+            <fieldset class="hm-kid-avatar-choice-group hm-avatar-swatch-group" data-group="eye_colour">
+              <legend>Eye colour</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="eye_colour"></div>
+            </fieldset>
+            <div class="hm-kid-avatar-select-grid">
+<!--              <label class="hm-kid-avatar-select-field">-->
+<!--                <span>Eye shape</span>-->
+<!--                <select data-avatar-select="eye_shape" aria-label="Eye shape"></select>-->
+<!--              </label>-->
+              <label class="hm-kid-avatar-select-field">
+                <span>Eyebrows</span>
+                <select data-avatar-select="eyebrows" aria-label="Eyebrows"></select>
+              </label>
+<!--              <label class="hm-kid-avatar-select-field">-->
+<!--                <span>Nose</span>-->
+<!--                <select data-avatar-select="nose" aria-label="Nose"></select>-->
+<!--              </label>-->
+              <label class="hm-kid-avatar-select-field">
+                <span>Mouth</span>
+                <select data-avatar-select="mouth" aria-label="Mouth"></select>
+              </label>
+            </div>
+          </details>
+
+          <details class="hm-kid-avatar-editor-section">
+            <summary>👕 Clothes & shoes</summary>
+            <fieldset class="hm-kid-avatar-choice-group" data-group="clothes">
+              <legend>Clothes</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="clothes"></div>
+            </fieldset>
+            <fieldset class="hm-kid-avatar-choice-group" data-group="bottoms">
+              <legend>Trousers or dress</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="bottoms"></div>
+            </fieldset>
+            <fieldset class="hm-kid-avatar-choice-group" data-group="shoes">
+              <legend>Shoes</legend>
+              <div class="hm-kid-avatar-choice-grid" data-choices="shoes"></div>
+            </fieldset>
+          </details>
+        </div>
+
+        <button type="button" class="hm-kid-avatar-save hm-char-customise-save-btn" id="save-button">
+          Save my character
+        </button>
+        <span class="hm-kid-avatar-customise-status" id="save-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1"></script>
+<script src="/static/js/character-customise.js?v=20260809-avatar-polish-1"></script>
+</body>
+</html>

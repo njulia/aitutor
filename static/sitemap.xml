@@ -1,48 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://homeworkmagic.co.uk/</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/ks1-homework</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/ks2-homework</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus-practice</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus-mock-exams</loc><lastmod>2026-08-06</lastmod></url>
-  <url><loc>https://homeworkmagic.co.uk/check-my-homework</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/year-3-maths-practice</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/year-3-english-reading-practice</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/calm-eleven-plus-practice</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/articles</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus-year-round-plan</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus-topic-mastery</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/pricing</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/safety</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/messages</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/terms</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/privacy</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/refund-policy</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/uk-grammar-guide</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-school-guide</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-vocabulary-list</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/english-comprehension-strategies</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/verbal-reasoning-tips</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/essay-writing-guide</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-maths-common-mistake</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/maths-topics-checklist</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/problem-solving-techniques</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/non-verbal-reasoning-guide</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/spatial-awareness-practice</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-time-management</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/exam-day-preparation</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/stress-management-techniques</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/mock-exam-strategy</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-acceptance-rates-gcse</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-exam-formats</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-preparation-timeline</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/selective-schools-admission</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/fractions-decimals-percentages</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/geometry-algebra-fundamentals</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/comprehension-question-types</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/spelling-punctuation-grammar</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/supporting-child-preparation</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/tutoring-vs-self-study</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/revision-techniques</loc></url>
-  <url><loc>https://homeworkmagic.co.uk/elevenplus/managing-test-anxiety</loc></url>
+  <!-- Homepage -->
+  <url><loc>https://homeworkmagic.co.uk/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
+
+  <!-- Main homework pages -->
+  <url><loc>https://homeworkmagic.co.uk/ks1-homework</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/ks2-homework</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus-practice</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus-mock-exams</loc><lastmod>2026-08-06</lastmod><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/check-my-homework</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/year-3-maths-practice</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/year-3-english-reading-practice</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/calm-eleven-plus-practice</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+
+  <!-- Hub pages -->
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/articles</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus-year-round-plan</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus-topic-mastery</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+
+  <!-- Info pages -->
+  <url><loc>https://homeworkmagic.co.uk/pricing</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/safety</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Support -->
+  <url><loc>https://homeworkmagic.co.uk/messages</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Legal pages -->
+  <url><loc>https://homeworkmagic.co.uk/terms</loc><priority>0.5</priority><changefreq>yearly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/privacy</loc><priority>0.5</priority><changefreq>yearly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/refund-policy</loc><priority>0.5</priority><changefreq>yearly</changefreq></url>
+
+  <!-- 11+ Articles -->
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/uk-grammar-guide</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-school-guide</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-vocabulary-list</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/english-comprehension-strategies</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/verbal-reasoning-tips</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/essay-writing-guide</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-maths-common-mistake</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/maths-topics-checklist</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/problem-solving-techniques</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/non-verbal-reasoning-guide</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/spatial-awareness-practice</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-time-management</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/exam-day-preparation</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/stress-management-techniques</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/mock-exam-strategy</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-acceptance-rates-gcse</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-exam-formats</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/11plus-preparation-timeline</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/selective-schools-admission</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/fractions-decimals-percentages</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/geometry-algebra-fundamentals</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/comprehension-question-types</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/spelling-punctuation-grammar</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/supporting-child-preparation</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/tutoring-vs-self-study</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/revision-techniques</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://homeworkmagic.co.uk/elevenplus/managing-test-anxiety</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
 </urlset>

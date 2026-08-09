@@ -58,3 +58,70 @@ def test_review_pending_state_keeps_answers_readable() -> None:
     assert '#results[aria-busy="true"] .answer-input-inline[readonly]' in stylesheet
     assert "unlockSubmittedWorkAfterReview()" in script
 
+
+def test_explain_in_detail_keeps_questions_and_answers_visible() -> None:
+    page = (ROOT / "static/app.html").read_text(encoding="utf-8")
+    script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+
+    explain_deep = _function(script, "ExplainDeep", "displayExplainDeep")
+    detailed_result = _function(script, "displayExplainDeep", "backToReview")
+    review_loading = _function(script, "showReviewLoading", "hideLoading")
+
+    assert "showReviewLoading('Making your step-by-step explanation…'" in explain_deep
+    assert "preserveExisting: true" in explain_deep
+    assert "showLoading();" not in explain_deep
+    assert "insertAdjacentHTML('beforeend', pendingMarkup)" in review_loading
+    assert "document.getElementById('review-result')" in detailed_result
+    assert "homework-results" not in detailed_result
+    assert page.index('id="homework-results"') < page.index('id="review-result"')
+    assert "detail-review-stable" in page
+
+
+def test_independent_homework_review_removes_generated_questions_and_feedback() -> None:
+    page = (ROOT / "static/app.html").read_text(encoding="utf-8")
+    script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+
+    prepare_review = _function(
+        script, "prepareIndependentHomeworkReviewDisplay", "reviewHomework"
+    )
+    review_uploaded = _function(
+        script, "reviewHomeworkWithContent", "buildGeneratedReviewContext"
+    )
+    show_results = _function(script, "showResults", "clearResults")
+
+    assert "currentHomework = [];" in prepare_review
+    assert "activeReviewContext = null;" in prepare_review
+    assert "clearSavedState();" in prepare_review
+    assert "homeworkResults.replaceChildren();" in prepare_review
+    assert "homeworkResults.hidden = true;" in prepare_review
+    assert "reviewContainer.replaceChildren();" in prepare_review
+    assert "INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML" in prepare_review
+
+    assert "prepareIndependentHomeworkReviewDisplay();" in review_uploaded
+    assert "requestBody.is_eleven_plus = false;" in review_uploaded
+    assert "currentHomework.some" not in review_uploaded
+    assert "currentHomework[0]" not in review_uploaded
+
+    # A newly generated Make Homework or 11+ Practice quest restores its own
+    # question area, so this isolation does not alter those two flows.
+    assert "homeworkResults.hidden = false;" in show_results
+    assert 'id="results-heading"' in page
+    assert "uploaded-review-isolation" in page
+
+
+def test_uploaded_review_extra_practice_returns_to_uploaded_feedback() -> None:
+    script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+
+    improve = _function(script, "ImprovePractice", "showPracticeGenerationMessage")
+    display_practice = _function(
+        script, "displayPracticeQuestions", "checkPracticeAnswers"
+    )
+    exit_practice = _function(script, "exitPracticeMode", "TrackProgress")
+
+    assert "reviewContext.review_source === 'independent'" in improve
+    assert "container.hidden = false;" in display_practice
+    assert "Back to Feedback" in display_practice
+    assert "returnToIndependentReview" in exit_practice
+    assert "homeworkResults.hidden = true;" in exit_practice
+    assert "restoreSavedState();" in exit_practice
+    assert "INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML" in exit_practice

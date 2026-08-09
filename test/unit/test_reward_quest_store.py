@@ -19,11 +19,12 @@ DELIVERY_SECRET = "unit-test-delivery-secret-with-32-characters"
 CUSTOM_CHARACTER = {
     "character": "boy",
     "clothes": "green_jumper",
+    "bottoms": "purple_trousers",
     "shoes": "boots",
     "skin_tone": "tan",
     "hair_colour": "black",
     "hair_length": "short",
-    "hair_style": "curly",
+    "hair_style": "straight",
     "eye_shape": "almond",
     "eye_colour": "green",
     "nose": "small",
@@ -207,6 +208,7 @@ def test_character_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> 
     assert initial["profile"] == {
         "character": "girl",
         "clothes": "pink_dress",
+        "bottoms": "match_outfit",
         "shoes": "trainers",
         "skin_tone": "warm",
         "hair_colour": "brown",
@@ -269,8 +271,10 @@ def test_character_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> 
         student_id=student_id,
     )
     assert erased["character_profiles"] == 1
+    assert erased["character_bottom_profiles"] == 1
     with store.engine.begin() as conn:
         assert conn.execute(store.character_profiles.select()).first() is None
+        assert conn.execute(store.character_bottom_profiles.select()).first() is None
 
     store.update_avatar(
         account_id=account_id,
@@ -279,8 +283,10 @@ def test_character_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> 
     )
     account_erased = store.delete_account(account_id)
     assert account_erased["character_profiles"] == 1
+    assert account_erased["character_bottom_profiles"] == 1
     with store.engine.begin() as conn:
         assert conn.execute(store.character_profiles.select()).first() is None
+        assert conn.execute(store.character_bottom_profiles.select()).first() is None
 
 
 def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> None:
