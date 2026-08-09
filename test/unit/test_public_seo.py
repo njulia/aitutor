@@ -138,17 +138,30 @@ def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None
     assert "free diagnostic" in source.casefold()
     assert "Only the Common 11+ Diagnostic is free" in source
     assert "every other mock" in source.casefold()
-    assert "15 online 11 Plus mock exams" in source
-    assert "192 original questions" in source
+    assert "29 online 11 Plus mock exams" in source
+    assert "278 original questions" in source
+    assert "eight common papers" in source
     assert all(
         area in source
         for area in (
+            "Wilson's",
+            "Tiffin Girls",
+            "St Olave's",
+            "Henrietta Barnett",
+            "Altrincham Girls",
+            "Reading",
+            "CCHS",
             "Kent",
             "Buckinghamshire",
             "Sutton",
             "West Midlands",
             "CSSE Essex",
             "Lancaster",
+            "Bexley",
+            "Wirral",
+            "Gloucestershire",
+            "Slough",
+            "Medway",
         )
     )
 
@@ -171,7 +184,7 @@ def test_mock_exam_sitemap_entry_has_a_last_modified_date() -> None:
     namespace = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     for entry in tree.findall("s:url", namespace):
         if entry.findtext("s:loc", namespaces=namespace) == f"{ORIGIN}/elevenplus-mock-exams":
-            assert entry.findtext("s:lastmod", namespaces=namespace) == "2026-08-06"
+            assert entry.findtext("s:lastmod", namespaces=namespace) == "2026-08-09"
             break
     else:
         pytest.fail("Mock-exam sitemap entry not found")

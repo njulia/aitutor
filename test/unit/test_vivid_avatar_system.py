@@ -4,6 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from src.webapp.static_asset_policy import (
+    CHARACTER_ASSET_CACHE_CONTROL,
+    CHARACTER_ASSET_PATHS,
+    cache_control_for_static_asset,
+)
+
 
 pytestmark = pytest.mark.unit
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,7 +82,7 @@ def test_avatar_renderer_has_bounded_age_growth_and_rich_safe_choices() -> None:
 
 def test_boy_face_and_blue_tshirt_have_requested_polish() -> None:
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
-    stylesheet = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
+    stylesheet = (ROOT / "static/css/avatar-character.css").read_text(encoding="utf-8")
     navigation = (ROOT / "static/js/auth-nav.js").read_text(encoding="utf-8")
 
     assert (
@@ -110,7 +116,7 @@ def test_spiky_hair_covers_the_full_top_of_the_head() -> None:
 
 def test_dresses_keep_their_named_colour_and_girl_eyes_are_gentler() -> None:
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
-    stylesheet = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
+    stylesheet = (ROOT / "static/css/avatar-character.css").read_text(encoding="utf-8")
 
     assert "pink_dress: ['#ffb8d2', '#f24f94', '#b72164']" in renderer
     assert "purple_dress: ['#d6b6ff', '#8b5cf6', '#5631a5']" in renderer
@@ -141,6 +147,29 @@ def test_girl_has_a_smaller_head_and_slimmer_character_proportions() -> None:
     assert "profile.character === 'girl'" in renderer
     assert "else group.removeAttribute('transform')" in renderer
     assert "applyCharacterProportions(figure, safeProfile)" in renderer
+
+
+def test_character_assets_are_shared_lazy_and_do_not_need_html_version_edits() -> None:
+    renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
+    character_styles = (ROOT / "static/css/avatar-character.css").read_text(
+        encoding="utf-8"
+    )
+    theme = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
+
+    assert "const AVATAR_STYLESHEET_PATH = '/static/css/avatar-character.css'" in renderer
+    assert "function ensureStylesheet()" in renderer
+    assert "ensureStylesheet();" in renderer
+    assert "single source of truth" in character_styles
+    assert "must not update individual HTML pages" in character_styles
+    assert '.hm-character-avatar[data-avatar-renderer="vivid-3d"]' in character_styles
+    assert ".hm-kid-avatar-menu[hidden]" in character_styles
+    assert ".hm-character-avatar" not in theme
+    assert ".hm-kid-avatar" not in theme
+    assert "/static/js/avatar-character.js" in CHARACTER_ASSET_PATHS
+    assert "/static/css/avatar-character.css" in CHARACTER_ASSET_PATHS
+    assert cache_control_for_static_asset("/static/js/avatar-character.js?v=old") == (
+        CHARACTER_ASSET_CACHE_CONTROL
+    )
 
 
 def test_avatar_api_returns_only_minimised_age_context() -> None:

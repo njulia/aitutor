@@ -32,6 +32,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import RedirectResponse, Response
 
+from .static_asset_policy import cache_control_for_static_asset
+
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
@@ -364,6 +366,13 @@ def owner_key(identity: str) -> str:
         # A per-process secret is fine in development. Production must set a
         # stable secret so multiple workers create the same key.
         secret = b"dev-only-change-me"
+    elif len(secret) > 64:
+        # BLAKE2b accepts keys of at most 64 bytes. Secret Manager values made
+        # with a base64 command can be 65 bytes when the trailing newline is
+        # retained, and longer passphrases are also valid application secrets.
+        # Condense only over-length values so existing <=64-byte deployments
+        # keep exactly the same owner keys.
+        secret = hashlib.sha256(secret).digest()
     return hashlib.blake2b(identity.encode("utf-8"), key=secret, digest_size=24).hexdigest()
 
 
@@ -418,10 +427,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             if static_path.endswith((".html", ".htm")):
                 response.headers["X-Robots-Tag"] = "noindex, nofollow"
                 response.headers.setdefault("Cache-Control", "public, max-age=300")
-            elif static_path.endswith((".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2")):
-                response.headers.setdefault(
-                    "Cache-Control", "public, max-age=3600, stale-while-revalidate=86400"
-                )
+            else:
+                static_cache_control = cache_control_for_static_asset(static_path)
+                if static_cache_control:
+                    response.headers["Cache-Control"] = static_cache_control
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         if not settings.dev_mode:

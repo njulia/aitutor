@@ -72,6 +72,73 @@ ADDITIONAL_PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
         "title": "Lancaster Royal Grammar School: 2027 entrance tests",
         "url": "https://www.lrgs.org.uk/join-the-school/admissions",
     },
+    "bexley-selection-2027": {
+        "title": "London Borough of Bexley: 2027 Selection Test format",
+        "url": (
+            "https://www.bexley.gov.uk/services/schools-and-education/"
+            "selection-tests/about-test"
+        ),
+    },
+    "wirral-assessment-2027": {
+        "title": "Wirral Council: 2027 grammar-school assessment",
+        "url": (
+            "https://www.wirral.gov.uk/schools-and-learning/school-admissions/"
+            "step-by-step/apply-secondary-school-place/assessment-grammar"
+        ),
+    },
+    "gloucestershire-test-2027": {
+        "title": "Gloucestershire: 2027 grammar-school admission test format",
+        "url": "https://www.gloucestershire.gov.uk/media/oexblecu/denmar-1.pdf",
+    },
+    "slough-consortium-2027": {
+        "title": "Slough Consortium: 2027 shared 11+ examination",
+        "url": "https://www.herschel.slough.sch.uk/year-7-admissions-2027/",
+    },
+    "medway-test-2027": {
+        "title": "Medway Council: Medway Test papers and timings",
+        "url": (
+            "https://www.medway.gov.uk/info/200137/schools_and_learning/"
+            "1049/medway_test_11"
+        ),
+    },
+    "wilsons-second-stage-2027": {
+        "title": "Wilson's School: 2027 Second Stage Entrance Examination FAQs",
+        "url": "https://www.wilsons.school/admissions-faqs/",
+    },
+    "tiffin-girls-2027": {
+        "title": "The Tiffin Girls' School: Year 7 admissions for 2027 entry",
+        "url": "https://www.tiffingirls.org/admissions/year-7/",
+    },
+    "st-olaves-2027": {
+        "title": "St Olave's Grammar School: public admissions information",
+        "url": "https://www.saintolaves.net/",
+    },
+    "st-olaves-public-sample": {
+        "title": "Public archive of St Olave's school-issued Stage One sample format",
+        "url": (
+            "https://athenatuition.co.uk/wp-content/uploads/2019/06/"
+            "St-Olaves-Grammar-School-11-Stage-1-Entrance-Test-Sample.pdf"
+        ),
+    },
+    "henrietta-barnett-2027": {
+        "title": "The Henrietta Barnett School: 2027 entrance-test information",
+        "url": "https://www.hbschool.org.uk/admissions/",
+    },
+    "altrincham-girls-2027": {
+        "title": "Altrincham Grammar School for Girls: 2027 entrance-test information",
+        "url": "https://aggs.bright-futures.co.uk/admissions/september-2027-entry/",
+    },
+    "reading-fsce-2027": {
+        "title": "Reading School: 2027 FSCE entrance-test familiarisation information",
+        "url": "https://www.reading-school.co.uk/admissions/year-7-entry",
+    },
+    "cchs-fsce-2027": {
+        "title": "Chelmsford County High School for Girls: 2027 FSCE entrance test",
+        "url": (
+            "https://www.cchs.co.uk/admissions/"
+            "admission-to-year-7-september-2027/"
+        ),
+    },
 }
 
 
@@ -112,6 +179,25 @@ _MUSEUM_PASSAGE = (
     "the cover matched those of a celebrated director. Instead of rubbing away the "
     "marks, Elena photographed every page and called the curator. The notes had turned "
     "an ordinary souvenir into a rare record of a rehearsal."
+)
+
+_PLANETARIUM_PASSAGE = (
+    "At the school planetarium, Sami was trusted to run the projector for the "
+    "evening show. Minutes before the families entered, one constellation flickered "
+    "and vanished. The manual said to restart the whole system, but that would erase "
+    "the carefully timed sequence. Sami noticed a loose cable beneath the console. "
+    "He switched off only that section, pressed the connector firmly into place and "
+    "tested it. Orion returned, sharp and bright. When the doors opened, Sami stood "
+    "quietly at the back while the audience gasped at the stars above them."
+)
+
+_ORCHARD_PASSAGE = (
+    "The wind rose while Asha and Tom were checking the community orchard. A young "
+    "pear tree leaned so far that its roots lifted at one side. Tom ran to fetch rope, "
+    "but Asha chose a wide strip of old cloth instead. Together they eased the trunk "
+    "upright, braced it with two stakes and tied the cloth loosely. ‘Room to move, but "
+    "not enough to fall,’ Asha said. Overnight, rain drummed on the shed roof. In the "
+    "morning the tree still stood, and none of its bark had been rubbed raw."
 )
 
 
@@ -900,7 +986,581 @@ ADDITIONAL_QUESTIONS.extend([
         (("A", "top edge"), ("B", "right edge"), ("C", "bottom edge"), ("D", "left edge")), "B",
         "A quarter-turn clockwise moves the top edge to the right edge.",
     ),
+
+    # Mathematics: fourth original expansion set
+    _question(
+        "m49", "Maths", "Fractions and measures",
+        "A jug holds 2.4 litres when full. It is 3/4 full. How much water is in the jug?",
+        (("A", "0.6 litres"), ("B", "1.6 litres"),
+         ("C", "1.8 litres"), ("D", "2.1 litres")), "C",
+        "One quarter of 2.4 litres is 0.6 litres, so three quarters is 3 × 0.6 = 1.8 litres.",
+    ),
+    _question(
+        "m50", "Maths", "Percentages",
+        "A library has 240 new books. 35% are non-fiction. How many are non-fiction?",
+        (("A", "72"), ("B", "84"), ("C", "96"), ("D", "108")), "B",
+        "10% of 240 is 24 and 5% is 12. Therefore 35% is 72 + 12 = 84.",
+    ),
+    _question(
+        "m51", "Maths", "Ratio",
+        "Red and blue counters are in the ratio 5:3. There are 64 counters altogether. How many are red?",
+        (("A", "24"), ("B", "32"), ("C", "40"), ("D", "48")), "C",
+        "There are 8 equal parts, so each part is 64 ÷ 8 = 8. Red has 5 parts: 5 × 8 = 40.",
+    ),
+    _question(
+        "m52", "Maths", "Area",
+        "A 15 cm by 8 cm rectangle has a 4 cm by 4 cm square cut from one corner. What area remains?",
+        (("A", "88 cm²"), ("B", "104 cm²"),
+         ("C", "112 cm²"), ("D", "116 cm²")), "B",
+        "The rectangle's area is 15 × 8 = 120 cm². The cut-out is 4 × 4 = 16 cm², leaving 104 cm².",
+    ),
+    _question(
+        "m53", "Maths", "Averages",
+        "The mean of six numbers is 18. Five numbers are 15, 17, 19, 20 and 21. What is the sixth number?",
+        (("A", "16"), ("B", "17"), ("C", "18"), ("D", "20")), "A",
+        "All six numbers total 6 × 18 = 108. The five shown total 92, so the missing number is 16.",
+    ),
+    _question(
+        "m54", "Maths", "Time",
+        "A train leaves at 09:47 and the journey lasts 2 hours 38 minutes. When does it arrive?",
+        (("A", "12:15"), ("B", "12:25"), ("C", "12:35"), ("D", "13:25")), "B",
+        "Two hours after 09:47 is 11:47. Adding 38 minutes gives 12:25.",
+    ),
+    _question(
+        "m55", "Maths", "Mixed numbers", "Work out 2 2/3 − 1 5/6.",
+        (("A", "1/2"), ("B", "2/3"), ("C", "5/6"), ("D", "1 1/6")), "C",
+        "In sixths, 2 2/3 is 2 4/6. Regrouping gives 1 10/6; subtracting 1 5/6 leaves 5/6.",
+    ),
+    _question(
+        "m56", "Maths", "Volume",
+        "A cuboid is 7 cm long, 6 cm wide and 5 cm high. What is its volume?",
+        (("A", "18 cm³"), ("B", "42 cm³"),
+         ("C", "180 cm³"), ("D", "210 cm³")), "D",
+        "Volume = length × width × height, so 7 × 6 × 5 = 210 cm³.",
+    ),
+    _question(
+        "m57", "Maths", "Algebra", "Solve n ÷ 4 + 7 = 15.",
+        (("A", "8"), ("B", "22"), ("C", "30"), ("D", "32")), "D",
+        "Subtract 7 to get n ÷ 4 = 8. Multiplying by 4 gives n = 32.",
+    ),
+    _question(
+        "m58", "Maths", "Percentages",
+        "A bicycle helmet costs £60. Its price increases by 20%. What is the new price?",
+        (("A", "£68"), ("B", "£70"), ("C", "£80"), ("D", "£72")), "D",
+        "20% of £60 is £12. Adding the increase gives £60 + £12 = £72.",
+    ),
+    _question(
+        "m59", "Maths", "Angles",
+        "Three angles in a quadrilateral are 95°, 85° and 110°. What is the fourth angle?",
+        (("A", "60°"), ("B", "70°"), ("C", "80°"), ("D", "90°")), "B",
+        "Angles in a quadrilateral total 360°. The three angles total 290°, so the fourth is 70°.",
+    ),
+    _question(
+        "m60", "Maths", "Scale",
+        "On a map, 1 cm represents 5 km. Two towns are 7.4 cm apart on the map. What is the real distance?",
+        (("A", "12.4 km"), ("B", "35 km"), ("C", "42 km"), ("D", "37 km")), "D",
+        "Each centimetre represents 5 km, so 7.4 × 5 = 37 km.",
+    ),
+    _question(
+        "m61", "Maths", "Probability",
+        "A bag contains 3 red, 5 blue and 2 green counters. What is the probability of choosing a counter that is not blue?",
+        (("A", "1/5"), ("B", "3/10"), ("C", "1/2"), ("D", "7/10")), "C",
+        "There are 10 counters. Five are not blue, so the probability is 5/10 = 1/2.",
+    ),
+    _question(
+        "m62", "Maths", "Multiples", "What is the lowest common multiple of 8 and 12?",
+        (("A", "16"), ("B", "20"), ("C", "48"), ("D", "24")), "D",
+        "The first number in both lists of multiples is 24: 8 × 3 = 24 and 12 × 2 = 24.",
+    ),
+    _question(
+        "m63", "Maths", "Perimeter",
+        "A rectangle is 12.5 m long and 7.25 m wide. What is its perimeter?",
+        (("A", "19.75 m"), ("B", "32.25 m"),
+         ("C", "39.5 m"), ("D", "90.625 m")), "C",
+        "Perimeter is 2 × (12.5 + 7.25) = 2 × 19.75 = 39.5 m.",
+    ),
+    _question(
+        "m64", "Maths", "Data handling", "What is the median of 4, 7, 7, 9, 12, 15 and 18?",
+        (("A", "7"), ("B", "8"), ("C", "12"), ("D", "9")), "D",
+        "There are seven ordered values, so the fourth value is the median. The fourth value is 9.",
+    ),
+
+    # English: fourth original expansion set
+    _question(
+        "e49", "English", "Comprehension",
+        "Why did Sami avoid restarting the whole projector system?",
+        (("A", "It would make the room too bright."),
+         ("B", "The manual was missing."),
+         ("C", "The audience had already gone home."),
+         ("D", "It would erase the timed sequence.")), "D",
+        "The passage says that restarting the whole system would erase the carefully timed sequence.",
+        context=_PLANETARIUM_PASSAGE,
+    ),
+    _question(
+        "e50", "English", "Comprehension vocabulary",
+        "What does flickered mean in the passage?",
+        (("A", "grew much larger"), ("B", "made a loud noise"),
+         ("C", "shone unsteadily"), ("D", "changed colour permanently")), "C",
+        "A light that flickers shines unevenly or goes on and off quickly.",
+        context=_PLANETARIUM_PASSAGE,
+    ),
+    _question(
+        "e51", "English", "Inference", "What does Sami's response to the fault suggest?",
+        (("A", "He dislikes looking at stars."),
+         ("B", "He wants somebody else to run the show."),
+         ("C", "He has forgotten when the families arrive."),
+         ("D", "He is calm and practical.")), "D",
+        "Sami checks the likely cause and fixes only the faulty section instead of panicking.",
+        context=_PLANETARIUM_PASSAGE,
+    ),
+    _question(
+        "e52", "English", "Writer's choices",
+        "Why does the writer describe Orion as sharp and bright?",
+        (("A", "To explain why the cable came loose"),
+         ("B", "To suggest that the show was too long"),
+         ("C", "To show that the projector repair worked"),
+         ("D", "To prove that Orion is the largest constellation")), "C",
+        "The clear, bright image confirms that Sami restored the missing constellation.",
+        context=_PLANETARIUM_PASSAGE,
+    ),
+    _question(
+        "e53", "English", "Vocabulary", "Which meaning is closest to meticulous?",
+        (("A", "quick but careless"), ("B", "noisy and excited"),
+         ("C", "ordinary and familiar"), ("D", "very careful and exact")), "D",
+        "Someone who is meticulous pays very careful attention to details.",
+    ),
+    _question(
+        "e54", "English", "Punctuation", "Which sentence uses a semicolon correctly?",
+        (("A", "The hall; was full and warm."),
+         ("B", "We brought; coats, hats and scarves."),
+         ("C", "After the show; we walked home."),
+         ("D", "The hall was full; every seat was taken.")), "D",
+        "A semicolon can join two closely related main clauses: both halves of option A can stand alone.",
+    ),
+    _question(
+        "e55", "English", "Spelling", "Which spelling is correct?",
+        (("A", "neccessary"), ("B", "necesary"),
+         ("C", "necessary"), ("D", "nessessary")), "C",
+        "Necessary is spelt n-e-c-e-s-s-a-r-y.",
+    ),
+    _question(
+        "e56", "English", "Modal verbs",
+        "Which sentence uses a modal verb to show that something is possible?",
+        (("A", "We visited the observatory yesterday."),
+         ("B", "We are inside the observatory."),
+         ("C", "We visit the observatory each term."),
+         ("D", "We might visit the observatory tomorrow.")), "D",
+        "Might is a modal verb that shows possibility.",
+    ),
+    _question(
+        "e57", "English", "Comprehension",
+        "Why did Asha choose a wide strip of cloth instead of rope?",
+        (("A", "She wanted the pear tree to lie on the ground."),
+         ("B", "The cloth would stop the rain completely."),
+         ("C", "Tom had hidden every piece of rope."),
+         ("D", "The cloth would support the tree without rubbing its bark raw.")), "D",
+        "The loose, wide cloth supports the trunk while protecting its bark from damage.",
+        context=_ORCHARD_PASSAGE,
+    ),
+    _question(
+        "e58", "English", "Comprehension vocabulary",
+        "What does braced mean in the passage?",
+        (("A", "painted carefully"), ("B", "supported firmly"),
+         ("C", "cut into pieces"), ("D", "watered deeply")), "B",
+        "The stakes brace the tree by holding and supporting it firmly.",
+        context=_ORCHARD_PASSAGE,
+    ),
+    _question(
+        "e59", "English", "Inference", "What can we infer about Asha?",
+        (("A", "She understands that a young tree needs support and room to move."),
+         ("B", "She wants to remove every tree from the orchard."),
+         ("C", "She is frightened of working with Tom."),
+         ("D", "She believes tight rope can never damage bark.")), "A",
+        "Asha supports the tree gently and deliberately leaves enough space for movement.",
+        context=_ORCHARD_PASSAGE,
+    ),
+    _question(
+        "e60", "English", "Writer's choices",
+        "What effect does the phrase rain drummed on the shed roof create?",
+        (("A", "It makes the rain seem strong and noisy."),
+         ("B", "It shows that musicians were inside the shed."),
+         ("C", "It proves that the roof was made of cloth."),
+         ("D", "It makes the night seem completely silent.")), "A",
+        "Drummed compares the sound of rain to repeated beats, making it feel loud and forceful.",
+        context=_ORCHARD_PASSAGE,
+    ),
+    _question(
+        "e61", "English", "Vocabulary", "Which meaning is closest to scarce?",
+        (("A", "brightly coloured"), ("B", "in short supply"),
+         ("C", "easy to replace"), ("D", "carefully hidden")), "B",
+        "Something scarce is limited or difficult to find because there is not much of it.",
+    ),
+    _question(
+        "e62", "English", "Apostrophes",
+        "Which sentence shows that the bags belong to several players?",
+        (("A", "The player's bags were beside the bench."),
+         ("B", "The players bags were beside the bench."),
+         ("C", "The players' bags were beside the bench."),
+         ("D", "The players's bags were beside the bench.")), "C",
+        "For a regular plural noun ending in s, the possessive apostrophe comes after the s: players'.",
+    ),
+    _question(
+        "e63", "English", "Direct speech", "Which sentence is punctuated correctly?",
+        (("A", "‘We should leave now,’ said Ravi."),
+         ("B", "‘We should leave now’ said Ravi."),
+         ("C", "‘We should leave now, said Ravi.’"),
+         ("D", "We should leave now,’ said Ravi.")), "A",
+        "The spoken words have opening and closing quotation marks, and the reporting clause follows a comma.",
+    ),
+    _question(
+        "e64", "English", "Relative clauses", "Which sentence contains a relative clause?",
+        (("A", "Ava rang the red bicycle bell."),
+         ("B", "The bicycle that has a red bell belongs to Ava."),
+         ("C", "Ava's bicycle bell rang loudly."),
+         ("D", "Ring the bicycle bell, Ava.")), "B",
+        "That has a red bell is a relative clause giving more information about the bicycle.",
+    ),
+
+    # Verbal reasoning: fourth original expansion set
+    _question(
+        "v49", "Verbal Reasoning", "Letter codes",
+        "In a code, every letter moves one place forward in the alphabet. How is LION written?",
+        (("A", "MJPO"), ("B", "MIPO"), ("C", "KHMN"), ("D", "NKQP")), "A",
+        "L→M, I→J, O→P and N→O, so LION becomes MJPO.",
+    ),
+    _question(
+        "v50", "Verbal Reasoning", "Letter sequences", "What comes next? AZ, BY, CX, DW, …",
+        (("A", "EU"), ("B", "EV"), ("C", "FV"), ("D", "EW")), "B",
+        "The first letters move forwards A, B, C, D, E while the second move backwards Z, Y, X, W, V.",
+    ),
+    _question(
+        "v51", "Verbal Reasoning", "Analogies", "Gosling is to goose as calf is to …",
+        (("A", "cow"), ("B", "duck"), ("C", "goat"), ("D", "sheep")), "A",
+        "A gosling is a young goose, and a calf is a young cow.",
+    ),
+    _question(
+        "v52", "Verbal Reasoning", "Odd one out", "Which word is the odd one out?",
+        (("A", "triangle"), ("B", "square"), ("C", "pentagon"), ("D", "sphere")), "D",
+        "Triangle, square and pentagon are flat shapes. A sphere is a three-dimensional solid.",
+    ),
+    _question(
+        "v53", "Verbal Reasoning", "Word links",
+        "Which word can go after NOTE and before MARK to make two new words?",
+        (("A", "book"), ("B", "paper"), ("C", "pad"), ("D", "card")), "A",
+        "NOTE + BOOK makes notebook, and BOOK + MARK makes bookmark.",
+    ),
+    _question(
+        "v54", "Verbal Reasoning", "Alphabet values",
+        "Using A=1, B=2, C=3 and so on, what is the value of BRAVE?",
+        (("A", "43"), ("B", "46"), ("C", "48"), ("D", "50")), "C",
+        "B=2, R=18, A=1, V=22 and E=5. Their total is 48.",
+    ),
+    _question(
+        "v55", "Verbal Reasoning", "Anagrams", "Which word is an anagram of SILENT?",
+        (("A", "LISTEN"), ("B", "LITTLE"), ("C", "LINES"), ("D", "STILL")), "A",
+        "LISTEN uses exactly the same six letters as SILENT.",
+    ),
+    _question(
+        "v56", "Verbal Reasoning", "Number sequences", "What is the next number? 4, 10, 22, 46, …",
+        (("A", "70"), ("B", "82"), ("C", "92"), ("D", "94")), "D",
+        "Each number is doubled and then 2 is added. 46 × 2 + 2 = 94.",
+    ),
+    _question(
+        "v57", "Verbal Reasoning", "Letter relationships",
+        "BF becomes EI by moving each letter three places forward. What does HQ become?",
+        (("A", "JS"), ("B", "KT"), ("C", "KU"), ("D", "LT")), "B",
+        "H moves to K and Q moves to T, so HQ becomes KT.",
+    ),
+    _question(
+        "v58", "Verbal Reasoning", "Word relationships", "Which pair has a different relationship?",
+        (("A", "kitten : cat"), ("B", "calf : cow"),
+         ("C", "foal : horse"), ("D", "cub : den")), "D",
+        "The first three pairs link a young animal to its adult form. A den is a home, not an adult animal.",
+    ),
+    _question(
+        "v59", "Verbal Reasoning", "Logic",
+        "All daxes are blue. Every blue thing is cold. No cold thing is soft. Which statement must be true?",
+        (("A", "All soft things are daxes."), ("B", "Some daxes are soft."),
+         ("C", "No daxes are soft."), ("D", "Every cold thing is a dax.")), "C",
+        "Every dax is blue and therefore cold. Because no cold thing is soft, no dax can be soft.",
+    ),
+    _question(
+        "v60", "Verbal Reasoning", "Missing letters",
+        "The same two letters complete both words: B __ D and H __ D. Which letters are they?",
+        (("A", "AN"), ("B", "EN"), ("C", "OL"), ("D", "UR")), "A",
+        "AN makes B + AN + D = BAND and H + AN + D = HAND.",
+    ),
+    _question(
+        "v61", "Verbal Reasoning", "Word links",
+        "Which word can go after FOOT and before ROOM to make two new words?",
+        (("A", "step"), ("B", "ball"), ("C", "rest"), ("D", "print")), "B",
+        "FOOT + BALL makes football, and BALL + ROOM makes ballroom.",
+    ),
+    _question(
+        "v62", "Verbal Reasoning", "Alphabetical order",
+        "If these words are put in alphabetical order, which comes third? place, plain, planet, plaque",
+        (("A", "place"), ("B", "plain"), ("C", "planet"), ("D", "plaque")), "C",
+        "The order is place, plain, planet, plaque, so planet is third.",
+    ),
+    _question(
+        "v63", "Verbal Reasoning", "Letter codes",
+        "In a mirror-alphabet code A becomes Z, B becomes Y, and so on. How is FISH written?",
+        (("A", "TRHS"), ("B", "UQIT"), ("C", "URHS"), ("D", "VSHR")), "C",
+        "F becomes U, I becomes R, S becomes H and H becomes S, giving URHS.",
+    ),
+    _question(
+        "v64", "Verbal Reasoning", "Analogies", "Author is to novel as composer is to …",
+        (("A", "symphony"), ("B", "gallery"), ("C", "sculpture"), ("D", "camera")), "A",
+        "An author creates a novel, and a composer creates a symphony.",
+    ),
+
+    # Non-verbal and spatial reasoning: fourth original expansion set
+    _question(
+        "n49", "Non-Verbal Reasoning", "Rotation", "An arrow turns 90° clockwise each time: ↑, →, ↓, …",
+        (("A", "←"), ("B", "↖"), ("C", "↑"), ("D", "↘")), "A",
+        "One more quarter-turn clockwise from down makes the arrow point left.",
+    ),
+    _question(
+        "n50", "Non-Verbal Reasoning", "Position sequences",
+        "The filled circle moves two places to the right each time: ●○○○○, ○○●○○, ○○○○●, ○●○○○, … What comes next?",
+        (("A", "●○○○○"), ("B", "○○●○○"),
+         ("C", "○○○●○"), ("D", "○○○○●")), "C",
+        "The positions are first, third, fifth, second and then fourth, so ○○○●○ comes next.",
+    ),
+    _question(
+        "n51", "Non-Verbal Reasoning", "Shape properties",
+        "The shapes have 3 sides, then 5 sides, then 7 sides. How many sides should the next shape have?",
+        (("A", "8"), ("B", "9"), ("C", "10"), ("D", "11")), "B",
+        "The number of sides increases by two each time: 3, 5, 7, 9.",
+    ),
+    _question(
+        "n52", "Non-Verbal Reasoning", "Matrices",
+        "Across each row, two shapes exchange positions and become filled. Top row: ○□ becomes ■●. Bottom row: △◇ becomes ?",
+        (("A", "▲◆"), ("B", "◆▲"), ("C", "◇△"), ("D", "■●")), "B",
+        "The diamond moves first and the triangle second, and both become filled: ◆▲.",
+    ),
+    _question(
+        "n53", "Non-Verbal Reasoning", "Reflection",
+        "A horizontal mirror reflection changes ↘ into which arrow?",
+        (("A", "↗"), ("B", "↖"), ("C", "↘"), ("D", "↙")), "A",
+        "A horizontal mirror reverses up and down but keeps left and right, so down-right becomes up-right.",
+    ),
+    _question(
+        "n54", "Non-Verbal Reasoning", "Repeating groups", "What comes next? ○, ○○○, ■, ■■■, ▲, …",
+        (("A", "▲▲"), ("B", "▲▲▲"), ("C", "■■■"), ("D", "○○○")), "B",
+        "Each shape appears once and then three times, so the single triangle is followed by three triangles.",
+    ),
+    _question(
+        "n55", "Non-Verbal Reasoning", "Two-rule patterns", "What comes next? △↑, □→, △↓, □←, …",
+        (("A", "△↑"), ("B", "□↑"), ("C", "△→"), ("D", "□↓")), "A",
+        "The shapes alternate while the arrow turns 90° clockwise, returning to △↑.",
+    ),
+    _question(
+        "n56", "Non-Verbal Reasoning", "Symmetry", "Which shape has exactly two lines of symmetry?",
+        (("A", "a square"), ("B", "a non-square rectangle"),
+         ("C", "an equilateral triangle"), ("D", "a circle")), "B",
+        "A non-square rectangle has one horizontal and one vertical line of symmetry.",
+    ),
+    _question(
+        "n57", "Non-Verbal Reasoning", "Cubes",
+        "On a cube, M is opposite P, N is opposite Q, and O is opposite R. Which face is opposite O?",
+        (("A", "M"), ("B", "N"), ("C", "P"), ("D", "R")), "D",
+        "The information states that O and R are opposite faces.",
+    ),
+    _question(
+        "n58", "Non-Verbal Reasoning", "Rotation",
+        "An arrow turns 45° anticlockwise each time: →, ↗, ↑, ↖, …",
+        (("A", "←"), ("B", "↙"), ("C", "↓"), ("D", "↘")), "A",
+        "One more 45° anticlockwise turn from up-left makes the arrow point left.",
+    ),
+    _question(
+        "n59", "Non-Verbal Reasoning", "Matrices",
+        "Across each row, two matching shapes are added. Top row: ▲ becomes ▲▲▲. Bottom row: ●●●● becomes ?",
+        (("A", "●●●●●"), ("B", "●●●●●●"),
+         ("C", "▲▲▲▲▲▲"), ("D", "●●")), "B",
+        "The rule adds two matching shapes, so four circles become six circles.",
+    ),
+    _question(
+        "n60", "Non-Verbal Reasoning", "Two-rule patterns", "What comes next? ●, □□, ●●●, □□□□, …",
+        (("A", "●●●●"), ("B", "●●●●●"),
+         ("C", "□□□□□"), ("D", "□□□□□□")), "B",
+        "The count rises by one while filled circles and hollow squares alternate. Next are five filled circles.",
+    ),
+    _question(
+        "n61", "Non-Verbal Reasoning", "Transformations",
+        "The rule changes ○↑ into ●↓. Using the same rule, what does □← become?",
+        (("A", "■→"), ("B", "□→"), ("C", "■↑"), ("D", "□↓")), "A",
+        "The shape becomes filled and the arrow turns 180°, so □← becomes ■→.",
+    ),
+    _question(
+        "n62", "Non-Verbal Reasoning", "Position changes",
+        "A dot moves clockwise around the middle of each edge: top, right, bottom, left, … Where is it next?",
+        (("A", "top"), ("B", "right"), ("C", "bottom"), ("D", "centre")), "A",
+        "The dot has completed a circuit of the four edges, so it returns to the top.",
+    ),
+    _question(
+        "n63", "Non-Verbal Reasoning", "Spatial reasoning",
+        "A sheet is folded exactly in half four times. How many layers are there?",
+        (("A", "8"), ("B", "12"), ("C", "16"), ("D", "20")), "C",
+        "Each fold doubles the layers: 1, 2, 4, 8, then 16.",
+    ),
+    _question(
+        "n64", "Non-Verbal Reasoning", "Rotation",
+        "An arrow points up. It turns 270° clockwise. Which way does it point?",
+        (("A", "right"), ("B", "down"), ("C", "left"), ("D", "up")), "C",
+        "A 270° clockwise turn is the same as a 90° anticlockwise turn, so up becomes left.",
+    ),
 ])
+
+
+SCHOOL_TARGET_QUESTIONS = [
+    _question(
+        "fsce01", "Art & Design", "Shading",
+        "Which drawing technique is most useful for making a round apple look three-dimensional?",
+        (("A", "Drawing a square border"), ("B", "Changing gradually from light to dark"),
+         ("C", "Writing the colour names"), ("D", "Using only straight lines")), "B",
+        "Gradual light and dark shading shows where light falls and helps a flat drawing look solid.",
+    ),
+    _question(
+        "fsce02", "Art & Design", "Colour mixing",
+        "Which colour is made by mixing blue and yellow paint?",
+        (("A", "Orange"), ("B", "Purple"), ("C", "Green"), ("D", "Brown")), "C",
+        "Blue and yellow are primary colours that mix to make green.",
+    ),
+    _question(
+        "fsce03", "Computing", "Algorithms",
+        "What is the computing name for a clear sequence of steps used to complete a task?",
+        (("A", "An algorithm"), ("B", "A password"), ("C", "A pixel"), ("D", "A folder")), "A",
+        "An algorithm is an ordered set of instructions for solving a problem or completing a task.",
+    ),
+    _question(
+        "fsce04", "Computing", "Repetition",
+        "A sprite must move forward and turn right four times to draw a square. Which coding tool is most helpful?",
+        (("A", "A sound block"), ("B", "A variable called name"),
+         ("C", "A stop button"), ("D", "A repeat loop")), "D",
+        "A repeat loop runs the same move-and-turn instructions four times without rewriting them.",
+    ),
+    _question(
+        "fsce05", "Design & Technology", "Prototypes",
+        "Why might a designer build a simple cardboard model before making the final product?",
+        (("A", "To make the final product heavier"), ("B", "To avoid measuring anything"),
+         ("C", "To test and improve the idea"), ("D", "To hide the design")), "C",
+        "A prototype lets a designer test how an idea works and improve it before making the final version.",
+    ),
+    _question(
+        "fsce06", "Design & Technology", "Structures",
+        "Which shape is often added to a bridge frame because it helps the frame stay rigid?",
+        (("A", "Oval"), ("B", "Triangle"), ("C", "Spiral"), ("D", "Semicircle")), "B",
+        "Triangles keep their shape when forces push or pull on a frame, so they add strength.",
+    ),
+    _question(
+        "fsce07", "English", "Writing for an audience",
+        "Which feature would best help Year 2 pupils follow instructions for planting a seed?",
+        (("A", "Short numbered steps"), ("B", "A long mystery opening"),
+         ("C", "Several difficult quotations"), ("D", "A surprise ending")), "A",
+        "Short numbered steps put the actions in a clear order for younger readers.",
+    ),
+    _question(
+        "fsce08", "English", "Inference",
+        "Nia checked the dark clouds, zipped her coat and tucked the picnic blanket back into the cupboard. What is she most likely thinking?",
+        (("A", "The cupboard is too full"), ("B", "The blanket is brand new"),
+         ("C", "The coat is too warm"), ("D", "Rain may spoil the picnic")), "D",
+        "The dark clouds, coat and stored blanket suggest that Nia expects rain and may cancel the picnic.",
+    ),
+    _question(
+        "fsce09", "Geography", "Map scale",
+        "On a map, 1 cm represents 2 km. Two villages are 3.5 cm apart on the map. How far apart are they?",
+        (("A", "5 km"), ("B", "6 km"), ("C", "7 km"), ("D", "8 km")), "C",
+        "Each centimetre represents 2 km, so 3.5 × 2 = 7 km.",
+    ),
+    _question(
+        "fsce10", "Geography", "Water cycle",
+        "Which process changes liquid water at the sea surface into water vapour in the air?",
+        (("A", "Freezing"), ("B", "Evaporation"), ("C", "Precipitation"), ("D", "Collection")), "B",
+        "Evaporation happens when liquid water gains heat energy and becomes water vapour.",
+    ),
+    _question(
+        "fsce11", "History", "Historical sources",
+        "Which item is a primary source for learning about a nurse's work during the First World War?",
+        (("A", "Her diary written in 1916"), ("B", "A modern novel set in 1916"),
+         ("C", "A website summary written this year"), ("D", "A new costume made for a play")), "A",
+        "A diary written by the nurse at the time is direct evidence from the period being studied.",
+    ),
+    _question(
+        "fsce12", "History", "Chronology",
+        "Which event happened earliest?",
+        (("A", "The Norman Conquest in 1066"), ("B", "The Great Fire of London in 1666"),
+         ("C", "The first Moon landing in 1969"), ("D", "The Roman invasion of Britain in AD 43")), "D",
+        "AD 43 comes before 1066, 1666 and 1969, so the Roman invasion is the earliest event.",
+    ),
+    _question(
+        "fsce13", "Languages", "Using context",
+        "A sign says 'biblioteca' beside a picture of shelves full of books. What place does the word most likely mean?",
+        (("A", "Swimming pool"), ("B", "Train station"), ("C", "Library"), ("D", "Bakery")), "C",
+        "The book shelves give a strong context clue that 'biblioteca' means library.",
+    ),
+    _question(
+        "fsce14", "Languages", "Reading strategies",
+        "When you meet one unknown word in a short passage in another language, what should you try first?",
+        (("A", "Ignore every other word"), ("B", "Use nearby words, pictures and familiar patterns"),
+         ("C", "Change the word into a number"), ("D", "Read only the final letter")), "B",
+        "Context, pictures and familiar word patterns can help you infer an unknown word's meaning.",
+    ),
+    _question(
+        "fsce15", "Maths", "Fractions",
+        "A club has 64 badges. Three eighths are blue. How many badges are blue?",
+        (("A", "8"), ("B", "16"), ("C", "21"), ("D", "24")), "D",
+        "One eighth of 64 is 8, so three eighths is 3 × 8 = 24.",
+    ),
+    _question(
+        "fsce16", "Maths", "Perimeter",
+        "A rectangular garden is 12 m long and 7 m wide. What is its perimeter?",
+        (("A", "38 m"), ("B", "19 m"), ("C", "48 m"), ("D", "84 m")), "A",
+        "Perimeter = 12 + 7 + 12 + 7 = 38 m.",
+    ),
+    _question(
+        "fsce17", "Music", "Dynamics",
+        "Which musical feature tells a performer whether to play loudly or quietly?",
+        (("A", "Pitch"), ("B", "Dynamics"), ("C", "Tempo"), ("D", "Pulse")), "B",
+        "Dynamics describe how loud or quiet music should be played.",
+    ),
+    _question(
+        "fsce18", "Music", "Pitch",
+        "A piccolo usually makes a higher sound than a tuba. Which property is being compared?",
+        (("A", "Duration"), ("B", "Volume"), ("C", "Pitch"), ("D", "Rhythm")), "C",
+        "Pitch describes how high or low a sound is.",
+    ),
+    _question(
+        "fsce19", "Physical Education", "Warm-ups",
+        "Why is a gentle warm-up useful before vigorous exercise?",
+        (("A", "It removes the need to drink water"), ("B", "It makes every game shorter"),
+         ("C", "It guarantees that a team wins"), ("D", "It gradually prepares muscles and the heart")), "D",
+        "A warm-up gradually raises the heart rate and prepares muscles and joints for harder movement.",
+    ),
+    _question(
+        "fsce20", "Physical Education", "Teamwork",
+        "In a passing game, what is the best way for a player without the ball to help the team?",
+        (("A", "Move into a clear space"), ("B", "Stand behind an opponent"),
+         ("C", "Leave the playing area"), ("D", "Keep both eyes closed")), "A",
+        "Moving into space gives the player with the ball a safe passing option.",
+    ),
+    _question(
+        "fsce21", "Science", "Electricity",
+        "A bulb, cell and wires are connected, but the switch is open. Why does the bulb stay off?",
+        (("A", "The bulb has too much light"), ("B", "The wires are magnetic"),
+         ("C", "The circuit is incomplete"), ("D", "The cell has become a motor")), "C",
+        "An open switch breaks the circuit, so electric current cannot flow through the bulb.",
+    ),
+    _question(
+        "fsce22", "Science", "Light and shadows",
+        "Why is a person's outdoor shadow often shorter around midday than early in the morning?",
+        (("A", "The person becomes shorter"), ("B", "The Sun is higher in the sky"),
+         ("C", "The ground stops reflecting light"), ("D", "The Earth stops turning")), "B",
+        "When the Sun is higher, its light reaches the ground at a steeper angle and makes shorter shadows.",
+    ),
+]
+
+ADDITIONAL_QUESTIONS.extend(SCHOOL_TARGET_QUESTIONS)
 
 
 ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
@@ -1035,6 +1695,44 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
         "format_note": "Four multiple-choice sections in one timed sitting.",
         "last_verified": "2026-08-06",
     },
+    "common-full-7": {
+        "id": "common-full-7",
+        "category": "common",
+        "title": "Common Four-Subject Mock G",
+        "description": "A seventh full paper with 32 new questions across the four common 11+ subjects.",
+        "school": None,
+        "stage": "Full practice",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(49, 57)]
+            + [f"e{i:02d}" for i in range(49, 57)]
+            + [f"v{i:02d}" for i in range(49, 57)]
+            + [f"n{i:02d}" for i in range(49, 57)]
+        ),
+        "source_ids": ("dfe-primary", "common-four-subject"),
+        "format_note": "Four multiple-choice sections in one timed sitting.",
+        "last_verified": "2026-08-09",
+    },
+    "common-full-8": {
+        "id": "common-full-8",
+        "category": "common",
+        "title": "Common Four-Subject Mock H",
+        "description": "An eighth full paper with another completely different set of original questions.",
+        "school": None,
+        "stage": "Full practice",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(57, 65)]
+            + [f"e{i:02d}" for i in range(57, 65)]
+            + [f"v{i:02d}" for i in range(57, 65)]
+            + [f"n{i:02d}" for i in range(57, 65)]
+        ),
+        "source_ids": ("dfe-primary", "common-four-subject"),
+        "format_note": "Four multiple-choice sections in one timed sitting.",
+        "last_verified": "2026-08-09",
+    },
     "west-midlands-grammar-1": {
         "id": "west-midlands-grammar-1",
         "category": "school_target",
@@ -1088,5 +1786,230 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
         "source_ids": ("dfe-primary", "lrgs-2027"),
         "format_note": "Shortened three-subject practice; the school states that its test does not use Non-Verbal Reasoning.",
         "last_verified": "2026-08-06",
+    },
+    "bexley-selection-1": {
+        "id": "bexley-selection-1",
+        "category": "school_target",
+        "title": "Bexley Selection Test Target Mock",
+        "description": "Original verbal, English comprehension, numerical and non-verbal practice balanced to Bexley's published weighting.",
+        "school": "Bexley grammar schools",
+        "stage": "Bexley Selection Test",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(17, 25)]
+            + [f"v{i:02d}" for i in range(1, 9)]
+            + [f"m{i:02d}" for i in range(41, 49)]
+            + [f"n{i:02d}" for i in range(9, 17)]
+        ),
+        "source_ids": ("dfe-primary", "bexley-selection-2027"),
+        "format_note": "Condensed 50:25:25 verbal, numerical and non-verbal mix; the official test uses two approximately 50-minute booklets.",
+        "last_verified": "2026-08-09",
+    },
+    "wirral-assessment-1": {
+        "id": "wirral-assessment-1",
+        "category": "school_target",
+        "title": "Wirral Grammar Assessment Target Mock",
+        "description": "Original Verbal Reasoning, Mathematics and Non-Verbal Reasoning practice for the shared Wirral assessment.",
+        "school": "Wirral non-Catholic grammar schools",
+        "stage": "Grammar School Assessment",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"v{i:02d}" for i in range(25, 33)]
+            + [f"m{i:02d}" for i in range(9, 17)]
+            + [f"n{i:02d}" for i in range(41, 49)]
+        ),
+        "source_ids": ("dfe-primary", "wirral-assessment-2027"),
+        "format_note": "Shortened three-subject practice; the official Wirral assessment has two papers taken on the same day.",
+        "last_verified": "2026-08-09",
+    },
+    "gloucestershire-grammar-1": {
+        "id": "gloucestershire-grammar-1",
+        "category": "school_target",
+        "title": "Gloucestershire Grammar Schools Target Mock",
+        "description": "Original verbal ability, numerical reasoning and non-verbal reasoning practice for the shared county test scope.",
+        "school": "Gloucestershire grammar schools",
+        "stage": "Grammar School Entrance Test",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(33, 39)]
+            + [f"v{i:02d}" for i in range(9, 15)]
+            + [f"m{i:02d}" for i in range(19, 31)]
+            + [f"n{i:02d}" for i in range(1, 13)]
+        ),
+        "source_ids": ("dfe-primary", "gloucestershire-test-2027"),
+        "format_note": "Condensed three-skill multiple-choice practice; the published Gloucestershire format uses two papers.",
+        "last_verified": "2026-08-09",
+    },
+    "slough-consortium-1": {
+        "id": "slough-consortium-1",
+        "category": "school_target",
+        "title": "Slough Consortium 11+ Target Mock",
+        "description": "Original English, Mathematics, Verbal and Non-Verbal Reasoning practice for the consortium's shared scope.",
+        "school": "Slough Consortium of Grammar Schools",
+        "stage": "Consortium 11+ Examination",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(1, 9)]
+            + [f"v{i:02d}" for i in range(41, 49)]
+            + [f"m{i:02d}" for i in range(17, 25)]
+            + [f"n{i:02d}" for i in range(25, 33)]
+        ),
+        "source_ids": ("dfe-primary", "slough-consortium-2027"),
+        "format_note": "Shortened four-subject practice; the official consortium examination uses two longer papers.",
+        "last_verified": "2026-08-09",
+    },
+    "medway-test-1": {
+        "id": "medway-test-1",
+        "category": "school_target",
+        "title": "Medway Test Target Mock",
+        "description": "Original English, Mathematics, Verbal and Spatial/Non-Verbal Reasoning practice reflecting Medway's published paper mix.",
+        "school": "Medway grammar schools",
+        "stage": "Medway Test",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(37, 49)]
+            + [f"m{i:02d}" for i in range(25, 37)]
+            + [f"v{i:02d}" for i in range(33, 36)]
+            + [f"n{i:02d}" for i in range(33, 36)]
+        ),
+        "source_ids": ("dfe-primary", "medway-test-2027"),
+        "format_note": "Condensed 2:2:1 English, Maths and Reasoning mix; the official Medway Test uses three separately timed papers.",
+        "last_verified": "2026-08-09",
+    },
+    "wilsons-second-stage-1": {
+        "id": "wilsons-second-stage-1",
+        "category": "school_target",
+        "title": "Wilson's Second Stage Skills Mock",
+        "description": "Original English and Mathematics practice for the subjects in Wilson's shared Second Stage examination.",
+        "school": "Wilson's School",
+        "stage": "Second Stage skills practice",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": (
+            "e35", "e37", "e59", "e60", "e63", "e41",
+            "e45", "e58", "e50", "e52", "e49", "e51",
+            "m53", "m50", "m52", "m54", "m49", "m51",
+            "m55", "m61", "m56", "m57", "m58", "m60",
+        ),
+        "source_ids": ("dfe-primary", "wilsons-second-stage-2027"),
+        "format_note": "Shortened multiple-choice skills check; the official Second Stage has separate written English and Maths papers and is not multiple choice.",
+        "last_verified": "2026-08-09",
+    },
+    "tiffin-girls-stage-one-1": {
+        "id": "tiffin-girls-stage-one-1",
+        "category": "school_target",
+        "title": "Tiffin Girls' Stage One Target Mock",
+        "description": "Original English and Mathematics questions for The Tiffin Girls' School Stage One subject scope.",
+        "school": "The Tiffin Girls' School",
+        "stage": "Stage One",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": (
+            "e07", "e10", "e12", "e17", "e21", "e01",
+            "e03", "e05", "e02", "e04", "e53", "e54",
+            "m53", "m38", "m39", "m48", "m33", "m34",
+            "m40", "m41", "m06", "m10", "m62", "m64",
+        ),
+        "source_ids": ("dfe-primary", "tiffin-girls-2027"),
+        "format_note": "Shortened English and Maths practice; the official Stage One questions are computer-marked and Stage Two uses written papers.",
+        "last_verified": "2026-08-09",
+    },
+    "st-olaves-stage-one-1": {
+        "id": "st-olaves-stage-one-1",
+        "category": "school_target",
+        "title": "St Olave's Stage One Target Mock",
+        "description": "Original English, Mathematics, Verbal and Non-Verbal Reasoning questions for the published Stage One scope.",
+        "school": "St Olave's Grammar School",
+        "stage": "Stage One",
+        "duration_minutes": 40,
+        "is_free": False,
+        "question_ids": (
+            "e31", "e35", "e33", "e34", "e40", "e49",
+            "m07", "m08", "m11", "m12", "m06", "m10",
+            "v33", "v39", "v35", "v38", "v40", "v36",
+            "n34", "n36", "n33", "n43", "n40", "n57",
+        ),
+        "source_ids": (
+            "dfe-primary",
+            "st-olaves-2027",
+            "st-olaves-public-sample",
+        ),
+        "format_note": "Shortened four-section multiple-choice practice based on the public Stage One format; it is not an official school paper.",
+        "last_verified": "2026-08-09",
+    },
+    "henrietta-barnett-first-round-1": {
+        "id": "henrietta-barnett-first-round-1",
+        "category": "school_target",
+        "title": "Henrietta Barnett First Round Target Mock",
+        "description": "Original English, Verbal and Non-Verbal Reasoning practice for the school's published First Round scope.",
+        "school": "The Henrietta Barnett School",
+        "stage": "First Round",
+        "duration_minutes": 40,
+        "is_free": False,
+        "question_ids": (
+            "e17", "e21", "e18", "e19", "e22", "e23", "e53", "e54",
+            "v17", "v19", "v18", "v25", "v22", "v24", "v27", "v20",
+            "n17", "n18", "n19", "n20", "n22", "n24", "n25", "n29",
+        ),
+        "source_ids": ("dfe-primary", "henrietta-barnett-2027"),
+        "format_note": "Shortened First Round practice only; the official Second Round separately tests written English and Mathematics.",
+        "last_verified": "2026-08-09",
+    },
+    "altrincham-girls-1": {
+        "id": "altrincham-girls-1",
+        "category": "school_target",
+        "title": "Altrincham Girls Entrance Target Mock",
+        "description": "Original Mathematics, Verbal and Non-Verbal Reasoning practice for the Trafford consortium scope used by AGGS.",
+        "school": "Altrincham Grammar School for Girls",
+        "stage": "Trafford GL Consortium Entrance Exam",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": (
+            "m53", "m31", "m32", "m33", "m34", "m26", "m30", "m56",
+            "v45", "v49", "v41", "v43", "v46", "v48", "v54", "v44",
+            "n42", "n46", "n49", "n41", "n44", "n43", "n40", "n57",
+        ),
+        "source_ids": ("dfe-primary", "altrincham-girls-2027"),
+        "format_note": "Shortened three-skill practice; the official Trafford consortium entrance exam has two papers of approximately one hour each.",
+        "last_verified": "2026-08-09",
+    },
+    "reading-fsce-1": {
+        "id": "reading-fsce-1",
+        "category": "school_target",
+        "title": "Reading School FSCE Target Mock",
+        "description": "Original cross-curricular questions applying Year 5 knowledge across the public FSCE subject range.",
+        "school": "Reading School",
+        "stage": "FSCE Entrance Test familiarisation",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(f"fsce{i:02d}" for i in range(1, 23)),
+        "source_ids": ("dfe-primary", "reading-fsce-2027"),
+        "format_note": "Shortened multiple-choice cross-curricular practice; the official FSCE test can also use short written answers and a creative response, which are not marked here.",
+        "last_verified": "2026-08-09",
+    },
+    "cchs-fsce-1": {
+        "id": "cchs-fsce-1",
+        "category": "school_target",
+        "title": "CCHS FSCE Target Mock",
+        "description": "Original cross-curricular, English and Mathematics practice for Chelmsford County High School for Girls' public FSCE scope.",
+        "school": "Chelmsford County High School for Girls",
+        "stage": "FSCE Entrance Test familiarisation",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"fsce{i:02d}" for i in range(1, 7)]
+            + [f"fsce{i:02d}" for i in range(9, 15)]
+            + [f"fsce{i:02d}" for i in range(17, 23)]
+            + ["e59", "e60", "e58", "e57"]
+            + ["m53", "m55", "m58", "m60"]
+        ),
+        "source_ids": ("dfe-primary", "cchs-fsce-2027"),
+        "format_note": "Shortened multiple-choice cross-curricular practice; the official FSCE test may use other answer formats and creative work that this mock does not score.",
+        "last_verified": "2026-08-09",
     },
 }

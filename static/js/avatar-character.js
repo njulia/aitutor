@@ -3,6 +3,45 @@
 (function initialiseHomeworkMagicAvatar(global) {
   if (global.HomeworkMagicAvatar) return;
 
+  // Character pages keep loading this one shared JavaScript entry point. The
+  // character stylesheet is requested only when a figure is actually drawn,
+  // so changing its appearance never requires cache-version edits in HTML.
+  const AVATAR_STYLESHEET_PATH = '/static/css/avatar-character.css';
+  let avatarStylesheetPromise = null;
+
+  function ensureStylesheet() {
+    if (avatarStylesheetPromise) return avatarStylesheetPromise;
+    const doc = global.document;
+    if (!doc || !doc.createElement) {
+      avatarStylesheetPromise = Promise.resolve(null);
+      return avatarStylesheetPromise;
+    }
+
+    let stylesheet = doc.getElementById('homework-magic-avatar-styles');
+    if (!stylesheet) {
+      stylesheet = doc.createElement('link');
+      stylesheet.id = 'homework-magic-avatar-styles';
+      stylesheet.rel = 'stylesheet';
+      stylesheet.href = AVATAR_STYLESHEET_PATH;
+      stylesheet.setAttribute('data-homework-magic-avatar-styles', '');
+      (doc.head || doc.documentElement).appendChild(stylesheet);
+    }
+
+    if (stylesheet.sheet) {
+      avatarStylesheetPromise = Promise.resolve(stylesheet);
+      return avatarStylesheetPromise;
+    }
+
+    avatarStylesheetPromise = new Promise((resolve) => {
+      stylesheet.addEventListener('load', () => resolve(stylesheet), {once: true});
+      stylesheet.addEventListener('error', () => {
+        console.warn('The learner character styles could not be loaded.');
+        resolve(null);
+      }, {once: true});
+    });
+    return avatarStylesheetPromise;
+  }
+
   const PROFILE_DEFAULTS = Object.freeze({
     character: 'girl',
     clothes: 'pink_dress',
@@ -637,7 +676,9 @@
   }
 
   function hydrateFigure(figure) {
-    if (!figure || figure.getAttribute('data-avatar-renderer') === 'vivid-3d') return figure;
+    if (!figure) return figure;
+    ensureStylesheet();
+    if (figure.getAttribute('data-avatar-renderer') === 'vivid-3d') return figure;
     while (figure.firstChild) figure.removeChild(figure.firstChild);
     figure.classList.add('hm-character-avatar');
     figure.setAttribute('data-character-figure', '');
@@ -842,6 +883,7 @@
   }
 
   global.HomeworkMagicAvatar = Object.freeze({
+    AVATAR_STYLESHEET_PATH,
     ATTRIBUTES,
     CHARACTER_PRESETS,
     DEFAULTS: PROFILE_DEFAULTS,
@@ -852,6 +894,7 @@
     applyAppearance,
     createFigure,
     enableTilt,
+    ensureStylesheet,
     growthForXp,
     hydrateFigure,
     normaliseState,

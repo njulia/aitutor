@@ -187,6 +187,28 @@ def test_test_account_kid_session_unlocks_all_paid_mock_exams(
     assert started.status_code == 200, started.text
 
 
+def test_free_and_test_user_paid_starts_accept_long_session_owner_secret(
+    authenticated_client,
+    unique_email,
+    monkeypatch,
+) -> None:
+    """Secret Manager newlines must not stop either shared start path."""
+    assert set_user_test_flag(unique_email, True)
+    monkeypatch.setenv("SESSION_OWNER_SECRET", ("A" * 64) + "\n")
+
+    free_started = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-diagnostic-1/start"
+    )
+    paid_started = authenticated_client.post(
+        "/api/elevenplus/mock-exams/common-full-1/start"
+    )
+
+    assert free_started.status_code == 200, free_started.text
+    assert paid_started.status_code == 200, paid_started.text
+    assert free_started.json()["attempt"]["token"]
+    assert paid_started.json()["attempt"]["token"]
+
+
 def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> None:
     account = authenticated_client.get("/api/account").json()["account"]
     create_subscription(

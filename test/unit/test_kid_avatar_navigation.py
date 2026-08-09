@@ -98,7 +98,7 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
 
 
 def test_kid_avatar_uses_css_character_layers_and_touch_sized_styles() -> None:
-    stylesheet = (ROOT / "static/css/theme.css").read_text(encoding="utf-8")
+    stylesheet = (ROOT / "static/css/avatar-character.css").read_text(encoding="utf-8")
 
     assert ".hm-character-avatar" in stylesheet
     assert '.hm-character-avatar[data-avatar-renderer="vivid-3d"]' in stylesheet
@@ -130,16 +130,17 @@ def test_kid_avatar_uses_css_character_layers_and_touch_sized_styles() -> None:
 
 
 @pytest.mark.parametrize("relative_path", ROLE_AWARE_PAGES)
-def test_role_aware_pages_load_fresh_avatar_assets(relative_path: str) -> None:
+def test_role_aware_pages_load_shared_avatar_entry_point(relative_path: str) -> None:
     page = (ROOT / "static" / relative_path).read_text(encoding="utf-8")
 
-    theme = "/static/css/theme.css?v=20260809-avatar-eyes-dresses-1"
-    renderer = "/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1"
-    navigation = "/static/js/auth-nav.js?v=20260809-avatar-polish-1"
+    theme = "/static/css/theme.css"
+    renderer = "/static/js/avatar-character.js"
+    navigation = "/static/js/auth-nav.js"
     assert theme in page
     assert renderer in page
     assert navigation in page
     assert page.index(renderer) < page.index(navigation)
+    assert "/static/css/avatar-character.css" not in page
 
 
 def test_learning_app_reuses_shared_session_request_for_avatar() -> None:
