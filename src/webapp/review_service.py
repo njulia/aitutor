@@ -184,14 +184,25 @@ def _usable_generated_practice(raw_result: Any) -> tuple[str, List[Dict[str, Any
     """Return learner-safe practice only when the model produced questions."""
     practice = public_homework_content(normalise_homework_content(raw_result)).strip()
     if not practice or practice.casefold() in {"none", "null", "undefined", "{}", "[]"}:
+        logger.debug("[Review] _usable_generated_practice: empty/null content after normalisation")
         return "", []
 
     section_match = _PRACTICE_SECTION_RE.search(practice)
     question_area = practice[section_match.end():] if section_match else practice
     if not _NUMBERED_PRACTICE_QUESTION_RE.search(question_area):
+        logger.debug(
+            "[Review] _usable_generated_practice: no numbered questions found in question_area (len=%d, preview=%r)",
+            len(question_area),
+            question_area[:300],
+        )
         return "", []
 
     questions = parse_public_questions(practice)
+    if not questions:
+        logger.debug(
+            "[Review] _usable_generated_practice: parse_public_questions returned empty (practice preview=%r)",
+            practice[:300],
+        )
     return (practice, questions) if questions else ("", [])
 
 
@@ -1166,10 +1177,10 @@ def improve_practice(
         homework_content,
         student_answers,
         profile,
-        _without_rendered_solution_methods(review_feedback),
+        "",  # 不再将 review_feedback 发送给 LLM，减少 token 用量
     )
     cache_key = stable_cache_key(
-        "practice_v3",
+        "practice_v4",
         subject,
         budget,
         homework_doc_id,
@@ -1186,6 +1197,7 @@ def improve_practice(
                 "from_cache": True,
             }
 
+    wrong_questions_section = "## Wrong questions (topics to focus on)\n"
     correct_answers_section = ""
     if homework_doc_id:
         try:
@@ -1199,7 +1211,14 @@ def improve_practice(
             )
             rows = _mark_rows(pairs, budget["student_answers"], subject)
             if rows:
-                correct_answers_section = "## Authoritative Correct Answers\n"
+                wrong_rows = [r for r in rows if not r["is_correct"]]
+                if wrong_rows:
+                    wrong_questions_section = "## Questions the student got wrong\n"
+                    for i, r in enumerate(wrong_rows, 1):
+                        wrong_questions_section += f"{i}. {r['question']} (student answered: {r['student_answer']})\n"
+                else:
+                    wrong_questions_section = "## All questions were answered correctly\n"
+                correct_answers_section = "## Correct Answers for Reference\n"
                 for i, r in enumerate(rows, 1):
                     correct_answers_section += (
                         f"Question {i}: {r['question']}\n"
@@ -1207,16 +1226,18 @@ def improve_practice(
                     )
         except Exception:
             logger.exception("RAG answer lookup failed in improve_practice for %s", homework_doc_id)
+            wrong_questions_section = (
+                "## Questions that need practice\n"
+                f"{compact_text(budget['homework_content'], 2_000)}\n"
+                f"Student answers: {compact_text(budget['student_answers'], 1_000)}\n"
+            )
 
     prompt = format_prompt(
         IMPROVE_PRACTICE_PROMPT,
-        homework_content=budget["homework_content"],
-        student_answer=budget["student_answers"],
         subject=compact_text(subject_display_name(subject), 80),
-        student_profile=str(_prompt_profile(budget["profile"])),
-        review_feedback=budget["review_feedback"] or "No review feedback available",
         year_group=budget["profile"].get("year_group", 3),
         age=budget["profile"].get("age", 7),
+        wrong_questions_section=compact_text(wrong_questions_section, 2_000),
         correct_answers_section=compact_text(correct_answers_section, 4_000),
     )
     raw_result = _complete_review(
@@ -1229,7 +1250,12 @@ def improve_practice(
     )
     practice, questions = _usable_generated_practice(raw_result)
     if not practice:
-        logger.warning("[Review] targeted_practice returned no usable numbered questions")
+        preview = str(raw_result or "")[:500]
+        logger.warning(
+            "[Review] targeted_practice returned no usable practice (raw=%r chars, preview=%r)",
+            len(str(raw_result or "")),
+            preview,
+        )
         return {
             "success": False,
             "error": PRACTICE_GENERATION_UNAVAILABLE_MESSAGE,

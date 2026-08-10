@@ -615,6 +615,12 @@ class LLMClient:
                 finally:
                     _PROVIDER_SEMAPHORE.release()
                 content = str(getattr(response, "text", "") or "")
+                # Gemini 3.6+ 的 text 属性可能为空，从 candidates 中提取文本
+                if not content:
+                    candidates = getattr(response, "candidates", None) or []
+                    if candidates:
+                        parts = getattr(getattr(candidates[0], "content", None), "parts", None) or []
+                        content = "".join(str(getattr(p, "text", "") or "") for p in parts)
                 usage_metadata = getattr(response, "usage_metadata", None)
                 usage = {
                     "prompt_tokens": getattr(usage_metadata, "prompt_token_count", None),

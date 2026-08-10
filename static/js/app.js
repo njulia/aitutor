@@ -3017,7 +3017,6 @@
                     ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read feedback aloud">\uD83D\uDD0A Read it to me</button>` : ''}
                 </div>
                 <div class="review-output teacher-feedback-output">${renderSafeMarkdown(review)}</div>
-                ${renderSolutionMethods(solutionMethods)}
             `;
 
             document.getElementById('results').style.display = 'block';
