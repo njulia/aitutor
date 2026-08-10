@@ -21,10 +21,10 @@
       gap: 20px;
       padding: 20px max(24px, calc((100vw - 1180px) / 2));
       color: white;
-      background: linear-gradient(135deg, #5c4bc5, #783eaa);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
-    header h1 { margin: 0; font-size: 1.35rem; }
-    header a { color: white; font-weight: 750; }
+    header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    header a { color: white; font-weight: 600; }
     main { width: min(1180px, calc(100% - 32px)); margin: 28px auto 60px; }
     .toolbar,
     .panel {
@@ -106,8 +106,9 @@
 </head>
 <body>
   <header>
-    <h1>Homework Magic gift orders</h1>
-    <a href="/admin">← Back to admin dashboard</a>
+    <h1>Homework Magic Admin - Gift Orders</h1>
+    <a href="/admin">Admin Dashboard</a>
+      <a href="/app">Learning app</a>
   </header>
   <main>
     <p id="order-message" class="message" role="status" aria-live="polite"></p>

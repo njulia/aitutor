@@ -24,7 +24,7 @@ def unique_question() -> str:
 
 def test_model_defaults() -> None:
     assert review_service.QUICK_REVIEW_MODEL == "deepseek-v4-flash"
-    assert review_service.DETAIL_REVIEW_MODEL == "gemini-2.5-flash"
+    assert review_service.DETAIL_REVIEW_MODEL == "gemini-3.6-flash"
 
 
 def test_explicit_quick_review_uses_quick_model() -> None:

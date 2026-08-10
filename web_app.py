@@ -1068,6 +1068,7 @@ class AdminUserCreateRequest(BaseModel):
     name: str
     year_group: int = 3
     age: int = 7
+    parent_username: Optional[str] = None
 
 
 class AdminSubscriptionCreateRequest(BaseModel):
@@ -1082,6 +1083,7 @@ class AdminUserUpdateRequest(BaseModel):
     year_group: Optional[int] = None
     age: Optional[int] = None
     is_active: Optional[bool] = None
+    parent_username: Optional[str] = None
 
 
 class SubscriptionRequest(BaseModel):
@@ -3019,6 +3021,7 @@ async def admin_create_user(request: AdminUserCreateRequest):
         name=request.name.strip(),
         year_group=request.year_group,
         age=request.age,
+        parent_username=request.parent_username,
     )
     return {"success": True, "student": student}
 

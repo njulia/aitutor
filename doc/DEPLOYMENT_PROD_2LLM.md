@@ -9,8 +9,8 @@
 **Model routing:**
 
 - Quick review / normal answer checking: `deepseek-v4-flash`
-- Explain in detail: `gemini-2.5-flash`
-- Help me improve: `gemini-2.5-flash`
+- Explain in detail: `gemini-3.6-flash`
+- Help me improve: `gemini-3.6-flash`
 
 > Important: Google currently lists Gemini 2.5 Flash retirement for 16 October 2026. Keep the model name configurable and plan a controlled upgrade before that date.
 
@@ -55,7 +55,7 @@ The model selection must be controlled by environment variables, not hard-coded 
 QUICK_REVIEW_PROVIDER=deepseek
 QUICK_REVIEW_MODEL=deepseek-v4-flash
 DETAIL_REVIEW_PROVIDER=vertex_ai
-DETAIL_REVIEW_MODEL=gemini-2.5-flash
+DETAIL_REVIEW_MODEL=gemini-3.6-flash
 
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 GOOGLE_CLOUD_PROJECT=homework-magic-prod
@@ -289,7 +289,7 @@ PORT=8080
 QUICK_REVIEW_PROVIDER=deepseek
 QUICK_REVIEW_MODEL=deepseek-v4-flash
 DETAIL_REVIEW_PROVIDER=vertex_ai
-DETAIL_REVIEW_MODEL=gemini-2.5-flash
+DETAIL_REVIEW_MODEL=gemini-3.6-flash
 EMBEDDING_MODEL=your-configured-embedding-model
 EMBEDDING_DIMENSION=384
 DEEPSEEK_BASE_URL=https://api.deepseek.com
@@ -939,7 +939,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --min-instances=0 \
   --max-instances=2 \
   --set-cloudsql-instances="$INSTANCE_CONNECTION_NAME" \
-  --set-env-vars="DEV_MODE=false,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION},QUICK_REVIEW_PROVIDER=deepseek,QUICK_REVIEW_MODEL=deepseek-v4-flash,DETAIL_REVIEW_PROVIDER=vertex_ai,DETAIL_REVIEW_MODEL=gemini-2.5-flash,DEEPSEEK_BASE_URL=https://api.deepseek.com,DB_USER=${DB_USER},DB_NAME=${DB_NAME},INSTANCE_CONNECTION_NAME=${INSTANCE_CONNECTION_NAME},EMBEDDING_MODEL=your-configured-embedding-model,EMBEDDING_DIMENSION=384" \
+  --set-env-vars="DEV_MODE=false,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION},QUICK_REVIEW_PROVIDER=deepseek,QUICK_REVIEW_MODEL=deepseek-v4-flash,DETAIL_REVIEW_PROVIDER=vertex_ai,DETAIL_REVIEW_MODEL=gemini-3.6-flash,DEEPSEEK_BASE_URL=https://api.deepseek.com,DB_USER=${DB_USER},DB_NAME=${DB_NAME},INSTANCE_CONNECTION_NAME=${INSTANCE_CONNECTION_NAME},EMBEDDING_MODEL=your-configured-embedding-model,EMBEDDING_DIMENSION=384" \
   --set-secrets="DEEPSEEK_API_KEY=DEEPSEEK_API_KEY:latest,DB_PASSWORD=DB_PASSWORD:latest,AUTH_SECRET=AUTH_SECRET:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest"
 ```
 
@@ -1054,7 +1054,7 @@ For detailed review:
 {
   "event": "llm_request",
   "provider": "vertex_ai",
-  "model": "gemini-2.5-flash",
+  "model": "gemini-3.6-flash",
   "operation": "explain_in_detail",
   "latency_ms": 1600,
   "success": true
@@ -1260,7 +1260,7 @@ Database migrations should be backwards compatible so that application rollback 
 17. Start with a small group of test parents.
 18. Review quality, latency, vector-search accuracy and cost before increasing traffic.
 19. Scale Cloud Run only after confirming Cloud SQL connection-pool limits.
-20. Upgrade from Gemini 2.5 Flash before its announced retirement date.
+20. Upgrade from Gemini 3.6 Flash before its announced retirement date.
 
 ---
 

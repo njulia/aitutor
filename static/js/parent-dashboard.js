@@ -234,7 +234,8 @@ function renderKids() {
     const edit = node('button', 'btn btn-secondary', 'Edit profile');
     edit.type = 'button';
     edit.addEventListener('click', () => showProfileForm(kid));
-    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`), edit);
+    title.append(edit);
+    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`));
 
     const codeValue = combinedLoginCode(kid.kid_code);
     const code = node('div', 'kid-code');
@@ -256,6 +257,14 @@ function renderKids() {
       });
       code.append(copy);
     }
+    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Login');
+    loginBtn.type = 'button';
+    loginBtn.setAttribute('aria-label', `Login as ${kid.name || 'learner'}`);
+    loginBtn.addEventListener('click', () => {
+      const loginUrl = `/kid-login${codeValue ? `?code=${encodeURIComponent(codeValue)}` : ''}`;
+      window.open(loginUrl, '_blank');
+    });
+    code.append(loginBtn);
     card.append(code);
 
     const wallet = kid.wallet || {};
@@ -277,6 +286,7 @@ function renderKids() {
     progressLink.href = `/progress?student_id=${encodeURIComponent(kid.id)}`;
     const rewardLink = node('a', 'btn-link', 'Rewards');
     rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
+    rewardLink.style.marginLeft = 'auto';
     actions.append(progressLink, rewardLink);
 //    const edit = node('button', 'btn btn-secondary', 'Edit profile');
 //    edit.type = 'button';

@@ -128,7 +128,7 @@ AVATAR_CLOTHES: dict[str, str] = {
     "purple_hoodie": "Purple hoodie",
     "blue_tshirt": "Blue T-shirt",
     "green_jumper": "Green jumper",
-    "pink_dress": "Pink dress",
+    "pink_jumper": "Pink jumper",
     "star_jacket": "Star jacket",
     "sunshine_dungarees": "Sunshine dungarees",
 }

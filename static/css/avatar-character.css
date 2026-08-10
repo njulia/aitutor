@@ -338,7 +338,7 @@ body.hm-page > header.hm-kid-avatar-host {
 .hm-kid-avatar-choice-symbol { font-size: 1rem; text-align: center; }
 .hm-kid-avatar-choice-label { font-size: .66rem; font-weight: 850; line-height: 1.15; }
 .hm-kid-avatar-choice-colour[data-avatar-choice="purple"] .hm-kid-avatar-choice-symbol { color: #6558e8; }
-.hm-kid-avatar-choice-colour[data-avatar-choice="teal"] .hm-kid-avatar-choice-symbol { color: #128878; }
+.hm-kid-avatar-choice-colour[data-avatar-choice="dark_brown"] .hm-kid-avatar-choice-symbol { color: #4a2c1a; }
 .hm-kid-avatar-choice-colour[data-avatar-choice="rose"] .hm-kid-avatar-choice-symbol { color: #dc5d69; }
 .hm-kid-avatar-choice-colour[data-avatar-choice="blue"] .hm-kid-avatar-choice-symbol { color: #347fc4; }
 
@@ -1068,6 +1068,15 @@ body.hm-page > header.hm-kid-avatar-host {
   border-radius: 999px;
   background: var(--hm-character-outfit-light);
 }
+.hm-character-avatar[data-clothes="pink_jumper"] .hm-character-clothes-detail {
+  left: 10%;
+  bottom: 12%;
+  width: 80%;
+  height: 5%;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hm-character-outfit-light);
+}
 .hm-character-avatar[data-clothes="purple_hoodie"] .hm-character-clothes-detail {
   top: 0;
   left: 37%;
@@ -1359,10 +1368,10 @@ body.hm-page > header.hm-kid-avatar-host {
   --hm-character-hair-light: #b9a1ef;
   --hm-character-hair-shadow: #422d7b;
 }
-.hm-character-avatar[data-hair-colour="teal"] {
-  --hm-character-hair: #278f8a;
-  --hm-character-hair-light: #72ccc5;
-  --hm-character-hair-shadow: #14504e;
+.hm-character-avatar[data-hair-colour="dark_brown"] {
+  --hm-character-hair: #4a2c1a;
+  --hm-character-hair-light: #8b6345;
+  --hm-character-hair-shadow: #1f0f06;
 }
 
 .hm-character-avatar[data-eye-colour="brown"] {
@@ -1420,6 +1429,24 @@ body.hm-page > header.hm-kid-avatar-host {
   --hm-character-outfit-light: #ffe278;
   --hm-character-outfit-shadow: #b56b13;
   --hm-character-trousers: #3f78a7;
+}
+.hm-character-avatar[data-clothes="pink_jumper"] {
+  --hm-character-outfit: #e8749a;
+  --hm-character-outfit-light: #fcc3d5;
+  --hm-character-outfit-shadow: #b84a6c;
+  --hm-character-trousers: #685478;
+}
+.hm-character-avatar[data-clothes="pink_vest"] {
+  --hm-character-outfit: #e8687e;
+  --hm-character-outfit-light: #ffb7c7;
+  --hm-character-outfit-shadow: #a83a4c;
+  --hm-character-trousers: #685478;
+}
+.hm-character-avatar[data-clothes="blue_vest"] {
+  --hm-character-outfit: #3b82c4;
+  --hm-character-outfit-light: #81c4f0;
+  --hm-character-outfit-shadow: #1e4d78;
+  --hm-character-trousers: #364d72;
 }
 
 .hm-character-avatar[data-bottoms="navy_trousers"] {
@@ -1557,6 +1584,24 @@ body.hm-page > header.hm-kid-avatar-host {
 .hm-character-avatar[data-clothes="blue_tshirt"] .hm-avatar3d-sleeve-short,
 .hm-character-avatar[data-clothes="blue_tshirt"] .hm-avatar3d-tshirt-forearm,
 .hm-character-avatar[data-clothes="blue_tshirt"] .hm-avatar3d-tshirt-cuff { display: inline; }
+/* 背心：无袖，只保留皮肤色前臂，手臂上移靠近身体 */
+.hm-character-avatar[data-clothes="pink_vest"] .hm-avatar3d-sleeve,
+.hm-character-avatar[data-clothes="blue_vest"] .hm-avatar3d-sleeve { display: none; }
+.hm-character-avatar[data-clothes="pink_vest"] .hm-avatar3d-tshirt-forearm,
+.hm-character-avatar[data-clothes="blue_vest"] .hm-avatar3d-tshirt-forearm {
+  display: inline;
+  fill: var(--hm-character-skin);
+  stroke: rgba(71,39,26,.2);
+  stroke-width: 1;
+}
+.hm-character-avatar[data-clothes="pink_vest"] .hm-avatar3d-proportions-arm-left,
+.hm-character-avatar[data-clothes="blue_vest"] .hm-avatar3d-proportions-arm-left {
+  transform: translateY(-20px) translateX(8px);
+}
+.hm-character-avatar[data-clothes="pink_vest"] .hm-avatar3d-proportions-arm-right,
+.hm-character-avatar[data-clothes="blue_vest"] .hm-avatar3d-proportions-arm-right {
+  transform: translateY(-20px) translateX(-8px);
+}
 .hm-avatar3d-neck { stroke: rgba(71,39,26,.2); stroke-width: 1.2; }
 .hm-avatar3d-hand { stroke: rgba(71,39,26,.25); stroke-width: 1.3; }
 .hm-avatar3d-fingers { fill: none; stroke: var(--hm-character-skin-shadow); stroke-width: 1.2; stroke-linecap: round; }
@@ -1577,6 +1622,7 @@ body.hm-page > header.hm-kid-avatar-host {
 .hm-character-avatar[data-clothes="purple_hoodie"] .hm-avatar3d-hoodie-detail,
 .hm-character-avatar[data-clothes="blue_tshirt"] .hm-avatar3d-tshirt-detail,
 .hm-character-avatar[data-clothes="green_jumper"] .hm-avatar3d-jumper-detail,
+.hm-character-avatar[data-clothes="pink_jumper"] .hm-avatar3d-jumper-detail,
 .hm-character-avatar[data-clothes="star_jacket"] .hm-avatar3d-jacket-detail,
 .hm-character-avatar[data-clothes="sunshine_dungarees"] .hm-avatar3d-dungarees-detail { display: inline; }
 .hm-character-avatar[data-bottoms="pink_dress"] .hm-avatar3d-clothes-detail,

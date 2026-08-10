@@ -53,6 +53,7 @@ progress_students = Table(
     Column("name", String(80), nullable=False, default="Learner"),
     Column("year_group", Integer, nullable=False, default=3),
     Column("age", Integer, nullable=False, default=7),
+    Column("parent_username", String(254), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("is_active", Boolean, nullable=False, default=True),
@@ -155,6 +156,24 @@ def _dict(row: Any) -> Dict[str, Any]:
 
 def init_db() -> None:
     metadata.create_all(_engine)
+    _ensure_progress_students_columns()
+
+
+def _ensure_progress_students_columns() -> None:
+    """为既有数据库补齐 parent_username 列，避免老库升级时报错。"""
+    engine = get_engine(_URL)
+    additions = [
+        ("progress_students", "parent_username", "VARCHAR(254)"),
+    ]
+    for table_name, column_name, column_type in additions:
+        try:
+            with engine.begin() as conn:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                )
+        except Exception:
+            # 列已存在时 ALTER 会失败，这是预期行为
+            pass
 
 
 def _raw_storage_enabled() -> bool:
@@ -399,7 +418,7 @@ def get_student_detail(student_id: str) -> Optional[Dict]:
 
 
 def update_student(student_id: str, **kwargs) -> bool:
-    allowed = {"name", "year_group", "age", "is_active"}
+    allowed = {"name", "year_group", "age", "is_active", "parent_username"}
     values = {key: value for key, value in kwargs.items() if key in allowed}
     if not values:
         return False
@@ -418,12 +437,12 @@ def delete_student(student_id: str) -> bool:
     return bool(result.rowcount)
 
 
-def create_student(name: str, year_group: int = 3, age: int = 8) -> Dict[str, Any]:
+def create_student(name: str, year_group: int = 3, age: int = 8, parent_username: str = None) -> Dict[str, Any]:
     student_id = f"legacy_{uuid.uuid4().hex[:12]}"
     now = _now()
     with _engine.begin() as conn:
-        conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, created_at=now, updated_at=now, is_active=True))
-    return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "is_active": 1, "created_at": now.isoformat()}
+        conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, parent_username=parent_username, created_at=now, updated_at=now, is_active=True))
+    return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "parent_username": parent_username, "is_active": 1, "created_at": now.isoformat()}
 
 
 def get_students_subject_breakdown(student_ids: List[str], since: datetime = None) -> Dict[str, List[Dict[str, Any]]]:

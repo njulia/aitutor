@@ -33,14 +33,14 @@ The requested model identifiers are valid as of the date above:
 
 ```dotenv
 QUICK_REVIEW_PROVIDER=deepseek
-QUICK_REVIEW_MODEL=deepseek-v4-pro
+QUICK_REVIEW_MODEL=deepseek-v4-flash
 DETAIL_REVIEW_PROVIDER=vertex_ai
-DETAIL_REVIEW_MODEL=gemini-3.5-flash
+DETAIL_REVIEW_MODEL=gemini-3.6-flash
 ```
 
-DeepSeek documents `deepseek-v4-pro` at the OpenAI-compatible base URL `https://api.deepseek.com`; Google documents the stable model code `gemini-3.5-flash`. See [DeepSeek models](https://api-docs.deepseek.com/quick_start/pricing/) and [Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash).
+DeepSeek documents `deepseek-v4-pro` at the OpenAI-compatible base URL `https://api.deepseek.com`; Google documents the stable model code `gemini-3.6-flash`. See [DeepSeek models](https://api-docs.deepseek.com/quick_start/pricing/) and [Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash).
 
-Important location point: run Cloud Run and Cloud SQL in London, but set `GOOGLE_CLOUD_LOCATION` only to a Vertex location where `gemini-3.5-flash` is enabled for your project. Start by checking Vertex AI Model Garden. If the model is available only through the global endpoint, use:
+Important location point: run Cloud Run and Cloud SQL in London, but set `GOOGLE_CLOUD_LOCATION` only to a Vertex location where `gemini-3.6-flash` is enabled for your project. Start by checking Vertex AI Model Garden. If the model is available only through the global endpoint, use:
 
 ```dotenv
 GOOGLE_CLOUD_LOCATION=global
@@ -68,9 +68,9 @@ TRUST_PROXY_HEADERS: "true"
 WEB_CONCURRENCY: "1"
 
 QUICK_REVIEW_PROVIDER: "deepseek"
-QUICK_REVIEW_MODEL: "deepseek-v4-pro"
+QUICK_REVIEW_MODEL: "deepseek-v4-flash"
 DETAIL_REVIEW_PROVIDER: "vertex_ai"
-DETAIL_REVIEW_MODEL: "gemini-3.5-flash"
+DETAIL_REVIEW_MODEL: "gemini-3.6-flash"
 GOOGLE_CLOUD_PROJECT: "YOUR_PROJECT_ID"
 GOOGLE_CLOUD_LOCATION: "global"
 DEEPSEEK_BASE_URL: "https://api.deepseek.com"
@@ -405,7 +405,7 @@ Manually test these journeys on staging:
 2. Year 1–6 homework from RAG.
 3. 11+ ordinary, topic mastery and week 1 year-round homework.
 4. Quick Review and confirm logs show `deepseek-v4-pro`.
-5. Explain in detail and Help me improve; confirm logs show `gemini-3.5-flash` on Vertex AI.
+5. Explain in detail and Help me improve; confirm logs show `gemini-3.6-flash` on Vertex AI.
 6. Progress page, support message, account deletion and session expiry.
 7. Upload limits and unsupported file types.
 

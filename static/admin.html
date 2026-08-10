@@ -147,7 +147,7 @@
                 <div class="table-header">
                     <h3>Students</h3>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <input class="search-box" type="text" placeholder="Search students..." id="userSearch" oninput="filterUsers()">
+                        <input class="search-box" type="text" placeholder="Search parent username..." id="userSearch" oninput="filterUsers()">
                         <button class="btn btn-primary" onclick="openAddUserModal()">+ Add User</button>
                     </div>
                 </div>
@@ -155,8 +155,8 @@
                     <thead>
                         <tr>
                             <th>Student ID</th>
-                            <th>Email</th>
-                            <th>Name</th>
+                            <th>Parent</th>
+                            <th>Nickname</th>
                             <th>Year</th>
                             <th>Age</th>
                             <th>Sessions</th>
@@ -349,6 +349,10 @@
                 <input type="text" id="editName">
             </div>
             <div class="form-group">
+                <label>Parent Username</label>
+                <input type="text" id="editParentUsername">
+            </div>
+            <div class="form-group">
                 <label>Year Group</label>
                 <select id="editYear">
                     <option value="1">Year 1</option>
@@ -379,6 +383,10 @@
                 <input type="text" id="addUserName" placeholder="Enter student name">
             </div>
             <div class="form-group">
+                <label>Parent Username</label>
+                <input type="text" id="addUserParentUsername" placeholder="e.g. parent@email.com">
+            </div>
+            <div class="form-group">
                 <label>Year Group</label>
                 <select id="addUserYear">
                     <option value="1">Year 1</option>
@@ -394,8 +402,8 @@
                 <input type="number" id="addUserAge" min="5" max="11" value="7">
             </div>
             <div class="actions">
-                <button class="btn" onclick="closeAddUserModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="createUser()">Create</button>
+                <button class="btn" type="button" onclick="closeAddUserModal()">Cancel</button>
+                <button class="btn btn-primary" type="button" onclick="createUser()">Create</button>
             </div>
         </div>
     </div>
@@ -513,9 +521,9 @@
             loadAuthUsers();
         }
 
-        // API helper
+        // API helper — always fetch fresh data, never use browser cache
         async function api(path) {
-            const resp = await fetch(API + path);
+            const resp = await fetch(API + path, { cache: 'no-store' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             return resp.json();
         }
@@ -569,7 +577,7 @@
             document.getElementById('usersTable').innerHTML = users.map(u => `
                 <tr>
                     <td><code>${u.student_id}</code></td>
-                    <td>${u.email || '-'}</td>
+                    <td>${u.parent_username || '-'}</td>
                     <td>${u.name || 'Student'}</td>
                     <td>Year ${u.year_group}</td>
                     <td>${u.age}</td>
@@ -587,9 +595,7 @@
         function filterUsers() {
             const q = document.getElementById('userSearch').value.toLowerCase();
             renderUsers(allUsers.filter(u =>
-                (u.student_id || '').toLowerCase().includes(q) ||
-                (u.email || '').toLowerCase().includes(q) ||
-                (u.name || '').toLowerCase().includes(q)
+                (u.parent_username || '').toLowerCase().includes(q)
             ));
         }
 
@@ -598,6 +604,7 @@
             if (!u) return;
             editingUserId = id;
             document.getElementById('editName').value = u.name || '';
+            document.getElementById('editParentUsername').value = u.parent_username || '';
             document.getElementById('editYear').value = u.year_group || 3;
             document.getElementById('editAge').value = u.age || 8;
             document.getElementById('editModal').classList.add('show');
@@ -616,6 +623,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         name: document.getElementById('editName').value,
+                        parent_username: document.getElementById('editParentUsername').value || null,
                         year_group: parseInt(document.getElementById('editYear').value),
                         age: parseInt(document.getElementById('editAge').value),
                     })
@@ -636,6 +644,7 @@
         // Add User
         function openAddUserModal() {
             document.getElementById('addUserName').value = '';
+            document.getElementById('addUserParentUsername').value = '';
             document.getElementById('addUserYear').value = '3';
             document.getElementById('addUserAge').value = '8';
             document.getElementById('addUserModal').classList.add('show');
@@ -647,6 +656,7 @@
 
         async function createUser() {
             const name = document.getElementById('addUserName').value.trim();
+            const parentUsername = document.getElementById('addUserParentUsername').value.trim();
             const yearGroup = parseInt(document.getElementById('addUserYear').value);
             const age = parseInt(document.getElementById('addUserAge').value);
             if (!name) { alert('Please enter a name'); return; }
@@ -654,7 +664,7 @@
                 const resp = await fetch(API + '/users', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: name, year_group: yearGroup, age: age })
+                    body: JSON.stringify({ name: name, parent_username: parentUsername || null, year_group: yearGroup, age: age })
                 });
                 const data = await resp.json();
                 if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }

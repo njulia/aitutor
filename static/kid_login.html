@@ -252,6 +252,17 @@
       }
     });
 
+    // 从 URL 参数自动填充 login code
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const codeFromUrl = params.get('code');
+      if (codeFromUrl) {
+        const input = document.getElementById('loginCode');
+        input.value = codeFromUrl.toUpperCase();
+        input.focus();
+      }
+    })();
+
     // 初始化
     renderSavedAccounts();
   </script>

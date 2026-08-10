@@ -31,7 +31,7 @@ QUICK_REVIEW_MODEL = (
 ).strip()
 DETAIL_REVIEW_MODEL = (
     os.getenv("DETAIL_REVIEW_MODEL")
-    or "gemini-2.5-flash"
+    or "gemini-3.6-flash"
 ).strip()
 
 PRACTICE_GENERATION_UNAVAILABLE_MESSAGE = (

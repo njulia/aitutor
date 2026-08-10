@@ -96,14 +96,16 @@
       {value: 'purple_hoodie', label: 'Purple hoodie', symbol: '💜'},
       {value: 'blue_tshirt', label: 'Blue T-shirt', symbol: '👕'},
       {value: 'green_jumper', label: 'Green jumper', symbol: '🌿'},
-      {value: 'pink_dress', label: 'Pink dress', symbol: '🌸'},
+      {value: 'pink_jumper', label: 'Pink jumper', symbol: '🌸'},
       {value: 'star_jacket', label: 'Star jacket', symbol: '⭐'},
       {value: 'sunshine_dungarees', label: 'Sunshine dungarees', symbol: '☀️'},
+      {value: 'pink_vest', label: 'Pink vest', symbol: '🩷'},
+      {value: 'blue_vest', label: 'Blue vest', symbol: '💙'},
     ],
     bottoms: [
       {value: 'match_outfit', label: 'Match my outfit', symbol: '✨'},
       {value: 'navy_trousers', label: 'Navy trousers', symbol: '👖'},
-      {value: 'blue_jeans', label: 'Blue jeans', symbol: '🩵'},
+      {value: 'blue_jeans', label: 'Blue jeans', symbol: '🔵'},
       {value: 'purple_trousers', label: 'Purple trousers', symbol: '💜'},
       {value: 'pink_dress', label: 'Pink dress', symbol: '👗'},
       {value: 'purple_dress', label: 'Purple dress', symbol: '👗'},
@@ -126,7 +128,7 @@
       {value: 'blonde', label: 'Blonde hair', symbol: '●', swatch: '#e3bd62'},
       {value: 'red', label: 'Red hair', symbol: '●', swatch: '#ad4e32'},
       {value: 'purple', label: 'Purple hair', symbol: '●', swatch: '#8b6bd6'},
-      {value: 'teal', label: 'Teal hair', symbol: '●', swatch: '#278f8a'},
+      {value: 'dark_brown', label: 'Dark brown hair', symbol: '●', swatch: '#4a2c1a'},
     ],
     hair_length: [
       {value: 'short', label: 'Short'},
@@ -215,7 +217,7 @@
     blonde: ['#ffe7a0', '#e3bd62', '#9d7326'],
     red: ['#e98258', '#ad4e32', '#642718'],
     purple: ['#b9a1ef', '#8061c7', '#422d7b'],
-    teal: ['#72ccc5', '#278f8a', '#14504e'],
+    dark_brown: ['#8b6345', '#4a2c1a', '#1f0f06'],
   });
   const EYE_PALETTES = Object.freeze({
     brown: ['#c58b5c', '#75472e', '#382015'],
@@ -230,6 +232,9 @@
     pink_dress: ['#ffb8d2', '#f24f94', '#b72164'],
     star_jacket: ['#7291e7', '#3656a9', '#20316b'],
     sunshine_dungarees: ['#ffe278', '#f0aa2b', '#b56b13'],
+    pink_vest: ['#ffb7c7', '#e8687e', '#a83a4c'],
+    blue_vest: ['#81c4f0', '#3b82c4', '#1e4d78'],
+    pink_jumper: ['#fcc3d5', '#e8749a', '#b84a6c'],
   });
   const TROUSER_PALETTES = Object.freeze({
     purple_hoodie: ['#7b90b5', '#49567e', '#293955'],
@@ -238,6 +243,9 @@
     pink_dress: ['#9d84ac', '#685478', '#3d2f49'],
     star_jacket: ['#737b9f', '#3c4365', '#22263e'],
     sunshine_dungarees: ['#7db0d4', '#3f78a7', '#244a69'],
+    pink_vest: ['#9d84ac', '#685478', '#3d2f49'],
+    blue_vest: ['#6b86ad', '#364d72', '#1e2c44'],
+    pink_jumper: ['#9d84ac', '#685478', '#3d2f49'],
   });
   const BOTTOM_PALETTES = Object.freeze({
     navy_trousers: ['#6682ad', '#324a72', '#1d2c48'],
