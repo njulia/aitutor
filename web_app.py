@@ -3001,9 +3001,77 @@ async def admin_marketing_summary(req: Request, days: int = 180):
 
 @app.get("/api/admin/users")
 async def admin_list_users(limit: int = 100, offset: int = 0):
-    """列出所有学生"""
-    from src.progress_db import list_all_students
-    users = list_all_students(limit=limit, offset=offset)
+    """列出所有学生（合并 progress_students 和 account_store students 两个表）"""
+    from sqlalchemy import func as sa_func, select
+    from src.progress_db import list_all_students, homework_sessions, _engine as progress_engine
+    from src.webapp.account_store import list_all_account_students
+    legacy_users = list_all_students(limit=limit + offset, offset=0)
+    account_users = list_all_account_students(limit=limit + offset, offset=0)
+    # 合并并统一字段格式
+    merged = []
+    for u in legacy_users:
+        merged.append({
+            "student_id": u.get("student_id"),
+            "parent_username": u.get("parent_username"),
+            "name": u.get("name", "Student"),
+            "year_group": u.get("year_group"),
+            "age": u.get("age"),
+            "total_sessions": 0,
+            "avg_score": None,
+            "is_active": u.get("is_active", True),
+            "created_at": str(u.get("created_at", "")),
+        })
+    for u in account_users:
+        merged.append({
+            "student_id": u.get("student_id"),
+            "parent_username": u.get("parent_username"),
+            "name": u.get("name", "Student"),
+            "year_group": u.get("year_group"),
+            "age": u.get("age"),
+            "total_sessions": 0,
+            "avg_score": None,
+            "is_active": u.get("is_active", True),
+            "created_at": str(u.get("created_at", "")),
+        })
+    # 批量查询 homework_sessions 统计（session 数和平均分）
+    all_ids = [u["student_id"] for u in merged if u["student_id"]]
+    session_stats: dict = {}
+    if all_ids:
+        with progress_engine.begin() as conn:
+            rows = conn.execute(
+                select(
+                    homework_sessions.c.student_id,
+                    sa_func.count().label("cnt"),
+                    sa_func.avg(homework_sessions.c.score).label("avg_score"),
+                ).where(
+                    homework_sessions.c.student_id.in_(all_ids)
+                ).group_by(homework_sessions.c.student_id)
+            ).all()
+        session_stats = {
+            r._mapping["student_id"]: {
+                "total_sessions": int(r._mapping["cnt"] or 0),
+                "avg_score": round(float(r._mapping["avg_score"]), 1) if r._mapping["avg_score"] is not None else None,
+            }
+            for r in rows
+        }
+    for u in merged:
+        sid = u["student_id"]
+        if sid in session_stats:
+            u["total_sessions"] = session_stats[sid]["total_sessions"]
+            u["avg_score"] = session_stats[sid]["avg_score"]
+    # 同一家长的孩子们排在一起；组内按昵称升序，组间按组内最新时间降序
+    groups: dict = {}
+    for u in merged:
+        key = u.get("parent_username") or "__no_parent__"
+        groups.setdefault(key, []).append(u)
+    for group in groups.values():
+        group.sort(key=lambda x: (x.get("name") or "").lower())
+    merged_sorted = []
+    for _, group in sorted(groups.items(), key=lambda kv: max(
+        (u.get("created_at") or "") for u in kv[1]
+    ), reverse=True):
+        merged_sorted.extend(group)
+    users = merged_sorted[offset:offset + limit]
     return {"success": True, "users": users}
 
 
@@ -3038,20 +3106,32 @@ async def admin_get_user(student_id: str):
 
 @app.put("/api/admin/users/{student_id}")
 async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
-    """更新学生信息"""
-    from src.progress_db import update_student
+    """更新学生信息（同时更新 progress_students 和 account_store students）"""
+    from src.progress_db import update_student as progress_update_student
+    from src.webapp.account_store import update_student as account_update_student, get_student as account_get_student
     updates = request.model_dump(exclude_unset=True)
     if request.is_active is not None:
         updates["is_active"] = 1 if request.is_active else 0
-    ok = update_student(student_id, **updates)
+    # 先尝试 account_store（新表）
+    student = account_get_student(student_id)
+    if student:
+        account_update_student(student_id, student["account_id"], **updates)
+        return {"success": True}
+    # 回退到 progress_students（旧表）
+    ok = progress_update_student(student_id, **updates)
     return {"success": ok}
 
 
 @app.delete("/api/admin/users/{student_id}")
 async def admin_delete_user(student_id: str):
     """删除学生及所有相关数据（UK GDPR 被遗忘权）"""
-    from src.progress_db import delete_student
-    ok = delete_student(student_id)
+    from src.progress_db import delete_student as progress_delete_student
+    from src.webapp.account_store import delete_student as account_delete_student, get_student as account_get_student
+    student = account_get_student(student_id)
+    if student:
+        account_delete_student(student_id, student["account_id"])
+        return {"success": True, "message": "Student and all related data deleted (GDPR erasure)"}
+    ok = progress_delete_student(student_id)
     return {"success": ok, "message": "Student and all related data deleted (GDPR erasure)"}
 
 

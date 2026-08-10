@@ -669,6 +669,27 @@ def get_student_by_kid_code(kid_code: str) -> Optional[Dict[str, Any]]:
         ).first())
 
 
+def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """管理员查询所有账号下的学生（跨账号），供管理后台使用"""
+    with _engine().begin() as conn:
+        rows = conn.execute(
+            select(
+                students.c.id.label("student_id"),
+                accounts.c.email.label("parent_username"),
+                students.c.name,
+                students.c.year_group,
+                students.c.age,
+                students.c.is_active,
+                students.c.created_at,
+            )
+            .select_from(students.join(accounts, students.c.account_id == accounts.c.id))
+            .order_by(students.c.created_at.desc())
+            .limit(max(1, min(limit, 10000)))
+            .offset(max(0, offset))
+        ).all()
+    return [_dict(row) or {} for row in rows]
+
+
 def subscription_active_for_student(
     student_id: str,
     required_plans: Optional[List[str]] = None,
@@ -729,6 +750,13 @@ def update_student(student_id: str, account_id: str, **updates: Any) -> Optional
             ).values(**values)
         )
         row = conn.execute(select(students).where(students.c.id == student_id)).first()
+    # 同步昵称到 progress_students，确保 admin dashboard 显示最新昵称
+    if nickname != current.get("name"):
+        try:
+            from src.progress_db import _update_progress_student_name
+            _update_progress_student_name(student_id, nickname)
+        except Exception:
+            pass
     return _dict(row)
 
 

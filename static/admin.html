@@ -37,7 +37,11 @@
         .table-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
         .table-header h3 { font-size: 16px; font-weight: 600; }
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; background: #fafafa; border-bottom: 1px solid #f0f0f0; cursor: pointer; user-select: none; white-space: nowrap; }
+        th:hover { color: #667eea; }
+        th .sort-arrow { margin-left: 4px; font-size: 10px; }
+        th.sort-asc { color: #667eea; }
+        th.sort-desc { color: #667eea; }
         td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid #f5f5f5; }
         tr:hover td { background: #f8f9ff; }
 
@@ -154,14 +158,14 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Student ID</th>
-                            <th>Parent</th>
-                            <th>Nickname</th>
-                            <th>Year</th>
-                            <th>Age</th>
-                            <th>Sessions</th>
-                            <th>Avg Score</th>
-                            <th>Status</th>
+                            <th data-sort="student_id" onclick="sortUsers('student_id')">Student ID <span class="sort-arrow"></span></th>
+                            <th data-sort="parent_username" onclick="sortUsers('parent_username')">Parent <span class="sort-arrow"></span></th>
+                            <th data-sort="name" onclick="sortUsers('name')">Nickname <span class="sort-arrow"></span></th>
+                            <th data-sort="year_group" onclick="sortUsers('year_group')">Year <span class="sort-arrow"></span></th>
+                            <th data-sort="age" onclick="sortUsers('age')">Age <span class="sort-arrow"></span></th>
+                            <th data-sort="total_sessions" onclick="sortUsers('total_sessions')">Sessions <span class="sort-arrow"></span></th>
+                            <th data-sort="avg_score" onclick="sortUsers('avg_score')">Avg Score <span class="sort-arrow"></span></th>
+                            <th data-sort="is_active" onclick="sortUsers('is_active')">Status <span class="sort-arrow"></span></th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -493,6 +497,8 @@
         const API = '/api/admin';
         let allUsers = [];
         let editingUserId = null;
+        let sortColumn = null;
+        let sortDir = 1; // 1 = asc, -1 = desc
 
         // Tab switching
         function switchTab(name) {
@@ -565,7 +571,7 @@
         // Users
         async function loadUsers() {
             try {
-                const data = await api('/users');
+                const data = await api('/users?limit=1000');
                 allUsers = data.users || [];
                 renderUsers(allUsers);
             } catch(e) {
@@ -574,7 +580,9 @@
         }
 
         function renderUsers(users) {
-            document.getElementById('usersTable').innerHTML = users.map(u => `
+            // 应用排序
+            const sorted = sortUsersData(users.slice());
+            document.getElementById('usersTable').innerHTML = sorted.map(u => `
                 <tr>
                     <td><code>${u.student_id}</code></td>
                     <td>${u.parent_username || '-'}</td>
@@ -590,6 +598,52 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function sortUsersData(users) {
+            if (!sortColumn) return users;
+            users.sort((a, b) => {
+                let va = a[sortColumn], vb = b[sortColumn];
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (sortColumn === 'student_id' || sortColumn === 'parent_username' || sortColumn === 'name') {
+                    va = String(va).toLowerCase();
+                    vb = String(vb).toLowerCase();
+                    return sortDir * va.localeCompare(vb);
+                }
+                if (sortColumn === 'is_active') {
+                    return sortDir * ((vb ? 1 : 0) - (va ? 1 : 0));
+                }
+                return sortDir * ((va > vb ? 1 : 0) - (va < vb ? 1 : 0));
+            });
+            return users;
+        }
+
+        function sortUsers(column) {
+            if (sortColumn === column) {
+                sortDir = -sortDir;
+            } else {
+                sortColumn = column;
+                sortDir = 1;
+            }
+            updateSortIndicator();
+            renderUsers(allUsers);
+        }
+
+        function updateSortIndicator() {
+            document.querySelectorAll('#panel-users th[data-sort]').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                const arrow = th.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = '';
+            });
+            if (sortColumn) {
+                const activeTh = document.querySelector(`#panel-users th[data-sort="${sortColumn}"]`);
+                if (activeTh) {
+                    activeTh.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+                    const arrow = activeTh.querySelector('.sort-arrow');
+                    if (arrow) arrow.textContent = sortDir === 1 ? '\u25B2' : '\u25BC';
+                }
+            }
         }
 
         function filterUsers() {

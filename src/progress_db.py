@@ -428,6 +428,17 @@ def update_student(student_id: str, **kwargs) -> bool:
     return bool(result.rowcount)
 
 
+def _update_progress_student_name(student_id: str, name: str) -> bool:
+    """同步学生在 progress_students 表中的昵称（供 account_store 调用）"""
+    with _engine.begin() as conn:
+        result = conn.execute(
+            update(progress_students)
+            .where(progress_students.c.student_id == student_id)
+            .values(name=name[:80], updated_at=_now())
+        )
+    return bool(result.rowcount)
+
+
 def delete_student(student_id: str) -> bool:
     with _engine.begin() as conn:
         conn.execute(delete(topic_progress).where(topic_progress.c.student_id == student_id))
