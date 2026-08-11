@@ -23,6 +23,7 @@ BUSINESS_CONTACT_EMAIL="${BUSINESS_CONTACT_EMAIL:-contact@homeworkmagic.co.uk}"
 ADMIN_EMAILS="${ADMIN_EMAILS:-admin@homeworkmagic.co.uk,admin1@homeworkmagic.co.uk,admin2@homeworkmagic.co.uk,niejing1@gmail.com}"
 PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
 RELEASE="${RELEASE:-}"
+DEPLOY_MIGRATION_TOKEN="${DEPLOY_MIGRATION_TOKEN:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')}"
 
 ASSUME_YES=false
 STAGING_ONLY=false
@@ -596,7 +597,7 @@ gcloud run services update "${SERVICE}" \
   --min-instances=0 \
   --max-instances=10 \
   --cpu-boost \
-  --update-env-vars="^#^BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}#ADMIN_EMAILS=${ADMIN_EMAILS}" \
+  --update-env-vars="^#^BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}#ADMIN_EMAILS=${ADMIN_EMAILS}#DEPLOY_MIGRATION_TOKEN=${DEPLOY_MIGRATION_TOKEN}" \
   --update-secrets="DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \
@@ -686,6 +687,28 @@ if ! check_application "${PRODUCTION_URL}"; then
   fi
   show_revision_logs "${NEW_REVISION}"
   exit 1
+fi
+
+log "Production checks passed"
+
+# 部署后数据迁移：将 progress_students 中的遗留学生同步到 account_store
+log "Running student migration (one-time data sync)"
+MIGRATION_RESULT="$(
+  curl --silent --show-error --location \
+    --request POST \
+    --connect-timeout 15 \
+    --max-time 120 \
+    --header "Authorization: Bearer ${DEPLOY_MIGRATION_TOKEN}" \
+    --header "Content-Type: application/json" \
+    "${PRODUCTION_URL}/api/admin/migrate-students"
+)" || {
+  printf 'Migration call failed (non-blocking). Rerun:\n  curl -X POST -H "Authorization: Bearer %s" %s/api/admin/migrate-students\n' \
+    "${DEPLOY_MIGRATION_TOKEN}" "${PRODUCTION_URL}" >&2
+}
+if [ -n "${MIGRATION_RESULT:-}" ]; then
+  printf 'Migration result: %s\n' "${MIGRATION_RESULT}"
+else
+  printf 'Migration returned empty response (non-blocking)\n'
 fi
 
 log "Code deployment completed"
