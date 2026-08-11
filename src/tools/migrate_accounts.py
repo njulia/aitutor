@@ -4,7 +4,13 @@ The application already migrates users lazily. Use this script when
 `src.progress_db.list_all_users()` is available and you want to prepare all
 accounts before deployment.
 """
+import os
+from dotenv import load_dotenv
 from src.webapp.account_store import ensure_account, ensure_default_student
+
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 
 def main() -> None:

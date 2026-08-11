@@ -1069,6 +1069,8 @@ class AdminUserCreateRequest(BaseModel):
     year_group: int = 3
     age: int = 7
     parent_username: Optional[str] = None
+    xp: int = 0
+    gift_points: int = 0
 
 
 class AdminSubscriptionCreateRequest(BaseModel):
@@ -1084,6 +1086,8 @@ class AdminUserUpdateRequest(BaseModel):
     age: Optional[int] = None
     is_active: Optional[bool] = None
     parent_username: Optional[str] = None
+    xp: Optional[int] = None
+    gift_points: Optional[int] = None
 
 
 class SubscriptionRequest(BaseModel):
@@ -2977,12 +2981,27 @@ async def admin_access_status(req: Request):
 async def admin_overview():
     """管理后台概览数据"""
     from src.admin import get_ai_metrics, _check_langfuse
-    from src.progress_db import list_all_students
 
     metrics = get_ai_metrics()
+    # 总数从 account_store 取（唯一学生来源）
+    student_growth = []
+    account_growth = []
+    subscription_by_plan = {}
+    try:
+        from src.webapp.account_store import count_all_students, student_growth_by_day, account_growth_by_day, subscription_growth_by_plan
+        total = count_all_students()
+        student_growth = student_growth_by_day(30)
+        account_growth = account_growth_by_day(30)
+        subscription_by_plan = subscription_growth_by_plan(30)
+    except Exception as e:
+        logger.exception("admin_overview: account_store 查询失败")
+        total = metrics["sessions"].get("total_sessions", 0)
     return {
         "sessions": metrics["sessions"],
-        "total_students": len(list_all_students(limit=10000)),
+        "total_students": total,
+        "student_growth": student_growth,
+        "account_growth": account_growth,
+        "subscription_by_plan": subscription_by_plan,
         "langfuse_enabled": _check_langfuse(),
         "timestamp": datetime.now(UTC).isoformat(),
     }
@@ -3001,40 +3020,19 @@ async def admin_marketing_summary(req: Request, days: int = 180):
 
 @app.get("/api/admin/users")
 async def admin_list_users(limit: int = 100, offset: int = 0):
-    """列出所有学生（合并 progress_students 和 account_store students 两个表）"""
+    """列出所有学生（account_store.students 为唯一来源）"""
     from sqlalchemy import func as sa_func, select
-    from src.progress_db import list_all_students, homework_sessions, _engine as progress_engine
+    from src.progress_db import homework_sessions, _engine as progress_engine
     from src.webapp.account_store import list_all_account_students
-    legacy_users = list_all_students(limit=limit + offset, offset=0)
-    account_users = list_all_account_students(limit=limit + offset, offset=0)
-    # 合并并统一字段格式
-    merged = []
-    for u in legacy_users:
-        merged.append({
-            "student_id": u.get("student_id"),
-            "parent_username": u.get("parent_username"),
-            "name": u.get("name", "Student"),
-            "year_group": u.get("year_group"),
-            "age": u.get("age"),
-            "total_sessions": 0,
-            "avg_score": None,
-            "is_active": u.get("is_active", True),
-            "created_at": str(u.get("created_at", "")),
-        })
-    for u in account_users:
-        merged.append({
-            "student_id": u.get("student_id"),
-            "parent_username": u.get("parent_username"),
-            "name": u.get("name", "Student"),
-            "year_group": u.get("year_group"),
-            "age": u.get("age"),
-            "total_sessions": 0,
-            "avg_score": None,
-            "is_active": u.get("is_active", True),
-            "created_at": str(u.get("created_at", "")),
-        })
-    # 批量查询 homework_sessions 统计（session 数和平均分）
-    all_ids = [u["student_id"] for u in merged if u["student_id"]]
+    from src.webapp.reward_store import get_reward_store
+
+    # account_store.students 为主表（关联 accounts 取家长邮箱）
+    all_users = list_all_account_students(limit=10000, offset=0)
+
+    # 收集所有 student_id
+    all_ids = [u["student_id"] for u in all_users if u["student_id"]]
+
+    # 批量查 homework_sessions 统计
     session_stats: dict = {}
     if all_ids:
         with progress_engine.begin() as conn:
@@ -3054,11 +3052,49 @@ async def admin_list_users(limit: int = 100, offset: int = 0):
             }
             for r in rows
         }
-    for u in merged:
-        sid = u["student_id"]
-        if sid in session_stats:
-            u["total_sessions"] = session_stats[sid]["total_sessions"]
-            u["avg_score"] = session_stats[sid]["avg_score"]
+
+    # 批量查 reward_wallets（xp / gift_points）
+    wallet_stats: dict = {}
+    try:
+        store = get_reward_store()
+        with store.engine.begin() as conn:
+            wallet_rows = conn.execute(
+                select(
+                    store.wallets.c.student_id,
+                    store.wallets.c.lifetime_xp,
+                    store.wallets.c.spendable_xp,
+                ).where(store.wallets.c.student_id.in_(all_ids))
+            ).all()
+        wallet_stats = {
+            r._mapping["student_id"]: {
+                "xp": int(r._mapping["lifetime_xp"] or 0),
+                "gift_points": int(r._mapping["spendable_xp"] or 0),
+            }
+            for r in wallet_rows
+        }
+    except Exception:
+        pass
+
+    # 组装统一格式
+    merged = []
+    for u in all_users:
+        sid = u.get("student_id")
+        ss = session_stats.get(sid, {})
+        ws = wallet_stats.get(sid, {})
+        merged.append({
+            "student_id": sid,
+            "parent_username": u.get("parent_username"),
+            "name": u.get("name", "Student"),
+            "year_group": u.get("year_group"),
+            "age": u.get("age"),
+            "xp": ws.get("xp", 0),
+            "gift_points": ws.get("gift_points", 0),
+            "total_sessions": ss.get("total_sessions", 0),
+            "avg_score": ss.get("avg_score"),
+            "is_active": u.get("is_active", True),
+            "created_at": str(u.get("created_at") or ""),
+        })
+
     # 同一家长的孩子们排在一起；组内按昵称升序，组间按组内最新时间降序
     groups: dict = {}
     for u in merged:
@@ -3077,62 +3113,130 @@ async def admin_list_users(limit: int = 100, offset: int = 0):
 
 @app.post("/api/admin/users")
 async def admin_create_user(request: AdminUserCreateRequest):
-    """管理员创建新学生"""
-    from src.progress_db import create_student
+    """管理员创建新学生（account_store 为主表）"""
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     if not (1 <= request.year_group <= 6):
         raise HTTPException(status_code=400, detail="Year group must be 1-6")
     if not (5 <= request.age <= 11):
         raise HTTPException(status_code=400, detail="Age must be 5-11")
-    student = create_student(
-        name=request.name.strip(),
-        year_group=request.year_group,
-        age=request.age,
-        parent_username=request.parent_username,
-    )
-    return {"success": True, "student": student}
+    name = request.name.strip()
+    from src.webapp.account_store import ensure_account, create_student as account_create_student
+    # 确定家长账号；无家长时生成内部账号承载学生
+    if request.parent_username:
+        try:
+            account = ensure_account(request.parent_username.strip())
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Parent account error: {e}")
+    else:
+        internal_email = f"admin-created-{uuid.uuid4().hex[:8]}@internal.local"
+        account = ensure_account(internal_email)
+    account_student = account_create_student(account["id"], name, request.year_group, request.age)
+    student_id = account_student["id"]
+    # 初始化 reward wallet
+    if request.xp or request.gift_points:
+        try:
+            from src.webapp.reward_store import get_reward_store
+            store = get_reward_store()
+            with store.engine.begin() as conn:
+                store._ensure_wallet(conn, account["id"], student_id)
+                conn.execute(
+                    store.wallets.update()
+                    .where(store.wallets.c.student_id == student_id)
+                    .values(
+                        lifetime_xp=request.xp,
+                        spendable_xp=request.gift_points,
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+        except Exception as e:
+            logger.warning("admin_create_user: reward wallet 初始化失败: %s", e)
+    return {"success": True, "student": account_student}
 
 
 @app.get("/api/admin/users/{student_id}")
 async def admin_get_user(student_id: str):
     """获取学生详细信息"""
-    from src.progress_db import get_student_detail
-    detail = get_student_detail(student_id)
-    if not detail:
+    from src.webapp.account_store import get_student as account_get_student
+    student = account_get_student(student_id)
+    if not student:
         raise HTTPException(status_code=404, detail="Student not found")
-    return {"success": True, "student": detail}
+    return {"success": True, "student": student}
 
 
 @app.put("/api/admin/users/{student_id}")
 async def admin_update_user(student_id: str, request: AdminUserUpdateRequest):
-    """更新学生信息（同时更新 progress_students 和 account_store students）"""
-    from src.progress_db import update_student as progress_update_student
+    """更新学生信息"""
     from src.webapp.account_store import update_student as account_update_student, get_student as account_get_student
-    updates = request.model_dump(exclude_unset=True)
-    if request.is_active is not None:
-        updates["is_active"] = 1 if request.is_active else 0
-    # 先尝试 account_store（新表）
     student = account_get_student(student_id)
-    if student:
-        account_update_student(student_id, student["account_id"], **updates)
-        return {"success": True}
-    # 回退到 progress_students（旧表）
-    ok = progress_update_student(student_id, **updates)
-    return {"success": ok}
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    updates = request.model_dump(exclude_unset=True)
+    # update_student 用 name / year_group / age / is_active
+    account_updates = {k: v for k, v in updates.items() if k in ("name", "year_group", "age", "is_active")}
+    if account_updates:
+        result = account_update_student(student_id, student["account_id"], **account_updates)
+        if not result:
+            raise HTTPException(status_code=404, detail="Student not found")
+    # xp / gift_points 写入 reward_wallets
+    if "xp" in updates or "gift_points" in updates:
+        try:
+            from src.webapp.reward_store import get_reward_store
+            store = get_reward_store()
+            with store.engine.begin() as conn:
+                store._ensure_wallet(conn, student["account_id"], student_id)
+                wallet_values = {"updated_at": datetime.now(UTC)}
+                if "xp" in updates:
+                    wallet_values["lifetime_xp"] = updates["xp"]
+                if "gift_points" in updates:
+                    wallet_values["spendable_xp"] = updates["gift_points"]
+                conn.execute(
+                    store.wallets.update()
+                    .where(store.wallets.c.student_id == student_id)
+                    .values(**wallet_values)
+                )
+        except Exception as e:
+            logger.warning("admin_update_user: reward wallet 更新失败: %s", e)
+    return {"success": True}
 
 
 @app.delete("/api/admin/users/{student_id}")
 async def admin_delete_user(student_id: str):
-    """删除学生及所有相关数据（UK GDPR 被遗忘权）"""
-    from src.progress_db import delete_student as progress_delete_student
-    from src.webapp.account_store import delete_student as account_delete_student, get_student as account_get_student
+    """软删除/恢复学生（toggle is_active）"""
+    from src.webapp.account_store import update_student as account_update_student, get_student as account_get_student
     student = account_get_student(student_id)
-    if student:
-        account_delete_student(student_id, student["account_id"])
-        return {"success": True, "message": "Student and all related data deleted (GDPR erasure)"}
-    ok = progress_delete_student(student_id)
-    return {"success": ok, "message": "Student and all related data deleted (GDPR erasure)"}
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    new_active = not student.get("is_active")
+    account_update_student(student_id, student["account_id"], is_active=new_active)
+    return {"success": True, "is_active": new_active, "message": "Student reactivated" if new_active else "Student deactivated"}
+
+
+@app.post("/api/admin/migrate-students")
+async def admin_migrate_students(req: Request):
+    """部署时自动运行：将 progress_students 迁移到 account_store"""
+    # 接受 admin session 或部署时一次性 token
+    token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    deploy_token = os.getenv("DEPLOY_MIGRATION_TOKEN") or ""
+    if deploy_token and token == deploy_token:
+        pass  # deploy-time machine auth
+    else:
+        _require_admin(req)
+    from src.tools.migrate_students import migrate as _do_migrate
+    result = await run_blocking(_do_migrate, timeout=60)
+    return {"success": True, "result": result}
+
+
+@app.get("/api/admin/migrate-students-status")
+async def admin_migrate_students_status(req: Request):
+    """部署后检查：progress_students 中还有多少未迁移的学生"""
+    _require_admin(req)
+    from src.progress_db import list_all_students
+    from src.webapp.account_store import get_student as account_get_student
+
+    legacy = list_all_students(limit=100000, offset=0)
+    unmigrated = sum(1 for s in legacy if s.get("student_id") and not account_get_student(s["student_id"]))
+    return {"success": True, "total_legacy": len(legacy), "unmigrated": unmigrated}
 
 
 @app.get("/api/admin/subscriptions")

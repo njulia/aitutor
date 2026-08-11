@@ -681,6 +681,8 @@ def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[st
                 students.c.age,
                 students.c.is_active,
                 students.c.created_at,
+                students.c.updated_at,
+                students.c.account_id,
             )
             .select_from(students.join(accounts, students.c.account_id == accounts.c.id))
             .order_by(students.c.created_at.desc())
@@ -688,6 +690,127 @@ def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[st
             .offset(max(0, offset))
         ).all()
     return [_dict(row) or {} for row in rows]
+
+
+def count_all_students() -> int:
+    """管理员：统计已激活学生总数"""
+    with _engine().begin() as conn:
+        return int(conn.execute(
+            select(func.count()).select_from(students).where(students.c.is_active.is_(True))
+        ).scalar_one() or 0)
+
+
+def student_growth_by_day(days: int = 30) -> List[Dict[str, Any]]:
+    """管理员：按日统计累计已激活学生数，供概览页面增长曲线使用"""
+    from datetime import UTC as _utc
+    from sqlalchemy import func as sa_func
+    since = datetime.now(_utc) - timedelta(days=days)
+    with _engine().begin() as conn:
+        rows = conn.execute(
+            select(
+                sa_func.date(students.c.created_at).label("date"),
+                sa_func.count().label("cnt"),
+            )
+            .where(students.c.created_at >= since)
+            .group_by(sa_func.date(students.c.created_at))
+            .order_by(sa_func.date(students.c.created_at))
+        ).all()
+        daily = {r._mapping["date"].isoformat(): int(r._mapping["cnt"]) for r in rows}
+        before_cnt = conn.execute(
+            select(func.count()).select_from(students).where(
+                students.c.created_at < since,
+                students.c.is_active.is_(True),
+            )
+        ).scalar_one() or 0
+    # 计算累计值
+    result = []
+    cumulative = before_cnt
+    current = datetime.now(_utc).date()
+    for i in range(days):
+        d = current - timedelta(days=days - 1 - i)
+        key = d.isoformat()
+        cumulative += daily.get(key, 0)
+        result.append({"date": key, "count": cumulative})
+    return result
+
+
+def account_growth_by_day(days: int = 30) -> List[Dict[str, Any]]:
+    """管理员：按日统计累计家长账号数，供概览页面使用"""
+    from datetime import UTC as _utc
+    from sqlalchemy import func as sa_func
+    since = datetime.now(_utc) - timedelta(days=days)
+    with _engine().begin() as conn:
+        rows = conn.execute(
+            select(
+                sa_func.date(accounts.c.created_at).label("date"),
+                sa_func.count().label("cnt"),
+            )
+            .where(accounts.c.created_at >= since)
+            .group_by(sa_func.date(accounts.c.created_at))
+            .order_by(sa_func.date(accounts.c.created_at))
+        ).all()
+        daily = {r._mapping["date"].isoformat(): int(r._mapping["cnt"]) for r in rows}
+        before_cnt = conn.execute(
+            select(func.count()).select_from(accounts).where(accounts.c.created_at < since)
+        ).scalar_one() or 0
+    result = []
+    cumulative = before_cnt
+    current = datetime.now(_utc).date()
+    for i in range(days):
+        d = current - timedelta(days=days - 1 - i)
+        key = d.isoformat()
+        cumulative += daily.get(key, 0)
+        result.append({"date": key, "count": cumulative})
+    return result
+
+
+def subscription_growth_by_plan(days: int = 30) -> Dict[str, List[Dict[str, Any]]]:
+    """管理员：按套餐按日统计累计订阅数，供概览页面多曲线图使用"""
+    from datetime import UTC as _utc
+    from sqlalchemy import func as sa_func
+    since = datetime.now(_utc) - timedelta(days=days)
+    known_plans = ["homework_monthly", "elevenplus_monthly", "family_monthly", "trial_5day", "beta_year3"]
+    with _engine().begin() as conn:
+        rows = conn.execute(
+            select(
+                sa_func.date(subscriptions.c.starts_at).label("date"),
+                subscriptions.c.plan,
+                sa_func.count().label("cnt"),
+            )
+            .where(subscriptions.c.starts_at >= since)
+            .group_by(sa_func.date(subscriptions.c.starts_at), subscriptions.c.plan)
+            .order_by(sa_func.date(subscriptions.c.starts_at))
+        ).all()
+        # 按 plan 分组每日新增
+        daily: Dict[str, Dict[str, int]] = {p: {} for p in known_plans}
+        for r in rows:
+            plan = str(r._mapping["plan"])
+            date_key = r._mapping["date"].isoformat()
+            cnt = int(r._mapping["cnt"] or 0)
+            if plan in daily:
+                daily[plan][date_key] = cnt
+        # 各 plan 的起始累计（之前的总数）
+        before: Dict[str, int] = {}
+        for plan in known_plans:
+            before[plan] = conn.execute(
+                select(func.count()).select_from(subscriptions).where(
+                    subscriptions.c.starts_at < since,
+                    subscriptions.c.plan == plan,
+                )
+            ).scalar_one() or 0
+
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    current = datetime.now(_utc).date()
+    for plan in known_plans:
+        cumulative = before[plan]
+        series = []
+        for i in range(days):
+            d = current - timedelta(days=days - 1 - i)
+            key = d.isoformat()
+            cumulative += daily[plan].get(key, 0)
+            series.append({"date": key, "count": cumulative})
+        result[plan] = series
+    return result
 
 
 def subscription_active_for_student(
@@ -750,17 +873,16 @@ def update_student(student_id: str, account_id: str, **updates: Any) -> Optional
             ).values(**values)
         )
         row = conn.execute(select(students).where(students.c.id == student_id)).first()
-    # 同步昵称到 progress_students，确保 admin dashboard 显示最新昵称
-    if nickname != current.get("name"):
-        try:
-            from src.progress_db import _update_progress_student_name
-            _update_progress_student_name(student_id, nickname)
-        except Exception:
-            pass
     return _dict(row)
 
 
 def delete_student(student_id: str, account_id: str) -> bool:
+    """软删除：将学生标记为 inactive，保留所有数据"""
+    return bool(update_student(student_id, account_id, is_active=False))
+
+
+def hard_delete_student(student_id: str, account_id: str) -> bool:
+    """硬删除：彻底移除学生档案（session 数据由 progress_db 管理）"""
     with _engine().begin() as conn:
         conn.execute(delete(learning_targets).where(learning_targets.c.student_id == student_id))
         result = conn.execute(

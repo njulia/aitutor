@@ -506,8 +506,20 @@ class AdminPathGuardMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/admin/")
         )
 
+    @staticmethod
+    def _has_deploy_token(request: Request) -> bool:
+        """检查请求是否携带有效的部署迁移 token"""
+        deploy_token = os.getenv("DEPLOY_MIGRATION_TOKEN") or ""
+        if not deploy_token:
+            return False
+        auth = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        return auth == deploy_token
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if self._is_admin_path(request.url.path):
+            # 部署迁移端点允许通过 DEPLOY_MIGRATION_TOKEN 认证，绕过 session 检查
+            if request.url.path == "/api/admin/migrate-students" and self._has_deploy_token(request):
+                return await call_next(request)
             try:
                 result = self.require_admin(request)
                 if isinstance(result, Awaitable):

@@ -59,9 +59,13 @@
         .btn-danger { background: #fee; color: #c53030; }
         .btn-danger:hover { background: #fdd; }
         .btn-sm { padding: 4px 12px; font-size: 12px; }
+        .btn-outline { background: transparent; border: 1px solid #667eea; color: #667eea; }
+        .btn-outline:hover { background: #667eea; color: white; }
 
         /* Chart placeholder */
         .chart-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .charts-row { display: flex; gap: 24px; margin-bottom: 24px; }
+        .charts-row .chart-container { margin-bottom: 0; }
         .chart-container h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
         .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 16px; }
         .bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
@@ -125,7 +129,7 @@
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('overview')">Overview</div>
-        <div class="tab" onclick="switchTab('users')">Users</div>
+        <div class="tab" onclick="switchTab('users')">Students</div>
         <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
@@ -141,7 +145,30 @@
             </div>
             <div class="chart-container">
                 <h3>Daily Activity (Last 30 Days)</h3>
-                <div class="bar-chart" id="dailyChart"></div>
+                <div class="bar-chart" id="dailyChart" style="height:auto;display:block">
+                    <canvas id="dailyLineCanvas" style="width:100%;height:200px"></canvas>
+                </div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-container" style="flex:1">
+                    <h3>Total Students (Last 30 Days)</h3>
+                    <div class="bar-chart" id="growthChart" style="height:auto;display:block">
+                        <canvas id="growthLineCanvas" style="width:100%;height:200px"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container" style="flex:1">
+                    <h3>Parent Accounts (Last 30 Days)</h3>
+                    <div class="bar-chart" id="accountGrowthChart" style="height:auto;display:block">
+                        <canvas id="accountGrowthCanvas" style="width:100%;height:200px"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h3>Subscriptions by Plan (Last 30 Days)</h3>
+                <div id="subPlanChart" style="height:auto;display:block">
+                    <canvas id="subPlanCanvas" style="width:100%;height:260px"></canvas>
+                </div>
+                <div id="subPlanLegend" style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:12px;"></div>
             </div>
         </div>
 
@@ -158,13 +185,14 @@
                 <table>
                     <thead>
                         <tr>
-                            <th data-sort="student_id" onclick="sortUsers('student_id')">Student ID <span class="sort-arrow"></span></th>
                             <th data-sort="parent_username" onclick="sortUsers('parent_username')">Parent <span class="sort-arrow"></span></th>
                             <th data-sort="name" onclick="sortUsers('name')">Nickname <span class="sort-arrow"></span></th>
                             <th data-sort="year_group" onclick="sortUsers('year_group')">Year <span class="sort-arrow"></span></th>
                             <th data-sort="age" onclick="sortUsers('age')">Age <span class="sort-arrow"></span></th>
                             <th data-sort="total_sessions" onclick="sortUsers('total_sessions')">Sessions <span class="sort-arrow"></span></th>
                             <th data-sort="avg_score" onclick="sortUsers('avg_score')">Avg Score <span class="sort-arrow"></span></th>
+                            <th data-sort="xp" onclick="sortUsers('xp')">XP <span class="sort-arrow"></span></th>
+                            <th data-sort="gift_points" onclick="sortUsers('gift_points')">Gift Pts <span class="sort-arrow"></span></th>
                             <th data-sort="is_active" onclick="sortUsers('is_active')">Status <span class="sort-arrow"></span></th>
                             <th>Actions</th>
                         </tr>
@@ -371,6 +399,14 @@
                 <label>Age</label>
                 <input type="number" id="editAge" min="5" max="11">
             </div>
+            <div class="form-group">
+                <label>XP</label>
+                <input type="number" id="editXp" min="0">
+            </div>
+            <div class="form-group">
+                <label>Gift Points</label>
+                <input type="number" id="editGiftPoints" min="0">
+            </div>
             <div class="actions">
                 <button class="btn" onclick="closeModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveUser()">Save</button>
@@ -404,6 +440,14 @@
             <div class="form-group">
                 <label>Age</label>
                 <input type="number" id="addUserAge" min="5" max="11" value="7">
+            </div>
+            <div class="form-group">
+                <label>XP</label>
+                <input type="number" id="addUserXp" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label>Gift Points</label>
+                <input type="number" id="addUserGiftPoints" min="0" value="0">
             </div>
             <div class="actions">
                 <button class="btn" type="button" onclick="closeAddUserModal()">Cancel</button>
@@ -562,7 +606,10 @@
                     <div class="stat-card"><div class="label">Total Students</div><div class="value">${data.total_students || 0}</div></div>
                     <div class="stat-card"><div class="label">Langfuse</div><div class="value">${data.langfuse_enabled ? 'Active' : 'Off'}</div><div class="sub">${data.langfuse_enabled ? 'Tracing enabled' : 'Not configured'}</div></div>
                 `;
-                renderBarChart('dailyChart', s.daily_activity || [], 'date', 'count');
+                renderLineChart('dailyLineCanvas', s.daily_activity || [], 'date', 'count');
+                renderLineChart('growthLineCanvas', data.student_growth || [], 'date', 'count');
+                renderLineChart('accountGrowthCanvas', data.account_growth || [], 'date', 'count');
+                renderMultiLineChart('subPlanCanvas', 'subPlanLegend', data.subscription_by_plan || {});
             } catch(e) {
                 document.getElementById('overviewStats').innerHTML = `<div class="stat-card"><div class="label">Error</div><div class="value" style="font-size:14px;color:#c53030">${e.message}</div></div>`;
             }
@@ -575,7 +622,7 @@
                 allUsers = data.users || [];
                 renderUsers(allUsers);
             } catch(e) {
-                document.getElementById('usersTable').innerHTML = `<tr><td colspan="9" style="color:#c53030">Error: ${e.message}</td></tr>`;
+                document.getElementById('usersTable').innerHTML = `<tr><td colspan="10" style="color:#c53030">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -584,17 +631,18 @@
             const sorted = sortUsersData(users.slice());
             document.getElementById('usersTable').innerHTML = sorted.map(u => `
                 <tr>
-                    <td><code>${u.student_id}</code></td>
                     <td>${u.parent_username || '-'}</td>
                     <td>${u.name || 'Student'}</td>
                     <td>Year ${u.year_group}</td>
                     <td>${u.age}</td>
                     <td>${u.total_sessions || 0}</td>
                     <td>${u.avg_score ? u.avg_score.toFixed(1) : '-'}</td>
+                    <td>${u.xp || 0}</td>
+                    <td>${u.gift_points || 0}</td>
                     <td><span class="badge ${u.is_active ? 'badge-green' : 'badge-red'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>
                         <button class="btn btn-primary btn-sm" onclick="editUser('${u.student_id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.student_id}')">Delete</button>
+                        <button class="btn ${u.is_active ? 'btn-danger' : 'btn-outline'} btn-sm" onclick="toggleUser('${u.student_id}')">${u.is_active ? 'Deactivate' : 'Reactivate'}</button>
                     </td>
                 </tr>
             `).join('');
@@ -661,6 +709,8 @@
             document.getElementById('editParentUsername').value = u.parent_username || '';
             document.getElementById('editYear').value = u.year_group || 3;
             document.getElementById('editAge').value = u.age || 8;
+            document.getElementById('editXp').value = u.xp || 0;
+            document.getElementById('editGiftPoints').value = u.gift_points || 0;
             document.getElementById('editModal').classList.add('show');
         }
 
@@ -680,6 +730,8 @@
                         parent_username: document.getElementById('editParentUsername').value || null,
                         year_group: parseInt(document.getElementById('editYear').value),
                         age: parseInt(document.getElementById('editAge').value),
+                        xp: parseInt(document.getElementById('editXp').value) || 0,
+                        gift_points: parseInt(document.getElementById('editGiftPoints').value) || 0,
                     })
                 });
                 closeModal();
@@ -687,8 +739,11 @@
             } catch(e) { alert('Error: ' + e.message); }
         }
 
-        async function deleteUser(id) {
-            if (!confirm('Delete student ' + id + '? This will remove all their data (GDPR right to erasure).')) return;
+        async function toggleUser(id) {
+            const u = allUsers.find(x => x.student_id === id);
+            if (!u) return;
+            const action = u.is_active ? 'deactivate' : 'reactivate';
+            if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} student ${id}?`)) return;
             try {
                 await fetch(API + '/users/' + id, { method: 'DELETE' });
                 loadUsers();
@@ -701,6 +756,8 @@
             document.getElementById('addUserParentUsername').value = '';
             document.getElementById('addUserYear').value = '3';
             document.getElementById('addUserAge').value = '8';
+            document.getElementById('addUserXp').value = '0';
+            document.getElementById('addUserGiftPoints').value = '0';
             document.getElementById('addUserModal').classList.add('show');
         }
 
@@ -713,12 +770,14 @@
             const parentUsername = document.getElementById('addUserParentUsername').value.trim();
             const yearGroup = parseInt(document.getElementById('addUserYear').value);
             const age = parseInt(document.getElementById('addUserAge').value);
+            const xp = parseInt(document.getElementById('addUserXp').value) || 0;
+            const giftPoints = parseInt(document.getElementById('addUserGiftPoints').value) || 0;
             if (!name) { alert('Please enter a name'); return; }
             try {
                 const resp = await fetch(API + '/users', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: name, parent_username: parentUsername || null, year_group: yearGroup, age: age })
+                    body: JSON.stringify({ name: name, parent_username: parentUsername || null, year_group: yearGroup, age: age, xp: xp, gift_points: giftPoints })
                 });
                 const data = await resp.json();
                 if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }
@@ -1135,6 +1194,139 @@
         }
 
         // Chart rendering
+        function renderLineChart(canvasId, data, labelKey, valueKey) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !data.length) {
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.font = '13px Inter, sans-serif';
+                    ctx.fillStyle = '#888';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
+                }
+                return;
+            }
+            // 取最近 30 天
+            const series = data.slice(-30);
+            const values = series.map(d => d[valueKey] || 0);
+            const maxVal = Math.max(...values, 1);
+            const labels = series.map(d => (d[labelKey] || '').slice(5)); // "MM-DD"
+
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 200 * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = '200px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = 200;
+            const pad = { top: 24, right: 16, bottom: 28, left: 24 };
+            const plotW = W - pad.left - pad.right;
+            const plotH = H - pad.top - pad.bottom;
+
+            // 背景
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, W, H);
+
+            // 网格线
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 1;
+            const gridLines = 4;
+            for (let i = 0; i <= gridLines; i++) {
+                const y = pad.top + (plotH / gridLines) * i;
+                ctx.beginPath();
+                ctx.moveTo(pad.left, y);
+                ctx.lineTo(W - pad.right, y);
+                ctx.stroke();
+            }
+
+            // Y 轴标签
+            ctx.fillStyle = '#999';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= gridLines; i++) {
+                const val = Math.round((maxVal / gridLines) * (gridLines - i));
+                const y = pad.top + (plotH / gridLines) * i;
+                ctx.fillText(String(val), pad.left - 6, y + 3);
+            }
+
+            // 计算点坐标
+            const points = values.map((v, i) => ({
+                x: pad.left + (plotW / Math.max(1, values.length - 1)) * i,
+                y: pad.top + plotH - (v / maxVal) * plotH,
+                v,
+            }));
+
+            // 填充区域渐变
+            const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+            grad.addColorStop(0, 'rgba(102,126,234,0.25)');
+            grad.addColorStop(1, 'rgba(102,126,234,0.02)');
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, H - pad.bottom);
+            points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(points[points.length - 1].x, H - pad.bottom);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // 曲线
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            // 使用 Catmull-Rom 样条实现平滑曲线
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[Math.max(0, i - 1)];
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const p3 = points[Math.min(points.length - 1, i + 2)];
+                const cp1x = p1.x + (p2.x - p0.x) / 6;
+                const cp1y = p1.y + (p2.y - p0.y) / 6;
+                const cp2x = p2.x - (p3.x - p1.x) / 6;
+                const cp2y = p2.y - (p3.y - p1.y) / 6;
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2.5;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // 数据点
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#667eea';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+
+            // X 轴标签（每隔 approx. 6 个点显示一个，避免重叠）
+            const step = Math.max(1, Math.floor(labels.length / 6));
+            ctx.fillStyle = '#999';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < labels.length; i += step) {
+                ctx.fillText(labels[i], points[i].x, H - pad.bottom + 14);
+            }
+            // 最后一条标签也画上，如果不冲突
+            const lastPt = points[points.length - 1];
+            if (points.length > 1 && (points.length - 1) % step !== 0) {
+                ctx.fillText(labels[labels.length - 1], lastPt.x, H - pad.bottom + 14);
+            }
+
+            // 顶部最大值标签
+            if (maxVal > 0) {
+                ctx.fillStyle = '#667eea';
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(`Max: ${maxVal}`, W - pad.right - 50, pad.top - 8);
+            }
+        }
+
         function renderBarChart(containerId, data, labelKey, valueKey) {
             const container = document.getElementById(containerId);
             if (!data.length) {
@@ -1154,6 +1346,160 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function renderMultiLineChart(canvasId, legendId, planData) {
+            const canvas = document.getElementById(canvasId);
+            const legendEl = document.getElementById(legendId);
+            if (!canvas) return;
+
+            // 套餐显示名称与颜色
+            const planConfig = {
+                homework_monthly: { label: 'Homework Premium', color: '#667eea' },
+                elevenplus_monthly: { label: '11+ Premium', color: '#f59e0b' },
+                family_monthly: { label: 'Family Premium', color: '#1a8a4a' },
+                trial_5day: { label: 'Five-day pass', color: '#6366f1' },
+                beta_year3: { label: 'Parent beta', color: '#ec4899' },
+            };
+
+            // 只保留有数据的套餐
+            const plans = Object.keys(planData).filter(k => {
+                const s = planData[k];
+                return Array.isArray(s) && s.length > 0 && s.some(d => d.count > 0);
+            });
+            if (plans.length === 0) {
+                const ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = 260;
+                ctx.clearRect(0, 0, rect.width, 260);
+                ctx.font = '13px Inter, sans-serif';
+                ctx.fillStyle = '#888';
+                ctx.textAlign = 'center';
+                ctx.fillText('No subscription data available', rect.width / 2, 130);
+                if (legendEl) legendEl.innerHTML = '';
+                return;
+            }
+
+            // 计算所有套餐的最大值
+            let maxVal = 1;
+            const allDates = new Set();
+            plans.forEach(plan => {
+                planData[plan].forEach(d => {
+                    maxVal = Math.max(maxVal, d.count || 0);
+                    allDates.add(d.date);
+                });
+            });
+
+            // 取日期标签
+            const sortedDates = Array.from(allDates).sort();
+            const labels = sortedDates.map(d => (d || '').slice(5)); // "MM-DD"
+
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            const H = 260;
+            canvas.width = rect.width * dpr;
+            canvas.height = H * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = H + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const pad = { top: 24, right: 80, bottom: 32, left: 32 };
+            const plotW = W - pad.left - pad.right;
+            const plotH = H - pad.top - pad.bottom;
+
+            // 背景
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, W, H);
+
+            // 网格线
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 1;
+            const gridLines = 4;
+            for (let i = 0; i <= gridLines; i++) {
+                const y = pad.top + (plotH / gridLines) * i;
+                ctx.beginPath();
+                ctx.moveTo(pad.left, y);
+                ctx.lineTo(W - pad.right, y);
+                ctx.stroke();
+            }
+
+            // Y 轴标签
+            ctx.fillStyle = '#999';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= gridLines; i++) {
+                const val = Math.round((maxVal / gridLines) * (gridLines - i));
+                const y = pad.top + (plotH / gridLines) * i;
+                ctx.fillText(String(val), pad.left - 6, y + 3);
+            }
+
+            // 构建 date -> index 映射
+            const dateIndex = {};
+            sortedDates.forEach((d, i) => { dateIndex[d] = i; });
+
+            // 绘制每条曲线
+            const planMeta = [];
+            plans.forEach(plan => {
+                const cfg = planConfig[plan] || { label: plan, color: '#999' };
+                const series = planData[plan];
+                // 构建按 date 索引的 map
+                const countMap = {};
+                series.forEach(d => { countMap[d.date] = d.count || 0; });
+                // 生成平滑的点数组（含所有日期）
+                const points = sortedDates.map((date, i) => ({
+                    x: pad.left + (plotW / Math.max(1, sortedDates.length - 1)) * i,
+                    y: pad.top + plotH - ((countMap[date] || 0) / maxVal) * plotH,
+                    v: countMap[date] || 0,
+                }));
+
+                // 绘制平滑曲线
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p0 = points[Math.max(0, i - 1)];
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    const p3 = points[Math.min(points.length - 1, i + 2)];
+                    const cp1x = p1.x + (p2.x - p0.x) / 6;
+                    const cp1y = p1.y + (p2.y - p0.y) / 6;
+                    const cp2x = p2.x - (p3.x - p1.x) / 6;
+                    const cp2y = p2.y - (p3.y - p1.y) / 6;
+                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+                }
+                ctx.strokeStyle = cfg.color;
+                ctx.lineWidth = 2.2;
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                planMeta.push({ cfg, points });
+            });
+
+            // X 轴标签
+            const step = Math.max(1, Math.floor(labels.length / 6));
+            ctx.fillStyle = '#999';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < labels.length; i += step) {
+                const x = pad.left + (plotW / Math.max(1, sortedDates.length - 1)) * i;
+                ctx.fillText(labels[i], x, H - pad.bottom + 14);
+            }
+            if (sortedDates.length > 1 && (sortedDates.length - 1) % step !== 0) {
+                const lastX = pad.left + plotW;
+                ctx.fillText(labels[labels.length - 1], lastX, H - pad.bottom + 14);
+            }
+
+            // 图例
+            if (legendEl) {
+                legendEl.innerHTML = planMeta.map(m => `
+                    <span style="display:inline-flex;align-items:center;gap:4px;">
+                        <span style="display:inline-block;width:12px;height:3px;background:${m.cfg.color};border-radius:2px;"></span>
+                        ${m.cfg.label}
+                    </span>
+                `).join('');
+            }
         }
 
         async function loadAdminMessageCount() {

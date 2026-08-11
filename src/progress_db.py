@@ -54,6 +54,8 @@ progress_students = Table(
     Column("year_group", Integer, nullable=False, default=3),
     Column("age", Integer, nullable=False, default=7),
     Column("parent_username", String(254), nullable=True),
+    Column("xp", Integer, nullable=False, default=0),
+    Column("gift_points", Integer, nullable=False, default=0),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("is_active", Boolean, nullable=False, default=True),
@@ -164,6 +166,8 @@ def _ensure_progress_students_columns() -> None:
     engine = get_engine(_URL)
     additions = [
         ("progress_students", "parent_username", "VARCHAR(254)"),
+        ("progress_students", "xp", "INTEGER DEFAULT 0"),
+        ("progress_students", "gift_points", "INTEGER DEFAULT 0"),
     ]
     for table_name, column_name, column_type in additions:
         try:
@@ -249,14 +253,6 @@ def save_homework_session(
     session_id = f"hw_{uuid.uuid4().hex}"
     store_raw = _raw_storage_enabled()
     with _engine.begin() as conn:
-        if not conn.execute(select(progress_students.c.student_id).where(progress_students.c.student_id == student_id)).first():
-            try:
-                conn.execute(insert(progress_students).values(
-                    student_id=student_id, name="Learner", year_group=int(year_group), age=max(5, min(12, int(year_group)+4)),
-                    created_at=now, updated_at=now, is_active=True,
-                ))
-            except IntegrityError:
-                pass
         conn.execute(insert(homework_sessions).values(
             id=session_id, student_id=student_id, subject=subject[:80], year_group=int(year_group),
             homework_content=homework_content if store_raw else None,
@@ -418,7 +414,7 @@ def get_student_detail(student_id: str) -> Optional[Dict]:
 
 
 def update_student(student_id: str, **kwargs) -> bool:
-    allowed = {"name", "year_group", "age", "is_active", "parent_username"}
+    allowed = {"name", "year_group", "age", "is_active", "parent_username", "xp", "gift_points"}
     values = {key: value for key, value in kwargs.items() if key in allowed}
     if not values:
         return False
@@ -440,6 +436,12 @@ def _update_progress_student_name(student_id: str, name: str) -> bool:
 
 
 def delete_student(student_id: str) -> bool:
+    """软删除：将学生标记为 inactive，保留所有数据"""
+    return update_student(student_id, is_active=False)
+
+
+def hard_delete_student(student_id: str) -> bool:
+    """硬删除（UK GDPR 被遗忘权）：彻底移除学生及所有关联数据"""
     with _engine.begin() as conn:
         conn.execute(delete(topic_progress).where(topic_progress.c.student_id == student_id))
         conn.execute(delete(practice_sessions).where(practice_sessions.c.student_id == student_id))
@@ -448,12 +450,12 @@ def delete_student(student_id: str) -> bool:
     return bool(result.rowcount)
 
 
-def create_student(name: str, year_group: int = 3, age: int = 8, parent_username: str = None) -> Dict[str, Any]:
-    student_id = f"legacy_{uuid.uuid4().hex[:12]}"
+def create_student(name: str, year_group: int = 3, age: int = 8, parent_username: str = None, xp: int = 0, gift_points: int = 0, student_id: str = None) -> Dict[str, Any]:
+    student_id = student_id or f"legacy_{uuid.uuid4().hex[:12]}"
     now = _now()
     with _engine.begin() as conn:
-        conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, parent_username=parent_username, created_at=now, updated_at=now, is_active=True))
-    return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "parent_username": parent_username, "is_active": 1, "created_at": now.isoformat()}
+        conn.execute(insert(progress_students).values(student_id=student_id, name=" ".join(name.split())[:80], year_group=year_group, age=age, parent_username=parent_username, xp=xp, gift_points=gift_points, created_at=now, updated_at=now, is_active=True))
+    return {"student_id": student_id, "name": name, "year_group": year_group, "age": age, "parent_username": parent_username, "xp": xp, "gift_points": gift_points, "is_active": 1, "created_at": now.isoformat()}
 
 
 def get_students_subject_breakdown(student_ids: List[str], since: datetime = None) -> Dict[str, List[Dict[str, Any]]]:
@@ -500,12 +502,36 @@ def get_students_subject_breakdown(student_ids: List[str], since: datetime = Non
     return result
 
 
-def get_all_sessions_summary() -> Dict[str, Any]:
+def get_all_sessions_summary(days: int = 30) -> Dict[str, Any]:
+    since = _now() - timedelta(days=days)
     with _engine.begin() as conn:
         total = conn.execute(select(func.count()).select_from(homework_sessions)).scalar_one()
         avg = conn.execute(select(func.avg(homework_sessions.c.score)).where(homework_sessions.c.score.is_not(None))).scalar()
         subjects = conn.execute(select(homework_sessions.c.subject, func.count().label("count"), func.avg(homework_sessions.c.score).label("avg_score")).where(homework_sessions.c.score.is_not(None)).group_by(homework_sessions.c.subject)).all()
-    return {"total_sessions": int(total or 0), "average_score": round(float(avg),1) if avg is not None else None, "by_subject": [{"subject":r._mapping["subject"],"count":int(r._mapping["count"]),"avg_score":round(float(r._mapping["avg_score"]),1)} for r in subjects], "daily_activity": []}
+        # 每日活动统计：按日期分组统计 session 数量
+        daily_rows = conn.execute(
+            select(
+                func.date(homework_sessions.c.created_at).label("date"),
+                func.count().label("cnt"),
+            )
+            .where(homework_sessions.c.created_at >= since)
+            .group_by(func.date(homework_sessions.c.created_at))
+            .order_by(func.date(homework_sessions.c.created_at))
+        ).all()
+        daily_activity = [
+            {"date": r._mapping["date"], "count": int(r._mapping["cnt"])}
+            for r in daily_rows
+        ]
+    return {
+        "total_sessions": int(total or 0),
+        "average_score": round(float(avg), 1) if avg is not None else None,
+        "by_subject": [
+            {"subject": r._mapping["subject"], "count": int(r._mapping["count"]),
+             "avg_score": round(float(r._mapping["avg_score"]), 1)}
+            for r in subjects
+        ],
+        "daily_activity": daily_activity,
+    }
 
 
 def _hash_password(password: str, salt_hex: str) -> str:

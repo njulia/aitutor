@@ -15,16 +15,21 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     header {
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .header-inner {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 20px;
-      padding: 20px max(24px, calc((100vw - 1180px) / 2));
-      color: white;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px 24px;
     }
-    header h1 { margin: 0; font-size: 22px; font-weight: 600; }
-    header a { color: white; font-weight: 600; }
+    .brand { font-size: 1.25rem; font-weight: 800; text-decoration: none; color: white; }
+    .site-nav { display: flex; gap: 14px; flex-wrap: wrap; }
+    .site-nav a { font-weight: 650; text-decoration: none; color: white; }
     main { width: min(1180px, calc(100% - 32px)); margin: 28px auto 60px; }
     .toolbar,
     .panel {
@@ -105,11 +110,15 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Homework Magic Admin - Gift Orders</h1>
-    <a href="/admin">Admin Dashboard</a>
-      <a href="/app">Learning app</a>
-  </header>
+<header class="site-header">
+    <div class="header-inner">
+        <a class="brand" href="/admin">Homework Magic Admin - Gift Orders</a>
+        <nav class="site-nav" aria-label="Admin navigation">
+            <a href="/admin">Admin Dashboard</a>
+            <a href="/app">Learning app</a>
+        </nav>
+    </div>
+</header>
   <main>
     <p id="order-message" class="message" role="status" aria-live="polite"></p>
     <section class="toolbar" aria-label="Order filters">
