@@ -584,3 +584,11 @@ body.mock-page {
     transition-duration: .01ms !important;
   }
 }
+
+.study-plan-days { display: grid; gap: 12px; }
+.study-plan-day { background: #f8f9ff; border: 1px solid #e0e5f0; border-radius: 12px; padding: 14px; }
+.study-plan-day h3 { margin: 0 0 6px; }
+.study-plan-day p { margin: 0 0 10px; color: #68758d; }
+.study-plan-day ol { margin: 0; padding-left: 22px; }
+.study-plan-day ol > li { margin-bottom: 10px; }
+.study-plan-day ul { margin: 5px 0 0; padding-left: 20px; }

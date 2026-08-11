@@ -92,6 +92,15 @@ def test_every_exam_is_unique_and_uses_only_declared_public_sources() -> None:
                 "bright-futures.co.uk",
                 "reading-school.co.uk",
                 "cchs.co.uk",
+                "topschoolguide.com",
+                "nlcs.org.uk",
+                "clsg.org.uk",
+                "highgateschool.org.uk",
+                "kehs.org.uk",
+                "wimbledonhigh.gdst.net",
+                "putneyhigh.gdst.net",
+                "brightoncollege.org.uk",
+                "habsgirls.org.uk",
             )
         )
 
@@ -110,7 +119,7 @@ def test_expanded_catalogue_preserves_initial_mocks_and_question_bank() -> None:
         "lancaster-royal-grammar-1",
     }
 
-    assert len(mocks.EXAMS) == 29
+    assert len(mocks.EXAMS) == 38
     assert len(mocks._QUESTIONS) == 278
     assert expected_new_exams <= set(mocks.EXAMS)
     assert all(not mocks.EXAMS[exam_id]["is_free"] for exam_id in expected_new_exams)
@@ -178,7 +187,6 @@ def test_catalogue_adds_five_public_source_area_target_mocks() -> None:
         assert source_id in exam["source_ids"]
         assert source_id in mocks.PUBLIC_SOURCES
         assert "official" in exam["format_note"].casefold() or "published" in exam["format_note"].casefold()
-
 
 def test_new_area_target_mocks_match_their_declared_subject_scope() -> None:
     expected_subjects = {
@@ -249,38 +257,31 @@ def test_new_area_target_mocks_match_their_declared_subject_scope() -> None:
         assert exam["is_free"] is False
 
 
-def test_catalogue_adds_only_the_seven_supported_new_school_targets() -> None:
+def test_catalogue_adds_supported_top_50_a_level_school_targets() -> None:
     expected_new_targets = {
-        "wilsons-second-stage-1": ("Wilson's School", "wilsons-second-stage-2027"),
-        "tiffin-girls-stage-one-1": ("The Tiffin Girls' School", "tiffin-girls-2027"),
-        "st-olaves-stage-one-1": ("St Olave's Grammar School", "st-olaves-2027"),
-        "henrietta-barnett-first-round-1": (
-            "The Henrietta Barnett School",
-            "henrietta-barnett-2027",
-        ),
-        "altrincham-girls-1": (
-            "Altrincham Grammar School for Girls",
-            "altrincham-girls-2027",
-        ),
-        "reading-fsce-1": ("Reading School", "reading-fsce-2027"),
-        "cchs-fsce-1": (
-            "Chelmsford County High School for Girls",
-            "cchs-fsce-2027",
-        ),
+        "nlcs-11plus-1": ("North London Collegiate School", "nlcs-11plus-2027"),
+        "clsg-11plus-1": ("City of London School for Girls", "clsg-11plus-2027"),
+        "highgate-11plus-1": ("Highgate School", "highgate-11plus-2027"),
+        "kehs-11plus-1": ("King Edward VI High School for Girls", "kehs-11plus-2027"),
+        "wimbledon-high-11plus-1": ("Wimbledon High School", "wimbledon-high-11plus-2027"),
+        "putney-high-11plus-1": ("Putney High School", "putney-high-11plus-2027"),
+        "brighton-college-11plus-1": ("Brighton College", "brighton-11plus-2027"),
+        "habs-boys-11plus-1": ("Haberdashers' Boys' School", "habs-11plus-2027"),
+        "habs-girls-11plus-1": ("Haberdashers' Girls' School", "habs-11plus-2027"),
     }
 
     assert sum(
         exam["category"] == "school_target" for exam in mocks.EXAMS.values()
-    ) == 20
+    ) == 29
     for exam_id, (school, source_id) in expected_new_targets.items():
         exam = mocks.EXAMS[exam_id]
         assert exam["school"] == school
         assert exam["category"] == "school_target"
         assert exam["is_free"] is False
-        assert exam["last_verified"] == "2026-08-09"
+        assert exam["last_verified"] == "2026-08-11"
         assert source_id in exam["source_ids"]
         assert source_id in mocks.PUBLIC_SOURCES
-        assert "official" in exam["format_note"].casefold()
+        assert "original" in exam["format_note"].casefold()
 
     locked = {
         exam["id"]: exam
@@ -292,7 +293,6 @@ def test_catalogue_adds_only_the_seven_supported_new_school_targets() -> None:
     }
     assert all(not locked[exam_id]["available"] for exam_id in expected_new_targets)
     assert all(unlocked[exam_id]["available"] for exam_id in expected_new_targets)
-
 
 def test_new_school_targets_match_published_subject_scopes() -> None:
     traditional_scopes = {

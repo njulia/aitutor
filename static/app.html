@@ -1066,6 +1066,9 @@
         }
     </style>
     <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+
+<style>
+</style>
 </head>
 <body class="hm-app">
     <a class="hm-skip-link" href="#homework">Skip to learning choices</a>
@@ -1106,6 +1109,9 @@
             </button>
             <button class="tab" type="button" onclick="window.location.href='/elevenplus-mock-exams'">
                 📝 11+ mock exams
+            </button>
+            <button class="tab" id="mock-study-plan-tab" type="button" hidden onclick="window.location.href='/elevenplus-study-plan'">
+                📅 30-day improvement plan from your 11+ mock exam
             </button>
             <button class="tab" type="button" onclick="window.location.href='/elevenplus-year-round-plan'">
                 📝 11+ year-round plan
@@ -1595,5 +1601,39 @@
     <script src="/static/js/text-to-speech.js?v=20260806" defer></script>
     <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp-20260806-family-tts-mocks-make-homework-render-fix-11plus-saved-plan-kid-avatar-review-stable-cute-character-avatar-detail-review-stable-uploaded-review-isolation" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
+    <script>
+    (function () {
+        const tab = document.getElementById('mock-study-plan-tab');
+        if (!tab) return;
+
+        async function refreshMockStudyPlanTab() {
+            try {
+                const response = await fetch('/api/elevenplus/mock-exams/study-plan', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (response.status === 401 || response.status === 403 || response.status === 404) {
+                    tab.hidden = true;
+                    return;
+                }
+                const data = await response.json();
+                const status = String(data.status || '');
+                const shouldShow = data.success === true && (
+                    data.ready === true ||
+                    status === 'preparing' ||
+                    status === 'processing'
+                );
+                tab.hidden = !shouldShow;
+            } catch (error) {
+                // Do not expose a study-plan tab when its state cannot be verified.
+                tab.hidden = true;
+            }
+        }
+
+        refreshMockStudyPlanTab();
+        window.setInterval(refreshMockStudyPlanTab, 15000);
+    })();
+    </script>
+
 </body>
 </html>

@@ -406,6 +406,54 @@
     return match ? match.text : '';
   }
 
+  async function loadStudyPlan() {
+    const panel = document.getElementById('study-plan-panel');
+    const status = document.getElementById('study-plan-status');
+    const holder = document.getElementById('study-plan-days');
+    if (!panel || !status || !holder || !state.exam || state.exam.id === 'common-diagnostic-1') return;
+    panel.hidden = false;
+    status.textContent = 'Preparing your plan… Your parent’s 11+ Premium unlocks the 30-day plan.';
+    try {
+      let data = await readJson(await fetch('/api/elevenplus/mock-exams/study-plan', {
+        credentials: 'same-origin', headers: {'Accept': 'application/json'}, cache: 'no-store'
+      }));
+      for (let attempt = 0; attempt < 5 && !data.ready; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        data = await readJson(await fetch('/api/elevenplus/mock-exams/study-plan', {
+          credentials: 'same-origin', headers: {'Accept': 'application/json'}, cache: 'no-store'
+        }));
+      }
+      if (!data.ready || !data.plan) {
+        status.textContent = 'Your plan is still being prepared. Your parent can open it from the 11+ Premium study plan area later.';
+        return;
+      }
+      status.textContent = '30 minutes a day for 30 days, focused on the topics that need the most practice.';
+      holder.replaceChildren();
+      (data.plan.days || []).forEach((day) => {
+        const card = element('article', 'study-plan-day');
+        card.appendChild(element('h3', '', 'Day ' + day.day + ' · ' + day.minutes + ' minutes'));
+        card.appendChild(element('p', '', 'Focus: ' + (day.focus_topic || 'Targeted practice')));
+        const list = element('ol');
+        (day.questions || []).forEach((question) => {
+          const item = element('li');
+          item.appendChild(element('span', '', question.question));
+          const options = element('ul');
+          (question.options || []).forEach((option) => options.appendChild(element('li', '', option)));
+          item.appendChild(options);
+          list.appendChild(item);
+        });
+        card.appendChild(list);
+        holder.appendChild(card);
+      });
+    } catch (error) {
+      if (error.status === 402) {
+        status.textContent = 'Your parent needs an active 11+ Premium plan to open this 30-day study plan.';
+        return;
+      }
+      status.textContent = 'Your plan is still being prepared. Please check again from the 11+ Premium area.';
+    }
+  }
+
   function renderResults(data) {
     examView.hidden = true;
     catalogueView.hidden = true;
@@ -483,6 +531,7 @@
 
     document.title = data.exam.title + ' result | Homework Magic';
     window.scrollTo({top: 0, behavior: 'smooth'});
+    if (data.study_plan && data.study_plan.status === 'preparing') loadStudyPlan();
   }
 
   previousButton.addEventListener('click', function () { moveQuestion(-1); });

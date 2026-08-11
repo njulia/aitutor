@@ -66,6 +66,13 @@
     .modal-overlay.show { display: flex; }
     .modal { background: #fff; border-radius: 13px; max-width: 420px; padding: 24px; width: 100%; }
     .modal-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 16px; }
+    .study-plan-modal { max-height: 86vh; max-width: 760px; overflow: auto; }
+    .study-plan-day { background: #f8f9ff; border: 1px solid #e0e5f0; border-radius: 10px; margin: 10px 0; padding: 13px; }
+    .study-plan-day h3 { margin: 0 0 5px; }
+    .study-plan-day p { color: #68758d; margin: 0 0 8px; }
+    .study-plan-day ol { margin: 0; padding-left: 22px; }
+    .study-plan-day li { margin-bottom: 8px; }
+    .study-plan-day ul { margin: 4px 0 0; padding-left: 20px; }
     #page-status { border-radius: 9px; margin-bottom: 16px; padding: 10px 14px; }
     #page-status:empty { display: none; }
     #page-status.error { background: #ffe8e8; color: #8c2525; }
@@ -175,6 +182,15 @@
       </form>
     </section>
   </main>
+
+  <div class="modal-overlay" id="study-plan-modal" role="dialog" aria-modal="true" aria-labelledby="study-plan-modal-title">
+    <section class="modal study-plan-modal">
+      <h2 id="study-plan-modal-title">30-day 11+ study plan</h2>
+      <p class="muted" id="study-plan-modal-status">Loading…</p>
+      <div id="study-plan-modal-body"></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="close-study-plan" type="button">Close</button></div>
+    </section>
+  </div>
 
   <div class="modal-overlay" id="password-modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
     <form class="modal" id="password-form">

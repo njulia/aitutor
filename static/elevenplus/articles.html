@@ -150,6 +150,11 @@
   }
 </style>
 <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+
+<style>
+.school-finder-cta{margin:1rem 0 1.5rem}
+.school-finder-card{border:2px solid currentColor}
+</style>
 </head>
 <body>
 
@@ -162,8 +167,10 @@
   <h1>11+ Articles &amp; Resources</h1>
 </div>
 <p class="intro">Comprehensive guides, vocabulary lists, and practice resources to help your child prepare for the 11+ exam. All content is aligned to UK primary curriculum standards.</p>
-
-<a class="cta" href="/app?tab=eleven">Generate Free 11+ Practice Questions</a>
+<div class="school-finder-cta">
+  <a class="cta" href="/school-finder">Find Schools Near You by Postcode</a>
+    <a class="cta" href="/app?tab=eleven">Generate Free 11+ Practice Questions</a>
+</div>
 
 <div class="article-grid">
   <!-- Essential Guides -->
@@ -182,7 +189,15 @@
   </a>
 
   <!-- English & Verbal Reasoning -->
-  <a href="/elevenplus/11plus-vocabulary-list" class="article-card">
+  
+<a href="/school-finder" class="article-card school-finder-card">
+  <div class="article-card-content">
+    <h3>Find Schools Near You</h3>
+    <p>Enter a postcode to explore up to 10 nearby schools and compare school type, admissions route, selectivity and 11+ preparation options.</p>
+    <span class="tag">School choice</span>
+  </div>
+</a>
+<a href="/elevenplus/11plus-vocabulary-list" class="article-card">
     <div class="icon">📚</div>
     <h3>The 11+ Vocabulary List</h3>
     <p>Around 50 essential words for 11+ English and Verbal Reasoning papers. Interactive flashcards with definitions, synonyms, antonyms and example sentences.</p>

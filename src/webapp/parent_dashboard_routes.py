@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, SecretStr
 
 from src.progress_db import (
+    get_mock_study_plan,
     get_progress_summary,
     get_streak_info,
     get_students_subject_breakdown,
@@ -54,7 +55,7 @@ class GiftRequestDecision(BaseModel):
     xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
 
 
-def build_parent_dashboard_router(resolve_username) -> APIRouter:
+def build_parent_dashboard_router(resolve_username, has_subscription=None) -> APIRouter:
     router = APIRouter()
 
     async def account_context(request: Request) -> dict:
@@ -145,6 +146,45 @@ def build_parent_dashboard_router(resolve_username) -> APIRouter:
             "kids": list(kids),
             "student_limit": int(student_limit),
             "can_add_student": len(students) < int(student_limit),
+        }
+
+    @router.get("/api/parent/11plus-study-plan/{student_id}")
+    async def get_11plus_study_plan(request: Request, student_id: str):
+        """Return a learner's latest 30-day 11+ plan to a subscribed parent."""
+        account = await account_context(request)
+        belongs = await asyncio.to_thread(
+            student_belongs_to_account, student_id, account["id"]
+        )
+        if not belongs:
+            raise HTTPException(status_code=404, detail="Learner profile not found")
+        if has_subscription is None:
+            raise HTTPException(status_code=402, detail="11+ Premium is required to view this study plan.")
+        try:
+            allowed = await asyncio.to_thread(
+                has_subscription,
+                request,
+                None,
+                account["email"],
+                "elevenplus_monthly",
+                True,
+            )
+        except Exception:
+            logger.exception("Could not check 11+ Premium for study plan")
+            allowed = False
+        if not allowed:
+            return {
+                "success": False,
+                "locked": True,
+                "required_plan": "elevenplus_monthly",
+                "required_plan_name": "11+ Premium",
+                "pricing_url": "/pricing",
+            }
+        plan = await asyncio.to_thread(get_mock_study_plan, student_id)
+        return {
+            "success": True,
+            "locked": False,
+            "plan": plan,
+            "ready": bool(plan),
         }
 
     @router.get("/api/parent/learning-target/{student_id}")

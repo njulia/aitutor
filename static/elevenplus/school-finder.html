@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find secondary schools near your postcode | Homework Magic</title>
+  <meta name="description" content="Enter a UK postcode to see up to 10 nearby secondary or all-through schools, with distance, admissions notes and school links for parent research.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://homeworkmagic.co.uk/school-finder">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+  <link rel="stylesheet" href="/static/css/school-finder.css?v=20260811">
+  <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+  <script src="/static/js/school-finder.js?v=20260811" defer></script>
+</head>
+<body class="hm-page school-finder-page">
+<header class="finder-header">
+  <div class="hm-nav-wrap">
+    <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+    <nav class="hm-main-nav" aria-label="Main navigation">
+      <a href="/elevenplus-practice">11+ practice</a>
+      <a href="/elevenplus-mock-exams">11+ mock exams</a>
+      <a href="/elevenplus/articles">11+ articles</a>
+      <a href="/login" data-auth-login>Parent sign in</a>
+      <a href="#" data-auth-logout hidden>Log out</a>
+    </nav>
+  </div>
+</header>
+
+<main class="finder-main">
+  <section class="finder-hero" aria-labelledby="finder-title">
+    <p class="finder-kicker">For parents choosing secondary schools</p>
+    <h1 id="finder-title">Find secondary schools near your postcode</h1>
+    <p class="finder-lead">Enter your postcode and we’ll show up to 10 nearby secondary or all-through schools. Compare the basics first, then check each school’s current admission rules before applying.</p>
+    <form id="school-finder-form" class="finder-form" novalidate>
+      <div class="finder-fields">
+        <div><label for="postcode">UK postcode</label><input id="postcode" name="postcode" inputmode="text" autocomplete="postal-code" maxlength="10" placeholder="e.g. N22 8AA" required></div>
+        <div><label for="entry-year">Entry year</label><select id="entry-year" name="entry_year"><option>Year 7</option><option>Year 8</option><option>Year 9</option><option>Year 10</option><option>Year 11</option></select></div>
+        <div><label for="child-gender">Child</label><select id="child-gender" name="child_gender"><option value="any">Show all</option><option value="girl">Girl</option><option value="boy">Boy</option></select></div>
+      </div>
+      <div class="finder-input-row">
+        <button type="submit" class="finder-button">Find schools</button>
+      </div>
+      <p class="privacy-note">Your postcode is used only for this lookup and is not saved by Homework Magic.</p>
+    </form>
+  </section>
+
+  <section id="finder-status" class="finder-status" aria-live="polite" hidden></section>
+
+  <section id="finder-results" hidden aria-labelledby="results-title">
+    <div class="results-heading">
+      <div>
+        <p class="finder-kicker">Your local shortlist</p>
+        <h2 id="results-title">Nearby schools</h2>
+        <p id="results-area" class="results-area"></p>
+      </div>
+      <a class="finder-link" href="https://www.gov.uk/apply-for-secondary-school-place" target="_blank" rel="noopener">How applications work</a>
+    </div>
+    <div id="finder-map-panel" class="finder-map-panel" hidden aria-labelledby="map-title">
+      <div class="map-panel-heading"><div><p class="finder-kicker">Journey check</p><h2 id="map-title">Home and schools on Google Maps</h2></div><a id="map-open-link" class="finder-link" href="#" target="_blank" rel="noopener">Open Google Maps</a></div>
+      <iframe id="school-map" title="Google Maps showing the home postcode and selected school" loading="lazy" referrerpolicy="no-referrer-when-downgrade" hidden></iframe>
+      <p id="map-fallback" class="map-fallback" hidden>Google Maps embed is not configured yet. You can still open a route from your home postcode to each school using the Google Maps buttons on the school cards.</p>
+    </div>
+    <div id="school-list" class="school-list"></div>
+    <div class="eligibility-warning">
+      <strong>Important:</strong> being nearby does not guarantee that a child can get a place. Admissions can depend on catchment, distance, siblings, faith criteria, feeder schools, entrance tests and other rules. Always read the school’s current admission policy and your local council’s guidance.
+    </div>
+  </section>
+
+  <section class="finder-guide" aria-labelledby="guide-title">
+    <h2 id="guide-title">How to choose from the shortlist</h2>
+    <div class="guide-grid">
+      <article><span aria-hidden="true">📍</span><h3>Distance</h3><p>Check how far the school is from home and how the journey would work each day.</p></article>
+      <article><span aria-hidden="true">📝</span><h3>Admissions</h3><p>Look for catchment rules, entrance tests, priority groups and application deadlines.</p></article>
+      <article><span aria-hidden="true">📊</span><h3>Results</h3><p>Use the official DfE performance service to compare recent results rather than relying on a single league-table number.</p></article>
+      <article><span aria-hidden="true">💛</span><h3>School fit</h3><p>Open days, subjects, pastoral support, activities and the daily journey can matter just as much as results.</p></article>
+    </div>
+  </section>
+</main>
+
+<footer class="finder-footer">
+  <a href="/">Home</a>
+  <a href="/privacy">Privacy</a>
+  <a href="/elevenplus-practice">11+ practice</a>
+  <a href="/elevenplus-mock-exams">11+ mock exams</a>
+  <a href="/elevenplus/articles">11+ articles</a>
+    <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
+    <a href="https://www.compare-school-performance.service.gov.uk/" target="_blank" rel="noopener">DfE school performance</a>
+</footer>
+</body>
+</html>

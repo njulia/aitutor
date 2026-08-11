@@ -14,6 +14,7 @@ from urllib.parse import quote_plus
 import binascii
 import hashlib
 import hmac
+import json
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
@@ -139,6 +140,14 @@ ai_requests = Table(
     Column("langfuse_trace_id", String(100), nullable=True),
     Column("metadata_json", Text, nullable=True),
 )
+mock_study_plans = Table(
+    "mock_study_plans", metadata,
+    Column("student_id", String(80), primary_key=True),
+    Column("plan_json", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 metadata.create_all(_engine)
 
 
@@ -154,6 +163,46 @@ def _dict(row: Any) -> Dict[str, Any]:
         elif isinstance(value, bool):
             data[key] = int(value)
     return data
+
+
+def save_mock_study_plan(student_id: str, plan: Dict[str, Any]) -> None:
+    """Persist the latest adaptive 11+ plan for one learner."""
+    now = _now()
+    payload = json.dumps(plan, ensure_ascii=False, separators=(",", ":"))
+    with _engine.begin() as conn:
+        existing = conn.execute(
+            select(mock_study_plans.c.student_id).where(mock_study_plans.c.student_id == str(student_id))
+        ).first()
+        if existing:
+            conn.execute(
+                update(mock_study_plans)
+                .where(mock_study_plans.c.student_id == str(student_id))
+                .values(plan_json=payload, updated_at=now)
+            )
+        else:
+            conn.execute(
+                insert(mock_study_plans).values(
+                    student_id=str(student_id), plan_json=payload, created_at=now, updated_at=now
+                )
+            )
+
+
+def get_mock_study_plan(student_id: str) -> Optional[Dict[str, Any]]:
+    """Return the latest adaptive 11+ plan for one learner."""
+    with _engine.begin() as conn:
+        row = conn.execute(
+            select(mock_study_plans.c.plan_json, mock_study_plans.c.created_at, mock_study_plans.c.updated_at)
+            .where(mock_study_plans.c.student_id == str(student_id))
+        ).first()
+    if not row:
+        return None
+    try:
+        plan = json.loads(str(row._mapping["plan_json"]))
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if isinstance(plan, dict):
+        plan["created_at"] = plan.get("created_at") or row._mapping["created_at"].isoformat()
+    return plan
 
 
 def init_db() -> None:

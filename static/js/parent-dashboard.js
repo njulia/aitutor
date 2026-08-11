@@ -287,7 +287,10 @@ function renderKids() {
     const rewardLink = node('a', 'btn-link', 'Rewards');
     rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
     rewardLink.style.marginLeft = 'auto';
-    actions.append(progressLink, rewardLink);
+    const planButton = node('button', 'btn-link', '30-day 11+ plan');
+    planButton.type = 'button';
+    planButton.addEventListener('click', () => openStudyPlan(kid));
+    actions.append(progressLink, planButton, rewardLink);
 //    const edit = node('button', 'btn btn-secondary', 'Edit profile');
 //    edit.type = 'button';
 //    edit.addEventListener('click', () => showProfileForm(kid));
@@ -464,6 +467,49 @@ function decideGift(request, decision) {
   });
 }
 
+async function openStudyPlan(kid) {
+  const modal = byId('study-plan-modal');
+  const status = byId('study-plan-modal-status');
+  const body = byId('study-plan-modal-body');
+  modal.classList.add('show');
+  status.textContent = `Loading ${kid.name || 'learner'}'s plan…`;
+  clearNode(body);
+  try {
+    const data = await api(`/api/parent/11plus-study-plan/${encodeURIComponent(kid.id)}`);
+    if (data.locked) {
+      status.textContent = 'An active 11+ Premium plan is needed to view this study plan.';
+      body.append(node('a', 'btn-link', 'View 11+ Premium plans'));
+      body.firstChild.href = '/pricing';
+      return;
+    }
+    if (!data.ready || !data.plan) {
+      status.textContent = 'No completed paid mock has created a plan yet, or the plan is still being prepared.';
+      return;
+    }
+    const plan = data.plan;
+    status.textContent = `30 minutes a day for ${plan.duration_days || 30} days · focused on ${(
+      plan.weaknesses || []).slice(0, 3).map((item) => item.topic).join(', ') || 'targeted practice'}.`;
+    (plan.days || []).forEach((day) => {
+      const card = node('article', 'study-plan-day');
+      card.append(node('h3', '', `Day ${day.day} · ${day.minutes} minutes`));
+      card.append(node('p', '', `Focus: ${day.focus_topic || 'Targeted practice'}`));
+      const list = node('ol');
+      (day.questions || []).forEach((question) => {
+        const item = node('li');
+        item.append(node('span', '', question.question));
+        const options = node('ul');
+        (question.options || []).forEach((option) => options.append(node('li', '', option)));
+        item.append(options); list.append(item);
+      });
+      card.append(list); body.append(card);
+    });
+  } catch (error) {
+    status.textContent = error.status === 402
+      ? 'An active 11+ Premium plan is needed to view this study plan.'
+      : (error.message || 'The study plan could not be loaded.');
+  }
+}
+
 function requestPassword(action) {
   familyState.pendingPasswordAction = action;
   byId('parent-password').value = '';
@@ -514,6 +560,7 @@ byId('send-digest-button').addEventListener('click', () => requestPassword(async
   setStatus('Learning summary email sent.');
 }));
 byId('cancel-password').addEventListener('click', closePasswordModal);
+byId('close-study-plan').addEventListener('click', () => byId('study-plan-modal').classList.remove('show'));
 byId('password-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!familyState.pendingPasswordAction) return;

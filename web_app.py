@@ -43,6 +43,7 @@ from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
 from src.webapp.parent_dashboard_routes import build_parent_dashboard_router
+from src.webapp.school_finder_routes import build_school_finder_router
 from src.webapp.email_service import send_registration_confirmation_email
 from src.webapp.privacy_metrics import (
     marketing_summary,
@@ -730,6 +731,7 @@ app.include_router(
     )
 )
 app.include_router(build_parent_dashboard_router(_resolve_username))
+app.include_router(build_school_finder_router())
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):
@@ -1141,6 +1143,11 @@ async def eleven_plus_mock_exams():
     return _static_page("static", "elevenplus-mock-exams.html")
 
 
+@app.get("/elevenplus-study-plan")
+async def eleven_plus_study_plan():
+    return _static_page("static", "elevenplus-study-plan.html")
+
+
 @app.get("/elevenplus-topic-mastery")
 async def eleven_plus_topic_mastery():
     return _static_page("static", "elevenplus-topic-mastery.html")
@@ -1337,6 +1344,11 @@ async def legacy_time_management_page():
         "/elevenplus/11plus-time-management", status_code=308
     )
 
+
+
+@app.get("/school-finder")
+async def school_finder_page():
+    return _static_page("static", "", "school-finder.html")
 
 @app.get("/elevenplus/articles")
 async def elevenplus_articles():

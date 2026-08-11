@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>30-day improvement plan from your 11+ mock exam | Homework Magic</title>
+  <meta name="description" content="Your personalised 30-day 11+ improvement plan based on your mock exam results.">
+  <meta name="robots" content="noindex, follow">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+  <link rel="stylesheet" href="/static/css/mock-exams.css?v=20260806-premium-access">
+  <script src="/static/js/session-context.js?v=20260806" defer></script>
+  <script src="/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1" defer></script>
+  <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+  <style>
+    .study-plan-page .study-hero {
+      display:grid;
+      grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr);
+      gap:clamp(28px,6vw,76px);
+      align-items:center;
+      min-height:520px;
+      padding:64px 0 50px;
+    }
+    .study-plan-page .study-lead {
+      max-width:700px;
+      margin:22px 0 0;
+      color:var(--mock-muted);
+      font-size:clamp(1.05rem,2vw,1.22rem);
+      line-height:1.68;
+    }
+    .study-plan-page .study-access {
+      max-width:700px;
+      margin:20px 0 0;
+      padding:14px 17px;
+      border:2px solid #cfc7fa;
+      border-radius:15px;
+      color:#423789;
+      background:var(--mock-purple-soft);
+    }
+    .study-plan-page .study-board {
+      position:relative;
+      padding:28px;
+      border:3px solid var(--mock-ink);
+      border-radius:30px;
+      box-shadow:12px 14px 0 var(--mock-yellow);
+      background:var(--mock-paper);
+      transform:rotate(1.2deg);
+    }
+    .study-board-top {
+      display:flex;
+      justify-content:space-between;
+      gap:15px;
+      color:var(--mock-muted);
+      font-weight:900;
+    }
+    .study-day-pill {
+      padding:6px 10px;
+      border-radius:10px;
+      color:var(--mock-purple-dark);
+      background:var(--mock-purple-soft);
+    }
+    .study-board h2 { margin:26px 0 8px; font-size:1.65rem; }
+    .study-board p { color:var(--mock-muted); }
+    .study-time {
+      display:inline-flex;
+      margin-top:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      color:#116c58;
+      background:var(--mock-teal-soft);
+      font-weight:900;
+    }
+    .study-mini-list { margin:22px 0 0; padding:0; list-style:none; }
+    .study-mini-list li {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin:9px 0;
+      padding:10px 12px;
+      border:2px solid var(--mock-line);
+      border-radius:13px;
+      font-weight:800;
+      background:#fff;
+    }
+    .study-mini-list span {
+      display:grid;
+      width:30px;
+      height:30px;
+      place-items:center;
+      flex:none;
+      border-radius:50%;
+      color:#fff;
+      background:var(--mock-purple);
+    }
+    .study-status-section { padding:20px 0 70px; }
+    .study-status-card {
+      padding:30px;
+      border:3px solid var(--mock-ink);
+      border-radius:26px;
+      box-shadow:var(--mock-shadow);
+      background:var(--mock-paper);
+    }
+    .study-status-row { display:flex; gap:16px; align-items:flex-start; }
+    .study-status-icon {
+      display:grid;
+      width:52px;
+      height:52px;
+      place-items:center;
+      flex:none;
+      border-radius:16px;
+      color:#fff;
+      background:var(--mock-purple);
+      font-size:1.5rem;
+    }
+    .study-status-card h2 { margin:0 0 8px; font-size:clamp(1.65rem,3vw,2.35rem); }
+    .study-status-card p { margin:0; color:var(--mock-muted); line-height:1.65; }
+    .study-status-actions { margin-top:25px; display:flex; flex-wrap:wrap; gap:12px; }
+    .study-benefits { padding:20px 0 70px; }
+    .study-benefits .seo-grid article { min-height:150px; }
+    .study-footer-note {
+      margin:0 0 60px;
+      padding:20px 22px;
+      border:2px solid var(--mock-line);
+      border-radius:20px;
+      color:var(--mock-muted);
+      background:#fff;
+    }
+    @media (max-width: 800px) {
+      .study-plan-page .study-hero { grid-template-columns:1fr; min-height:auto; padding-top:42px; }
+      .study-plan-page .study-board { transform:none; }
+      .study-status-row { flex-direction:column; }
+    }
+  </style>
+</head>
+
+<body class="hm-page mock-page study-plan-page">
+  <header class="mock-header">
+    <div class="hm-nav-wrap">
+      <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+      <nav class="hm-main-nav" aria-label="Main navigation">
+        <a href="/elevenplus-practice">11+ practice</a>
+        <a href="/elevenplus-mock-exams">11+ mock exams</a>
+        <a href="/elevenplus/articles">11+ articles</a>
+<!--        <a href="/elevenplus-study-plan" aria-current="page">30-day improvement plan</a>-->
+        <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
+        <a href="/app">Homework</a>
+        <a href="/login" data-auth-login>Parent sign in</a>
+        <a href="#" data-auth-logout hidden>Log out</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="study-hero" aria-labelledby="page-title">
+      <div>
+        <p class="mock-kicker">📅 From your 11+ mock exam</p>
+        <h1 id="page-title">30-day improvement plan from your 11+ mock exam</h1>
+        <p class="study-lead">
+          A calm, focused 30-minute-a-day plan built around the areas your mock exam shows need the most practice.
+          You can leave this page while your personalised plan is being prepared.
+        </p>
+        <p class="study-access">
+          <strong>11+ Premium:</strong> your parent subscription unlocks the full 30-day plan.
+          Test accounts can use it for free.
+        </p>
+        <div class="hero-actions">
+          <a class="mock-button primary" href="/elevenplus-mock-exams">Back to 11+ mock exams</a>
+          <a class="mock-button secondary" href="/app?tab=eleven">Go to 11+ practice</a>
+        </div>
+        <ul class="hero-trust" aria-label="Study plan features">
+          <li>⏱️ 30 minutes a day</li>
+          <li>📆 30 days</li>
+          <li>🎯 Weak-topic practice</li>
+          <li>🔎 RAG-first questions</li>
+        </ul>
+      </div>
+
+      <div class="study-board" aria-label="Example 30-day study plan">
+        <div class="study-board-top">
+          <span>Today's mission</span>
+          <span class="study-day-pill">Day 1 of 30</span>
+        </div>
+        <h2>Build confidence one small step at a time.</h2>
+        <p>Today's questions are selected to practise the topics that need the most attention after your mock.</p>
+        <span class="study-time">30 minutes</span>
+        <ul class="study-mini-list">
+          <li><span>1</span> Maths weak topic</li>
+          <li><span>2</span> English weak topic</li>
+          <li><span>3</span> Quick review</li>
+          <li><span>✓</span> Track your progress</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="study-status-section" aria-labelledby="status-heading">
+      <div class="study-status-card" id="plan-status" aria-live="polite">
+        <div class="study-status-row">
+          <div class="study-status-icon" aria-hidden="true">✨</div>
+          <div>
+            <p class="mock-kicker">Plan status</p>
+            <h2 id="status-title">Your plan is being prepared</h2>
+            <p id="status-text">
+              You can leave this page. Your plan will stay available here when it is ready.
+              This page checks automatically, so you do not need to keep refreshing it.
+            </p>
+          </div>
+        </div>
+        <div class="study-status-actions">
+          <a class="mock-button primary" href="/elevenplus-mock-exams">Back to 11+ mock exams</a>
+          <a class="mock-button secondary" href="/app?tab=eleven">Practise while you wait</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="study-benefits" aria-labelledby="included-title">
+      <div class="section-heading">
+        <div>
+          <p class="mock-kicker">What your plan does</p>
+          <h2 id="included-title">Turn your mock result into a clear next step</h2>
+        </div>
+        <p>The plan focuses practice rather than giving the child another long list of things to revise.</p>
+      </div>
+      <div class="seo-grid">
+        <article>
+          <h3>🎯 Targets weaknesses</h3>
+          <p>Your mock result is used to identify the subjects and topics that need the most attention.</p>
+        </article>
+        <article>
+          <h3>📚 Uses existing questions first</h3>
+          <p>The plan looks for suitable questions in the Homework Magic RAG before creating anything new.</p>
+        </article>
+        <article>
+          <h3>✨ Fills genuine gaps</h3>
+          <p>If a suitable question is not available, an original question can be generated and added to the question bank.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="study-footer-note">
+      <strong>Parent note:</strong> This is a learning plan based on the mock result, not an admissions prediction.
+      School admissions decisions depend on each school's current rules and selection process.
+    </section>
+  </main>
+
+  <footer class="mock-footer">
+    <p>Homework Magic gives practice feedback, not an admissions prediction.</p>
+    <nav aria-label="Footer navigation">
+      <a href="/privacy">Privacy</a>
+      <a href="/safety">Safety</a>
+      <a href="/terms">Terms</a>
+      <a href="/messages">Contact</a>
+    </nav>
+  </footer>
+
+  <script>
+  (async function(){
+    const title = document.getElementById("status-title");
+    const text = document.getElementById("status-text");
+
+    async function check(){
+      try {
+        const r = await fetch("/api/elevenplus/study-plan", {
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+
+        if (r.status === 404) {
+          if (text) text.textContent = "Your study plan service is not available yet. Please try again after the study-plan backend has been deployed.";
+          return;
+        }
+
+        const d = await r.json();
+
+        if (d && d.ready) {
+          if (title) title.textContent = "Your plan is ready!";
+          if (text) text.textContent = "Open your 30-day plan and start today's practice.";
+          return;
+        }
+
+        if (d && d.locked) {
+          if (title) title.textContent = "11+ Premium required";
+          if (text) text.textContent = "Ask your parent or guardian to activate 11+ Premium to use this plan.";
+          return;
+        }
+
+        if (text) {
+          text.textContent = (d && d.message) ||
+            "Your plan is being prepared. You can leave this page and come back later.";
+        }
+      } catch (e) {
+        console.warn("Study plan status unavailable", e);
+      }
+    }
+
+    await check();
+    setInterval(check, 15000);
+  })();
+  </script>
+</body>
+</html>

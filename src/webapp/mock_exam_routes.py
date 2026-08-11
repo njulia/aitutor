@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -85,6 +85,38 @@ def build_mock_exam_router(
         set_anon_cookie(response, new_anon_id, request)
         return response
 
+    @router.get("/study-plan")
+    async def study_plan(request: Request):
+        """Return the latest 30-day plan when the family has 11+ Premium."""
+        identity, _username, new_anon_id, has_access = await access_context(request)
+        if not has_access:
+            response = private_json({
+                "success": False,
+                "locked": True,
+                "required_plan": MOCK_EXAM_PLAN,
+                "required_plan_name": MOCK_EXAM_PLAN_NAME,
+                "pricing_url": "/pricing",
+            }, status_code=402)
+            set_anon_cookie(response, new_anon_id, request)
+            return response
+        from src.progress_db import get_mock_study_plan
+        plan = await run_blocking(
+            get_mock_study_plan, identity, timeout=8, limit_concurrency=False
+        )
+        plan_status = None
+        if isinstance(plan, dict):
+            plan_status = plan.get("status")
+        response = private_json({
+            "success": True,
+            "locked": False,
+            "ready": bool(plan) and plan_status not in {"preparing", "processing"},
+            "status": plan_status or ("ready" if plan else "none"),
+            "has_mock_exam": bool(plan),
+            "plan": plan if plan_status not in {"preparing", "processing"} else None,
+        })
+        set_anon_cookie(response, new_anon_id, request)
+        return response
+
     @router.post("/{exam_id}/start")
     async def start(exam_id: str, request: Request):
         exam = EXAMS.get(str(exam_id or "").strip())
@@ -154,7 +186,12 @@ def build_mock_exam_router(
         return response
 
     @router.post("/{exam_id}/submit")
-    async def submit(exam_id: str, body: MockExamSubmission, request: Request):
+    async def submit(
+        exam_id: str,
+        body: MockExamSubmission,
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
         identity, _username, new_anon_id = resolve_identity(request)
         # 免费 diagnostic 考试提交时，也使用 cookie 中的匿名 ID，与 start 时保持一致
         exam = EXAMS.get(str(exam_id or "").strip())
@@ -183,6 +220,45 @@ def build_mock_exam_router(
                 status_code=500,
                 detail="We could not mark this mock just now. Please try again.",
             ) from exc
+
+        # Paid mocks automatically start an adaptive 30-day plan build. The
+        # generation is deliberately a background task so marking the exam stays
+        # fast even when an LLM fallback is needed. The free diagnostic remains
+        # a diagnostic only and does not create a premium study plan.
+        if exam and exam["id"] != FREE_MOCK_EXAM_ID:
+            try:
+                from src.progress_db import get_student_detail, save_mock_study_plan
+                from src.elevenplus_study_plan import generate_mock_study_plan
+                student = get_student_detail(identity) or {}
+                # Persist the preparing state so the app tab remains available
+                # after the child leaves the mock-results page.
+                save_mock_study_plan(str(identity), {
+                    "status": "preparing",
+                    "days": 30,
+                    "minutes_per_day": 30,
+                    "access": "11+ Premium",
+                })
+                year_group = max(1, min(int(student.get("year_group") or 5), 6))
+                background_tasks.add_task(
+                    generate_mock_study_plan,
+                    student_id=str(identity),
+                    year_group=year_group,
+                    exam_result=result,
+                )
+                result["study_plan"] = {
+                    "status": "preparing",
+                    "access": "11+ Premium",
+                    "days": 30,
+                    "minutes_per_day": 30,
+                }
+            except Exception:
+                logger.exception("Could not queue adaptive 11+ study plan")
+                result["study_plan"] = {
+                    "status": "unavailable",
+                    "access": "11+ Premium",
+                    "days": 30,
+                    "minutes_per_day": 30,
+                }
         response = private_json(result)
         set_anon_cookie(response, new_anon_id, request)
         return response
