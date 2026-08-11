@@ -114,7 +114,9 @@ document.getElementById('clear').onclick=async()=>{if(!confirm('Delete all remem
 document.getElementById('export').onclick=async()=>{try{const data=await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}/export`);const blob=new Blob([JSON.stringify(data.memory_export,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='learning-memory.json';a.click();URL.revokeObjectURL(a.href);status('Memory export created.');}catch(e){status(e.message,true);}};
 start();
 </script>
-<script src="/static/js/avatar-character.js?v=20260809-avatar-eyes-dresses-1" defer></script>
+<script src="/static/js/avatar-data.js?v=20260811-avatar-pet-1" defer></script>
+    <script src="/static/js/avatar-character.js?v=20260811-avatar-pet-1" defer></script>
+    <script src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1" defer></script>
 <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
 </body>
 </html>

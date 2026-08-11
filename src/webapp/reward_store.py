@@ -2072,6 +2072,13 @@ class RewardStore:
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
         counts: dict[str, int] = {}
+        try:
+            from .capybara_store import get_capybara_store
+            counts["capybara_pets"] = get_capybara_store().delete_learner(
+                account_id=account, student_id=learner
+            )
+        except Exception:
+            counts["capybara_pets"] = 0
         with self.engine.begin() as conn:
             for key, table in (
                 ("delivery_addresses", self.delivery_addresses),
@@ -2097,6 +2104,11 @@ class RewardStore:
     def delete_account(self, account_id: str) -> dict[str, int]:
         account = _clean_id(account_id, maximum=80)
         counts: dict[str, int] = {}
+        try:
+            from .capybara_store import get_capybara_store
+            counts["capybara_pets"] = get_capybara_store().delete_account(account_id=account)
+        except Exception:
+            counts["capybara_pets"] = 0
         with self.engine.begin() as conn:
             for key, table in (
                 ("delivery_addresses", self.delivery_addresses),

@@ -43,6 +43,7 @@ ROLE_AWARE_PAGES = (
 def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     script = (ROOT / "static/js/auth-nav.js").read_text(encoding="utf-8")
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
+    data = (ROOT / "static/js/avatar-data.js").read_text(encoding="utf-8")
 
     assert "context.role === 'kid'" in script
     assert "context.student || {}" in script
@@ -66,13 +67,13 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     assert "createReaction('celebrate'" in script
     assert "Age ${age.age} look" in script
     assert "CHARACTER_PRESETS" in renderer
-    assert "Girl character" in renderer
-    assert "Boy character" in renderer
+    assert "Girl character" in data
+    assert "Boy character" in data
     assert "hm-avatar3d-cheek" in renderer
     assert "feDropShadow" in renderer
     assert "linearGradient" in renderer
     assert "ageDetails" in renderer
-    assert "AGE_SCALES" in renderer
+    assert "AGE_SCALES" in data
     assert "enableTilt" in renderer
     assert "prefers-reduced-motion: reduce" in renderer
     for field in (
@@ -90,7 +91,7 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
         "mouth",
         "eyebrows",
     ):
-        assert f"{field}:" in renderer
+        assert f"{field}:" in data
     assert "capybara" not in script.lower()
     assert "activeRole === 'kid' ? '/api/kid-logout' : '/api/logout'" in script
     assert "innerHTML" not in script

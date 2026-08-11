@@ -201,10 +201,12 @@ async def lifespan(_app: FastAPI):
         from src.webapp.account_store import init_account_db
         from src.webapp.kid_session_store import init_kid_session_db
         from src.webapp.reward_store import get_reward_store
+        from src.webapp.capybara_store import get_capybara_store
         await asyncio.gather(
             asyncio.to_thread(init_account_db),
             asyncio.to_thread(init_kid_session_db),
             asyncio.to_thread(get_reward_store),
+            asyncio.to_thread(get_capybara_store),
         )
     except Exception:
         logger.exception("Account database initialization failed")
@@ -1272,6 +1274,11 @@ async def memory_page():
 @app.get("/character-customise")
 async def character_customise_page():
     return _static_page("static", "character-customise.html", cache_control="no-store, private")
+
+
+@app.get("/playtime")
+async def playtime_page():
+    return _static_page("static", "playtime.html", cache_control="no-store, private")
 
 
 @app.get("/app")

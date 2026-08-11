@@ -1838,3 +1838,66 @@ body.hm-page > header.hm-kid-avatar-host {
 @media print {
   .hm-kid-avatar { display: none !important; }
 }
+
+/* Mini character playroom: playful, calm and reward-free. */
+.hm-avatar-pet {
+  margin: 10px 0 12px;
+  padding: 12px;
+  border: 2px solid rgba(118, 75, 162, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(247,243,255,.98));
+  box-shadow: 0 8px 22px rgba(70, 50, 110, .08);
+}
+.hm-avatar-pet-heading, .hm-avatar-pet-title, .hm-avatar-pet-stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hm-avatar-pet-title { justify-content: flex-start; color: #3e315d; }
+.hm-avatar-pet-icon { font-size: 22px; }
+.hm-avatar-pet-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #ececf4;
+  color: #666277;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+.hm-avatar-pet-badge.ready { background: #dff8e8; color: #26734a; }
+.hm-avatar-pet-speech {
+  margin: 9px 0;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: #fff7dc;
+  color: #51472e;
+  font-size: .82rem;
+  line-height: 1.35;
+}
+.hm-avatar-pet-stats { display: grid; gap: 7px; }
+.hm-avatar-pet-stat-top { font-size: .72rem; color: #666277; }
+.hm-avatar-pet-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e8e5ef; }
+.hm-avatar-pet-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff9ec8, #8c7cf6); transition: width .3s ease; }
+.hm-avatar-pet-streak { margin-top: 2px; color: #6d5a9d; font-size: .74rem; font-weight: 750; }
+.hm-avatar-pet-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.hm-avatar-pet-action {
+  min-height: 40px;
+  border: 1px solid #ddd8ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #4b3f72;
+  cursor: pointer;
+  font-weight: 750;
+  font-size: .72rem;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.hm-avatar-pet-action:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(75,63,114,.12); }
+.hm-avatar-pet-action:disabled { opacity: .48; cursor: not-allowed; }
+.hm-avatar-pet-footer { display: block; margin-top: 8px; color: #817a91; text-align: center; font-size: .68rem; }
+@media (max-width: 520px) {
+  .hm-avatar-pet-actions { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-avatar-pet-fill, .hm-avatar-pet-action { transition: none; }
+}

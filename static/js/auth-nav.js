@@ -211,6 +211,9 @@
     actions.appendChild(createAvatarAction(
       '/rewards', '🎁', 'My rewards', 'Check XP, levels and rewards'
     ));
+    actions.appendChild(createAvatarAction(
+      '/playtime', '🦫', 'Pet playtime', 'Care for your little friend'
+    ));
     menu.appendChild(actions);
 
     const customiseLink = document.createElement('a');

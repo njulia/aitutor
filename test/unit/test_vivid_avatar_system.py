@@ -47,26 +47,28 @@ def test_character_customiser_uses_shared_vivid_renderer_and_age_context() -> No
 
 def test_avatar_renderer_has_bounded_age_growth_and_rich_safe_choices() -> None:
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
+    data = (ROOT / "static/js/avatar-data.js").read_text(encoding="utf-8")
 
+    assert "const AGE_SCALES" in data
     assert "Math.max(5, Math.min(11" in renderer
     for age in range(5, 12):
-        assert f"{age}:" in renderer
+        assert f"{age}:" in data
     assert "age.scale * (XP_SCALES[growth.stage] || 1)" in renderer
     assert "Math.max(0.78, Math.min(1.13" in renderer
-    assert "pink_dress" in renderer
-    assert "star_jacket" in renderer
-    assert "sunshine_dungarees" in renderer
-    assert "rainbow_high_tops" in renderer
+    assert "pink_dress" in data
+    assert "star_jacket" in data
+    assert "sunshine_dungarees" in data
+    assert "rainbow_high_tops" in data
     assert "addRainbowGradient" in renderer
     assert "hm-avatar3d-rainbow-shoe-base" in renderer
-    assert "navy_trousers" in renderer
-    assert "blue_jeans" in renderer
-    assert "purple_trousers" in renderer
-    assert "purple_dress" in renderer
+    assert "navy_trousers" in data
+    assert "blue_jeans" in data
+    assert "purple_trousers" in data
+    assert "purple_dress" in data
     assert "space_buns" not in renderer
     assert "curly" not in renderer.lower()
-    assert "purple" in renderer
-    assert "teal" in renderer
+    assert "purple" in data
+    assert "teal" in data
     assert "feDropShadow" in renderer
     assert "hm-avatar3d-face-highlight" in renderer
     assert "hm-avatar3d-sleeve-short" in renderer
@@ -118,8 +120,9 @@ def test_dresses_keep_their_named_colour_and_girl_eyes_are_gentler() -> None:
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
     stylesheet = (ROOT / "static/css/avatar-character.css").read_text(encoding="utf-8")
 
-    assert "pink_dress: ['#ffb8d2', '#f24f94', '#b72164']" in renderer
-    assert "purple_dress: ['#d6b6ff', '#8b5cf6', '#5631a5']" in renderer
+    data = (ROOT / "static/js/avatar-data.js").read_text(encoding="utf-8")
+    assert "pink_dress: ['#ffb8d2', '#f24f94', '#b72164']" in data
+    assert "purple_dress: ['#d6b6ff', '#8b5cf6', '#5631a5']" in data
     assert "stop.style.setProperty('stop-color', colours[index])" in renderer
     assert "const whiteWidth = isGirl ? '10.5' : '13'" in renderer
     assert "iris.setAttribute('r', isGirl ? '5.2' : '7')" in renderer
@@ -135,12 +138,13 @@ def test_dresses_keep_their_named_colour_and_girl_eyes_are_gentler() -> None:
 def test_girl_has_a_smaller_head_and_slimmer_character_proportions() -> None:
     renderer = (ROOT / "static/js/avatar-character.js").read_text(encoding="utf-8")
 
-    assert "const GIRL_PROPORTION_TRANSFORMS" in renderer
-    assert "head: 'matrix(0.86 0 0 0.86 12.6 13.44)'" in renderer
-    assert "torso: 'matrix(0.8 0 0 1 18 0)'" in renderer
-    assert "lower: 'matrix(0.88 0 0 1 10.8 0)'" in renderer
-    assert "armLeft: 'translate(6 0)'" in renderer
-    assert "armRight: 'translate(-6 0)'" in renderer
+    data = (ROOT / "static/js/avatar-data.js").read_text(encoding="utf-8")
+    assert "const GIRL_PROPORTION_TRANSFORMS" in data
+    assert "head: 'matrix(0.86 0 0 0.86 12.6 13.44)'" in data
+    assert "torso: 'matrix(0.8 0 0 1 18 0)'" in data
+    assert "lower: 'matrix(0.88 0 0 1 10.8 0)'" in data
+    assert "armLeft: 'translate(6 0)'" in data
+    assert "armRight: 'translate(-6 0)'" in data
     assert renderer.count("hm-avatar3d-proportions-head") >= 3
     assert "hm-avatar3d-proportions-torso" in renderer
     assert "hm-avatar3d-proportions-lower" in renderer
@@ -166,6 +170,8 @@ def test_character_assets_are_shared_lazy_and_do_not_need_html_version_edits() -
     assert ".hm-character-avatar" not in theme
     assert ".hm-kid-avatar" not in theme
     assert "/static/js/avatar-character.js" in CHARACTER_ASSET_PATHS
+    assert "/static/js/avatar-data.js" in CHARACTER_ASSET_PATHS
+    assert "/static/js/avatar-pet.js" in CHARACTER_ASSET_PATHS
     assert "/static/css/avatar-character.css" in CHARACTER_ASSET_PATHS
     assert cache_control_for_static_asset("/static/js/avatar-character.js?v=old") == (
         CHARACTER_ASSET_CACHE_CONTROL

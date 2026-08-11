@@ -14,6 +14,8 @@ CHARACTER_ASSET_PATHS = frozenset(
         "/static/css/character-customise.css",
         "/static/js/auth-nav.js",
         "/static/js/avatar-character.js",
+        "/static/js/avatar-data.js",
+        "/static/js/avatar-pet.js",
         "/static/js/character-customise.js",
     }
 )

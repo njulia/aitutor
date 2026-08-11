@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field, SecretStr
 
-from src.progress_db import verify_user_credentials
+from src.progress_db import get_daily_goal_stats, verify_user_credentials
 
 from .account_store import (
     account_has_active_reward_subscription,
@@ -27,6 +27,7 @@ from .reward_models import (
     RewardDecisionRequest,
     RewardRequest,
 )
+from .capybara_store import ACTIVITIES, FRUITS, get_capybara_store
 from .reward_store import get_reward_store
 
 
@@ -70,6 +71,16 @@ class ParentRedemptionDecisionRequest(BaseModel):
 
 class ParentPasswordRequest(BaseModel):
     parent_password: SecretStr
+
+
+class CapybaraFruitRequest(BaseModel):
+    student_id: str | None = Field(default=None, max_length=80)
+    fruit: str = Field(min_length=1, max_length=30)
+
+
+class CapybaraActivityRequest(BaseModel):
+    student_id: str | None = Field(default=None, max_length=80)
+    activity: str = Field(min_length=1, max_length=20)
 
 
 class AvatarPreferenceRequest(BaseModel):
@@ -218,6 +229,86 @@ def build_reward_router(
             },
             **dashboard,
         }
+
+    async def _capybara_goal_context(learner: dict) -> tuple[bool, int, int, str]:
+        from src.webapp.account_store import get_learning_target
+
+        target = await asyncio.to_thread(get_learning_target, learner["id"])
+        goal = max(1, int(target.get("daily_goal") or 1))
+        stats = await asyncio.to_thread(get_daily_goal_stats, learner["id"], goal)
+        from datetime import datetime, UTC
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            tz = ZoneInfo(__import__("os").getenv("REWARD_TIMEZONE", "Europe/London"))
+        except ZoneInfoNotFoundError:
+            tz = ZoneInfo("UTC")
+        today = datetime.now(UTC).astimezone(tz).date().isoformat()
+        count = next((int(item["count"]) for item in stats.get("daily_counts", []) if item["date"] == today), 0)
+        return count >= goal, count, goal, today
+
+    @router.get("/api/rewards/capybara")
+    async def capybara_status(
+        request: Request,
+        student_id: str | None = Query(default=None, max_length=80),
+    ):
+        account, learner = await authenticated_learner_context(request, student_id)
+        completed, count, goal, today = await _capybara_goal_context(learner)
+        pet = await asyncio.to_thread(
+            get_capybara_store().status,
+            account_id=account["id"],
+            student_id=learner["id"],
+            daily_goal_completed=completed,
+            today=today,
+        )
+        return {
+            "success": True,
+            "learner": {"id": learner["id"], "name": learner["name"], "year_group": learner["year_group"]},
+            "daily_goal": {"completed": completed, "count": count, "target": goal},
+            "pet": pet,
+        }
+
+    @router.post("/api/rewards/capybara/adopt")
+    async def capybara_adopt(request: Request, body: CapybaraActivityRequest):
+        account, learner = await authenticated_learner_context(request, body.student_id)
+        completed, count, goal, today = await _capybara_goal_context(learner)
+        pet = await asyncio.to_thread(
+            get_capybara_store().adopt_new_baby,
+            account_id=account["id"], student_id=learner["id"],
+            daily_goal_completed=completed, today=today,
+        )
+        return {"success": True, "daily_goal": {"completed": completed, "count": count, "target": goal}, "pet": pet}
+
+    @router.post("/api/rewards/capybara/activity")
+    async def capybara_activity(request: Request, body: CapybaraActivityRequest):
+        account, learner = await authenticated_learner_context(request, body.student_id)
+        completed, count, goal, today = await _capybara_goal_context(learner)
+        try:
+            pet = await asyncio.to_thread(
+                get_capybara_store().act,
+                account_id=account["id"], student_id=learner["id"],
+                activity=body.activity, daily_goal_completed=completed, today=today,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"success": True, "daily_goal": {"completed": completed, "count": count, "target": goal}, "pet": pet}
+
+    @router.put("/api/rewards/capybara/fruit")
+    async def capybara_fruit(request: Request, body: CapybaraFruitRequest):
+        account, learner = await authenticated_learner_context(request, body.student_id)
+        completed, count, goal, today = await _capybara_goal_context(learner)
+        try:
+            pet = await asyncio.to_thread(
+                get_capybara_store().set_fruit,
+                account_id=account["id"], student_id=learner["id"],
+                fruit=body.fruit, daily_goal_completed=completed, today=today,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"success": True, "daily_goal": {"completed": completed, "count": count, "target": goal}, "pet": pet}
 
     @router.get("/api/rewards/avatar")
     async def avatar_profile(

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Playtime with your Homework Magic capybara.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Capybara Playtime | Homework Magic</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260811-capybara-2">
+  <link rel="stylesheet" href="/static/css/playtime.css?v=20260811-capybara-2">
+</head>
+<body class="hm-page hm-playtime-page">
+<header class="hm-site-header">
+  <div class="hm-nav-wrap">
+    <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+  </div>
+</header>
+
+<main class="hm-playtime-shell" id="main-content">
+  <section class="hm-playtime-status" id="playtime-status" role="status" aria-live="polite">Loading playtime…</section>
+
+  <section class="hm-playtime-login" id="playtime-login" hidden>
+    <div class="hm-playtime-card hm-playtime-login-card">
+      <div class="hm-playtime-big-emoji" aria-hidden="true">🦫🍎</div>
+      <h1>Capybara Playtime</h1>
+      <p>Sign in with your kid login to meet your capybara.</p>
+      <a class="hm-playtime-button primary" href="/kid-login?next=/playtime">Kid sign in</a>
+    </div>
+  </section>
+
+  <section id="playtime-app" hidden>
+    <div class="hm-playtime-heading">
+      <div>
+        <p class="hm-playtime-kicker">🌿 MY LITTLE FRIEND</p>
+        <h1><span id="kid-name">Your</span>'s Capybara Playtime</h1>
+        <p>Finish today's learning goal, then take a little play break together.</p>
+      </div>
+      <a class="hm-playtime-back" href="/app">← Back to learning</a>
+    </div>
+
+    <section class="hm-goal-banner" id="goal-banner" aria-live="polite">
+      <div class="hm-goal-icon" aria-hidden="true">🎯</div>
+      <div>
+        <strong id="goal-title">Today's goal</strong>
+        <span id="goal-copy">Checking your learning goal…</span>
+      </div>
+      <div class="hm-goal-count" id="goal-count">0 / 1</div>
+    </section>
+
+    <div class="hm-playtime-grid">
+      <section class="hm-pet-card" aria-label="Your capybara">
+        <div class="hm-pet-bubble" id="pet-message" role="status" aria-live="polite">Hi! I'm your baby capybara! 💕</div>
+        <div class="hm-pet-stage" id="pet-stage">
+          <div class="hm-action-prop hm-prop-ball" id="prop-ball" aria-hidden="true">⚽</div>
+          <div class="hm-action-prop hm-prop-food" id="prop-food" aria-hidden="true">🥕</div>
+          <div class="hm-action-prop hm-prop-poo" id="prop-poo" aria-hidden="true">💩</div>
+          <div class="hm-action-prop hm-prop-broom" id="prop-broom" aria-hidden="true">🧹</div>
+          <div class="hm-sleep-z" id="sleep-z" aria-hidden="true">Zzz…</div>
+          <div class="hm-pet-shadow" aria-hidden="true"></div>
+          <div class="hm-pet-fruit" id="pet-fruit" aria-hidden="true">🍎</div>
+          <div class="hm-capybara" id="capybara" data-stage="1" data-action="idle" aria-label="Cute capybara">
+            <div class="hm-capy-ear left"></div><div class="hm-capy-ear right"></div>
+            <div class="hm-capy-body">
+              <div class="hm-capy-paw left"></div><div class="hm-capy-paw right"></div>
+              <div class="hm-capy-face">
+                <span class="hm-capy-eye left"></span><span class="hm-capy-eye right"></span>
+                <span class="hm-capy-eyelid left"></span><span class="hm-capy-eyelid right"></span>
+                <span class="hm-capy-cheek left"></span><span class="hm-capy-cheek right"></span>
+                <span class="hm-capy-snout"><span class="hm-capy-nose"></span><span class="hm-capy-smile"></span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hm-pet-name-row">
+          <div>
+            <h2 id="pet-stage-name">Baby Capy</h2>
+            <p id="pet-growth-copy">Tiny paws, huge cuddles!</p>
+          </div>
+          <span class="hm-generation" id="pet-generation">Baby #1</span>
+        </div>
+        <div class="hm-care-meter">
+          <div class="hm-care-meter-top"><span>Care level</span><strong id="care-points">0</strong></div>
+          <div class="hm-care-track"><span id="care-bar"></span></div>
+        </div>
+      </section>
+
+      <aside class="hm-play-panel">
+        <section class="hm-play-section">
+          <h2>🎮 What should we do?</h2>
+          <p class="hm-play-hint" id="play-hint">Complete today's goal to unlock playtime.</p>
+          <div class="hm-activity-grid" id="activity-grid">
+            <button type="button" class="hm-activity" data-activity="play"><span>🤸</span><b>Play</b><small>Jump &amp; roll!</small></button>
+            <button type="button" class="hm-activity" data-activity="food"><span>🥕</span><b>Food</b><small>Watch me eat!</small></button>
+            <button type="button" class="hm-activity" data-activity="poo"><span>🧹</span><b>Clean up</b><small>Find &amp; sweep!</small></button>
+            <button type="button" class="hm-activity" data-activity="sleep"><span>😴</span><b>Sleep</b><small>Close eyes &amp; snooze</small></button>
+          </div>
+        </section>
+
+        <section class="hm-fruit-section">
+          <h2>🍓 Pick a fruit for its head</h2>
+          <p>Choose a new fruit whenever you like.</p>
+          <div class="hm-fruit-grid" id="fruit-grid"></div>
+        </section>
+
+        <section class="hm-play-rules">
+          <h2>🌟 Your care rule</h2>
+          <p>When you finish today's Daily Goal, give your capybara some playtime. If a completed-goal day ends without <strong>Play</strong>, your capybara peacefully goes to the rainbow garden and the next visit starts a brand-new baby.</p>
+          <p class="hm-no-rewards-note">Playtime never takes away XP or Gift Points.</p>
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <section class="hm-pet-gone" id="pet-gone" hidden>
+    <div class="hm-playtime-card">
+      <div class="hm-rainbow" aria-hidden="true">🌈✨🌿</div>
+      <h1>Your capybara is resting in the rainbow garden</h1>
+      <p>It has peacefully finished its little journey. Your learning adventure can welcome a brand-new baby capybara.</p>
+      <button type="button" class="hm-playtime-button primary" id="adopt-button">💚 Meet my new baby</button>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/session-context.js?v=20260811-capybara-2"></script>
+<script src="/static/js/avatar-character.js?v=20260811-capybara-2"></script>
+<script src="/static/js/auth-nav.js?v=20260811-capybara-2"></script>
+<script src="/static/js/playtime.js?v=20260811-capybara-2"></script>
+</body>
+</html>

@@ -407,3 +407,54 @@ def test_review_fingerprint_never_contains_raw_homework_or_answers() -> None:
         answers="Private pupil answer",
         subject="English",
     )
+
+
+def test_avatar_pet_unlocks_after_daily_goal_without_changing_wallet(tmp_path) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'pet.db'}")
+    account_id = "acct_pet"
+    student_id = "stu_pet"
+
+    locked = store.pet_summary(
+        account_id=account_id,
+        student_id=student_id,
+        daily_goal=1,
+        checked_today=0,
+    )
+    assert locked["unlocked"] is False
+    with pytest.raises(PermissionError):
+        store.pet_action(
+            account_id=account_id,
+            student_id=student_id,
+            daily_goal=1,
+            checked_today=0,
+            action="dance",
+        )
+
+    before = store.dashboard(account_id=account_id, student_id=student_id)["wallet"]
+    now = datetime.now(UTC).replace(microsecond=0)
+    store.award_checked_activity(
+        account_id=account_id,
+        student_id=student_id,
+        fingerprint=_fingerprint("pet-unlock"),
+        subject="Maths",
+        awarded_at=now,
+    )
+    checked_today = store.dashboard(
+        account_id=account_id, student_id=student_id
+    )["week_summary"]["checked_today"]
+    assert checked_today == 1
+
+    unlocked = store.pet_action(
+        account_id=account_id,
+        student_id=student_id,
+        daily_goal=1,
+        checked_today=checked_today,
+        action="dance",
+    )
+    assert unlocked["unlocked"] is True
+    assert unlocked["play_count"] == 1
+    assert unlocked["friendship"] == 2
+
+    after = store.dashboard(account_id=account_id, student_id=student_id)["wallet"]
+    assert after["lifetime_xp"] == before["lifetime_xp"] + 30
+    assert after["gift_points"] == before["gift_points"]
