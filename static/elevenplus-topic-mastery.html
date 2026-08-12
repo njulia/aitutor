@@ -55,12 +55,7 @@
         button { touch-action: manipulation; }
         .skip-link { position: absolute; left: -9999px; top: 8px; z-index: 100; background: #fff; padding: 9px 13px; border-radius: 9px; }
         .skip-link:focus { left: 8px; }
-        .site-header { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); }
-        .header-inner { max-width: 1120px; margin: auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-        .brand { color: var(--purple-dark); font-weight: 850; font-size: 1.17rem; text-decoration: none; }
-        .site-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-        .site-nav a { color: var(--muted); text-decoration: none; font-weight: 680; padding: 8px 11px; border-radius: 999px; }
-        .site-nav a:hover, .site-nav a:focus-visible, .site-nav a[aria-current="page"] { color: var(--purple-dark); background: var(--purple-soft); outline: none; }
+        .topic-header { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); }
         main { max-width: 1120px; margin: auto; padding: 32px 20px 72px; }
         .hero { padding: 34px; border-radius: 26px; color: #fff; background: linear-gradient(135deg,#645bd4,#8d55b7); box-shadow: var(--shadow); }
         .eyebrow { font-weight: 780; letter-spacing: .02em; }
@@ -99,32 +94,51 @@
         .feedback { margin-top: 18px; padding: 18px; border-radius: 15px; background: var(--green-soft); border: 1px solid #b9e4cd; }
         .feedback > :first-child { margin-top: 0; }
         .feedback > :last-child { margin-bottom: 0; }
+
+        /* Review summary 表格样式 */
+        .feedback table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 14px 0;
+          font-size: 0.93em;
+        }
+        .feedback thead th {
+          background: #d6efe1;
+          color: #176747;
+          font-weight: 700;
+          text-align: left;
+          padding: 10px 12px;
+          border-bottom: 2px solid #b9e4cd;
+        }
+        .feedback tbody td {
+          padding: 9px 12px;
+          border-bottom: 1px solid #e0efe7;
+          vertical-align: top;
+        }
+        .feedback tbody tr:nth-child(even) {
+          background: #f9fcfa;
+        }
         @media (max-width: 790px) { .subject-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .selector-grid { grid-template-columns: 1fr 1fr; } .selector-grid .btn { grid-column: 1/-1; } }
-        @media (max-width: 560px) { .header-inner { align-items: flex-start; flex-direction: column; } .site-nav { justify-content: flex-start; } main { padding: 20px 13px 55px; } .hero,.card { padding: 20px; } .subject-grid,.selector-grid { grid-template-columns: 1fr; } .practice-heading { flex-direction: column; } }
+        @media (max-width: 560px) { main { padding: 20px 13px 55px; } .hero,.card { padding: 20px; } .subject-grid,.selector-grid { grid-template-columns: 1fr; } .practice-heading { flex-direction: column; } }
         @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation-duration: .001ms !important; } }
     </style>
 </head>
 <body class="hm-eleven">
 <a class="skip-link" href="#main-content">Skip to topic mastery</a>
-<header class="site-header">
-    <div class="header-inner">
-        <a class="brand" href="/">✨ Homework Magic</a>
-        <nav class="site-nav" aria-label="Main navigation">
-            <a href="/elevenplus-practice">11+ practice</a>
-            <a href="/elevenplus-mock-exams">11+ mock</a>
-            <a href="/elevenplus/articles">11+ articles</a>
-            <a href="/elevenplus-topic-mastery" aria-current="page">Topic mastery</a>
-            <a href="/elevenplus-year-round-plan">Year-round plan</a>
-            <a href="/progress" id="kid-progress-link">Progress</a>
-            <a href="/rewards" id="kid-rewards-link">Rewards</a>
-            <a href="/pricing" id="parent-plan-link">Parent plans</a>
-            <a href="/parent-dashboard" id="parent-dashboard-link">Parent dashboard</a>
-            <a href="/login" id="home-login-link">Login</a>
-<!--            <a href="/register">Register</a>-->
-            <a href="#" id="home-logout-link" hidden>Logout</a>
-        </nav>
+<header class="topic-header">
+    <div class="hm-nav-wrap">
+      <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+      <nav class="hm-main-nav" aria-label="Main navigation">
+        <a href="/elevenplus-practice">11+ practice</a>
+        <a href="/elevenplus-mock-exams">11+ mock exams</a>
+        <a href="/elevenplus/articles">11+ articles</a>
+        <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
+        <a href="/app">Homework</a>
+        <a href="/login" data-auth-login>Parent sign in</a>
+        <a href="#" data-auth-logout hidden>Log out</a>
+      </nav>
     </div>
-</header>
+  </header>
 
 <main id="main-content">
     <section class="hero" aria-labelledby="page-title">
@@ -249,13 +263,29 @@
             showStatus(error.message || 'Something went wrong. Please try again.');
         } finally { setLoading(false); }
     }
+    function findFirstUnansweredQuestion() {
+        const items = document.querySelectorAll('#question-container .question-response-item[data-question-number]');
+        for (let i = 0; i < items.length; i++) {
+            const checked = items[i].querySelector('input:checked');
+            if (!checked) return items[i];
+        }
+        return null;
+    }
     async function checkAnswers() {
         if (!state.homework) return;
         const block = document.querySelector('#question-container .question-response-block');
         const answers = window.HomeworkQuestionRenderer.getBlockAnswer(block);
         const answerCount = answers ? answers.split('\n').filter(Boolean).length : 0;
         const questionCount = Array.isArray(state.homework.questions) ? state.homework.questions.length : 0;
-        if (!answers || answerCount < questionCount) { showStatus('Please choose one answer for every question before checking.'); return; }
+        if (!answers || answerCount < questionCount) {
+            const first = findFirstUnansweredQuestion();
+            if (first) {
+                first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                first.querySelector('input')?.focus();
+            }
+            showStatus('Please choose one answer for every question before checking.');
+            return;
+        }
         showStatus('');
         const button = document.getElementById('check-button');
         button.disabled = true; button.textContent = 'Checking…';

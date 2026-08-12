@@ -29,6 +29,9 @@
 
 * { box-sizing: border-box; }
 
+/* Safari < 15.4 需要显式声明 hidden 样式 */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; }
 
 body.hm-home,
@@ -99,13 +102,14 @@ a { -webkit-tap-highlight-color: transparent; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
 }
+
+/* Safari < 14.1 不支持 flex gap, 用 margin 替代 */
+.hm-nav-wrap > .hm-brand { margin-right: 24px; }
 
 .hm-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   color: var(--hm-ink);
   text-decoration: none;
   font-size: 1.16rem;
@@ -116,6 +120,7 @@ a { -webkit-tap-highlight-color: transparent; }
 .hm-brand-mark {
   width: 42px;
   height: 42px;
+  margin-right: 10px; /* Safari < 14.1 flex gap 替代 */
   display: grid;
   place-items: center;
   border: 2px solid var(--hm-ink);
@@ -129,8 +134,10 @@ a { -webkit-tap-highlight-color: transparent; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
 }
+
+/* Safari < 14.1 不支持 flex gap, 用 margin 替代 */
+.hm-main-nav a + a { margin-left: 6px; }
 
 .hm-main-nav a {
   min-height: 44px;

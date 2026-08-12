@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Homework Magic — Friendly AI Homework Help for Ages 5–11</title>
-  <meta name="description" content="Parent-built, personalised UK primary practice for Years 1–6, with short daily activities, kind instant feedback and focused 11+ support.">
-  <meta name="keywords" content="UK primary homework, KS1 homework, KS2 homework, 11 plus practice, National Curriculum homework, homework help for children">
+  <meta name="description" content="Parent-built UK primary practice for Years 1–6, with short daily activities, kind instant feedback, and a 11+ preparation roadmap including school finder, mock exams and year-round study plans.">
+  <meta name="keywords" content="UK primary homework, KS1 homework, KS2 homework, 11 plus practice, 11+ preparation roadmap, school finder, secondary school finder, 11+ mock exams, year-round study plan, National Curriculum homework, homework help for children">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://homeworkmagic.co.uk/">
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="Homework Magic — Friendly Homework Help for Ages 5–11">
-  <meta property="og:description" content="Created by a parent for short, personalised primary practice with encouraging feedback built in.">
+  <meta property="og:description" content="Parent-built UK primary practice with a 11+ preparation roadmap: find secondary schools near you, take mock exams, and follow a year-round study plan.">
   <meta property="og:url" content="https://homeworkmagic.co.uk/">
   <meta property="og:site_name" content="Homework Magic">
   <meta property="og:locale" content="en_GB">
@@ -22,7 +22,7 @@
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Homework Magic — Friendly Homework Help for Ages 5–11">
-  <meta name="twitter:description" content="Created by a parent for short, personalised primary practice with encouraging feedback built in.">
+  <meta name="twitter:description" content="Parent-built for short primary practice, with a 11+ preparation roadmap covering school finder, mock exams and year-round study plans.">
   <meta name="twitter:image" content="https://homeworkmagic.co.uk/static/images/homework-magic-logo.png">
   <meta name="twitter:image:alt" content="Homework Magic mascot and wordmark">
   <link rel="preload" href="/static/images/homework-magic-logo.webp" as="image" type="image/webp" fetchpriority="high">
@@ -33,7 +33,7 @@
     "@context": "https://schema.org",
     "@type": "EducationalApplication",
     "name": "Homework Magic",
-    "description": "Personalised homework and encouraging feedback for UK primary school learners, covering Years 1–6 and 11+ preparation.",
+    "description": "Personalised homework and encouraging feedback for UK primary school learners, covering Years 1–6 and a 11+ preparation roadmap with school finder, mock exams and year-round study plans.",
     "applicationCategory": "EducationalApplication",
     "operatingSystem": "Web",
     "image": "https://homeworkmagic.co.uk/static/images/homework-magic-logo.png",
@@ -57,8 +57,19 @@
   </script>
 
 <style>
-.hm-path-actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+.hm-path-actions{display:flex;gap:.75rem;flex-wrap:nowrap;align-items:stretch;width:100%}.hm-path-actions .hm-button{flex:1 1 0;min-width:0;text-align:center}
 .hm-button-secondary{background:transparent;border:1px solid currentColor}
+
+.hm-workflow-stack{display:flex;flex-direction:column;gap:16px}
+.hm-workflow-card{padding:26px;border:1.5px solid var(--hm-line, #e0e0e0);border-radius:18px;background:var(--hm-card, #fff);box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.hm-workflow-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.hm-workflow-step{display:inline-block;background:var(--hm-blue-soft, #e8f0fe);color:var(--hm-blue, #215fa2);font-size:.75em;font-weight:700;padding:3px 10px;border-radius:10px}
+.hm-workflow-label{font-size:1.05em;color:var(--hm-muted)}
+.hm-workflow-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hm-workflow-node{display:inline-flex;align-items:center;gap:6px;background:var(--hm-soft, #f8f9fa);border:1.5px solid var(--hm-line, #e0e0e0);border-radius:999px;padding:8px 16px;text-decoration:none;color:var(--hm-ink);font-weight:700;font-size:1.05rem;transition:background .15s,box-shadow .15s}
+.hm-workflow-node:hover{background:#e8f0fe;border-color:#4285F4}
+.hm-wf-arrow{color:#aaa;font-weight:700;font-size:1.1em;flex-shrink:0}
+.hm-workflow-note{font-size:.9em;color:var(--hm-muted);margin-top:12px;font-style:italic}
 </style>
 </head>
 <body class="hm-home">
@@ -78,7 +89,7 @@
         <a href="/school-finder">School finder</a>
 <!--        <a href="/progress">Progress</a>-->
 <!--        <a href="/rewards">Rewards</a>-->
-        <a href="/pricing">Parent plans</a>
+<!--        <a href="/pricing">Parent plans</a>-->
         <a href="/parent-dashboard">Parent dashboard</a>
         <a href="/login" id="home-login-link">Login</a>
         <a href="#" id="home-logout-link" hidden>Logout</a>
@@ -235,34 +246,56 @@
       </div>
     </section>
 
-    <section class="hm-section" aria-labelledby="tip-title">
-      <div class="hm-tip-banner">
-        <div class="hm-tip-icon" aria-hidden="true">🌤️</div>
-        <div>
-          <h2 id="tip-title">A calmer homework tip</h2>
-          <p>Choose one clear goal and finish while the session still feels positive. For younger learners, a focused 10–15 minutes can be more useful than a long struggle.</p>
-        </div>
-        <a class="hm-button hm-button-small" href="/app">Try a short session</a>
-      </div>
-    </section>
+<!--    <section class="hm-section" aria-labelledby="tip-title">-->
+<!--      <div class="hm-tip-banner">-->
+<!--        <div class="hm-tip-icon" aria-hidden="true">🌤️</div>-->
+<!--        <div>-->
+<!--          <h2 id="tip-title">A calmer homework tip</h2>-->
+<!--          <p>Choose one clear goal and finish while the session still feels positive. For younger learners, a focused 10–15 minutes can be more useful than a long struggle.</p>-->
+<!--        </div>-->
+<!--        <a class="hm-button hm-button-small" href="/app">Try a short session</a>-->
+<!--      </div>-->
+<!--    </section>-->
 
     <section class="hm-section" aria-labelledby="eleven-title">
-      <div class="hm-eleven-callout">
-        <div>
-          <p class="hm-kicker">For older primary learners</p>
-          <h2 id="eleven-title">11+ practice with a clear path forward.</h2>
-          <p>Practise Maths, English, Verbal Reasoning and Non-Verbal Reasoning on demand, or follow a steady 52-week plan.</p>
-        </div>
-        <div class="hm-week-path" aria-label="Example 11 plus plan phases">
-          <div class="hm-week"><span>Weeks 1–13</span><span>Build foundations</span></div>
-          <div class="hm-week"><span>Weeks 14–38</span><span>Grow skills</span></div>
-          <div class="hm-week"><span>Weeks 39–52</span><span>Practise calmly</span></div>
-        </div>
-        <div class="hm-path-actions">
-            <a class="hm-button" href="/elevenplus-practice">Explore 11+ practice & mock exams & year-round study plan</a>
-            <a class="hm-button" href="/school-finder">Find schools near you</a>
-          </div>
+      <div class="hm-section-heading">
+        <p class="hm-kicker">For older primary learners</p>
+        <h2 id="eleven-title">Your 11+ preparation roadmap</h2>
+        <p>Every family's journey is different. Pick the workflow that fits your timeline.</p>
       </div>
+      <div class="hm-workflow-stack">
+        <div class="hm-workflow-card">
+          <div class="hm-workflow-head"><span class="hm-workflow-step">Path A</span><span class="hm-workflow-label">Just getting started</span></div>
+          <div class="hm-workflow-steps">
+            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/elevenplus-mock-exams" class="hm-workflow-node">2. Mock exam</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/app?tab=eleven" class="hm-workflow-node">3. Daily practice</a>
+          </div>
+        </div>
+        <div class="hm-workflow-card">
+          <div class="hm-workflow-head"><span class="hm-workflow-step">Path B</span><span class="hm-workflow-label">Building foundations</span></div>
+          <div class="hm-workflow-steps">
+            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/elevenplus-mock-exams" class="hm-workflow-node">2. Mock exam</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/elevenplus-topic-mastery" class="hm-workflow-node">3. Topic mastery</a>
+          </div>
+        </div>
+        <div class="hm-workflow-card">
+          <div class="hm-workflow-head"><span class="hm-workflow-step">Path C</span><span class="hm-workflow-label">Long-term preparation</span></div>
+          <div class="hm-workflow-steps">
+            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/elevenplus-year-round-plan" class="hm-workflow-node">2. Year-round plan</a>
+            <span class="hm-wf-arrow">→</span>
+            <a href="/elevenplus-mock-exams" class="hm-workflow-node">3. Mock exam</a>
+          </div>
+        </div>
+      </div>
+      <p class="hm-workflow-note">Mock exams help you identify weak areas, then targeted practice strengthens them — repeat as needed until exam day.</p>
     </section>
 
     <section class="hm-section" id="our-story" aria-labelledby="story-title">
@@ -272,7 +305,7 @@
           <p class="hm-kicker">Built from a real family need with love 🏡</p>
           <h2 id="story-title">Why I started Homework Magic</h2>
           <div class="hm-story-copy">
-            <p>I’m a parent whose daughter is starting Year 3 in September 2026. Her school does not set regular homework, but I wanted to give her a simple 10–15 minutes of useful practice each day.</p>
+            <p>I’m a parent whose daughter is starting Year 3 in September. Her school does not set regular homework, but I wanted to give her a simple 10–15 minutes of useful practice each day.</p>
             <p>The materials I found were often one-size-fits-all, and I still needed to choose the right work and check every answer myself. So I began building an AI tutor that could prepare practice for her level and give helpful feedback straight away, at any time.</p>
             <p>My daughter liked the idea and helped shape the design and choose the name <strong>Homework Magic</strong>. Her input is a daily reminder that learning should feel friendly, manageable and made for the child using it.</p>
                 <a class="hm-button hm-button-small" href="/messages">I’d love to hear your feedback</a>

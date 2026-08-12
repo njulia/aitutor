@@ -132,6 +132,7 @@
         <div class="tab" onclick="switchTab('users')">Students</div>
         <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
+        <div class="tab" onclick="switchTab('schools')">School Finder</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
         <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
         <a class="tab" href="/admin/messages" style="text-decoration:none;">User Messages</a>
@@ -227,6 +228,51 @@
                         </tr>
                     </thead>
                     <tbody id="subsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- School Finder Panel -->
+        <div class="panel" id="panel-schools">
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>School Finder</h3>
+                        <div style="font-size:12px;color:#888;margin-top:4px;">
+                            Search the public directory and mark an incorrect secondary-school result as excluded.
+                            The exclusion applies to future searches.
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input class="search-box" id="adminSchoolPostcode" type="text" placeholder="UK postcode e.g. E15 1AA">
+                        <button class="btn btn-primary" onclick="searchAdminSchools()">Find schools</button>
+                    </div>
+                </div>
+                <div id="adminSchoolResults" style="padding:16px;">
+                    <div style="color:#888;text-align:center;padding:24px;">Enter a postcode to find schools.</div>
+                </div>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>School reports</h3>
+                        <div style="font-size:12px;color:#888;margin-top:4px;">User reports are pending until an admin acknowledges or rejects them. Acknowledging excludes the school from future searches.</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadSchoolReports()">Refresh</button>
+                </div>
+                <table>
+                    <thead><tr><th>School</th><th>Report</th><th>Submitted</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody id="schoolReportsTable"></tbody>
+                </table>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Excluded schools</h3>
+                    <button class="btn btn-outline" onclick="loadExcludedSchools()">Refresh</button>
+                </div>
+                <table>
+                    <thead><tr><th>School</th><th>Reason</th><th>Marked by</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody id="excludedSchoolsTable"></tbody>
                 </table>
             </div>
         </div>
@@ -559,6 +605,7 @@
                 case 'users': loadUsers(); break;
                 case 'auth-users': loadAuthUsers(); break;
                 case 'subscriptions': loadSubscriptions(); break;
+                case 'schools': loadExcludedSchools(); loadSchoolReports(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
                 case 'ai-eval': loadAIEval(); break;
             }
@@ -566,8 +613,18 @@
 
         function refreshAll() {
             const active = document.querySelector('.tab.active');
-            if (active) loadTabData(active.textContent.toLowerCase().replace(' ', '-').replace('ai ', 'ai-'));
-            // also refresh auth users list
+            if (active) {
+                const labels = {
+                    'Overview': 'overview',
+                    'Students': 'users',
+                    'Auth Users': 'auth-users',
+                    'Subscriptions': 'subscriptions',
+                    'School Finder': 'schools',
+                    'AI Monitor': 'ai-monitor',
+                    'AI Evaluation': 'ai-eval'
+                };
+                loadTabData(labels[active.textContent.trim()] || 'overview');
+            }
             loadAuthUsers();
         }
 
@@ -1499,6 +1556,163 @@
                         ${m.cfg.label}
                     </span>
                 `).join('');
+            }
+        }
+
+        async function searchAdminSchools() {
+            const input = document.getElementById('adminSchoolPostcode');
+            const container = document.getElementById('adminSchoolResults');
+            const postcode = (input.value || '').trim();
+            if (!postcode) {
+                container.innerHTML = '<div style="color:#c53030;padding:20px">Please enter a postcode.</div>';
+                return;
+            }
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Searching public school directory...</p></div>';
+            try {
+                const response = await fetch('/api/admin/schools/nearby', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({postcode})
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'School search failed.');
+                const schools = Array.isArray(data.schools) ? data.schools : [];
+                if (!schools.length) {
+                    container.innerHTML = '<div style="color:#888;text-align:center;padding:24px">No secondary schools found for this postcode.</div>';
+                    return;
+                }
+                container.innerHTML = schools.map(s => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 4px;border-bottom:1px solid #f0f0f0;">
+                        <div>
+                            <div style="font-weight:600">${escapeHtml(s.name || '')}</div>
+                            <div style="font-size:12px;color:#888;margin-top:4px;">
+                                ${Number(s.distance_km || 0).toFixed(1)} km · ${escapeHtml(s.type || 'Secondary school')}
+                            </div>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick='excludeAdminSchool(${JSON.stringify(s)})'>
+                            Mark not secondary
+                        </button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = `<div style="color:#c53030;padding:20px">${escapeHtml(err.message || 'School search failed.')}</div>`;
+            }
+        }
+
+        async function excludeAdminSchool(school) {
+            if (!school || !school.source_id) {
+                alert('This school record cannot be excluded because the public directory did not provide an ID.');
+                return;
+            }
+            const reason = prompt('Why is this school not a secondary school?', 'Marked not a secondary school');
+            if (reason === null) return;
+            try {
+                const response = await fetch('/api/admin/schools/exclude', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        source_id: school.source_id,
+                        name: school.name,
+                        latitude: school.latitude,
+                        longitude: school.longitude,
+                        reason
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not exclude school.');
+                await searchAdminSchools();
+                await loadExcludedSchools();
+            } catch (err) {
+                alert(err.message || 'Could not exclude school.');
+            }
+        }
+
+        async function loadSchoolReports() {
+            const tbody = document.getElementById('schoolReportsTable');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+            try {
+                const response = await fetch('/api/admin/schools/reports?status=pending', {credentials: 'same-origin', cache: 'no-store'});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not load school reports.');
+                const rows = Array.isArray(data.reports) ? data.reports : [];
+                tbody.innerHTML = rows.length ? rows.map(r => `
+                    <tr>
+                        <td><strong>${escapeHtml(r.name || '')}</strong><br><small>${escapeHtml(r.source_id || '')}</small></td>
+                        <td>${escapeHtml(r.reason || '')}</td>
+                        <td>${escapeHtml(r.submitted_by || 'Anonymous')}</td>
+                        <td>${escapeHtml(new Date(r.created_at).toLocaleString())}</td>
+                        <td style="white-space:nowrap;">
+                            <button class="btn btn-primary btn-sm" onclick="reviewSchoolReport(${JSON.stringify(r.report_id)}, 'acknowledge')">Acknowledge</button>
+                            <button class="btn btn-outline btn-sm" onclick="reviewSchoolReport(${JSON.stringify(r.report_id)}, 'reject')">Reject</button>
+                        </td>
+                    </tr>
+                `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:30px">No pending school reports.</td></tr>';
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="color:#c53030;padding:20px">${escapeHtml(err.message || 'Could not load school reports.')}</td></tr>`;
+            }
+        }
+
+        async function reviewSchoolReport(reportId, action) {
+            const label = action === 'acknowledge' ? 'acknowledge this report and exclude the school from future searches' : 'reject this report';
+            if (!confirm(`Are you sure you want to ${label}?`)) return;
+            const note = prompt('Optional admin note:', '') ?? '';
+            try {
+                const response = await fetch('/api/admin/schools/reports/' + encodeURIComponent(reportId) + '/review', {
+                    method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action, note})
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not review school report.');
+                await loadSchoolReports();
+                await loadExcludedSchools();
+                if ((document.getElementById('adminSchoolPostcode').value || '').trim()) await searchAdminSchools();
+            } catch (err) {
+                alert(err.message || 'Could not review school report.');
+            }
+        }
+
+        async function loadExcludedSchools() {
+            const tbody = document.getElementById('excludedSchoolsTable');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+            try {
+                const response = await fetch('/api/admin/schools/excluded', {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not load exclusions.');
+                const rows = Array.isArray(data.schools) ? data.schools : [];
+                tbody.innerHTML = rows.length ? rows.map(s => `
+                    <tr>
+                        <td><strong>${escapeHtml(s.name || '')}</strong><br><small>${escapeHtml(s.source_id || '')}</small></td>
+                        <td>${escapeHtml(s.reason || '')}</td>
+                        <td>${escapeHtml(s.excluded_by || '')}</td>
+                        <td>${escapeHtml(new Date(s.created_at).toLocaleString())}</td>
+                        <td><button class="btn btn-outline btn-sm" onclick="restoreAdminSchool(${JSON.stringify(s.source_id)})">Restore</button></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:30px">No excluded schools.</td></tr>';
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="color:#c53030;padding:20px">${escapeHtml(err.message || 'Could not load exclusions.')}</td></tr>`;
+            }
+        }
+
+        async function restoreAdminSchool(sourceId) {
+            if (!confirm('Restore this school to the School Finder?')) return;
+            try {
+                const response = await fetch('/api/admin/schools/exclude/' + encodeURIComponent(sourceId), {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not restore school.');
+                await loadExcludedSchools();
+                if ((document.getElementById('adminSchoolPostcode').value || '').trim()) await searchAdminSchools();
+            } catch (err) {
+                alert(err.message || 'Could not restore school.');
             }
         }
 

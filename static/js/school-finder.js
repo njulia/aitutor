@@ -68,7 +68,7 @@
     const search = `https://www.get-information-schools.service.gov.uk/Search?SearchType=Text&SearchText=${encodeURIComponent(school.name)}`;
     const badge = school.eligibility && school.eligibility.startsWith('Usually not') ? 'not-suitable' : 'possible';
     const map = school.google_maps_url ? `<a class="map-link" href="${esc(school.google_maps_url)}" target="_blank" rel="noopener" data-map-school="${esc(school.name)}">View home → school on Google Maps</a>` : '';
-    return `<article class="school-card"><div class="school-top"><h3>${index + 1}. ${esc(school.name)}</h3><span class="distance">${esc(school.distance_km)} km</span></div><div class="school-meta"><span>${esc(school.route || school.type || 'Secondary school')}</span><span>${esc(normaliseGender(school.gender, school.name))}</span></div><p class="eligibility-badge ${badge}">${esc(school.eligibility || 'Potential option — check admissions')}</p><p class="school-note"><strong>Admissions:</strong> ${esc(school.admission_hint)}</p><p class="school-note">${esc(school.level_note)}</p>${school.address ? `<p class="school-note">${esc(school.address)}</p>` : ''}<div class="school-actions">${mockLink(school.name)}${map}${site}<a href="${search}" target="_blank" rel="noopener">Check DfE record</a></div></article>`;
+    return `<article class="school-card"><div class="school-top"><h3>${index + 1}. ${esc(school.name)}</h3><span class="distance">${esc(school.distance_km)} km</span></div><div class="school-meta"><span>${esc(school.route || school.type || 'Secondary school')}</span><span>${esc(normaliseGender(school.gender, school.name))}</span></div><p class="eligibility-badge ${badge}">${esc(school.eligibility || 'Potential option — check admissions')}</p><p class="school-note"><strong>Admissions:</strong> ${esc(school.admission_hint)}</p><p class="school-note">${esc(school.level_note)}</p>${school.address ? `<p class="school-note">${esc(school.address)}</p>` : ''}<div class="school-actions"><a href="${search}" target="_blank" rel="noopener">Check DfE record</a>${mockLink(school.name)}${map}${site}</div></article>`;
   };
 
   function showMap(schools, allLocationsUrl, allLocationsEmbedUrl) {
@@ -145,7 +145,11 @@
       setStatus(data.schools?.length ? `${data.schools.length} nearby schools found.` : 'No suitable secondary schools were found in the public directory for this postcode.', false);
       if (data.schools?.length && results) results.scrollIntoView({behavior:'smooth', block:'start'});
     } catch (error) {
-      setStatus(error.message || 'We could not complete the lookup. Please try again.', true);
+      console.error('School Finder lookup failed:', error);
+      const message = error && error.message === 'Failed to fetch'
+        ? 'The school directory could not be reached just now. Please try again in a moment.'
+        : (error.message || 'We could not complete the lookup. Please try again.');
+      setStatus(message, true);
     } finally { button.disabled = false; }
   });
 })();

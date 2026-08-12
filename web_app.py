@@ -43,7 +43,10 @@ from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
 from src.webapp.parent_dashboard_routes import build_parent_dashboard_router
-from src.webapp.school_finder_routes import build_school_finder_router
+from src.webapp.school_finder_routes import (
+    build_school_finder_router,
+    build_school_finder_admin_router,
+)
 from src.webapp.email_service import send_registration_confirmation_email
 from src.webapp.privacy_metrics import (
     marketing_summary,
@@ -734,6 +737,7 @@ app.include_router(
 )
 app.include_router(build_parent_dashboard_router(_resolve_username))
 app.include_router(build_school_finder_router())
+app.include_router(build_school_finder_admin_router(_require_admin))
 
 
 def generate_homework_with_profile(profile: dict, subjects: list, is_eleven_plus: bool = False):

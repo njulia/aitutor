@@ -13,8 +13,18 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from src.webapp.school_finder_exclusions import (
+    create_school_report,
+    exclude_school,
+    is_school_excluded,
+    list_excluded_schools,
+    list_school_reports,
+    review_school_report,
+    restore_school as restore_excluded_school,
+)
 
 _UK_POSTCODE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}$", re.I)
 
@@ -52,19 +62,23 @@ def _school_level(tags: dict[str, Any]) -> str:
 
 
 def _is_secondary_school(tags: dict[str, Any]) -> bool:
-    """Return True only when public school tags provide a secondary-age signal.
+    """Return True unless public school tags clearly show a primary/early-years school.
 
-    We intentionally do not treat "academy" by itself as secondary: many UK
-    primary schools are academies (for example Mossbourne Riverside Academy).
-    If the public directory does not identify the phase clearly, we skip the
-    school rather than guessing.
+    Many UK OSM records omit phase metadata.  We only reject schools with
+    explicit primary signals; all other schools are treated as potential
+    secondary/through candidates.  Administrators can exclude misclassified
+    primary schools via the admin panel.
     """
     values = {str(k).lower(): str(v or "").strip().lower() for k, v in tags.items()}
     level = " ".join(values.get(k, "") for k in ("school:level", "isced:level", "education", "phase", "school:phase"))
     age_text = " ".join(values.get(k, "") for k in ("age", "grades", "min_age", "max_age", "start_age", "end_age"))
     name = values.get("name", "")
 
-    # Explicit primary/early-years signals always win.
+    # 显式标记为小学/低年级的学校才排除
+    # Exclude only schools with explicit primary/early-years signals, including names.
+    if re.search(r"\b(primary|infant|junior|nursery|reception|prep)\b", name):
+        return False
+
     if any(x in level for x in ("primary", "infant", "junior", "first school")):
         return False
     if any(x in age_text for x in ("3-11", "3 – 11", "4-11", "4 – 11", "5-11", "5 – 11", "reception")) and not any(
@@ -72,24 +86,11 @@ def _is_secondary_school(tags: dict[str, Any]) -> bool:
     ):
         return False
 
-    # Prefer explicit phase/IS​​CED/level data.
-    if any(x in level for x in ("secondary", "isced:level=2", "isced:level=3", "secondary;tertiary", "tertiary;secondary")):
-        return True
-
-    # Common OSM age/grade representations for Year 7+ schools.
-    if re.search(r"(?:^|[^0-9])(?:11|12|13|14|15|16|17|18)(?:\s*(?:-|–|to)\s*(?:16|17|18|19))", age_text):
-        return True
-    if re.search(r"(?:^|[^0-9])(?:7|8|9|10|11|12|13)(?:\s*(?:-|–|to)\s*(?:11|12|13|14|15|16|17|18))", age_text):
-        return True
-    if any(re.search(rf"\b{g}\b", age_text) for g in ("year 7", "year 8", "year 9", "year 10", "year 11", "ks3", "ks4")):
-        return True
-
-    # Name-based fallback is deliberately narrow; "academy" and "college"
-    # alone are not enough because both are used for primary/FE settings.
-    if any(x in name for x in ("grammar school", "secondary school", "high school")):
-        return True
-
-    return False
+    # 其余学校（包含缺乏阶段元数据的）默认视为中学候选，由管理员面板排除误判学校
+    # Treat all remaining schools (including those without phase metadata)
+    # as secondary-school candidates.  Admins can exclude misclassified
+    # primary schools via the admin panel.
+    return True
 
 
 def _admission_hint(tags: dict[str, Any], name: str) -> str:
@@ -131,62 +132,89 @@ def _website(tags: dict[str, Any]) -> str | None:
     return None
 
 
-async def _fetch_nearby(postcode: str, entry_year: str = "Year 7", child_gender: str = "any") -> dict[str, Any]:
-    headers = {"User-Agent": "HomeworkMagic/1.0 school-finder"}
-    async with httpx.AsyncClient(timeout=8.0, headers=headers, follow_redirects=True) as client:
-        geo = await client.get(f"https://api.postcodes.io/postcodes/{postcode.replace(' ', '')}")
-        if geo.status_code != 200:
-            raise HTTPException(status_code=400, detail="We could not find that postcode. Please check it and try again.")
-        payload = geo.json().get("result") or {}
-        lat = float(payload["latitude"])
-        lon = float(payload["longitude"])
-        council = payload.get("admin_district") or payload.get("parliamentary_constituency")
+async def _fetch_overpass_elements(client: httpx.AsyncClient, lat: float, lon: float) -> list[dict[str, Any]]:
+    """Fetch nearby school records from public Overpass mirrors.
 
-        # OSM is used only as a public geographic directory.  The query asks for
-        # secondary/all-through schools and returns no user data.
+    Cloud-hosted deployments can be rejected when sending large POST bodies to
+    public Overpass instances.  Use the standard GET ``data=`` interface first,
+    keep the query small, and rotate through current public mirrors.  A valid
+    empty result is a successful lookup, not an outage.
+    """
+    endpoints = (
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.osm.ch/api/interpreter",
+    )
+    # Keep the live request small enough for a normal web request.  The second
+    # radius is only attempted when the first query succeeds but finds nothing.
+    radii = (12000, 18000)
+    last_error: str | None = None
+
+    for radius in radii:
+        # 仅使用 amenity=school 标签获取所有学校，避免昂贵的正则 nwr 查询。
+        # 中学筛选在 Python 端 _is_secondary_school() 中完成。
         query = f"""
-        [out:json][timeout:8];
+        [out:json][timeout:15];
         (
-          nwr(around:18000,{lat},{lon})[amenity=school][school:level~"secondary|primary;secondary|secondary;tertiary",i];
-          nwr(around:18000,{lat},{lon})[amenity=school][isced:level~"2|3",i];
-          nwr(around:18000,{lat},{lon})[amenity=school][grades~"7|8|9|10|11|12",i];
+          nwr(around:{radius},{lat},{lon})[amenity=school];
         );
         out center tags;
         """
-        # Overpass instances can be busy and the more selective tag query is not
-        # consistently supported across instances. Try a small pool of public
-        # instances and use a broad school query, then filter locally.
-        elements = []
-        overpass_query = f"[out:json][timeout:15];nwr(around:18000,{lat},{lon})[amenity=school];out center tags;"
-        endpoints = [
-            "https://overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-        ]
-        last_error = None
         for endpoint in endpoints:
             try:
-                osm = await client.post(endpoint, content=overpass_query)
-                if osm.status_code == 200:
-                    elements = osm.json().get("elements", [])
-                    if elements:
-                        break
-                last_error = f"HTTP {osm.status_code}"
-            except httpx.HTTPError as exc:
-                last_error = str(exc)
-        if not elements and last_error:
-            raise HTTPException(status_code=503, detail="The public school directory is temporarily unavailable. Please try again.")
+                # GET is deliberately used here.  Some public Overpass mirrors
+                # and cloud egress paths reject POST requests even for valid
+                # OverpassQL, while GET is part of the documented interface.
+                response = await client.get(endpoint, params={"data": query})
+                if response.status_code != 200:
+                    last_error = f"HTTP {response.status_code} from {endpoint}"
+                    continue
+                payload = response.json()
+                elements = payload.get("elements") or []
+                if elements:
+                    return elements
+                # Empty is a successful directory lookup.  Try the larger
+                # radius before declaring that there are no nearby records.
+                last_error = None
+                break
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = f"{endpoint}: {exc}"
+
+    if last_error:
+        raise HTTPException(
+            status_code=503,
+            detail="The public school directory is temporarily unavailable. Please try again.",
+        )
+    return []
+
+
+async def _fetch_nearby(postcode: str, entry_year: str = "Year 7", child_gender: str = "any", include_admin_fields: bool = False) -> dict[str, Any]:
+    headers = {"User-Agent": "HomeworkMagic/1.0 (school-finder; public-directory)"}
+    timeout = httpx.Timeout(12.0, connect=5.0)
+    async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
+        try:
+            geo = await client.get(f"https://api.postcodes.io/postcodes/{postcode.replace(' ', '')}")
+        except httpx.HTTPError:
+            raise HTTPException(status_code=503, detail="The postcode service is temporarily unavailable. Please try again.")
+        if geo.status_code != 200:
+            raise HTTPException(status_code=400, detail="We could not find that postcode. Please check it and try again.")
+        try:
+            payload = geo.json().get("result") or {}
+            lat = float(payload["latitude"])
+            lon = float(payload["longitude"])
+        except (ValueError, TypeError, KeyError):
+            raise HTTPException(status_code=503, detail="The postcode service returned an invalid result. Please try again.")
+        council = payload.get("admin_district") or payload.get("parliamentary_constituency")
+
+        elements = await _fetch_overpass_elements(client, lat, lon)
 
     schools: list[dict[str, Any]] = []
     seen: set[str] = set()
     for el in elements:
         tags = el.get("tags") or {}
         name = str(tags.get("name") or "").strip()
-        # Only include schools for which public directory data gives a
-        # secondary-age signal. Do not infer secondary phase from generic words
-        # such as "academy" or "college".
-        if not _is_secondary_school(tags):
-            continue
-        if not name:
+        if not name or not _is_secondary_school(tags):
             continue
         centre = el.get("center") or {}
         slat, slon = el.get("lat", centre.get("lat")), el.get("lon", centre.get("lon"))
@@ -197,8 +225,14 @@ async def _fetch_nearby(postcode: str, entry_year: str = "Year 7", child_gender:
             continue
         seen.add(key)
         distance = _distance_km(lat, lon, float(slat), float(slon))
+        source_type = str(el.get("type") or "").strip().lower()
+        source_osm_id = str(el.get("id") or "").strip()
+        source_id = f"osm:{source_type}:{source_osm_id}" if source_type and source_osm_id else ""
         schools.append({
             "name": name,
+            "source_id": source_id,
+            "latitude": float(slat),
+            "longitude": float(slon),
             "distance_km": round(distance, 1),
             "type": tags.get("school:level") or tags.get("isced:level") or "Secondary school",
             "gender": tags.get("gender") or tags.get("school:gender") or "Not stated",
@@ -211,11 +245,25 @@ async def _fetch_nearby(postcode: str, entry_year: str = "Year 7", child_gender:
             "source": "OpenStreetMap public school directory",
         })
 
+    schools = [
+        school for school in schools
+        if not is_school_excluded(
+            source_id=school.get("source_id", ""),
+            name=school.get("name", ""),
+            latitude=school.get("latitude"),
+            longitude=school.get("longitude"),
+        )
+    ]
     schools.sort(key=lambda x: x["distance_km"])
     for school in schools:
         school["eligibility"] = _eligibility({}, school["name"], child_gender, entry_year)
         if school.get("gender") and school["gender"] != "Not stated":
             school["eligibility"] = _eligibility({"gender": school["gender"]}, school["name"], child_gender, entry_year)
+    if not include_admin_fields:
+        for school in schools:
+            school.pop("latitude", None)
+            school.pop("longitude", None)
+
     api_key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
     home_query = postcode.replace(" ", "+") + ", UK"
     for school in schools[:10]:
@@ -240,8 +288,95 @@ async def _fetch_nearby(postcode: str, entry_year: str = "Year 7", child_gender:
     }
 
 
+def build_school_finder_admin_router(require_admin) -> APIRouter:
+    """Protected administrator controls for persistent school exclusions."""
+    router = APIRouter(prefix="/api/admin/schools", tags=["admin school finder"])
+
+    @router.post("/nearby")
+    async def admin_nearby(req: Request, body: dict):
+        require_admin(req)
+        postcode = _normalise_postcode(str(body.get("postcode") or ""))
+        return await _fetch_nearby(
+            postcode,
+            str(body.get("entry_year") or "Year 7"),
+            str(body.get("child_gender") or "any"),
+            include_admin_fields=True,
+        )
+
+    @router.get("/excluded")
+    async def excluded_schools(req: Request):
+        require_admin(req)
+        return {"success": True, "schools": list_excluded_schools()}
+
+    @router.get("/reports")
+    async def school_reports(req: Request, status: str = "pending"):
+        require_admin(req)
+        return {"success": True, "reports": list_school_reports(status if status != "all" else None)}
+
+    @router.post("/reports/{report_id}/review")
+    async def review_school_report_endpoint(req: Request, report_id: str, body: dict):
+        admin_email = require_admin(req)
+        action = str(body.get("action") or "").strip().lower()
+        note = str(body.get("note") or "").strip()[:500]
+        try:
+            row = review_school_report(report_id=report_id, action=action, reviewed_by=str(admin_email), review_note=note)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="School report not found.")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return {"success": True, "report": row}
+
+    @router.post("/exclude")
+    async def exclude_school_endpoint(req: Request, body: dict):
+        admin_email = require_admin(req)
+        name = str(body.get("name") or "").strip()
+        source_id = str(body.get("source_id") or "").strip()
+        if not name or not source_id:
+            raise HTTPException(status_code=400, detail="School name and source ID are required.")
+        try:
+            latitude = float(body["latitude"]) if body.get("latitude") is not None else None
+            longitude = float(body["longitude"]) if body.get("longitude") is not None else None
+        except (TypeError, ValueError):
+            latitude = longitude = None
+        row = exclude_school(
+            source_id=source_id,
+            name=name,
+            latitude=latitude,
+            longitude=longitude,
+            reason=str(body.get("reason") or "Marked not a secondary school").strip()[:500],
+            excluded_by=str(admin_email),
+        )
+        return {"success": True, "school": row}
+
+    @router.delete("/exclude/{source_id:path}")
+    async def restore_school_endpoint(req: Request, source_id: str):
+        require_admin(req)
+        restore_excluded_school(source_id)
+        return {"success": True}
+
+    return router
+
+
 def build_school_finder_router() -> APIRouter:
     router = APIRouter(prefix="/api/schools", tags=["school finder"])
+
+    @router.post("/report")
+    async def report_school_endpoint(body: dict):
+        # Reporting is intentionally lightweight: no postcode or child data is stored.
+        name = str(body.get("name") or "").strip()
+        source_id = str(body.get("source_id") or "").strip()
+        if not name or not source_id:
+            raise HTTPException(status_code=400, detail="School name and source ID are required.")
+        try:
+            latitude = float(body["latitude"]) if body.get("latitude") is not None else None
+            longitude = float(body["longitude"]) if body.get("longitude") is not None else None
+        except (TypeError, ValueError):
+            latitude = longitude = None
+        row = create_school_report(
+            source_id=source_id, name=name, latitude=latitude, longitude=longitude,
+            reason=str(body.get("reason") or "This school is not a secondary school").strip()[:500],
+        )
+        return {"success": True, "report": row}
 
     @router.post("/nearby")
     async def nearby(body: SchoolFinderRequest):
