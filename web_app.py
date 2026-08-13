@@ -1155,6 +1155,18 @@ async def index(req: Request, background_tasks: BackgroundTasks):
 async def daily_quest():
     return _static_page("static", "daily-quest.html")
 
+@app.get("/storytime")
+async def storytime():
+    return _static_page("static", "storytime.html")
+
+@app.get("/summer-learning")
+async def summer_learning():
+    return _static_page("static", "summer-learning.html")
+
+@app.get("/back-to-school")
+async def back_to_school():
+    return _static_page("static", "back-to-school.html")
+
 
 @app.get("/ks1-homework")
 async def ks1_homework():

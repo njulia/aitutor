@@ -1,0 +1,30 @@
+/* Campaign landing pages: parent-friendly, light, and mobile-first. */
+.hm-campaign { max-width: 1120px; margin: 0 auto; padding: 56px 20px 80px; }
+.hm-campaign-hero { display:grid; grid-template-columns:1.15fr .85fr; gap:32px; align-items:center; padding:34px; border-radius:28px; background:linear-gradient(135deg,#fff8df,#f3efff); box-shadow:0 10px 0 rgba(39,31,72,.08); }
+.hm-campaign-hero h1 { margin:.15em 0 .25em; font-size:clamp(2.2rem,5vw,4.2rem); line-height:1.02; letter-spacing:-.04em; }
+.hm-campaign-hero p { font-size:1.12rem; line-height:1.65; }
+.hm-campaign-kicker { font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.hm-campaign-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+.hm-campaign-note { color:#5e5870; font-size:.95rem; margin-top:12px; }
+.hm-campaign-art { min-height:280px; display:grid; place-items:center; font-size:7rem; background:#fff; border:3px solid #272044; border-radius:24px; }
+.hm-campaign-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:28px; }
+.hm-campaign-card { padding:24px; background:#fff; border:2px solid #e8e2f5; border-radius:20px; box-shadow:0 5px 0 rgba(39,31,72,.06); }
+.hm-campaign-card h2,.hm-campaign-card h3 { margin-top:0; }
+.hm-campaign-card p { line-height:1.6; }
+.hm-campaign-card .hm-button { margin-top:8px; }
+.hm-campaign-section { margin-top:58px; }
+.hm-campaign-section > h2 { font-size:clamp(1.8rem,3.5vw,2.8rem); margin-bottom:12px; }
+.hm-campaign-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.hm-campaign-step { padding:20px; border-radius:18px; background:#faf9ff; border:2px solid #ebe7f5; }
+.hm-campaign-step strong { display:block; margin-bottom:7px; }
+.hm-youtube-card { display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:center; padding:24px; border-radius:22px; background:#fff1f1; border:2px solid #ffd5d5; }
+.hm-youtube-icon { width:64px; height:64px; display:grid; place-items:center; border-radius:18px; background:#ffdddd; font-size:2rem; }
+.hm-campaign-faq details { padding:16px 0; border-bottom:1px solid #e8e3ef; }
+.hm-campaign-faq summary { cursor:pointer; font-weight:800; }
+@media (max-width:760px) {
+  .hm-campaign { padding:28px 14px 56px; }
+  .hm-campaign-hero { grid-template-columns:1fr; padding:22px; }
+  .hm-campaign-grid,.hm-campaign-steps { grid-template-columns:1fr; }
+  .hm-campaign-art { min-height:180px; font-size:5rem; }
+  .hm-campaign-actions .hm-button { width:100%; }
+}
