@@ -1,3 +1,41 @@
+// 兼容旧版 iPad 上 Safari 12 缺失的 DOM 便捷方法，使用 ES5 语法以便先于页面逻辑运行。
+(function installLegacySafariCompatibility() {
+  function defineMethod(prototype, name, implementation) {
+    if (!prototype || prototype[name]) return;
+    try {
+      Object.defineProperty(prototype, name, {
+        configurable: true,
+        writable: true,
+        value: implementation
+      });
+    } catch (error) {
+      prototype[name] = implementation;
+    }
+  }
+
+  if (typeof NodeList !== 'undefined') {
+    defineMethod(NodeList.prototype, 'forEach', function (callback, thisArg) {
+      return Array.prototype.forEach.call(this, callback, thisArg);
+    });
+  }
+
+  if (typeof Element !== 'undefined') {
+    defineMethod(Element.prototype, 'replaceChildren', function () {
+      while (this.firstChild) {
+        this.removeChild(this.firstChild);
+      }
+      for (var index = 0; index < arguments.length; index += 1) {
+        var child = arguments[index];
+        this.appendChild(
+          child && typeof child.nodeType === 'number'
+            ? child
+            : document.createTextNode(String(child))
+        );
+      }
+    });
+  }
+}());
+
 (function () {
   'use strict';
 

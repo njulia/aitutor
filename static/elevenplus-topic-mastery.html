@@ -281,7 +281,8 @@
             const first = findFirstUnansweredQuestion();
             if (first) {
                 first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                first.querySelector('input')?.focus();
+                const firstInput = first.querySelector('input');
+                if (firstInput) firstInput.focus();
             }
             showStatus('Please choose one answer for every question before checking.');
             return;
