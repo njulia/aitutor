@@ -1121,6 +1121,19 @@
         }
 
         // 检查是否需要订阅才能使用高级功能
+        async function requireAccount(featureName = 'this feature') {
+            if (currentSessionRole === 'parent' || currentSessionRole === 'kid') {
+                return true;
+            }
+            saveStateToSessionStorage();
+            const message = featureName
+                ? `${featureName} is free, but you need a family account first.`
+                : 'You need a free family account first.';
+            alert(`${message} You will be taken to the sign-in page.`);
+            redirectToLogin();
+            return false;
+        }
+
         async function requireSubscription(featureName, isFree = false, plan = null) {
             if (isFree) return true;
 
@@ -1900,6 +1913,8 @@
         }
 
         async function generateGuidedHomework() {
+            if (!await requireAccount('Homework')) return;
+
             if (!isHomeworkGuideComplete()) {
                 alert('Please answer each short question first.');
                 homeworkGuideState.showQuickStart = false;
@@ -1993,6 +2008,8 @@
         }
 
         async function generateHomework() {
+            if (!await requireAccount('Homework')) return;
+
             const year = parseInt(document.getElementById('homework-year').value);
             const subjects = getSelectedSubjects('homework-subjects');
             const mode = getSelectedMode('homework-quick-mode');
@@ -2066,6 +2083,8 @@
         }
 
         async function generateQuickHomeworkEleven() {
+            if (!await requireAccount('11+ practice')) return;
+
             const subjects = getSelectedSubjects('eleven-subjects');
             const elevenYearInput = document.getElementById('eleven-year');
             const selectedYear = Number(elevenYearInput ? elevenYearInput.value : NaN);
@@ -2137,6 +2156,8 @@
         }
 
         async function generateCustomHomeworkEleven() {
+            if (!await requireAccount('11+ practice')) return;
+
             if (!isElevenGuideComplete()) {
                 alert('Please answer each short question first.');
                 elevenGuideState.showQuickStart = false;
@@ -2699,6 +2720,8 @@
         }
 
         async function reviewGeneratedHomework() {
+            if (!await requireAccount('Quick Review')) return;
+
             const reviewItems = [];
 
             for (let index = 0; index < currentHomework.length; index += 1) {
@@ -2890,6 +2913,8 @@
         }
 
         async function reviewHomeworkWithContent(homework, answers, subject, homeworkDocId = null, submittedWork = null) {
+            if (!await requireAccount('Homework review')) return;
+
             prepareIndependentHomeworkReviewDisplay();
             showReviewLoading('Checking your homework…');
 
@@ -3299,7 +3324,9 @@
             document.getElementById('results').style.display = 'block';
         }
 
-        function checkPracticeAnswers() {
+        async function checkPracticeAnswers() {
+            if (!await requireAccount('Practice review')) return;
+
             const practiceBlock = document.querySelector('#homework-results .practice-question-block, #homework-results .question-response-block');
             const unanswered = findFirstUnansweredResponse(practiceBlock);
             if (unanswered) {

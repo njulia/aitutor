@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.api
 
 
-def test_year1_maths_generation_preserves_rag_metadata(client, app_module, monkeypatch) -> None:
+def test_year1_maths_generation_preserves_rag_metadata(authenticated_client, app_module, monkeypatch) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         assert profile["year_group"] == 1
         assert subjects == ["Maths"]
@@ -21,7 +21,7 @@ def test_year1_maths_generation_preserves_rag_metadata(client, app_module, monke
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -41,7 +41,7 @@ def test_year1_maths_generation_preserves_rag_metadata(client, app_module, monke
 
 
 def test_guided_primary_generation_uses_structured_choices_and_time_limit(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     captured = {}
 
@@ -66,7 +66,7 @@ def test_guided_primary_generation_uses_structured_choices_and_time_limit(
         }]
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -103,7 +103,7 @@ def test_guided_primary_generation_uses_structured_choices_and_time_limit(
     assert body["profile"]["difficulty"] == "gentle"
 
 
-def test_tutor_mode_keeps_question_index_and_doc_id(client, app_module, monkeypatch) -> None:
+def test_tutor_mode_keeps_question_index_and_doc_id(authenticated_client, app_module, monkeypatch) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         return [{
             "subject": "Maths",
@@ -114,7 +114,7 @@ def test_tutor_mode_keeps_question_index_and_doc_id(client, app_module, monkeypa
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -131,7 +131,7 @@ def test_tutor_mode_keeps_question_index_and_doc_id(client, app_module, monkeypa
     assert all(item["from_rag"] is True for item in homework)
 
 
-def test_review_route_passes_question_index_to_review_service(client, app_module, monkeypatch) -> None:
+def test_review_route_passes_question_index_to_review_service(authenticated_client, app_module, monkeypatch) -> None:
     captured = {}
 
     def fake_review(homework, answers, subject, profile, **kwargs):
@@ -147,7 +147,7 @@ def test_review_route_passes_question_index_to_review_service(client, app_module
 
     monkeypatch.setattr(app_module, "review_homework", fake_review)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/review",
         json={
             "homework": "What is 2 + 2?",
@@ -165,7 +165,7 @@ def test_review_route_passes_question_index_to_review_service(client, app_module
     assert captured["is_tutor_mode"] is True
 
 
-def test_year_round_generation_preserves_selected_week_and_public_questions(client, app_module, monkeypatch) -> None:
+def test_year_round_generation_preserves_selected_week_and_public_questions(authenticated_client, app_module, monkeypatch) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         assert profile["plan_week"] == 14
         assert profile["learning_goals"] == ["Decimals and percentages"]
@@ -190,7 +190,7 @@ def test_year_round_generation_preserves_selected_week_and_public_questions(clie
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: True)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -215,8 +215,8 @@ def test_year_round_generation_preserves_selected_week_and_public_questions(clie
 
 
 
-def test_subject_endpoint_exposes_separate_year_round_keys(client) -> None:
-    response = client.get("/api/subjects")
+def test_subject_endpoint_exposes_separate_year_round_keys(authenticated_client) -> None:
+    response = authenticated_client.get("/api/subjects")
     assert response.status_code == 200
     data = response.json()
     assert data["eleven_plus"] == [
@@ -244,7 +244,7 @@ def test_subject_endpoint_exposes_separate_year_round_keys(client) -> None:
         assert subject in data["primary"]
 
 
-def test_year_round_api_canonicalises_old_friendly_subject_name(client, app_module, monkeypatch) -> None:
+def test_year_round_api_canonicalises_old_friendly_subject_name(authenticated_client, app_module, monkeypatch) -> None:
     captured = {}
 
     def fake_generate(profile, subjects, is_eleven_plus=False):
@@ -258,7 +258,7 @@ def test_year_round_api_canonicalises_old_friendly_subject_name(client, app_modu
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: True)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {"year_group": 5, "age": 10, "plan_week": 1},
@@ -273,7 +273,7 @@ def test_year_round_api_canonicalises_old_friendly_subject_name(client, app_modu
 
 @pytest.mark.parametrize("year", [1, 6])
 def test_primary_generation_exposes_choice_model_for_all_year_groups(
-    client, app_module, monkeypatch, year
+    authenticated_client, app_module, monkeypatch, year
 ) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         assert profile["year_group"] == year
@@ -286,7 +286,7 @@ def test_primary_generation_exposes_choice_model_for_all_year_groups(
         }]
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -304,7 +304,7 @@ def test_primary_generation_exposes_choice_model_for_all_year_groups(
 
 
 def test_standard_elevenplus_generation_exposes_choice_model(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         assert is_eleven_plus is True
@@ -317,7 +317,7 @@ def test_standard_elevenplus_generation_exposes_choice_model(
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: True)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -336,7 +336,7 @@ def test_standard_elevenplus_generation_exposes_choice_model(
 
 
 def test_tutor_generation_preserves_choice_options(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         return [{
@@ -347,7 +347,7 @@ def test_tutor_generation_preserves_choice_options(
         }]
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -366,7 +366,7 @@ def test_tutor_generation_preserves_choice_options(
 
 
 def test_tutor_generation_preserves_reading_passage_context(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     def fake_generate(profile, subjects, is_eleven_plus=False):
         return [{
@@ -380,7 +380,7 @@ def test_tutor_generation_preserves_reading_passage_context(
         }]
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -399,7 +399,7 @@ def test_tutor_generation_preserves_reading_passage_context(
 
 
 def test_personalised_french_homework_uses_supported_primary_subject(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     captured = {}
 
@@ -414,7 +414,7 @@ def test_personalised_french_homework_uses_supported_primary_subject(
         }]
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -434,13 +434,13 @@ def test_personalised_french_homework_uses_supported_primary_subject(
 
 
 def test_personalised_out_of_scope_request_is_blocked_before_generation(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     def unexpected_generate(*_args, **_kwargs):
         raise AssertionError("Out-of-scope content must not reach homework generation")
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", unexpected_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -462,12 +462,12 @@ def test_personalised_out_of_scope_request_is_blocked_before_generation(
     assert "primary school subjects and 11+" in body["error"]
 
 
-def test_explicit_unknown_subject_is_blocked(client, app_module, monkeypatch) -> None:
+def test_explicit_unknown_subject_is_blocked(authenticated_client, app_module, monkeypatch) -> None:
     def unexpected_generate(*_args, **_kwargs):
         raise AssertionError("Unknown subject must not reach generation")
 
     monkeypatch.setattr(app_module, "generate_homework_with_profile", unexpected_generate)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -483,7 +483,7 @@ def test_explicit_unknown_subject_is_blocked(client, app_module, monkeypatch) ->
 
 
 def test_api_unwraps_legacy_json_homework_before_returning_it(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     wrapped = json.dumps({
         "homework": "1. Say hello in French.\\n2. Say goodbye in French.",
@@ -500,7 +500,7 @@ def test_api_unwraps_legacy_json_homework_before_returning_it(
             "from_rag": True,
         }],
     )
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "quick_select": True,
@@ -518,7 +518,7 @@ def test_api_unwraps_legacy_json_homework_before_returning_it(
 
 
 def test_guided_elevenplus_uses_structured_profile_and_requested_length(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     questions = [
         {
@@ -552,7 +552,7 @@ def test_guided_elevenplus_uses_structured_profile_and_requested_length(
     monkeypatch.setattr(app_module, "generate_homework_with_profile", fake_generate)
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: True)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -582,7 +582,7 @@ def test_guided_elevenplus_uses_structured_profile_and_requested_length(
 
 
 def test_guided_elevenplus_checks_entitlement_before_generation(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *a, **kw: False)
     monkeypatch.setattr(
@@ -591,7 +591,7 @@ def test_guided_elevenplus_checks_entitlement_before_generation(
         lambda *_args, **_kwargs: pytest.fail("Generation must not run before entitlement"),
     )
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {
@@ -608,5 +608,20 @@ def test_guided_elevenplus_checks_entitlement_before_generation(
         },
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 402
     assert response.json()["required_plan"] == "elevenplus_monthly"
+
+
+def test_anonymous_homework_generation_requires_free_account(client) -> None:
+    response = client.post(
+        "/api/generate",
+        json={
+            "quick_select": True,
+            "year": 3,
+            "subjects": ["Maths"],
+            "mode": "homework",
+            "profile": {},
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "registration_required"

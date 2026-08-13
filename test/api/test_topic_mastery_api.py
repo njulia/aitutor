@@ -5,12 +5,12 @@ import pytest
 pytestmark = pytest.mark.api
 
 
-def test_topic_mastery_catalogue_and_page_are_available(client) -> None:
-    page = client.get("/elevenplus-topic-mastery")
+def test_topic_mastery_catalogue_and_page_are_available(authenticated_client) -> None:
+    page = authenticated_client.get("/elevenplus-topic-mastery")
     assert page.status_code == 200
     assert "11+ Topic Mastery" in page.text
 
-    response = client.get("/api/elevenplus/topic-mastery/catalog")
+    response = authenticated_client.get("/api/elevenplus/topic-mastery/catalog")
     assert response.status_code == 200
     data = response.json()
     assert len(data["subjects"]) == 4
@@ -18,7 +18,7 @@ def test_topic_mastery_catalogue_and_page_are_available(client) -> None:
     assert len(data["levels"]) == 5
 
 
-def test_topic_mastery_fetch_uses_exact_isolated_metadata(client, monkeypatch) -> None:
+def test_topic_mastery_fetch_uses_exact_isolated_metadata(authenticated_client, monkeypatch) -> None:
     import src.elevenplus_rag as rag
 
     captured = {}
@@ -35,7 +35,7 @@ def test_topic_mastery_fetch_uses_exact_isolated_metadata(client, monkeypatch) -
     monkeypatch.setattr(rag, "search_homework_by_metadata", fake_search)
     monkeypatch.setattr(rag, "get_homework_questions", lambda *_: questions)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/elevenplus/topic-mastery/practice",
         json={"subject": "Maths", "topic_index": 2, "mastery_level": 3},
     )
@@ -54,8 +54,8 @@ def test_topic_mastery_fetch_uses_exact_isolated_metadata(client, monkeypatch) -
     assert "private source" not in item["content"]
 
 
-def test_ordinary_generate_api_rejects_internal_mastery_subject(client) -> None:
-    response = client.post(
+def test_ordinary_generate_api_rejects_internal_mastery_subject(authenticated_client) -> None:
+    response = authenticated_client.post(
         "/api/generate",
         json={
             "profile": {"year_group": 6, "age": 11},

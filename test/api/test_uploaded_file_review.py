@@ -7,7 +7,7 @@ pytestmark = pytest.mark.api
 
 
 def test_uploaded_text_file_can_be_read_and_reviewed(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     captured = {}
 
@@ -28,7 +28,7 @@ def test_uploaded_text_file_can_be_read_and_reviewed(
     monkeypatch.setattr(app_module, "review_homework", fake_review)
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *_args, **_kwargs: True)
 
-    upload = client.post(
+    upload = authenticated_client.post(
         "/api/upload-file",
         files={
             "file": (
@@ -43,7 +43,7 @@ def test_uploaded_text_file_can_be_read_and_reviewed(
     extracted = upload.json()["content"]
     assert "What is 2 + 3?" in extracted
 
-    review = client.post(
+    review = authenticated_client.post(
         "/api/review",
         json={
             "homework": "1. What is 2 + 3?\n2. What is 8 - 2?",
@@ -61,10 +61,10 @@ def test_uploaded_text_file_can_be_read_and_reviewed(
 
 
 def test_uploaded_review_remains_subscription_protected(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     monkeypatch.setattr(app_module, "user_has_subscription", lambda *_args, **_kwargs: False)
-    response = client.post(
+    response = authenticated_client.post(
         "/api/review",
         json={
             "homework": "1. What is 2 + 2?",
@@ -74,7 +74,7 @@ def test_uploaded_review_remains_subscription_protected(
         },
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 402
     assert "Mark uploaded homework" in response.json()["error"]
 
 

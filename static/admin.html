@@ -106,6 +106,19 @@
         .message-admin-link { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; }
         .message-count { display: none; min-width: 22px; height: 22px; padding: 0 7px; align-items: center; justify-content: center; border-radius: 999px; background: #fff; color: #5a55d6; font-size: 12px; font-weight: 800; }
         .message-count.visible { display: inline-flex; }
+        .ops-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-bottom:24px; }
+        .ops-card { background:white; border-radius:12px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+        .ops-card h3 { font-size:16px; margin-bottom:8px; }
+        .ops-card p { font-size:13px; color:#777; line-height:1.5; margin-bottom:14px; }
+        .health-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #f1f1f1; font-size:13px; }
+        .health-row:last-child { border-bottom:0; }
+        .health-dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:7px; }
+        .health-dot.ok { background:#22a06b; }
+        .health-dot.warn { background:#f59e0b; }
+        .health-dot.bad { background:#d64545; }
+        .ops-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .mini-note { font-size:12px; color:#888; margin-top:8px; }
+        @media (max-width: 760px) { .tabs { overflow-x:auto; padding:0 12px; } .tab { padding:12px 14px; white-space:nowrap; } .content { padding:16px; } .header { padding:16px; } }
     </style>
 </head>
 <body>
@@ -135,6 +148,7 @@
         <div class="tab" onclick="switchTab('schools')">School Finder</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
         <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
+        <div class="tab" onclick="switchTab('operations')">Operations</div>
         <a class="tab" href="/admin/messages" style="text-decoration:none;">User Messages</a>
     </div>
 
@@ -608,6 +622,7 @@
                 case 'schools': loadExcludedSchools(); loadSchoolReports(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
                 case 'ai-eval': loadAIEval(); break;
+                case 'operations': loadOperations(); break;
             }
         }
 
@@ -621,7 +636,8 @@
                     'Subscriptions': 'subscriptions',
                     'School Finder': 'schools',
                     'AI Monitor': 'ai-monitor',
-                    'AI Evaluation': 'ai-eval'
+                    'AI Evaluation': 'ai-eval',
+                    'Operations': 'operations'
                 };
                 loadTabData(labels[active.textContent.trim()] || 'overview');
             }
@@ -629,8 +645,8 @@
         }
 
         // API helper — always fetch fresh data, never use browser cache
-        async function api(path) {
-            const resp = await fetch(API + path, { cache: 'no-store' });
+        async function api(path, options = {}) {
+            const resp = await fetch(API + path, { cache: 'no-store', credentials: 'same-origin', ...options });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             return resp.json();
         }
@@ -1736,6 +1752,123 @@
             } catch (_) {
                 // The main admin page still works if the message count is unavailable.
             }
+        }
+
+
+        // ---- Operations / common admin tools ----
+        async function loadOperations(){
+            const health = document.getElementById('healthChecks');
+            const growth = document.getElementById('growthSummary');
+            const stats = document.getElementById('opsStats');
+            health.innerHTML = '<div class="loading" style="padding:20px 0"><div class="spinner"></div></div>';
+            try {
+                const results = await Promise.allSettled([
+                    api('/overview'),
+                    api('/ai-monitor/stats?hours=24'),
+                    api('/embedding-cache/stats'),
+                    api('/voice-usage-stats'),
+                    api('/dev-mode-status'),
+                    api('/marketing-summary?days=30')
+                ]);
+                const get = i => results[i].status === 'fulfilled' ? results[i].value : null;
+                const overview = get(0) || {};
+                const ai = get(1) || {};
+                const cache = get(2) || {};
+                const voice = get(3) || {};
+                const dev = get(4) || {};
+                const marketing = get(5) || {};
+                const sessions = overview.sessions || {};
+                const aiRequests = Number(ai.request_count ?? ai.requests ?? 0);
+                const aiErrors = Number(ai.error_count ?? ai.errors ?? 0);
+                const cacheStats = cache.stats || cache || {};
+                const cacheRows = Object.keys(cacheStats).length;
+
+                stats.innerHTML = `
+                    <div class="stat-card"><div class="label">Students</div><div class="value">${Number(overview.total_students||0).toLocaleString()}</div><div class="sub">Current learner profiles</div></div>
+                    <div class="stat-card"><div class="label">AI Requests · 24h</div><div class="value">${aiRequests.toLocaleString()}</div><div class="sub">${aiErrors ? aiErrors+' errors' : 'No reported errors'}</div></div>
+                    <div class="stat-card"><div class="label">Embedding Cache</div><div class="value">${cacheRows ? 'Ready' : 'Check'}</div><div class="sub">Operational cache status</div></div>
+                    <div class="stat-card"><div class="label">Environment</div><div class="value">${dev.is_dev_mode ? 'Development' : 'Production'}</div><div class="sub">Admin-only status</div></div>
+                `;
+
+                const checks = [
+                    ['Application API', !!overview.timestamp, overview.timestamp ? 'OK' : 'Unavailable'],
+                    ['AI monitoring', results[1].status === 'fulfilled', results[1].status === 'fulfilled' ? 'OK' : 'Unavailable'],
+                    ['Embedding cache', results[2].status === 'fulfilled', results[2].status === 'fulfilled' ? 'OK' : 'Unavailable'],
+                    ['Voice metrics', results[3].status === 'fulfilled', results[3].status === 'fulfilled' ? 'OK' : 'Unavailable'],
+                    ['Marketing metrics', results[5].status === 'fulfilled', results[5].status === 'fulfilled' ? 'OK' : 'Unavailable']
+                ];
+                health.innerHTML = checks.map(([name, ok, text]) => `<div class="health-row"><span><span class="health-dot ${ok?'ok':'bad'}"></span>${escapeHtml(name)}</span><strong>${escapeHtml(text)}</strong></div>`).join('');
+
+                const activeUsers = marketing.active_users ?? marketing.active_accounts ?? marketing.users ?? '-';
+                const newUsers = marketing.new_users ?? marketing.new_accounts ?? marketing.accounts_created ?? '-';
+                const sessions30 = marketing.sessions ?? marketing.total_sessions ?? sessions.total_sessions ?? '-';
+                growth.innerHTML = `
+                    <div class="health-row"><span>New accounts · 30d</span><strong>${escapeHtml(newUsers)}</strong></div>
+                    <div class="health-row"><span>Active users · 30d</span><strong>${escapeHtml(activeUsers)}</strong></div>
+                    <div class="health-row"><span>Learning sessions</span><strong>${escapeHtml(sessions30)}</strong></div>
+                    <div class="health-row"><span>Voice events</span><strong>${escapeHtml(voice.total_events ?? voice.events ?? '-')}</strong></div>
+                `;
+                await loadVoiceUsage(voice);
+            } catch(e) {
+                stats.innerHTML = `<div class="stat-card"><div class="label">Operations</div><div class="value" style="font-size:14px;color:#c53030">${escapeHtml(e.message)}</div></div>`;
+                health.innerHTML = `<div style="color:#c53030;font-size:13px">${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function loadVoiceUsage(prefetched=null){
+            const target = document.getElementById('voiceUsageTable');
+            try {
+                const data = prefetched || await api('/voice-usage-stats');
+                const rows = data.stats || data;
+                if (!rows || typeof rows !== 'object') { target.innerHTML = '<div style="color:#888">No voice usage data available.</div>'; return; }
+                const items = [];
+                Object.entries(rows).forEach(([key, value]) => {
+                    if (typeof value === 'object' && value !== null) {
+                        items.push(`<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(JSON.stringify(value))}</td></tr>`);
+                    }
+                });
+                target.innerHTML = items.length ? `<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>${items.slice(0,30).join('')}</tbody></table>` : '<div style="color:#888">No voice usage data available.</div>';
+            } catch(e) {
+                target.innerHTML = `<div style="color:#c53030">Unable to load voice metrics: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function clearAppCache(){
+            if (!confirm('Clear the application cache? This is safe but may make the next request slower.')) return;
+            const el=document.getElementById('maintenanceStatus');
+            el.textContent='Clearing application cache...';
+            try { const data=await api('/cache/clear', {method:'POST'}); el.textContent='Application cache cleared.'; }
+            catch(e){ el.textContent='Could not clear application cache: '+e.message; }
+        }
+
+        async function cleanupEmbeddingCache(){
+            if (!confirm('Clean embedding cache entries older than 90 days?')) return;
+            const el=document.getElementById('maintenanceStatus');
+            el.textContent='Cleaning embedding cache...';
+            try {
+                const resp=await fetch(API+'/embedding-cache/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:90})});
+                const data=await resp.json();
+                if(!resp.ok) throw new Error(data.error || 'Request failed');
+                el.textContent='Embedding cache cleanup complete.';
+            } catch(e){ el.textContent='Could not clean embedding cache: '+e.message; }
+        }
+
+        function downloadCsv(filename, rows){
+            if(!rows.length){ alert('There is no data to export.'); return; }
+            const headers=Object.keys(rows[0]);
+            const csv=[headers.join(','), ...rows.map(row=>headers.map(h=>{ const v=row[h] ?? ''; return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','))].join('\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+            const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+        }
+
+        async function exportAuthUsersCsv(){
+            if(!authUsers.length) await loadAuthUsers();
+            downloadCsv('homeworkmagic-auth-users.csv', authUsers.map(u=>({username:u.username,created_at:u.created_at,is_test:!!u.is_test})));
+        }
+
+        async function exportStudentsCsv(){
+            if(!allUsers.length) await loadUsers();
+            downloadCsv('homeworkmagic-students.csv', allUsers.map(u=>({student_id:u.student_id,parent_username:u.parent_username||'',nickname:u.name||'',year_group:u.year_group,age:u.age,total_sessions:u.total_sessions||0,avg_score:u.avg_score??'',xp:u.xp||0,gift_points:u.gift_points||0,is_active:!!u.is_active})));
         }
 
         // Init

@@ -3,6 +3,9 @@
   <!-- Homepage -->
   <url><loc>https://homeworkmagic.co.uk/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
 
+  <!-- Daily engagement landing page -->
+  <url><loc>https://homeworkmagic.co.uk/daily-quest</loc><priority>0.85</priority><changefreq>daily</changefreq></url>
+
   <!-- Main homework pages -->
   <url><loc>https://homeworkmagic.co.uk/ks1-homework</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
   <url><loc>https://homeworkmagic.co.uk/ks2-homework</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>

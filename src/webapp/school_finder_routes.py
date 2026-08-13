@@ -357,7 +357,7 @@ def build_school_finder_admin_router(require_admin) -> APIRouter:
     return router
 
 
-def build_school_finder_router() -> APIRouter:
+def build_school_finder_router(resolve_identity=None) -> APIRouter:
     router = APIRouter(prefix="/api/schools", tags=["school finder"])
 
     @router.post("/report")
@@ -379,7 +379,17 @@ def build_school_finder_router() -> APIRouter:
         return {"success": True, "report": row}
 
     @router.post("/nearby")
-    async def nearby(body: SchoolFinderRequest):
+    async def nearby(req: Request, body: SchoolFinderRequest):
+        if resolve_identity is not None:
+            resolved_student_id, logged_in_username, _ = await resolve_identity(req)
+            if not resolved_student_id or str(resolved_student_id).startswith("anon_"):
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "code": "registration_required",
+                        "message": "Create a free family account or log in to use the school finder.",
+                    },
+                )
         postcode = _normalise_postcode(body.postcode)
         try:
             return await _fetch_nearby(postcode, body.entry_year, body.child_gender)

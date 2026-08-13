@@ -713,6 +713,33 @@ async def _resolve_request_identity(
     )
 
 
+async def _require_registered_identity(
+    req: Request,
+    *,
+    resolved_student_id: Optional[str] = None,
+    logged_in_username: Optional[str] = None,
+) -> tuple[str, str]:
+    """Require a signed-in parent/learner account for learner services.
+
+    Public landing pages and health endpoints remain anonymous-accessible, but
+    learner actions must now belong to a registered family account.  This
+    keeps the free tier free forever while preventing anonymous use of the
+    AI/learning services and allowing progress, XP and saved work to follow
+    the family account.
+    """
+    if resolved_student_id and not str(resolved_student_id).startswith("anon_"):
+        return str(resolved_student_id), str(logged_in_username or "")
+
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "code": "registration_required",
+            "message": "Create a free family account or log in to use Homework Magic.",
+        },
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 # Parent/guardian support messages and the protected administrator inbox.
 app.include_router(create_message_router(
     resolve_identity=_get_user_or_anonymous_id,
@@ -736,7 +763,7 @@ app.include_router(
     )
 )
 app.include_router(build_parent_dashboard_router(_resolve_username))
-app.include_router(build_school_finder_router())
+app.include_router(build_school_finder_router(_resolve_request_identity))
 app.include_router(build_school_finder_admin_router(_require_admin))
 
 
@@ -1122,6 +1149,11 @@ class AuthRequest(BaseModel):
 async def index(req: Request, background_tasks: BackgroundTasks):
     _count_landing_visit(req, background_tasks, "home")
     return _static_page("static", "index.html")
+
+
+@app.get("/daily-quest")
+async def daily_quest():
+    return _static_page("static", "daily-quest.html")
 
 
 @app.get("/ks1-homework")
@@ -1644,6 +1676,11 @@ async def get_topic_mastery_catalog():
 @app.post("/api/elevenplus/topic-mastery/practice")
 async def get_topic_mastery_practice(req: Request, request: TopicMasteryPracticeRequest):
     """Fetch one exact pre-generated mastery set; never fall back to an LLM."""
+    resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
+    await _require_registered_identity(
+        req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
+    )
+
     from src.elevenplus_rag import (
         format_questions_only,
         get_homework_questions,
@@ -1728,6 +1765,7 @@ async def api_generate(req: Request, request: ProfileRequest):
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
 
         request.student_id = resolved_student_id
         request.profile = dict(request.profile or {})
@@ -1965,6 +2003,7 @@ async def api_review(
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
 
@@ -2171,6 +2210,7 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
 
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
@@ -2222,6 +2262,7 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
     try:
         initialize()
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
         required_plan = _required_premium_plan(
@@ -2292,6 +2333,7 @@ async def api_get_progress(
     """
     try:
         resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
 
         # 孩子登录会话：只能查看自己的进度
         is_kid_session = False
@@ -2909,6 +2951,8 @@ async def api_kid_logout(req: Request):
 async def upload_file(request: Request, file: UploadFile = File(...)):
     try:
         initialize()
+        resolved_student_id, logged_in_username, _ = await _resolve_request_identity(request)
+        await _require_registered_identity(request, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file selected")
         allowed_all = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_TEXT_EXTENSIONS | ALLOWED_PDF_EXTENSION
@@ -2949,6 +2993,8 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 async def upload_photo(request: Request, request_body: PhotoRequest):
     try:
         initialize()
+        resolved_student_id, logged_in_username, _ = await _resolve_request_identity(request)
+        await _require_registered_identity(request, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
 
         if not request_body.photo:
             raise HTTPException(status_code=400, detail="No photo data")

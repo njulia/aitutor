@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 
 from web_app import app
 
-def test_explain_deep_timeout_handling():
-    client = TestClient(app)
+def test_explain_deep_timeout_handling(authenticated_client):
     # We want to trigger the 504. 
     # Since I increased the timeout to 120s, I should verify the code uses that timeout.
     
@@ -17,7 +16,7 @@ def test_explain_deep_timeout_handling():
         raise HTTPException(status_code=504, detail="That took too long.")
 
     with patch("web_app.run_blocking", side_effect=slow_blocking):
-        response = client.post("/api/explain-deep", json={
+        response = authenticated_client.post("/api/explain-deep", json={
             "homework": "1+1=?",
             "answers": "2",
             "subject": "Maths",
@@ -27,13 +26,12 @@ def test_explain_deep_timeout_handling():
         assert response.status_code == 504
         assert "That took too long" in response.json()["detail"]
 
-def test_explain_deep_subscription_logic_rag():
-    client = TestClient(app)
+def test_explain_deep_subscription_logic_rag(authenticated_client):
     # If from_rag is True, it should not require subscription (402)
     
     with patch("web_app.user_has_subscription", return_value=False):
         with patch("web_app.run_blocking", return_value={"success": True, "explanation": "test"}):
-            response = client.post("/api/explain-deep", json={
+            response = authenticated_client.post("/api/explain-deep", json={
                 "homework": "1+1=?",
                 "answers": "2",
                 "subject": "Maths",
@@ -44,12 +42,11 @@ def test_explain_deep_subscription_logic_rag():
             assert response.status_code == 200
             assert response.json()["success"] is True
 
-def test_explain_deep_subscription_logic_non_rag():
-    client = TestClient(app)
+def test_explain_deep_subscription_logic_non_rag(authenticated_client):
     # If from_rag is False, it SHOULD require subscription (402 or 401)
     
     with patch("web_app.user_has_subscription", return_value=False):
-        response = client.post("/api/explain-deep", json={
+        response = authenticated_client.post("/api/explain-deep", json={
             "homework": "1+1=?",
             "answers": "2",
             "subject": "Maths",

@@ -73,7 +73,7 @@ def test_web_app_explanation_wrapper_uses_the_maintained_prompt_contract(
 
 
 def test_explain_in_detail_endpoint_no_longer_raises_missing_prompt_field(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         app_module,
@@ -81,7 +81,7 @@ def test_explain_in_detail_endpoint_no_longer_raises_missing_prompt_field(
         lambda *args, **kwargs: True,
     )
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/explain-deep",
         json={
             "homework": "1. What is 2 + 2?",
@@ -97,8 +97,8 @@ def test_explain_in_detail_endpoint_no_longer_raises_missing_prompt_field(
     assert "correct_answers_section" not in response.text
 
 
-def test_memory_page_is_mounted(client) -> None:
-    response = client.get("/memory")
+def test_memory_page_is_mounted(authenticated_client) -> None:
+    response = authenticated_client.get("/memory")
 
     assert response.status_code == 200
     assert "Learning memory" in response.text

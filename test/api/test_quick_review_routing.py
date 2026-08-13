@@ -6,7 +6,7 @@ pytestmark = pytest.mark.api
 
 
 def test_quick_review_flag_reaches_review_service_without_detail_subscription(
-    client, app_module, monkeypatch
+    authenticated_client, app_module, monkeypatch
 ) -> None:
     captured = {}
 
@@ -23,7 +23,7 @@ def test_quick_review_flag_reaches_review_service_without_detail_subscription(
         ),
     )
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/review",
         json={
             "homework": "1. What is 2 + 3?\nA) 4\nB) 5",
@@ -50,3 +50,18 @@ def test_browser_quick_review_request_sets_explicit_flag() -> None:
     )[0]
     assert "quick_review: true" in function_body
 
+
+
+def test_anonymous_quick_review_requires_free_account(client) -> None:
+    response = client.post(
+        "/api/review",
+        json={
+            "homework": "1. What is 2 + 3?\nA) 4\nB) 5",
+            "answers": "1. B",
+            "subject": "Maths",
+            "profile": {"year_group": 3, "age": 7},
+            "quick_review": True,
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "registration_required"
