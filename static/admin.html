@@ -31,6 +31,12 @@
         .stat-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
         .stat-card .value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
         .stat-card .sub { font-size: 12px; color: #999; margin-top: 4px; }
+        .people-stat-values { display:flex; align-items:center; gap:20px; margin-top:4px; }
+        .people-stat-values > div:not(.people-stat-divider) { flex:1; min-width:0; }
+        .people-stat-number { font-size:28px; font-weight:700; color:#1a1a2e; line-height:1.1; }
+        .people-stat-caption { font-size:12px; color:#777; margin-top:5px; }
+        .people-stat-divider { width:1px; height:42px; background:#e5e7eb; flex:0 0 1px; }
+        @media (max-width:520px) { .people-stat-values { gap:12px; } .people-stat-number { font-size:24px; } }
 
         /* Table */
         .table-container { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 24px; }
@@ -128,6 +134,7 @@
             <div class="status" id="headerStatus">Loading...</div>
         </div>
         <div class="header-actions">
+            <a class="btn btn-primary message-admin-link" href="/app"><span>Learning app</span></a>
             <a class="btn btn-primary message-admin-link" href="/admin/messages">
                 <span>✉ User Messages</span>
                 <span id="adminMessageUnreadCount" class="message-count" aria-label="Unread user messages"></span>
@@ -676,7 +683,14 @@
                 document.getElementById('overviewStats').innerHTML = `
                     <div class="stat-card"><div class="label">Total Sessions</div><div class="value">${s.total_sessions || 0}</div></div>
                     <div class="stat-card"><div class="label">Average Score</div><div class="value">${s.average_score || 'N/A'}</div><div class="sub">out of 10</div></div>
-                    <div class="stat-card"><div class="label">Total Students</div><div class="value">${data.total_students || 0}</div></div>
+                    <div class="stat-card people-stat-card">
+                        <div class="label">Students &amp; Parent Accounts</div>
+                        <div class="people-stat-values">
+                            <div><div class="people-stat-number">${data.total_students || 0}</div><div class="people-stat-caption">Students</div></div>
+                            <div class="people-stat-divider" aria-hidden="true"></div>
+                            <div><div class="people-stat-number">${data.parent_accounts || 0}</div><div class="people-stat-caption">Parent Accounts</div></div>
+                        </div>
+                    </div>
                     <div class="stat-card"><div class="label">Langfuse</div><div class="value">${data.langfuse_enabled ? 'Active' : 'Off'}</div><div class="sub">${data.langfuse_enabled ? 'Tracing enabled' : 'Not configured'}</div></div>
                 `;
                 renderLineChart('dailyLineCanvas', s.daily_activity || [], 'date', 'count');

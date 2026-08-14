@@ -1,35 +1,36 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en-GB">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic</title>
-  <meta name="description" content="Free UK primary homework help for Years 1–6, with friendly AI explanations, daily practice quests, progress rewards and 11+ practice, mock exams and school-finder tools for families.">
-  <meta name="keywords" content="free primary homework help UK, AI homework help UK, Year 1 homework, Year 2 homework, Year 3 homework, Year 4 homework, Year 5 homework, Year 6 homework, KS1 homework, KS2 homework, 11+ practice, 11+ mock exams, primary maths practice, primary English practice">
-  <meta name="robots" content="index, follow">
-  <link rel="canonical" href="https://homeworkmagic.co.uk/">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic</title>
+<meta name="description" content="Free UK primary homework help for Years 1–6. Practise Maths, English and Science with friendly feedback, plus 11+ practice, mock exams and school-finder tools for families."/>
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"/>
+<link rel="canonical" href="https://homeworkmagic.co.uk/"/>
+<link rel="alternate" hreflang="en-GB" href="https://homeworkmagic.co.uk/"/>
 
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic">
-  <meta property="og:description" content="Friendly, free homework practice for UK primary children in Years 1–6, plus 11+ practice, mock exams, school finder and year-round preparation tools.">
-  <meta property="og:url" content="https://homeworkmagic.co.uk/">
-  <meta property="og:site_name" content="Homework Magic">
-  <meta property="og:locale" content="en_GB">
-  <meta property="og:image" content="https://homeworkmagic.co.uk/static/images/homework-magic-logo.png">
-  <meta property="og:image:width" content="1536">
-  <meta property="og:image:height" content="1024">
-  <meta property="og:image:alt" content="Homework Magic mascot and wordmark">
 
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic">
-  <meta name="twitter:description" content="Friendly, free homework practice for Years 1–6, plus 11+ practice, mock exams and school-finder tools for families.">
-  <meta name="twitter:image" content="https://homeworkmagic.co.uk/static/images/homework-magic-logo.png">
-  <meta name="twitter:image:alt" content="Homework Magic mascot and wordmark">
-  <link rel="preload" href="/static/images/homework-magic-logo.webp" as="image" type="image/webp" fetchpriority="high">
-  <link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
-  <link rel="stylesheet" href="/static/css/marketing.css?v=20260813-marketing-1">
 
-  <script type="application/ld+json">
+
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic"/>
+<meta property="og:description" content="Friendly, free homework practice for Years 1–6, plus 11+ practice, mock exams and school-finder tools for UK families."/>
+<meta property="og:url" content="https://homeworkmagic.co.uk/"/>
+<meta property="og:site_name" content="Homework Magic"/>
+<meta property="og:locale" content="en_GB"/>
+<meta property="og:image" content="https://homeworkmagic.co.uk/static/images/homework-magic-logo.png"/>
+<meta property="og:image:width" content="1536"/>
+<meta property="og:image:height" content="1024"/>
+<meta property="og:image:alt" content="Homework Magic mascot and wordmark"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Free UK Primary Homework Help &amp; 11+ Practice | Homework Magic"/>
+<meta name="twitter:description" content="Friendly Maths, English and Science practice for Years 1–6, plus 11+ practice and mock exams."/>
+<meta name="twitter:image" content="https://homeworkmagic.co.uk/static/images/homework-magic-logo.png"/>
+<meta name="twitter:image:alt" content="Homework Magic mascot and wordmark"/>
+<link as="image" fetchpriority="high" href="/static/images/homework-magic-logo.webp" rel="preload" type="image/webp"/>
+<link href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1" rel="stylesheet"/>
+<script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "EducationalApplication",
@@ -63,8 +64,7 @@
     "isAccessibleForFree": true
   }
   </script>
-
-  <script type="application/ld+json">
+<script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -77,7 +77,6 @@
     ]
   }
   </script>
-
 <style>
 .hm-path-actions{display:flex;gap:.75rem;flex-wrap:nowrap;align-items:stretch;width:100%}.hm-path-actions .hm-button{flex:1 1 0;min-width:0;text-align:center}
 .hm-button-secondary{background:transparent;border:1px solid currentColor}
@@ -92,99 +91,348 @@
 .hm-workflow-node:hover{background:#e8f0fe;border-color:#4285F4}
 .hm-wf-arrow{color:#aaa;font-weight:700;font-size:1.1em;flex-shrink:0}
 .hm-workflow-note{font-size:.9em;color:var(--hm-muted);margin-top:12px;font-style:italic}
+
+/* Homepage alignment: Daily Magic Quest */
+.hm-quest-choice-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+  align-items:stretch;
+}
+.hm-quest-choice{
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+}
+
+.hm-quest-choice{
+  min-width:0;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  grid-template-areas:
+    "icon title"
+    "icon note";
+  align-items:center;
+  column-gap:10px;
+  row-gap:3px;
+  padding:14px 13px;
+  border:1px solid var(--hm-line,#e0e0e0);
+  border-radius:16px;
+  background:var(--hm-card,#fff);
+  text-decoration:none;
+  color:var(--hm-ink,#222);
+}
+.hm-quest-choice > span{
+  grid-area:icon;
+  font-size:1.55rem;
+  line-height:1;
+}
+.hm-quest-choice > strong{
+  grid-area:title;
+  min-width:0;
+  font-size:.98rem;
+  line-height:1.2;
+}
+.hm-quest-choice > small{
+  grid-area:note;
+  min-width:0;
+  color:var(--hm-muted,#667085);
+  font-size:.82rem;
+  line-height:1.25;
+}
+.hm-quest-choice:hover,
+.hm-quest-choice:focus-visible{
+  border-color:#4285F4;
+  box-shadow:0 3px 10px rgba(0,0,0,.07);
+}
+@media (max-width:900px){
+  .hm-quest-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  .hm-quest-choice-grid{grid-template-columns:1fr}
+}
+
+/* Compact 11+ roadmap */
+.hm-roadmap{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-top:18px;
+}
+.hm-roadmap-step{
+  position:relative;
+  padding:18px 16px;
+  border:1px solid var(--hm-line,#e0e0e0);
+  border-radius:16px;
+  background:var(--hm-card,#fff);
+}
+.hm-roadmap-number{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  margin-bottom:10px;
+  border-radius:50%;
+  background:var(--hm-blue-soft,#e8f0fe);
+  color:var(--hm-blue,#215fa2);
+  font-weight:800;
+}
+.hm-roadmap-step h3{
+  margin:0 0 5px;
+  font-size:1rem;
+}
+.hm-roadmap-step p{
+  margin:0;
+  color:var(--hm-muted,#667085);
+  font-size:.86rem;
+  line-height:1.4;
+}
+.hm-roadmap-arrow{
+  position:absolute;
+  top:50%;
+  right:-9px;
+  transform:translateY(-50%);
+  z-index:2;
+  font-weight:800;
+  color:#98a2b3;
+}
+.hm-roadmap-cta{
+  margin-top:14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.hm-roadmap-cta p{margin:0;color:var(--hm-muted,#667085);font-size:.9rem}
+@media (max-width:900px){
+  .hm-roadmap{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hm-roadmap-arrow{display:none}
+}
+@media (max-width:560px){
+  .hm-roadmap{grid-template-columns:1fr}
+}
+
+/* Daily Magic Quest: four choices in one row on desktop */
+.hm-home .hm-daily-quest-section .hm-quest-choice-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:10px !important;
+}
+.hm-home .hm-daily-quest-section .hm-quest-choice{
+  min-width:0 !important;
+  width:100% !important;
+  box-sizing:border-box !important;
+}
+@media (max-width:900px){
+  .hm-home .hm-daily-quest-section .hm-quest-choice-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+}
+@media (max-width:560px){
+  .hm-home .hm-daily-quest-section .hm-quest-choice-grid{
+    grid-template-columns:1fr !important;
+  }
+}
+</style>
+
+<style>
+.hm-roadmap-step h3 a{
+  color:inherit;
+  text-decoration:none;
+}
+.hm-roadmap-step h3 a:hover,
+.hm-roadmap-step h3 a:focus-visible{
+  text-decoration:underline;
+}
+</style>
+
+
+<meta name="author" content="Homework Magic"/>
+<meta name="application-name" content="Homework Magic"/>
+<meta name="theme-color" content="#ffffff"/>
+
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"WebSite",
+  "name":"Homework Magic",
+  "url":"https://homeworkmagic.co.uk/",
+  "inLanguage":"en-GB",
+  "description":"Free UK primary homework help for Years 1–6 plus 11+ practice and mock exams."
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"WebPage",
+  "name":"Free UK Primary Homework Help & 11+ Practice",
+  "url":"https://homeworkmagic.co.uk/",
+  "description":"Free UK primary homework help for Years 1–6, plus 11+ practice, mock exams and school-finder tools.",
+  "isPartOf":{"@type":"WebSite","name":"Homework Magic","url":"https://homeworkmagic.co.uk/"},
+  "inLanguage":"en-GB"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"Organization",
+  "name":"Homework Magic",
+  "url":"https://homeworkmagic.co.uk/",
+  "logo":"https://homeworkmagic.co.uk/static/images/homework-magic-logo.png"
+}
+</script>
+
+
+<style>
+.hm-seo-intro{
+  max-width:760px;
+  margin:14px 0 0;
+  color:var(--hm-muted,#667085);
+  font-size:.98rem;
+  line-height:1.55;
+}
+.hm-seo-intro strong{color:var(--hm-ink,#222)}
+</style>
+
+
+<style>
+/* Clean hero after removing the old example-mission visual */
+.hm-home .hm-hero{
+  grid-template-columns:1fr !important;
+}
+.hm-home .hm-hero-copy{
+  max-width:900px;
+}
+.hm-home .hm-hero-actions{
+  margin-top:20px;
+}
+.hm-home .hm-mini-proof{
+  margin-top:18px;
+}
+
+/* Clear section rhythm */
+.hm-home .hm-section{
+  margin-top:32px;
+}
+.hm-home .hm-section-heading{
+  margin-bottom:18px;
+}
+.hm-home .hm-section-heading h2{
+  margin-bottom:6px;
+}
+.hm-home .hm-section-heading > p:not(.hm-kicker){
+  max-width:760px;
+}
+
+/* Put the main destinations first and make them visually consistent */
+.hm-home .hm-quick-links .hm-path-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+/* The daily quest becomes a supporting feature rather than another navigation menu */
+.hm-home .hm-daily-quest-section{
+  margin-top:24px;
+}
+.hm-home .hm-daily-quest-copy > p:not(.hm-kicker){
+  max-width:760px;
+}
+.hm-home .hm-daily-quest-actions{
+  margin-top:18px;
+}
+@media (max-width:900px){
+  .hm-home .hm-quick-links .hm-path-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+
+<style>
+/* Keep the homepage hero aligned with every other content section. */
+.hm-home .hm-hero{
+  width:100%;
+  max-width:var(--hm-content-width,1120px);
+  margin-left:auto;
+  margin-right:auto;
+  box-sizing:border-box;
+}
+.hm-home .hm-hero-copy{
+  width:100%;
+  max-width:none;
+  box-sizing:border-box;
+}
+.hm-home .hm-hero-copy > p,
+.hm-home .hm-hero-copy > h1,
+.hm-home .hm-hero-copy > .hm-hero-actions,
+.hm-home .hm-hero-copy > .hm-seo-intro,
+.hm-home .hm-hero-copy > .hm-mini-proof{
+  max-width:none;
+}
+@media (max-width:900px){
+  .hm-home .hm-hero{
+    width:100%;
+  }
+}
 </style>
 </head>
 <body class="hm-home">
-  <a class="hm-skip-link" href="#main-content">Skip to main content</a>
-
-  <header class="hm-site-header">
-    <div class="hm-nav-wrap">
-      <a class="hm-brand" href="/" aria-label="Homework Magic home">
-        <span class="hm-brand-mark" aria-hidden="true">✨</span>
-        <span>Homework Magic</span>
-      </a>
-      <nav class="hm-main-nav" aria-label="Main navigation">
-        <a href="#how-it-works">How it works</a>
-        <a href="/elevenplus-practice">11+ practice</a>
-        <a href="/elevenplus-mock-exams">11+ mock</a>
-        <a href="/elevenplus/articles">11+ articles</a>
-        <a href="/school-finder">School finder</a>
+<a class="hm-skip-link" href="#main-content">Skip to main content</a>
+<header class="hm-site-header">
+<div class="hm-nav-wrap">
+<a aria-label="Homework Magic home" class="hm-brand" href="/">
+<span aria-hidden="true" class="hm-brand-mark">✨</span>
+<span>Homework Magic</span>
+</a>
+<nav aria-label="Main navigation" class="hm-main-nav">
+<a href="/elevenplus-practice">11+ practice</a>
+<a href="/elevenplus-mock-exams">11+ mock</a>
+<a href="/elevenplus/articles">11+ articles</a>
+<a href="/school-finder">School finder</a>
 <!--        <a href="/progress">Progress</a>-->
 <!--        <a href="/rewards">Rewards</a>-->
-<!--        <a href="/pricing">Parent plans</a>-->
-        <a href="/parent-dashboard">Parent dashboard</a>
-        <a href="/login" id="home-login-link">Login</a>
-        <a href="#" id="home-logout-link" hidden>Logout</a>
-        <a class="hm-nav-cta" href="/app">Start learning</a>
-      </nav>
-    </div>
-  </header>
+<!--        <a href="/pricing">Pricing</a>-->
+<a href="/parent-dashboard">Parent dashboard</a>
+<a href="/login" id="home-login-link">Login</a>
+<a hidden="" href="/" id="home-logout-link">Log out</a>
+<a class="hm-nav-cta" href="/app">Start learning</a>
+</nav>
+</div>
+</header>
+<main id="main-content">
+<section aria-labelledby="hero-title" class="hm-hero">
+<div class="hm-hero-copy">
+<p class="hm-eyebrow">Made for ages 5–11 · Years 1–6</p>
+<h1 id="hero-title">Learning made simple. <span>Little wins every day.</span></h1>
+<p>Choose your year and a subject, have a go, and get friendly feedback. Short practice for children, with less planning for parents.</p>
+<p class="hm-seo-intro">
+<strong>Homework Magic is free primary homework help for UK families.</strong>
+Children in Years 1–6 can practise Maths, English and Science with short, friendly activities.
+Older primary learners can also prepare for the 11+ with practice questions and mock exams.
+</p>
+<ul aria-label="Key benefits" class="hm-mini-proof">
+<li>Curriculum-focused</li>
+<li>Friendly marking</li>
+<li>Parent-managed account</li>
+</ul>
+<div class="hm-hero-actions">
+<a class="hm-button hm-button-primary" href="/app"><span aria-hidden="true">🚀</span> Start learning</a>
+<a class="hm-button hm-button-primary" href="/elevenplus-practice">Explore 11+ practice</a>
+<a class="hm-button hm-button-primary" href="/pricing">Pricing</a>
+</div>
+</div>
+</section>
 
-  <main id="main-content">
-    <section class="hm-hero" aria-labelledby="hero-title">
-      <div class="hm-hero-copy">
-        <p class="hm-eyebrow">Made for ages 5–11 · Years 1–6</p>
-        <h1 id="hero-title">Homework that feels like <span>a little win.</span></h1>
-        <p>Pick a year and subject, have a go, then get kind feedback straight away. Short, focused practice for children—and less planning for parents.</p>
-        <div class="hm-hero-actions">
-          <a class="hm-button hm-button-primary" href="/app"><span aria-hidden="true">🚀</span> Start a learning quest</a>
-          <a class="hm-button" href="/pricing">Pricing</a>
-        </div>
-        <ul class="hm-mini-proof" aria-label="Key benefits">
-          <li>Curriculum-focused</li>
-          <li>Friendly marking</li>
-          <li>Parent-managed account</li>
-        </ul>
-      </div>
-
-      <div class="hm-quest-scene" aria-label="Example of a short daily learning mission">
-        <div class="hm-float-star" aria-hidden="true">⭐</div>
-        <div class="hm-float-pencil" aria-hidden="true">✏️</div>
-        <div class="hm-quest-board">
-          <div class="hm-board-top">
-            <div>
-              <div class="hm-board-label">Today’s mini mission</div>
-              <div class="hm-board-title">Ready, steady, learn!</div>
-            </div>
-            <div class="hm-streak">🔥 3-day streak</div>
-          </div>
-          <div class="hm-quest-list">
-            <div class="hm-quest-item">
-              <span class="hm-quest-icon" aria-hidden="true">🔢</span>
-              <span><span class="hm-quest-name">Maths warm-up</span><br><span class="hm-quest-note">Five friendly questions</span></span>
-              <span class="hm-quest-time">5 mins</span>
-            </div>
-            <div class="hm-quest-item">
-              <span class="hm-quest-icon" aria-hidden="true">📚</span>
-              <span><span class="hm-quest-name">Reading explorer</span><br><span class="hm-quest-note">Find the clues in a story</span></span>
-              <span class="hm-quest-time">10 mins</span>
-            </div>
-            <div class="hm-quest-item">
-              <span class="hm-quest-icon" aria-hidden="true">🔬</span>
-              <span><span class="hm-quest-name">Science spark</span><br><span class="hm-quest-note">One curious challenge</span></span>
-              <span class="hm-quest-time">5 mins</span>
-            </div>
-          </div>
-          <div class="hm-board-win"><span aria-hidden="true">🌟</span> Every try helps your brain grow.</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="hm-trust-strip" aria-label="Homework Magic at a glance">
-      <div class="hm-trust-grid">
-        <div class="hm-trust-item"><span aria-hidden="true">🎒</span> Years 1–6 and 11+</div>
-        <div class="hm-trust-item"><span aria-hidden="true">⏱️</span> Fits short family routines</div>
-        <div class="hm-trust-item"><span aria-hidden="true">💬</span> Explains, not just scores</div>
-      </div>
-    </section>
 
     <section class="hm-section hm-daily-quest-section" aria-labelledby="daily-quest-title">
       <div class="hm-daily-quest-card">
         <div class="hm-daily-quest-copy">
-          <p class="hm-kicker">A new little challenge every day</p>
-          <h2 id="daily-quest-title">🎮 Meet your Daily Magic Quest</h2>
-          <p>Pick a tiny mission, earn XP as you practise, and come back tomorrow for a fresh challenge. No huge worksheet — just one satisfying step.</p>
-          <div class="hm-quest-choice-grid" role="list" aria-label="Daily quest ideas">
+          <p class="hm-kicker">Make practice feel easy</p>
+          <h2 id="daily-quest-title">🎮 A little learning quest each day</h2>
+          <p>Choose one short activity, earn XP as you practise, and come back tomorrow for a fresh challenge. No huge worksheet—just one satisfying step.</p>
+          <div class="hm-quest-choice-grid" role="list" aria-label="Daily Maths, Reading, Science and 11+ learning quests">
             <a href="/app?tab=homework" class="hm-quest-choice" role="listitem"><span>🔢</span><strong>Maths Mission</strong><small>Beat 5 brainy questions</small></a>
             <a href="/app?tab=homework" class="hm-quest-choice" role="listitem"><span>📚</span><strong>Reading Hunt</strong><small>Spot clues and new words</small></a>
             <a href="/app?tab=homework" class="hm-quest-choice" role="listitem"><span>🔬</span><strong>Science Spark</strong><small>Answer one curious challenge</small></a>
@@ -198,291 +446,147 @@
         <div class="hm-daily-quest-reward" aria-hidden="true">
           <div class="hm-reward-orbit">⭐</div>
           <div class="hm-reward-trophy">🏆</div>
-          <div class="hm-reward-pet">🦊</div>
+<!--          <div class="hm-reward-pet">🦊</div>-->
           <strong>Quest complete!</strong>
           <span>+ XP · New badge</span>
         </div>
       </div>
     </section>
 
-    <section class="hm-section" aria-labelledby="summer-title">
-      <div class="hm-campaign-card" style="background:linear-gradient(135deg,#fff8df,#f3efff);">
-        <p class="hm-kicker">☀️ Summer → 🎒 September</p>
-        <h2 id="summer-title">A little learning now. An easier return to school later.</h2>
-        <p>Try a 5–10 minute challenge when it suits your family. In late August, switch to our Back-to-School challenge for a gentle Year 1–6 refresh.</p>
-        <div class="hm-campaign-actions">
-          <a class="hm-button hm-button-primary" href="/summer-learning">Summer learning ideas</a>
-          <a class="hm-button" href="/back-to-school">Back-to-school challenge</a>
-        </div>
-      </div>
-    </section>
 
-    <section class="hm-section" aria-labelledby="storytime-title">
-      <div class="hm-youtube-card">
-        <div class="hm-youtube-icon" aria-hidden="true">▶️</div>
-        <div>
-          <p class="hm-kicker">📖 Story time + learning</p>
-          <h2 id="storytime-title">Enjoy a story, then try one tiny learning quest.</h2>
-          <p>For families who enjoy children's stories, London Kids Reading offers story time on YouTube. When the story ends, Homework Magic can turn the next 5–10 minutes into a playful Maths, English or Science challenge.</p>
-          <div class="hm-campaign-actions"><a class="hm-button" href="https://www.youtube.com/@LondonKidsReading" rel="noopener noreferrer">Watch London Kids Reading</a><a class="hm-button hm-button-primary" href="/storytime">Story-to-learning ideas</a></div>
-        </div>
-      </div>
-    </section>
 
-    <section class="hm-section" id="how-it-works" aria-labelledby="how-title">
-      <div class="hm-section-heading">
-        <p class="hm-kicker">Three simple steps</p>
-        <h2 id="how-title">From “I’m stuck” to “I did it!”</h2>
-        <p>Clear choices and encouraging words help children focus on the learning, not the screen.</p>
-      </div>
-      <div class="hm-step-grid">
-        <article class="hm-step-card">
-          <div class="hm-step-number">1</div>
-          <h3>Choose a quest</h3>
-          <p>Pick a year group and subject, or tell the tutor what needs a little extra practice.</p>
-        </article>
-        <article class="hm-step-card">
-          <div class="hm-step-number">2</div>
-          <h3>Have a go</h3>
-          <p>Work through a short set together, or use Tutor mode for one question at a time.</p>
-        </article>
-        <article class="hm-step-card">
-          <div class="hm-step-number">3</div>
-          <h3>Get kind feedback</h3>
-          <p>See what went well, understand mistakes and find the next small step to try.</p>
-        </article>
-      </div>
-    </section>
+<section aria-labelledby="quick-title" class="hm-section hm-quick-links">
+<div class="hm-section-heading">
+<p class="hm-kicker">Choose your path</p>
+<h2 id="quick-title">What would you like to do?</h2>
+</div>
+<div class="hm-path-grid">
+<a class="hm-path-card" href="/app"><span aria-hidden="true">📚</span><div><strong>Homework help</strong><small>Years 1–6 · Maths, English &amp; Science</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/elevenplus-practice"><span aria-hidden="true">🎯</span><div><strong>11+ practice</strong><small>Questions, skills and mock exams</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/back-to-school"><span aria-hidden="true">🎒</span><div><strong>Get ready for school</strong><small>Short summer-to-September practice</small></div><b aria-hidden="true">→</b></a>
+</div>
+</section>
+<section aria-labelledby="learning-title" class="hm-section hm-compact-learning">
+<div class="hm-section-heading"><p class="hm-kicker">Explore learning</p><h2 id="learning-title">Find practice for your child</h2></div>
+<div class="hm-path-grid">
+<a class="hm-path-card" href="/ks1-homework"><span aria-hidden="true">✏️</span><div><strong>KS1</strong><small>Years 1–2 homework</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/ks2-homework"><span aria-hidden="true">📚</span><div><strong>KS2</strong><small>Years 3–6 homework</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/year-3-maths-practice"><span aria-hidden="true">🔢</span><div><strong>Year 3 Maths</strong><small>Practice questions</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/year-3-english-reading-practice"><span aria-hidden="true">📖</span><div><strong>Year 3 English</strong><small>Reading practice</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/elevenplus-mock-exams"><span aria-hidden="true">🎯</span><div><strong>11+ mocks</strong><small>Exam practice</small></div><b aria-hidden="true">→</b></a>
+<a class="hm-path-card" href="/storytime"><span aria-hidden="true">🌙</span><div><strong>Storytime learning</strong><small>From London Kids Reading</small></div><b aria-hidden="true">→</b></a>
+</div>
+</section>
 
-    <div class="hm-section-soft">
-      <section class="hm-section" aria-labelledby="parent-title">
-        <div class="hm-parent-layout">
-          <div class="hm-parent-panel">
-            <p class="hm-kicker">For parents and guardians</p>
-            <h2 id="parent-title">Helpful practice, without another hour of planning.</h2>
-            <p>Set the level, choose the subject and let Homework Magic prepare focused questions. You stay in charge of the account, progress and learning memory.</p>
-            <a class="hm-button" href="/pricing">Explore parent plans</a>
-          </div>
-          <div class="hm-parent-cards">
-            <article class="hm-parent-card">
-              <span class="hm-parent-icon" aria-hidden="true">🎯</span>
-              <h3>Right-sized practice</h3>
-              <p>Choose the school year and subject, with sessions designed to stay manageable.</p>
-            </article>
-            <article class="hm-parent-card">
-              <span class="hm-parent-icon" aria-hidden="true">📈</span>
-              <h3>Progress you can use</h3>
-              <p>Spot stronger topics and areas that may benefit from another gentle try.</p>
-            </article>
-            <article class="hm-parent-card">
-              <span class="hm-parent-icon" aria-hidden="true">🛡️</span>
-              <h3>Parent-managed privacy</h3>
-              <p>Use learner nicknames and control optional learning memory from the parent area.</p>
-            </article>
-            <article class="hm-parent-card">
-              <span class="hm-parent-icon" aria-hidden="true">💡</span>
-              <h3>Feedback that teaches</h3>
-              <p>Children see clear explanations and next steps—not only a red cross or a score.</p>
-            </article>
-          </div>
-        </div>
-      </section>
+        <section class="hm-section hm-eleven-roadmap" aria-labelledby="eleven-title">
+  <div class="hm-section-heading">
+    <p class="hm-kicker">A separate path for older primary learners</p>
+    <h2 id="eleven-title">🎯 11+ preparation roadmap</h2>
+    <p>A simple path from choosing schools to building the skills needed for the 11+.</p>
+  </div>
+
+  <div class="hm-roadmap" aria-label="11+ preparation steps">
+    <div class="hm-roadmap-step">
+      <span class="hm-roadmap-number">1</span>
+      <h3><a href="/school-finder">Find schools</a></h3>
+      <p>Use the school finder to explore eligible schools and start planning your 11+ target schools.</p>
+      <span class="hm-roadmap-arrow" aria-hidden="true">→</span>
     </div>
-
-    <section class="hm-section" aria-labelledby="subjects-title">
-      <div class="hm-section-heading">
-        <p class="hm-kicker">Pick a favourite</p>
-        <h2 id="subjects-title">Primary Maths, English, Science &amp; more</h2>
-        <p>Practise UK primary school skills in Years 1–6 with short, friendly activities that are easy to fit into family life.</p>
-      </div>
-      <div class="hm-subject-grid">
-        <article class="hm-subject-card">
-          <span class="hm-subject-icon" aria-hidden="true">🔢</span>
-          <h3>Maths</h3>
-          <p>Number, fractions, shape, measures and problem-solving.</p>
-        </article>
-        <article class="hm-subject-card">
-          <span class="hm-subject-icon" aria-hidden="true">📖</span>
-          <h3>English</h3>
-          <p>Reading, vocabulary, spelling, grammar and writing skills.</p>
-        </article>
-        <article class="hm-subject-card">
-          <span class="hm-subject-icon" aria-hidden="true">🌱</span>
-          <h3>Science</h3>
-          <p>Living things, materials, forces and curious investigations.</p>
-        </article>
-        <article class="hm-subject-card">
-          <span class="hm-subject-icon" aria-hidden="true">🗺️</span>
-          <h3>More subjects</h3>
-          <p>History, geography and language practice for primary learners.</p>
-        </article>
-      </div>
-    </section>
-
-<!--    <section class="hm-section" aria-labelledby="tip-title">-->
-<!--      <div class="hm-tip-banner">-->
-<!--        <div class="hm-tip-icon" aria-hidden="true">🌤️</div>-->
-<!--        <div>-->
-<!--          <h2 id="tip-title">A calmer homework tip</h2>-->
-<!--          <p>Choose one clear goal and finish while the session still feels positive. For younger learners, a focused 10–15 minutes can be more useful than a long struggle.</p>-->
-<!--        </div>-->
-<!--        <a class="hm-button hm-button-small" href="/app">Try a short session</a>-->
-<!--      </div>-->
-<!--    </section>-->
-
-    <section class="hm-section hm-seo-learning-hub" aria-labelledby="learning-hub-title">
-      <div class="hm-section-heading">
-        <p class="hm-kicker">Free learning guides</p>
-        <h2 id="learning-hub-title">Find practice for your child’s year group</h2>
-        <p>Explore useful starting points for UK primary homework, Maths, English reading and 11+ preparation.</p>
-      </div>
-      <div class="hm-learning-link-grid">
-        <a href="/ks1-homework"><strong>KS1 homework</strong><span>Year 1 &amp; Year 2 practice</span></a>
-        <a href="/ks2-homework"><strong>KS2 homework</strong><span>Year 3–6 practice</span></a>
-        <a href="/year-3-maths-practice"><strong>Year 3 Maths</strong><span>Number and problem-solving</span></a>
-        <a href="/year-3-english-reading-practice"><strong>Year 3 English</strong><span>Reading and vocabulary</span></a>
-        <a href="/elevenplus-practice"><strong>11+ practice</strong><span>Maths, English and reasoning</span></a>
-        <a href="/elevenplus-mock-exams"><strong>11+ mock exams</strong><span>Try a realistic exam journey</span></a>
-      </div>
-    </section>
-
-    <section class="hm-section" aria-labelledby="eleven-title">
-      <div class="hm-section-heading">
-        <p class="hm-kicker">For older primary learners</p>
-        <h2 id="eleven-title">Your 11+ preparation roadmap</h2>
-        <p>Every family's journey is different. Pick the workflow that fits your timeline.</p>
-      </div>
-      <div class="hm-workflow-stack">
-        <div class="hm-workflow-card">
-          <div class="hm-workflow-head"><span class="hm-workflow-step">Path A</span><span class="hm-workflow-label">Just getting started</span></div>
-          <div class="hm-workflow-steps">
-            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/elevenplus-mock-exams" class="hm-workflow-node">2. Mock exam</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/app?tab=eleven" class="hm-workflow-node">3. Daily practice</a>
-          </div>
-        </div>
-        <div class="hm-workflow-card">
-          <div class="hm-workflow-head"><span class="hm-workflow-step">Path B</span><span class="hm-workflow-label">Building foundations</span></div>
-          <div class="hm-workflow-steps">
-            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/elevenplus-mock-exams" class="hm-workflow-node">2. Mock exam</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/elevenplus-topic-mastery" class="hm-workflow-node">3. Topic mastery</a>
-          </div>
-        </div>
-        <div class="hm-workflow-card">
-          <div class="hm-workflow-head"><span class="hm-workflow-step">Path C</span><span class="hm-workflow-label">Long-term preparation</span></div>
-          <div class="hm-workflow-steps">
-            <a href="/school-finder" class="hm-workflow-node">1. Find schools</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/elevenplus-year-round-plan" class="hm-workflow-node">2. Year-round plan</a>
-            <span class="hm-wf-arrow">→</span>
-            <a href="/elevenplus-mock-exams" class="hm-workflow-node">3. Mock exam</a>
-          </div>
-        </div>
-      </div>
-      <p class="hm-workflow-note">Mock exams help you identify weak areas, then targeted practice strengthens them — repeat as needed until exam day.</p>
-    </section>
-
-    <section class="hm-section" id="our-story" aria-labelledby="story-title">
-      <div class="hm-tip-banner hm-founder-story">
-        <div class="hm-story-intro">
-<!--          <span class="hm-story-icon" aria-hidden="true">🏡</span>-->
-          <p class="hm-kicker">Built from a real family need with love 🏡</p>
-          <h2 id="story-title">Why I started Homework Magic</h2>
-          <div class="hm-story-copy">
-            <p>I’m a parent whose daughter is starting Year 3 in September. Her school does not set regular homework, but I wanted to give her a simple 10–15 minutes of useful practice each day.</p>
-            <p>The materials I found were often one-size-fits-all, and I still needed to choose the right work and check every answer myself. So I began building an AI tutor that could prepare practice for her level and give helpful feedback straight away, at any time.</p>
-            <p>My daughter liked the idea and helped shape the design and choose the name <strong>Homework Magic</strong>. Her input is a daily reminder that learning should feel friendly, manageable and made for the child using it.</p>
-                <a class="hm-button hm-button-small" href="/messages">I’d love to hear your feedback</a>
-          </div>
-        </div>
-        <aside class="hm-founder-promise" aria-label="A note from the founder">
-          <span aria-hidden="true">✨</span>
-          <p>I’ll keep improving Homework Magic as my daughter uses it, guided by what makes practice clearer, calmer and more useful for families.</p>
-<!--            <p>If you have an idea or spot something we could do better, I’d love to hear from you.</p>-->
-        </aside>
-      </div>
-    </section>
-
-    <section class="hm-section hm-faq" aria-labelledby="faq-title">
-      <div class="hm-section-heading">
-        <p class="hm-kicker">Good to know</p>
-        <h2 id="faq-title">Questions families ask</h2>
-      </div>
-      <details>
-        <summary>Which ages and school years can use Homework Magic?</summary>
-        <p>It is designed for UK primary learners in Years 1–6, broadly ages 5–11, with extra 11+ preparation for older primary learners.</p>
-      </details>
-      <details>
-        <summary>Does it follow the school curriculum?</summary>
-        <p>Homework activities are designed around National Curriculum subjects and year groups in England. A parent, guardian or teacher should still check anything important because AI can make mistakes.</p>
-      </details>
-      <details>
-        <summary>What can I use before choosing a paid plan?</summary>
-        <p>Families can try available curriculum questions. Parent plans add features such as Tutor mode, deeper explanations, progress and targeted practice.</p>
-      </details>
-      <details>
-        <summary>How should a child use the website safely?</summary>
-        <p>A parent or guardian should manage the account. Use a learner nickname and never enter a child’s school, address, phone number, exact birthday or password into a homework box.</p>
-      </details>
-      <details>
-        <summary>Does this replace a teacher?</summary>
-        <p>No. Homework Magic is a practice helper. Teachers and parents know the child and should make important learning or wellbeing decisions.</p>
-      </details>
-    </section>
-
-    <section class="hm-section" aria-labelledby="start-title">
-      <div class="hm-final-cta">
-        <p class="hm-kicker">One small step</p>
-        <h2 id="start-title">Pick a subject and turn today’s homework into a little win.</h2>
-        <p>Start with a short activity. You can always stop, celebrate the effort and come back tomorrow.</p>
-        <a class="hm-button hm-button-primary" href="/app"><span aria-hidden="true">✨</span> Start learning</a>
-      </div>
-    </section>
-  </main>
-
-  <footer class="hm-footer">
-    <div class="hm-footer-grid">
-      <div>
-        <a class="hm-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>
-        <p>Friendly homework practice and feedback for UK primary families.</p>
-      </div>
-      <div>
-        <h2>Learn</h2>
-        <div class="hm-footer-links">
-          <a href="/ks1-homework">KS1 homework</a>
-          <a href="/ks2-homework">KS2 homework</a>
-          <a href="/elevenplus-practice">11+ practice</a>
-          <a href="/elevenplus-mock-exams">11+ mock exams</a>
-          <a href="/progress">Progress</a>
-          <a href="/rewards">Reward quests</a>
-          <a href="/storytime">Story time + learning</a>
-          <a href="/back-to-school">Back to school</a>
-        </div>
-      </div>
-      <div>
-        <h2>Families</h2>
-        <div class="hm-footer-links">
-          <a href="/pricing">Parent plans</a>
-          <a href="/parent-dashboard">Parent dashboard</a>
-          <a href="/messages">Contact us</a>
-          <a href="mailto:contact@homeworkmagic.co.uk">Email support</a>
-          <a href="/terms">Terms of Service</a>
-          <a href="/refund-policy">Refunds &amp; cancellation</a>
-          <a href="/privacy">Privacy</a>
-          <a href="/safety">Safety</a>
-        </div>
-      </div>
+    <div class="hm-roadmap-step">
+      <span class="hm-roadmap-number">2</span>
+      <h3><a href="/elevenplus-mock-exams">Try a mock</a></h3>
+      <p>Take an 11+ mock exam to see strengths and areas to improve across key exam skills.</p>
+      <span class="hm-roadmap-arrow" aria-hidden="true">→</span>
     </div>
-    <div class="hm-footer-note">© 2026 Homework Magic · Accounts and payments should be managed by a parent or guardian.</div>
-  </footer>
-  <script src="/static/js/avatar-data.js?v=20260811-avatar-pet-1" defer></script>
-    <script src="/static/js/avatar-character.js?v=20260811-avatar-pet-1" defer></script>
-    <script src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1" defer></script>
-  <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+    <div class="hm-roadmap-step">
+      <span class="hm-roadmap-number">3</span>
+      <h3><a href="/app?tab=eleven">Build skills</a></h3>
+      <p>Practise weaker 11+ topics with focused Maths, English, verbal reasoning and non-verbal reasoning questions.</p>
+      <span class="hm-roadmap-arrow" aria-hidden="true">→</span>
+    </div>
+    <div class="hm-roadmap-step">
+      <span class="hm-roadmap-number">4</span>
+      <h3><a href="/elevenplus-topic-mastery">Repeat &amp; improve</a></h3>
+      <p>Use more mocks and review progress as exam day gets closer.</p>
+    </div>
+  </div>
+
+  <div class="hm-roadmap-cta">
+    <p>Start free, then unlock more 11+ preparation when your family needs it.</p>
+    <a class="hm-button hm-button-primary" href="/elevenplus-practice">Explore 11+ practice</a>
+  </div>
+</section>
+
+<section aria-labelledby="faq-title" class="hm-section hm-faq">
+<div class="hm-section-heading">
+<p class="hm-kicker">Good to know</p>
+<h2 id="faq-title">Questions families ask</h2>
+</div>
+<details>
+<summary>Which ages and school years can use Homework Magic?</summary>
+<p>It is designed for UK primary learners in Years 1–6, broadly ages 5–11, with extra 11+ preparation for older primary learners.</p>
+</details>
+<details>
+<summary>Does it follow the school curriculum?</summary>
+<p>Homework activities are designed around National Curriculum subjects and year groups in England. A parent, guardian or teacher should still check anything important because AI can make mistakes.</p>
+</details>
+<details>
+<summary>What can I use before choosing a paid plan?</summary>
+<p>Families can try available curriculum questions. Pricing plans add features such as Tutor mode, deeper explanations, progress and targeted practice.</p>
+</details>
+<details>
+<summary>How should a child use the website safely?</summary>
+<p>A parent or guardian should manage the account. Use a learner nickname and never enter a child’s school, address, phone number, exact birthday or password into a homework box.</p>
+</details>
+
+</section>
+<section aria-labelledby="start-title" class="hm-section">
+<div class="hm-final-cta">
+<p class="hm-kicker">One small step</p>
+<h2 id="start-title">Pick a subject and turn today’s homework into a little win.</h2>
+<p>Start with a short activity. You can always stop, celebrate the effort and come back tomorrow.</p>
+<a class="hm-button hm-button-primary" href="/app"><span aria-hidden="true">✨</span> Start learning</a>
+</div>
+</section>
+</main>
+
+
+<footer class="hm-footer">
+<div class="hm-footer-grid">
+<div>
+<a class="hm-brand" href="/"><span aria-hidden="true">✨</span> Homework Magic</a>
+<p>Friendly homework practice and feedback for UK primary families.</p>
+</div>
+<div>
+<h2>Learn</h2>
+<div class="hm-footer-links">
+<a href="/ks1-homework">KS1 homework</a>
+<a href="/ks2-homework">KS2 homework</a>
+<a href="/elevenplus-practice">11+ practice</a>
+<a href="/elevenplus-mock-exams">11+ mock exams</a>
+<a href="/progress">Progress</a>
+<a href="/rewards">Reward quests</a>
+</div>
+</div>
+<div>
+<h2>Families</h2>
+<div class="hm-footer-links">
+<a href="/pricing">Pricing</a>
+<a href="/parent-dashboard">Parent dashboard</a>
+<a href="/messages">Contact us</a>
+<a href="mailto:contact@homeworkmagic.co.uk">Email support</a>
+<a href="/terms">Terms of Service</a>
+<a href="/refund-policy">Refunds &amp; cancellation</a>
+<a href="/privacy">Privacy</a>
+<a href="/safety">Safety</a>
+</div>
+</div>
+</div>
+<div class="hm-footer-note">© 2026 Homework Magic · Accounts and payments should be managed by a parent or guardian.</div>
+</footer>
+<script defer="" src="/static/js/avatar-data.js?v=20260811-avatar-pet-1"></script>
+<script defer="" src="/static/js/avatar-character.js?v=20260811-avatar-pet-1"></script>
+<script defer="" src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1"></script>
+<script defer="" src="/static/js/auth-nav.js?v=20260809-avatar-polish-1"></script>
 </body>
 </html>

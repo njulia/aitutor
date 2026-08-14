@@ -1678,8 +1678,19 @@ app.include_router(build_mock_exam_router(
 ))
 
 @app.get("/api/elevenplus/topic-mastery/catalog")
-async def get_topic_mastery_catalog():
+async def get_topic_mastery_catalog(req: Request):
     """Return the small static catalogue without loading RAG or an LLM."""
+    resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
+    if not user_has_subscription(
+        req=req,
+        student_id=resolved_student_id,
+        username=logged_in_username,
+        required_plan=ELEVENPLUS_PREMIUM_PLAN,
+    ):
+        return _subscription_required_response(
+            "11+ Topic Mastery", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+        )
+
     from src.elevenplus_topic_mastery import topic_mastery_catalogue
 
     return topic_mastery_catalogue()
@@ -1692,6 +1703,15 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
     await _require_registered_identity(
         req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
     )
+    if not user_has_subscription(
+        req=req,
+        student_id=resolved_student_id,
+        username=logged_in_username,
+        required_plan=ELEVENPLUS_PREMIUM_PLAN,
+    ):
+        return _subscription_required_response(
+            "11+ Topic Mastery", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+        )
 
     from src.elevenplus_rag import (
         format_questions_only,
@@ -3069,17 +3089,20 @@ async def admin_overview():
     account_growth = []
     subscription_by_plan = {}
     try:
-        from src.webapp.account_store import count_all_students, student_growth_by_day, account_growth_by_day, subscription_growth_by_plan
+        from src.webapp.account_store import count_all_students, count_all_parent_accounts, student_growth_by_day, account_growth_by_day, subscription_growth_by_plan
         total = count_all_students()
+        parent_accounts = count_all_parent_accounts()
         student_growth = student_growth_by_day(30)
         account_growth = account_growth_by_day(30)
         subscription_by_plan = subscription_growth_by_plan(30)
     except Exception as e:
         logger.exception("admin_overview: account_store 查询失败")
         total = metrics["sessions"].get("total_sessions", 0)
+        parent_accounts = 0
     return {
         "sessions": metrics["sessions"],
         "total_students": total,
+        "parent_accounts": parent_accounts,
         "student_growth": student_growth,
         "account_growth": account_growth,
         "subscription_by_plan": subscription_by_plan,

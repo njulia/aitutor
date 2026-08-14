@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Parent plans and prices | Homework Magic</title>
+  <title>Pricing Tiers | Homework Magic</title>
   <meta name="description" content="Compare Homework Magic plans for UK primary homework, 11+ practice and original timed mock exams. Parent-managed payment through secure Stripe Checkout.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://homeworkmagic.co.uk/pricing">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Parent Plans and Prices | Homework Magic">
+  <meta property="og:title" content="Pricing Tiers | Homework Magic">
   <meta property="og:description" content="Compare Homework Magic plans for UK primary homework, 11+ practice and timed mock exams.">
   <meta property="og:url" content="https://homeworkmagic.co.uk/pricing">
   <meta property="og:site_name" content="Homework Magic">
   <meta property="og:locale" content="en_GB">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Parent Plans and Prices | Homework Magic">
-  <meta name="twitter:description" content="Compare parent-managed plans for homework, 11+ practice and timed mock exams.">
+  <meta name="twitter:title" content="Pricing Tiers | Homework Magic">
+  <meta name="twitter:description" content="Compare pricing tiers for homework, 11+ practice and timed mock exams.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -40,6 +40,12 @@
     .billing-points { display: flex; flex-wrap: wrap; justify-content: center; gap: .7rem; }
     .billing-points span { background: #fff; border-radius: 999px; padding: .55rem .8rem; }
     .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .free-plan-card { max-width: 820px; margin: 1.5rem auto; border: 2px solid #d8c9ff; background: #fbf9ff; }
+    .free-plan-card h2 { margin-bottom: .35rem; }
+    .free-plan-price { margin: .2rem 0 .8rem; color: #5a4a9f; }
+    .free-plan-price strong { font-size: 1.6rem; }
+    .free-plan-price span { color: #52606d; font-size: .95rem; }
+    .free-plan-card ul { margin-bottom: 1.1rem; }
     .card { background: #fff; border-radius: 18px; padding: 1.5rem; box-shadow: 0 5px 22px #1e2b4a14; }
     .card h2 { margin-top: 0; }
     .featured { border: 2px solid #7a68d8; }
@@ -86,7 +92,7 @@
 
 <main data-billing-refresh-endpoint="/api/billing/status?refresh=true">
   <section class="intro">
-    <p class="hm-kicker">Simple parent plans</p>
+    <p class="hm-kicker">Pricing/p>
     <h1>Choose the support your learner needs</h1>
     <p>A parent or guardian manages the account, checkout and subscription. Children should never enter payment details.</p>
     <p><strong>All prices are in pounds sterling (GBP).</strong> The exact charge, renewal period and any applicable tax are shown before payment.</p>
@@ -95,69 +101,25 @@
     </div>
   </section>
 
-  <section id="public-plan-summary" aria-labelledby="plan-summary-title">
-    <h2 id="plan-summary-title" hidden>Plan summary</h2>
-    <div class="plans">
-      <article class="card featured">
-        <p class="hm-kicker">Free forever</p>
-        <h2>Homework Magic Free</h2>
-        <p class="price">£0 GBP / forever</p>
-        <ul>
-            <li>Years 1–6 homework support</li>
-            <li>Quick Review with simple feedback</li>
-            <li>Basic 11+ practice</li>
-            <li>Free Common 11+ Diagnostic</li>
-            <li>XP, levels and avatar</li>
-            <li>Basic learning progress</li>
-        </ul>
-        <p class="billing-term">A parent or guardian creates the free family account. The Free tier does not renew automatically because it has no billing, and no payment is required.</p>
-        <a class="button checkout-button" href="/register?next=/app" data-checkout-label="Create free account">Create free account</a>
-      </article>
-      <article class="card">
-        <p class="hm-kicker">Years 1–6 for 2 students</p>
-        <h2>Homework Premium</h2>
-        <p class="price">£4.99 GBP / month</p>
-        <ul>
-            <li>Years 1–6 homework support</li>
-            <li>Tutor mode</li>
-            <li>Detailed explanations</li>
-            <li>Targeted practice</li>
-            <li>Progress and learning memory</li>
-            <li>XP, levels and certificates</li>
-            <li>Earn Gift Points and claim gifts</li>
-        </ul>
-        <p class="billing-term">£4.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
-        <a class="button checkout-button" href="/login?next=/pricing" data-plan="homework_monthly" data-checkout-label="Choose Homework Premium">Parent sign in to choose</a>
-      </article>
-      <article class="card">
-        <p class="hm-kicker">Years 1–6 &amp; 11+ for 4 students</p>
-        <h2>11+ Premium</h2>
-        <p class="price">£9.99 GBP / month</p>
-        <ul>
-            <li>Years 1–6 homework support</li>
-            <li>11+ Maths, English and reasoning practice</li>
-            <li>11+ Year-round study plan</li>
-            <li>11+ Common four-subject mock exams</li>
-            <li>11+ School-target Maths and English mocks</li>
-            <li>Progress and learning memory</li>
-            <li>Instant local marking and topic breakdown</li>
-        </ul>
-        <p class="billing-term">£9.99 GBP is charged each month until cancelled. Each billing period is one month, matching the Stripe product.</p>
-        <a class="button checkout-button" href="/login?next=/pricing" data-plan="elevenplus_monthly" data-checkout-label="Choose 11+ Premium">Parent sign in to choose</a>
-      </article>
-    </div>
-    <section id="stripe-pricing-table-section" hidden aria-labelledby="stripe-pricing-table-title">
-      <h2 id="stripe-pricing-table-title" hidden>Stripe pricing table</h2>
-      <div id="stripe-pricing-table-container" class="card" style="padding:0; background:transparent; box-shadow:none;"></div>
-<!--      <p class="billing-help" style="text-align:center">Or choose a Homework Magic plan card above.</p>-->
-    </section>
+  <section class="card free-plan-card" aria-labelledby="free-plan-title">
+    <p class="hm-kicker">Free forever · No payment needed</p>
+    <h2 id="free-plan-title">Homework Magic Free</h2>
+    <p class="free-plan-price"><strong>£0</strong> <span>forever</span></p>
+    <p>Get started with everyday primary homework practice before choosing a paid plan.</p>
+    <ul>
+      <li>Years 1–6 homework support</li>
+      <li>Quick Review with simple feedback</li>
+      <li>Basic 11+ practice</li>
+      <li>Free Common 11+ Diagnostic</li>
+      <li>XP, levels and avatar</li>
+      <li>Basic learning progress</li>
+    </ul>
+    <a class="button secondary" href="/register?next=/app">Create free account</a>
+  </section>
 
-    <section class="card checkout-help" id="checkout-help" aria-labelledby="secure-checkout-title">
-      <h2 id="secure-checkout-title">Secure, parent-managed checkout</h2>
-      <p>Sign in as a parent or guardian, choose a plan above, then review the exact purchase on Stripe’s hosted checkout page.</p>
-      <a class="button" id="pricing-login-button" href="/login?next=/pricing">Parent sign in to choose</a>
-      <noscript>Please enable JavaScript to start secure checkout. You can also contact support for help.</noscript>
-    </section>
+  <section id="stripe-pricing-table-section" aria-labelledby="stripe-pricing-table-title">
+    <h2 id="stripe-pricing-table-title" hidden>Homework Magic pricing plans</h2>
+    <div id="stripe-pricing-table-container"></div>
   </section>
 
   <p id="status" role="status" aria-live="polite">Checking your parent account…</p>
@@ -201,7 +163,7 @@
   <p class="legal-links"><a href="/terms">Terms of Service</a> · <a href="/refund-policy">Refunds &amp; cancellation</a> · <a href="/privacy">Privacy</a> · <a href="/messages">Contact</a></p>
 </main>
 
-<script src="/static/js/pricing.js?v=20260807-pricing-cards-only" defer></script>
+<script src="/static/js/pricing.js?v=20260814-stripe-pricing-table" defer></script>
 <script src="/static/js/avatar-data.js?v=20260811-avatar-pet-1" defer></script>
     <script src="/static/js/avatar-character.js?v=20260811-avatar-pet-1" defer></script>
     <script src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1" defer></script>

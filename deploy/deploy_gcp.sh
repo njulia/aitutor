@@ -23,6 +23,11 @@ CLOUD_RUN_MAX_INSTANCES="${CLOUD_RUN_MAX_INSTANCES:-60}"
 CLOUD_RUN_CPU="${CLOUD_RUN_CPU:-2}"
 CLOUD_RUN_MEMORY="${CLOUD_RUN_MEMORY:-4Gi}"
 BILLING_HEALTH_URL="${BILLING_HEALTH_URL:-https://homeworkmagic.co.uk/api/billing/plans}"
+
+# Production AI routing. These values are enforced on every full deployment.
+DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-deepseek}"
+DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-pro}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REWARD_SECRET_HELPER="${SCRIPT_DIR}/ensure_reward_delivery_secret.sh"
 
@@ -37,7 +42,37 @@ if [[ ! -f "${DEPLOY_ENV_FILE}" ]]; then
   echo "Create ${DEPLOY_ENV_FILE} from deploy/cloud-run.env.yaml.example first." >&2
   exit 2
 fi
-if grep -Eq ':[[:space:]]*["'"'"']?REPLACE_' "${DEPLOY_ENV_FILE}"; then
+
+# --env-vars-file is authoritative in Cloud Run. Create an effective temporary
+# copy with the production AI routing enforced, so an older value in the
+# operator's private env file cannot reappear in the next revision.
+DEPLOY_ENV_FILE_EFFECTIVE="${DEPLOY_ENV_FILE}"
+DEPLOY_ENV_TMP="$(mktemp "${TMPDIR:-/tmp}/homeworkmagic-env.XXXXXX.yaml")"
+trap 'rm -f "${DEPLOY_ENV_TMP}"' EXIT
+
+python3 - "${DEPLOY_ENV_FILE}" "${DEPLOY_ENV_TMP}" "${DETAIL_REVIEW_PROVIDER}" "${DETAIL_REVIEW_MODEL}" <<'PY'
+import pathlib
+import re
+import sys
+
+source, destination, provider, model = sys.argv[1:]
+text = pathlib.Path(source).read_text(encoding="utf-8")
+
+def upsert(text, key, value):
+    pattern = re.compile(rf"(?m)^{re.escape(key)}:[^\n]*$")
+    line = f"{key}: {value}"
+    if pattern.search(text):
+        return pattern.sub(line, text, count=1)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text + line + "\n"
+
+text = upsert(text, "DETAIL_REVIEW_PROVIDER", provider)
+text = upsert(text, "DETAIL_REVIEW_MODEL", model)
+pathlib.Path(destination).write_text(text, encoding="utf-8")
+PY
+DEPLOY_ENV_FILE_EFFECTIVE="${DEPLOY_ENV_TMP}"
+if grep -Eq ':[[:space:]]*["'"'"']?REPLACE_' "${DEPLOY_ENV_FILE_EFFECTIVE}"; then
   echo "${DEPLOY_ENV_FILE} still contains placeholder values." >&2
   exit 2
 fi
@@ -52,7 +87,7 @@ required_public_settings=(
   BUSINESS_CONTACT_EMAIL
 )
 for setting in "${required_public_settings[@]}"; do
-  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE}"; then
+  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE_EFFECTIVE}"; then
     echo "${DEPLOY_ENV_FILE} must contain a non-empty ${setting} value." >&2
     exit 2
   fi
@@ -66,13 +101,13 @@ required_billing_settings=(
   STRIPE_PRICE_ELEVENPLUS_MONTHLY
 )
 for setting in "${required_billing_settings[@]}"; do
-  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE}"; then
+  if ! grep -Eq "^${setting}:[[:space:]]*[\"']?[^\"'[:space:]][^\"']*[\"']?[[:space:]]*$" "${DEPLOY_ENV_FILE_EFFECTIVE}"; then
     echo "${DEPLOY_ENV_FILE} must contain a non-empty ${setting} value." >&2
     exit 2
   fi
 done
 
-if grep -Eq '^BETA_ACCESS_ENABLED:[[:space:]]*["'"'"']?(true|1|yes|on)["'"'"']?[[:space:]]*$' "${DEPLOY_ENV_FILE}"; then
+if grep -Eq '^BETA_ACCESS_ENABLED:[[:space:]]*["'"'"']?(true|1|yes|on)["'"'"']?[[:space:]]*$' "${DEPLOY_ENV_FILE_EFFECTIVE}"; then
   if [[ ",${SECRET_BINDINGS}," != *",BETA_ACCESS_CODE="* ]]; then
     echo "BETA_ACCESS_ENABLED is true, but SECRET_BINDINGS does not bind BETA_ACCESS_CODE." >&2
     echo "Store the invite code in Secret Manager and add BETA_ACCESS_CODE=SECRET_NAME:latest." >&2
@@ -119,7 +154,7 @@ gcloud run deploy "${GCP_SERVICE}" \
   --platform managed \
   --service-account "${GCP_SERVICE_ACCOUNT}" \
   --add-cloudsql-instances "${GCP_PROJECT_ID}:${GCP_REGION}:${GCP_SQL_INSTANCE}" \
-  --env-vars-file "${DEPLOY_ENV_FILE}" \
+  --env-vars-file "${DEPLOY_ENV_FILE_EFFECTIVE}" \
   --update-secrets "${SECRET_BINDINGS}" \
   --allow-unauthenticated \
   --port 8080 \

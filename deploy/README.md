@@ -293,3 +293,19 @@ For the reviewed Cloud Run job workflow, use:
 ./deploy/deploy_rag_gcp.sh --plan-only
 ./deploy/deploy_rag_gcp.sh
 ```
+
+
+### AI review model
+
+Production detail explanations are deployed with Vertex AI using:
+
+```text
+DETAIL_REVIEW_PROVIDER: vertex_ai
+DETAIL_REVIEW_MODEL: gemini-3.6-flash
+```
+
+Both `deploy_gcp.sh` and `deploy_code_gcp.sh` enforce these values on every
+application deployment. This prevents an older Cloud Run value such as
+`DETAIL_REVIEW_MODEL=gemini-2.5-flash` from returning in a new revision.
+For a deliberate test override, use `DETAIL_REVIEW_MODEL` in the shell or
+`--detail-review-model MODEL` with `deploy_code_gcp.sh`.

@@ -692,6 +692,14 @@ def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[st
     return [_dict(row) or {} for row in rows]
 
 
+def count_all_parent_accounts() -> int:
+    """管理员：统计普通家长账号总数（不计管理员账号）。"""
+    with _engine().begin() as conn:
+        return int(conn.execute(
+            select(func.count()).select_from(accounts).where(accounts.c.role == "user")
+        ).scalar_one() or 0)
+
+
 def count_all_students() -> int:
     """管理员：统计已激活学生总数"""
     with _engine().begin() as conn:

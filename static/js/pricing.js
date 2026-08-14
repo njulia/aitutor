@@ -2,11 +2,6 @@
   'use strict';
 
   var statusEl = document.getElementById('status');
-  var planSummary = document.getElementById('public-plan-summary');
-  var pricingLoginButton = document.getElementById('pricing-login-button');
-  var checkoutButtons = Array.prototype.slice.call(
-    document.querySelectorAll('.checkout-button[data-plan]')
-  );
   var accountActions = document.getElementById('account-actions');
   var subscriptionSummary = document.getElementById('subscription-summary');
   var subscriptionDetail = document.getElementById('subscription-detail');
@@ -15,7 +10,6 @@
   var portalButton = document.getElementById('portal-button');
   var existingBillingActions = document.getElementById('existing-billing-actions');
   var existingPortalButton = document.getElementById('existing-portal-button');
-  var checkoutHelp = document.getElementById('checkout-help');
   var navLogin = document.getElementById('pricing-nav-login');
   var navLearning = document.getElementById('pricing-nav-learning');
   var navLogout = document.getElementById('pricing-nav-logout');
@@ -43,12 +37,10 @@
   }
 
   function renderSignedInNavigation(signedIn) {
-    checkoutHelp.hidden = signedIn;
     navLogin.hidden = signedIn;
     navRegister.hidden = signedIn;
     navLearning.hidden = !signedIn;
     navLogout.hidden = !signedIn;
-    pricingLoginButton.hidden = signedIn;
   }
 
   function billingStatus(refresh) {
@@ -80,7 +72,6 @@
     var endDate = formatDate(subscription.current_period_end);
     var cancellationScheduled = subscription.cancel_at_period_end === true;
 
-    planSummary.hidden = true;
     accountActions.hidden = false;
     existingBillingActions.hidden = true;
     billingHelp.hidden = false;
@@ -109,27 +100,6 @@
     subscriptionDetail.textContent = 'Active' + (endDate ? ' until ' + endDate : '') + ' · no payment and no renewal';
     billingButtons.forEach(function (button) { button.hidden = true; });
     billingHelp.hidden = true;
-  }
-
-  function configureCheckoutButtons(data) {
-    var availability = data.plan_availability || {};
-    var unavailableCount = 0;
-    checkoutButtons.forEach(function (button) {
-      var plan = button.getAttribute('data-plan');
-      var ready = availability[plan] === true;
-      button.dataset.checkoutReady = 'true';
-      button.textContent = button.getAttribute('data-checkout-label');
-      button.href = '#';
-      button.removeAttribute('aria-disabled');
-      if (!ready) {
-        unavailableCount += 1;
-      }
-    });
-    if (unavailableCount >= checkoutButtons.length) {
-      setStatus('Stripe billing may not be configured. You can still try to choose a plan.', true);
-    } else if (unavailableCount > 0) {
-      setStatus('Some plans may be temporarily unavailable.', true);
-    }
   }
 
   function loadStripePricingTable() {
@@ -163,41 +133,6 @@
     });
   }
 
-  function checkoutUrlIsSafe(rawUrl) {
-    try {
-      var target = new URL(rawUrl);
-      return target.protocol === 'https:' && target.hostname === 'checkout.stripe.com';
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function startCheckout(plan, button) {
-    button.setAttribute('aria-disabled', 'true');
-    setStatus('Opening Stripe’s secure payment page…');
-    return fetch('/api/billing/checkout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-      body: JSON.stringify({plan: plan})
-    }).then(readJson).then(function (data) {
-      if (!checkoutUrlIsSafe(data.checkout_url)) {
-        throw new Error('Stripe returned an invalid checkout link.');
-      }
-      window.location.assign(data.checkout_url);
-    }).catch(function (error) {
-      button.removeAttribute('aria-disabled');
-      setStatus(error.message || 'Checkout is temporarily unavailable.', true);
-    });
-  }
-
-  checkoutButtons.forEach(function (button) {
-    button.addEventListener('click', function (event) {
-      if (button.dataset.checkoutReady !== 'true') return;
-      event.preventDefault();
-      startCheckout(button.getAttribute('data-plan'), button);
-    });
-  });
 
   function initialiseBilling() {
     return billingStatus(true).then(function (data) {
@@ -206,13 +141,16 @@
         showActiveSubscription(data);
         return;
       }
-      configureCheckoutButtons(data);
       if (data.has_subscription) {
         showBetaAccess(data);
         var trial = document.getElementById('trial-checkout-button');
-        trial.removeAttribute('href');
-        trial.setAttribute('aria-disabled', 'true');
-        trial.textContent = 'Five-day access unavailable';
+        // Older/current pricing layouts may not render a five-day trial button.
+        // Test/beta users must therefore never cause a null-DOM error here.
+        if (trial) {
+          trial.removeAttribute('href');
+          trial.setAttribute('aria-disabled', 'true');
+          trial.textContent = 'Five-day access unavailable';
+        }
         loadStripePricingTable();
         setStatus('Your free beta access is active. You can upgrade to a monthly plan below.');
         return;
@@ -223,12 +161,13 @@
       if (data.refresh && data.refresh.attempted && !data.refresh.succeeded) {
         setStatus('We could not refresh Stripe just now. You can still choose an available plan.', true);
       } else {
-        setStatus("Choose a plan above to continue to Stripe's secure checkout.");
+        setStatus("Choose a plan in the Stripe pricing table to continue to secure checkout.");
       }
     }).catch(function (error) {
       if (error.status === 401) {
         renderSignedInNavigation(false);
-        setStatus('A parent or guardian needs to sign in before choosing a plan.');
+        loadStripePricingTable();
+        setStatus('A parent or guardian can choose a plan using the secure Stripe pricing table.');
         return;
       }
       if (error.status === 409) {
@@ -238,7 +177,6 @@
       }
       // 非 401 错误：假设用户已登录（否则会返回 401），配置 UI 为已登录状态
       renderSignedInNavigation(true);
-      configureCheckoutButtons({plan_availability: {}});
       loadStripePricingTable();
       setStatus(error.message || 'We could not verify plan details. You can still try — we will confirm at checkout.', true);
     });
@@ -342,3 +280,49 @@
     initialiseBilling();
   }
 }());
+
+
+// 11+ Topic Mastery is a premium feature.
+// Keep the link visible, but send non-premium users to pricing so the feature
+// cannot be accidentally presented as free.
+function protectElevenPlusTopicMasteryLinks() {
+  document.querySelectorAll('a[href*="elevenplus-topic-mastery"]').forEach((link) => {
+    const originalHref = link.getAttribute('href');
+    if (!originalHref) return;
+    link.dataset.premiumDestination = 'elevenplus-topic-mastery';
+    link.addEventListener('click', async (event) => {
+      // Allow the normal navigation for users already entitled to 11+ Premium.
+      try {
+        const response = await fetch('/api/subscription/status', {
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = response.ok ? await response.json() : null;
+        const premium = !!(
+          data &&
+          (
+            data.eleven_plus_premium ||
+            data.elevenplus_premium ||
+            data.is_eleven_plus_premium ||
+            data.subscription_tier === 'eleven_plus_premium'
+          )
+        );
+        if (premium) return;
+      } catch (_) {
+        // If entitlement cannot be checked, fail closed for this premium link.
+      }
+      event.preventDefault();
+      const next = encodeURIComponent(originalHref);
+      window.location.href = `/pricing?next=${next}`;
+    }, { passive: false });
+  });
+}
+
+
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', protectElevenPlusTopicMasteryLinks);
+} else {
+  protectElevenPlusTopicMasteryLinks();
+}
+
