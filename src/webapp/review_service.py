@@ -276,7 +276,7 @@ def _pair_rag_answers(
 
     pairs: List[Dict[str, Any]] = []
     if isinstance(raw_answers, list) and all(isinstance(item, dict) for item in raw_answers):
-        for item in raw_answers:
+        for item in raw_answers[:len(questions)]:
             question = _clean_answer(item.get("question"))
             answer = _clean_answer(item.get("answer"))
             if question and answer:
