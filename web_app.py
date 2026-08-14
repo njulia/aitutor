@@ -848,7 +848,6 @@ def improve_practice(
     student_answers: str,
     subject: str,
     profile=None,
-    review_feedback: str = "",
     *,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
@@ -859,7 +858,6 @@ def improve_practice(
         student_answers,
         subject,
         profile,
-        review_feedback,
         homework_doc_id=homework_doc_id,
         is_eleven_plus=is_eleven_plus,
         question_index=question_index,
@@ -1071,7 +1069,6 @@ class ImprovePracticeRequest(BaseModel):
     answers: str
     subject: str = "Maths"
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = None
     from_rag: bool = False
     homework_doc_id: Optional[str] = None
     question_index: Optional[int] = Field(default=None, ge=0, le=500)
@@ -1678,19 +1675,8 @@ app.include_router(build_mock_exam_router(
 ))
 
 @app.get("/api/elevenplus/topic-mastery/catalog")
-async def get_topic_mastery_catalog(req: Request):
+async def get_topic_mastery_catalog():
     """Return the small static catalogue without loading RAG or an LLM."""
-    resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
-    if not user_has_subscription(
-        req=req,
-        student_id=resolved_student_id,
-        username=logged_in_username,
-        required_plan=ELEVENPLUS_PREMIUM_PLAN,
-    ):
-        return _subscription_required_response(
-            "11+ Topic Mastery", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
-        )
-
     from src.elevenplus_topic_mastery import topic_mastery_catalogue
 
     return topic_mastery_catalogue()
@@ -1703,12 +1689,19 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
     await _require_registered_identity(
         req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
     )
-    if not user_has_subscription(
-        req=req,
-        student_id=resolved_student_id,
-        username=logged_in_username,
-        required_plan=ELEVENPLUS_PREMIUM_PLAN,
-    ):
+
+    # 11+ Topic Mastery 需要 11+ Premium 订阅
+    has_sub = await run_blocking(
+        user_has_subscription,
+        req,
+        resolved_student_id,
+        logged_in_username,
+        ELEVENPLUS_PREMIUM_PLAN,
+        True,
+        timeout=12,
+        limit_concurrency=False,
+    )
+    if not has_sub:
         return _subscription_required_response(
             "11+ Topic Mastery", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
         )
@@ -2321,7 +2314,6 @@ async def api_improve_practice(req: Request, request_body: ImprovePracticeReques
             request_body.answers,
             request_body.subject,
             profile,
-            request_body.review_feedback or "",
             homework_doc_id=request_body.homework_doc_id,
             is_eleven_plus=bool(request_body.is_eleven_plus),
             question_index=request_body.question_index,

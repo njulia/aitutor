@@ -25,8 +25,8 @@ PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
 RELEASE="${RELEASE:-}"
 
 # Production AI routing. These values are applied to every new revision.
-DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-deepseek}"
-DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-pro}"
+DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-vertex_ai}"
+DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-gemini-3.7-flash}"
 
 ASSUME_YES=false
 STAGING_ONLY=false
@@ -53,7 +53,7 @@ Options:
   --contact-email EMAIL    BUSINESS_CONTACT_EMAIL value
   --admin-emails EMAILS    ADMIN_EMAILS value (comma-separated)
   --detail-review-model MODEL
-                           Detail-review AI model (default: deepseek-v4-pro)
+                           Detail-review AI model (default: gemini-3.7-flash)
   --release TAG            Explicit image tag (default: UTC timestamp)
   --staging-only           Stop after staging checks; do not move traffic
   --yes                    Promote without an interactive confirmation

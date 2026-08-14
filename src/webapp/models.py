@@ -46,7 +46,6 @@ class ImprovePracticeRequest(BaseModel):
     answers: str = Field(min_length=1, max_length=30_000)
     subject: str = Field(default="Maths", min_length=1, max_length=80)
     profile: Optional[dict] = None
-    review_feedback: Optional[str] = Field(default=None, max_length=20_000)
     from_rag: Optional[bool] = False
     homework_doc_id: Optional[str] = Field(default=None, max_length=256)
     question_index: Optional[int] = Field(default=None, ge=0, le=500)

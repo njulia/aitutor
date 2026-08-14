@@ -63,7 +63,7 @@ feedbackForm.addEventListener('submit', async (event) => {
       body: JSON.stringify({
         contact_email: document.getElementById('feedback-email').value.trim(),
         category: 'beta_feedback',
-        subject: 'Year 3 parent beta feedback',
+        subject: 'Parent beta feedback',
         message,
       }),
     }));

@@ -64,7 +64,7 @@
       elevenplus_monthly: '11+ Premium',
       family_monthly: 'Family Premium',
       trial_5day: 'Five-day access',
-      beta_year3: 'Free Year 3 parent beta'
+      beta_year3: 'Free parent beta'
     };
     var subscription = data.subscription || {};
     var management = data.management || {};
@@ -96,7 +96,7 @@
     var subscription = data.subscription || {};
     var endDate = formatDate(subscription.current_period_end);
     accountActions.hidden = false;
-    subscriptionSummary.textContent = 'Free Year 3 parent beta';
+    subscriptionSummary.textContent = 'Free parent beta';
     subscriptionDetail.textContent = 'Active' + (endDate ? ' until ' + endDate : '') + ' · no payment and no renewal';
     billingButtons.forEach(function (button) { button.hidden = true; });
     billingHelp.hidden = true;
@@ -298,15 +298,8 @@ function protectElevenPlusTopicMasteryLinks() {
           headers: { 'Accept': 'application/json' }
         });
         const data = response.ok ? await response.json() : null;
-        const premium = !!(
-          data &&
-          (
-            data.eleven_plus_premium ||
-            data.elevenplus_premium ||
-            data.is_eleven_plus_premium ||
-            data.subscription_tier === 'eleven_plus_premium'
-          )
-        );
+        const plan = (data && data.subscription && data.subscription.plan) || '';
+        const premium = plan === 'elevenplus_monthly' || plan === 'family_11plus_monthly';
         if (premium) return;
       } catch (_) {
         // If entitlement cannot be checked, fail closed for this premium link.

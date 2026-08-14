@@ -3177,9 +3177,6 @@
                 return;
             }
 
-            const reviewEl = document.querySelector('#review-result .teacher-feedback-output');
-            const reviewFeedback = reviewEl ? reviewEl.innerText : '';
-
             const oldMessage = document.getElementById('practice-generation-message');
             if (oldMessage) oldMessage.remove();
 
@@ -3194,7 +3191,6 @@
                         answers: combinedAnswers,
                         subject: subject,
                         profile: getLearnerReviewProfile(),
-                        review_feedback: reviewFeedback,
                         from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
                         is_eleven_plus: Boolean(reviewContext.is_eleven_plus),

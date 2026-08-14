@@ -1156,7 +1156,6 @@ def improve_practice(
     student_answers: str,
     subject: str,
     profile: Optional[dict] = None,
-    review_feedback: str = "",
     *,
     homework_doc_id: Optional[str] = None,
     is_eleven_plus: bool = False,
@@ -1177,7 +1176,6 @@ def improve_practice(
         homework_content,
         student_answers,
         profile,
-        "",  # 不再将 review_feedback 发送给 LLM，减少 token 用量
     )
     cache_key = stable_cache_key(
         "practice_v4",
@@ -1197,7 +1195,12 @@ def improve_practice(
                 "from_cache": True,
             }
 
-    wrong_questions_section = "## Wrong questions (topics to focus on)\n"
+    # 默认用原始作业和学生答案作为上下文，确保 LLM 始终有足够信息生成练习
+    wrong_questions_section = (
+        "## Questions that need practice\n"
+        f"{compact_text(budget['homework_content'], 2_000)}\n"
+        f"Student answers: {compact_text(budget['student_answers'], 1_000)}\n"
+    )
     correct_answers_section = ""
     if homework_doc_id:
         try:
@@ -1216,8 +1219,6 @@ def improve_practice(
                     wrong_questions_section = "## Questions the student got wrong\n"
                     for i, r in enumerate(wrong_rows, 1):
                         wrong_questions_section += f"{i}. {r['question']} (student answered: {r['student_answer']})\n"
-                else:
-                    wrong_questions_section = "## All questions were answered correctly\n"
                 correct_answers_section = "## Correct Answers for Reference\n"
                 for i, r in enumerate(rows, 1):
                     correct_answers_section += (
@@ -1226,11 +1227,6 @@ def improve_practice(
                     )
         except Exception:
             logger.exception("RAG answer lookup failed in improve_practice for %s", homework_doc_id)
-            wrong_questions_section = (
-                "## Questions that need practice\n"
-                f"{compact_text(budget['homework_content'], 2_000)}\n"
-                f"Student answers: {compact_text(budget['student_answers'], 1_000)}\n"
-            )
 
     prompt = format_prompt(
         IMPROVE_PRACTICE_PROMPT,
