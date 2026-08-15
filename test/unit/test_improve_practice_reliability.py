@@ -85,48 +85,27 @@ def test_browser_handles_empty_practice_and_displays_visible_message() -> None:
 
 
 
-def test_model_output_with_common_markdown_numbering_is_normalised() -> None:
-    practice = """## Similar Practice Questions
-**Question 1:** What is 5 + 4?
-**Question 2:** What is 6 + 3?
-**Question 3:** What is 7 + 2?
+def test_help_me_improve_prompt_does_not_include_prior_review_results(monkeypatch):
+    captured = {}
 
-## Quick Revision Notes
-Remember to count on.
-"""
+    class CaptureLLM(ResultLLM):
+        def complete(self, messages, **kwargs):
+            captured["messages"] = messages
+            captured["kwargs"] = kwargs
+            return """## Similar Practice Questions\n1. What is 8 + 5?\n2. What is 9 + 6?\n3. What is 7 + 8?\n\n## Quick Revision Notes\nPractise adding numbers carefully."""
+
     result = review_service.improve_practice(
         _question(),
         "1. 6",
         "Maths",
         {"year_group": 3, "age": 7},
-        llm_client=ResultLLM(practice),
+        llm_client=CaptureLLM("ignored"),
     )
 
     assert result["success"] is True
-    assert len(result["questions"]) == 3
-
-
-class RetryLLM(ResultLLM):
-    def __init__(self, first, second):
-        super().__init__(first)
-        self.results = [first, second]
-
-    def complete(self, *_args, **_kwargs):
-        return self.results.pop(0)
-
-
-def test_unrenderable_model_response_is_retried() -> None:
-    practice = """## Similar Practice Questions
-1. What is 5 + 4?
-2. What is 6 + 3?
-3. What is 7 + 2?
-"""
-    result = review_service.improve_practice(
-        _question(),
-        "1. 6",
-        "Maths",
-        {"year_group": 3, "age": 7},
-        llm_client=RetryLLM("Here are some revision tips.", practice),
-    )
-    assert result["success"] is True
-    assert len(result["questions"]) == 3
+    prompt_text = "\n".join(str(m.get("content", "")) for m in captured["messages"])
+    assert "quick review" not in prompt_text.lower()
+    assert "detail review" not in prompt_text.lower()
+    assert "review result" not in prompt_text.lower()
+    assert "deep explanation" not in prompt_text.lower()
+    assert captured["kwargs"]["model"] == "deepseek-v4-flash"

@@ -25,8 +25,10 @@ PRODUCTION_URL="${PRODUCTION_URL:-https://homeworkmagic.co.uk}"
 RELEASE="${RELEASE:-}"
 
 # Production AI routing. These values are applied to every new revision.
-DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-vertex_ai}"
-DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-gemini-2.5-flash}"
+QUICK_REVIEW_PROVIDER="${QUICK_REVIEW_PROVIDER:-deepseek}"
+QUICK_REVIEW_MODEL="${QUICK_REVIEW_MODEL:-deepseek-v4-flash}"
+DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-deepseek}"
+DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-flash}"
 
 ASSUME_YES=false
 STAGING_ONLY=false
@@ -52,8 +54,10 @@ Options:
   --production-url URL     Public URL checked after promotion
   --contact-email EMAIL    BUSINESS_CONTACT_EMAIL value
   --admin-emails EMAILS    ADMIN_EMAILS value (comma-separated)
+  --quick-review-model MODEL
+                           Quick-review AI model (default: deepseek-v4-flash)
   --detail-review-model MODEL
-                           Detail-review AI model (default: gemini-2.5-flash)
+                           Detail-review AI model (default: deepseek-v4-flash)
   --release TAG            Explicit image tag (default: UTC timestamp)
   --staging-only           Stop after staging checks; do not move traffic
   --yes                    Promote without an interactive confirmation
@@ -186,6 +190,11 @@ while [ "$#" -gt 0 ]; do
     --admin-emails)
       [ "$#" -ge 2 ] || die "--admin-emails requires a value"
       ADMIN_EMAILS="$2"
+      shift 2
+      ;;
+    --quick-review-model)
+      [ "$#" -ge 2 ] || die "--quick-review-model requires a value"
+      QUICK_REVIEW_MODEL="$2"
       shift 2
       ;;
     --detail-review-model)
@@ -607,7 +616,7 @@ gcloud run services update "${SERVICE}" \
   --min-instances=0 \
   --max-instances=10 \
   --cpu-boost \
-  --update-env-vars="^#^BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}#ADMIN_EMAILS=${ADMIN_EMAILS}#DETAIL_REVIEW_PROVIDER=${DETAIL_REVIEW_PROVIDER}#DETAIL_REVIEW_MODEL=${DETAIL_REVIEW_MODEL}" \
+  --update-env-vars="^#^BUSINESS_CONTACT_EMAIL=${BUSINESS_CONTACT_EMAIL}#ADMIN_EMAILS=${ADMIN_EMAILS}#QUICK_REVIEW_PROVIDER=${QUICK_REVIEW_PROVIDER}#QUICK_REVIEW_MODEL=${QUICK_REVIEW_MODEL}#DETAIL_REVIEW_PROVIDER=${DETAIL_REVIEW_PROVIDER}#DETAIL_REVIEW_MODEL=${DETAIL_REVIEW_MODEL}" \
   --update-secrets="DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,REWARD_DELIVERY_SECRET=${REWARD_DELIVERY_SECRET_SECRET}:latest" \
   --no-traffic \
   --tag=staging \

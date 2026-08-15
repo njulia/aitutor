@@ -24,7 +24,7 @@ def unique_question() -> str:
 
 def test_model_defaults() -> None:
     assert review_service.QUICK_REVIEW_MODEL == "deepseek-v4-flash"
-    assert review_service.DETAIL_REVIEW_MODEL == "gemini-2.5-flash"
+    assert review_service.DETAIL_REVIEW_MODEL == "deepseek-v4-flash"
 
 
 def test_explicit_quick_review_uses_quick_model() -> None:
@@ -91,5 +91,18 @@ def test_explain_and_improve_use_detail_model() -> None:
     review_service.improve_practice(
         question, "2", "Maths", {"year_group": 3}, llm_client=llm
     )
-    assert len(llm.models) >= 2
-    assert all(model == review_service.DETAIL_REVIEW_MODEL for model in llm.models)
+    assert llm.models == [
+        review_service.DETAIL_REVIEW_MODEL,
+        review_service.DETAIL_REVIEW_MODEL,
+    ]
+
+
+def test_all_review_models_default_to_deepseek_v4_flash(monkeypatch):
+    monkeypatch.delenv("QUICK_REVIEW_MODEL", raising=False)
+    monkeypatch.delenv("DETAIL_REVIEW_MODEL", raising=False)
+    monkeypatch.delenv("QUICK_REVIEW_PROVIDER", raising=False)
+    monkeypatch.delenv("DETAIL_REVIEW_PROVIDER", raising=False)
+    # Module constants are intentionally production defaults; this assertion
+    # protects the source-level configuration used when env vars are absent.
+    assert review_service.QUICK_REVIEW_MODEL == "deepseek-v4-flash"
+    assert review_service.DETAIL_REVIEW_MODEL == "deepseek-v4-flash"

@@ -31,7 +31,7 @@ QUICK_REVIEW_MODEL = (
 ).strip()
 DETAIL_REVIEW_MODEL = (
     os.getenv("DETAIL_REVIEW_MODEL")
-    or "gemini-2.5-flash"
+    or "deepseek-v4-flash"
 ).strip()
 
 PRACTICE_GENERATION_UNAVAILABLE_MESSAGE = (
@@ -180,45 +180,9 @@ def _complete_review(
     return str(raw_result).strip()
 
 
-def _normalise_generated_practice_text(raw_result: Any) -> str:
-    """Make common Gemini/Markdown question formats parseable by our renderer.
-
-    Gemini sometimes returns fenced Markdown or writes ``Question 1:`` /
-    ``**1.**`` instead of the numbered worksheet format used by the public
-    question parser. This is presentation normalisation only; it does not add
-    or change learning content.
-    """
-    text = str(raw_result or "").replace("\\r\\n", "\\n").strip()
-    if not text:
-        return ""
-    text = re.sub(r"(?im)^\\s*```(?:markdown|text)?\\s*$", "", text)
-    text = re.sub(r"(?im)^\\s*```\\s*$", "", text).strip()
-
-    # Normalise heading-style question numbers while preserving the question
-    # text and answer choices exactly.
-    text = re.sub(
-        r"(?im)^\\s*(?:#{1,6}\\s*)?\\*\\*Question\\s+(\\d+)\\s*[:.)-]\\*\\*\\s*",
-        r"\\1. ",
-        text,
-    )
-    text = re.sub(
-        r"(?im)^\\s*(?:#{1,6}\\s*)?Question\\s+(\\d+)\\s*[:.)-]\\s*",
-        r"\\1. ",
-        text,
-    )
-    text = re.sub(
-        r"(?im)^\\s*\\*\\*(\\d+)\\s*[.)-]\\s*\\*\\*\\s*",
-        r"\\1. ",
-        text,
-    )
-    return text.strip()
-
-
 def _usable_generated_practice(raw_result: Any) -> tuple[str, List[Dict[str, Any]]]:
     """Return learner-safe practice only when the model produced questions."""
-    practice = public_homework_content(
-        normalise_homework_content(_normalise_generated_practice_text(raw_result))
-    ).strip()
+    practice = public_homework_content(normalise_homework_content(raw_result)).strip()
     if not practice or practice.casefold() in {"none", "null", "undefined", "{}", "[]"}:
         logger.debug("[Review] _usable_generated_practice: empty/null content after normalisation")
         return "", []
@@ -1084,7 +1048,7 @@ def explain_deep(
         _without_rendered_solution_methods(review_feedback),
     )
     cache_key = stable_cache_key(
-        "review_detail_v6",
+        "review_detail_v7",
         DETAIL_REVIEW_MODEL,
         subject,
         budget,
@@ -1127,29 +1091,14 @@ def explain_deep(
             subject=compact_text(subject_display_name(subject), 80),
             **_rag_prompt_context(rows),
         )
-        try:
-            ai_explanation = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.2,
-                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-                operation="detail_explanation_with_rag",
-            )
-        except Exception:
-            # The deterministic RAG marking is still useful even if the
-            # explanation provider is temporarily unavailable.
-            logger.exception("[Review] detail explanation provider failed; using trusted RAG explanation")
-            ai_explanation = (
-                "The detailed AI explanation is temporarily unavailable, but "
-                "your answers and the trusted marking above are ready. "
-                "Review the method shown for each question and try the next step."
-            )
-        if not str(ai_explanation or "").strip():
-            ai_explanation = (
-                "The detailed AI explanation is temporarily unavailable, but "
-                "your answers and the trusted marking above are ready."
-            )
+        ai_explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
+            operation="detail_explanation_with_rag",
+        )
         local_methods = [
             {
                 "id": f"q{index}",
@@ -1179,32 +1128,14 @@ def explain_deep(
             homework_content=budget["homework_content"],
             student_answer=budget["student_answers"],
         )
-        try:
-            explanation = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.2,
-                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-                operation="detail_review_no_rag_all_answers",
-            )
-        except Exception:
-            logger.exception("[Review] detail explanation provider failed")
-            return {
-                "success": False,
-                "error": "The detailed explanation service is temporarily unavailable. Please try again in a moment.",
-                "llm_no_response": True,
-                "model_tier": "plus",
-                "model_used": _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
-            }
-        if not str(explanation or "").strip():
-            return {
-                "success": False,
-                "error": "The detailed explanation service returned no explanation. Please try again in a moment.",
-                "llm_no_response": True,
-                "model_tier": "plus",
-                "model_used": _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
-            }
+        explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
+            operation="detail_review_no_rag_all_answers",
+        )
         score, max_score = _extract_score(explanation)
 
     model_used = _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
@@ -1247,7 +1178,8 @@ def improve_practice(
         profile,
     )
     cache_key = stable_cache_key(
-        "practice_v4",
+        "practice_v5",
+        DETAIL_REVIEW_MODEL,
         subject,
         budget,
         homework_doc_id,
@@ -1305,51 +1237,15 @@ def improve_practice(
         wrong_questions_section=compact_text(wrong_questions_section, 2_000),
         correct_answers_section=compact_text(correct_answers_section, 4_000),
     )
-    messages = build_messages(prompt)
     raw_result = _complete_review(
         llm_client,
-        messages,
+        build_messages(prompt),
         model=DETAIL_REVIEW_MODEL,
         temperature=0.25,
         max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 3000, maximum=5000),
         operation="targeted_practice",
     )
     practice, questions = _usable_generated_practice(raw_result)
-
-    # A successful provider call can still return prose that is not renderable
-    # (for example a model may omit the numbered-question section). Retry once
-    # with a short, explicit output contract before reporting failure.
-    if not practice:
-        retry_prompt = prompt + """\n\nFINAL OUTPUT CHECK:
-Return ONLY these sections:
-## Similar Practice Questions
-1. [new question]
-2. [new question]
-3. [new question]
-4. [new question]
-5. [slightly harder challenge question]
-
-## Quick Revision Notes
-- [short note]
-
-## Tips and Tricks
-- [short tip]
-
-Do not use JSON, code fences, tables, or prose before question 1. Number every
-practice question as 1., 2., 3., 4., 5. Keep answer choices on separate lines.
-"""
-        try:
-            raw_result = _complete_review(
-                llm_client,
-                build_messages(retry_prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.15,
-                max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 3000, maximum=5000),
-                operation="targeted_practice_retry",
-            )
-            practice, questions = _usable_generated_practice(raw_result)
-        except Exception:
-            logger.exception("[Review] targeted_practice retry failed")
     if not practice:
         preview = str(raw_result or "")[:500]
         logger.warning(
