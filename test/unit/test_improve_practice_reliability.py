@@ -83,3 +83,50 @@ def test_browser_handles_empty_practice_and_displays_visible_message() -> None:
     assert "panel.setAttribute('role', 'alert');" in source
     assert "question_index: Number.isInteger(reviewContext.question_index)" in source
 
+
+
+def test_model_output_with_common_markdown_numbering_is_normalised() -> None:
+    practice = """## Similar Practice Questions
+**Question 1:** What is 5 + 4?
+**Question 2:** What is 6 + 3?
+**Question 3:** What is 7 + 2?
+
+## Quick Revision Notes
+Remember to count on.
+"""
+    result = review_service.improve_practice(
+        _question(),
+        "1. 6",
+        "Maths",
+        {"year_group": 3, "age": 7},
+        llm_client=ResultLLM(practice),
+    )
+
+    assert result["success"] is True
+    assert len(result["questions"]) == 3
+
+
+class RetryLLM(ResultLLM):
+    def __init__(self, first, second):
+        super().__init__(first)
+        self.results = [first, second]
+
+    def complete(self, *_args, **_kwargs):
+        return self.results.pop(0)
+
+
+def test_unrenderable_model_response_is_retried() -> None:
+    practice = """## Similar Practice Questions
+1. What is 5 + 4?
+2. What is 6 + 3?
+3. What is 7 + 2?
+"""
+    result = review_service.improve_practice(
+        _question(),
+        "1. 6",
+        "Maths",
+        {"year_group": 3, "age": 7},
+        llm_client=RetryLLM("Here are some revision tips.", practice),
+    )
+    assert result["success"] is True
+    assert len(result["questions"]) == 3

@@ -2269,7 +2269,10 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
             question_index=request_body.question_index,
             timeout=120,
         )
-        response = JSONResponse(content=result)
+        response = JSONResponse(
+            status_code=502 if result.get("llm_no_response") else 200,
+            content=result,
+        )
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
     except HTTPException:

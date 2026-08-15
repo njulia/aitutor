@@ -29,7 +29,7 @@ def test_detail_client_uses_vertex_project_and_region(monkeypatch) -> None:
     detail_client = client.with_model(llm_client.DETAIL_REVIEW_MODEL)
 
     assert detail_client.provider == "vertex_ai"
-    assert detail_client.model == "gemini-3.6-flash"
+    assert detail_client.model == "gemini-2.5-flash"
     assert detail_client.vertex_project == "homework-magic-prod"
     assert detail_client.vertex_location == "europe-west2"
     assert detail_client.api_base is None

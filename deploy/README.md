@@ -301,7 +301,7 @@ Production detail explanations are deployed with Vertex AI using:
 
 ```text
 DETAIL_REVIEW_PROVIDER: vertex_ai
-DETAIL_REVIEW_MODEL: gemini-3.6-flash
+DETAIL_REVIEW_MODEL: gemini-2.5-flash
 ```
 
 Both `deploy_gcp.sh` and `deploy_code_gcp.sh` enforce these values on every

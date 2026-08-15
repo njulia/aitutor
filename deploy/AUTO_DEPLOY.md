@@ -10,7 +10,7 @@ gcloud auth login
 ## Production AI model
 
 Every application deployment automatically sets detail review to Vertex AI
-`gemini-3.6-flash`. You do not need to edit the Cloud Run environment variable
+`gemini-2.5-flash`. You do not need to edit the Cloud Run environment variable
 manually before each deployment.
 
 For a deliberate model override:

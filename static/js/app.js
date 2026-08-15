@@ -3094,7 +3094,9 @@
                         review_feedback: reviewFeedback,
                         from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
-                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus)
+                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus),
+                        question_index: Number.isInteger(reviewContext.question_index)
+                            ? reviewContext.question_index : null
                     })
                 });
 
