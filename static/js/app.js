@@ -75,6 +75,8 @@
         let currentPracticeContent = '';
         let currentPracticeSubject = 'Maths';
         let practiceReturnMode = 'generated';
+        let currentPracticeIsElevenPlus = false;
+        let currentPracticeTopic = '';
 
         // Homework mode and current question index
         let currentHomeworkMode = 'homework'; // 'homework' or 'tutor'
@@ -1165,9 +1167,6 @@
             <button class="btn btn-secondary" onclick="ExplainDeep()">
                 Explain in Detail
             </button>
-            <button class="btn btn-secondary" onclick="ImprovePractice()">
-                Help me improve
-            </button>
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
             </button>
@@ -1176,9 +1175,6 @@
         const INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML = `
             <button class="btn btn-secondary" onclick="ExplainDeep()">
                 Explain in Detail
-            </button>
-            <button class="btn btn-secondary" onclick="ImprovePractice()">
-                Help me improve
             </button>
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
@@ -1902,6 +1898,8 @@
             currentHomework = [];
             isPracticeMode = false;
             currentPracticeContent = '';
+            currentPracticeIsElevenPlus = false;
+            currentPracticeTopic = '';
             practiceReturnMode = 'generated';
             currentHomeworkMode = 'homework';
             currentQuestionIndex = 0;
@@ -3003,7 +3001,8 @@
                 subject: answeredItems[0].homeworkItem.subject || 'Maths',
                 from_rag: answeredItems.every(item => Boolean(item.homeworkItem.from_rag)),
                 homework_doc_id: answeredItems.length === 1 ? (answeredItems[0].homeworkItem.doc_id || null) : null,
-                is_eleven_plus: answeredItems.some(item => Boolean(item.homeworkItem.is_eleven_plus))
+                is_eleven_plus: answeredItems.some(item => Boolean(item.homeworkItem.is_eleven_plus)),
+                topic: answeredItems[0].homeworkItem.topic || null
             };
         }
 
@@ -3090,7 +3089,7 @@
                         homework: homework,
                         answers: combinedAnswers,
                         subject: subject,
-                        profile: getLearnerReviewProfile(),
+                        profile: Object.assign({}, getLearnerReviewProfile(), {topic: reviewContext.topic || null}),
                         review_feedback: reviewFeedback,
                         from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
@@ -3116,10 +3115,11 @@
                     return;
                 }
 
-                if (response.ok && data.success) {
-                    displayExplainDeep(data.explanation);
+                const explanation = String(data.explanation || '').trim();
+                if (response.ok && data.success && explanation) {
+                    displayExplainDeep(explanation);
                 } else {
-                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'Unknown error';
+                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'The detailed explanation is temporarily unavailable. Please try again in a moment.';
                     alert('Error: ' + errorMsg);
                 }
             } catch (error) {
@@ -3192,7 +3192,7 @@
                         homework: homework,
                         answers: combinedAnswers,
                         subject: subject,
-                        profile: getLearnerReviewProfile(),
+                        profile: Object.assign({}, getLearnerReviewProfile(), {topic: reviewContext.topic || null}),
                         from_rag: fromRag,
                         homework_doc_id: reviewContext.homework_doc_id || null,
                         is_eleven_plus: Boolean(reviewContext.is_eleven_plus),
@@ -3223,7 +3223,9 @@
                         practiceContent,
                         subject,
                         reviewContext.review_source === 'independent'
-                            ? 'independent' : 'generated'
+                            ? 'independent' : 'generated',
+                        Boolean(reviewContext.is_eleven_plus),
+                        reviewContext.topic || ''
                     );
                 } else {
                     const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) ||
@@ -3261,13 +3263,15 @@
             panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        function displayPracticeQuestions(practiceContent, subject, returnMode = 'generated') {
+        function displayPracticeQuestions(practiceContent, subject, returnMode = 'generated', isElevenPlus = false, topic = '') {
             const container = document.getElementById('homework-results');
             const resultsHeading = document.getElementById('results-heading');
             const renderer = window.HomeworkQuestionRenderer;
 
             currentPracticeContent = practiceContent;
             currentPracticeSubject = subject;
+            currentPracticeIsElevenPlus = Boolean(isElevenPlus);
+            currentPracticeTopic = String(topic || '');
             isPracticeMode = true;
             practiceReturnMode = returnMode === 'independent' ? 'independent' : 'generated';
             container.hidden = false;
@@ -3353,7 +3357,8 @@
                     homework: currentPracticeContent,
                     answers: answers,
                     subject: currentPracticeSubject,
-                    profile: getLearnerReviewProfile()
+                    profile: Object.assign({}, getLearnerReviewProfile(), {topic: currentPracticeTopic || null}),
+                    is_eleven_plus: currentPracticeIsElevenPlus
                 })
             })
             .then(response => response.json())

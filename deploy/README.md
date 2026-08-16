@@ -304,6 +304,8 @@ QUICK_REVIEW_PROVIDER: deepseek
 QUICK_REVIEW_MODEL: deepseek-v4-flash
 DETAIL_REVIEW_PROVIDER: deepseek
 DETAIL_REVIEW_MODEL: deepseek-v4-flash
+FALLBACK_REVIEW_PROVIDER: vertex_ai
+FALLBACK_REVIEW_MODEL: gemini-3.7-flash
 ```
 
 Both `deploy_gcp.sh` and `deploy_code_gcp.sh` enforce these values on every

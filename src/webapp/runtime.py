@@ -45,6 +45,15 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def is_30_day_study_plan_enabled() -> bool:
+    """Return whether the optional 11+ 30-day study plan is enabled.
+
+    This is deliberately off by default so deploying a new revision does not
+    unexpectedly start generating study plans or expose the feature.
+    """
+    return _env_bool("ENABLE_11PLUS_30_DAY_STUDY_PLAN", False)
+
+
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
         value = int(os.getenv(name, str(default)))

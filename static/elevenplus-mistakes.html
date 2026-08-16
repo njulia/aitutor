@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My 11+ Mistake Practice | Homework Magic</title>
+<meta name="description" content="Practise 11+ questions you previously found tricky.">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/multiple-choice.css">
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2d2340;background:#f8f7fc;--purple:#6a43b5;--purple-dark:#4c347a;--purple-soft:#eee8f7;--line:#ddd6ea;--muted:#6d6678;--green:#eaf8ef;--red:#fff0f0}
+*{box-sizing:border-box}body{margin:0;background:#f8f7fc;color:#2d2340}button{font:inherit}a{color:inherit}.wrap{max-width:1180px;margin:0 auto;padding:24px 18px 60px}
+.hm-nav-wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:24px}.hm-brand{font-size:1.85rem;font-weight:500;color:#27334f;text-decoration:underline;text-underline-offset:3px}.hm-brand-mark{margin-right:6px}.hm-main-nav{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.hm-main-nav a{color:#2d3650;text-decoration:underline;text-underline-offset:3px;font-size:1.12rem}.hm-main-nav a.active{font-weight:800;color:#5d3ca8}
+.hero,.card{background:#fff;border-radius:18px;padding:26px;box-shadow:0 4px 18px rgba(40,20,70,.08);margin-bottom:18px}.hero{padding:30px}.hero h1{margin:0 0 8px;font-size:clamp(2rem,4vw,3rem);color:#302443}.hero p{margin:7px 0;color:var(--muted);font-size:1.06rem}.muted{color:var(--muted)}
+.topic-section h2{margin:0 0 5px}.topic-section p{margin:0 0 18px;color:var(--muted)}.topic-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.topic-btn{min-height:82px;border:2px solid var(--line);border-radius:16px;background:#fff;color:#4c347a;text-align:left;padding:13px 15px;cursor:pointer;font-weight:800;transition:.16s ease}.topic-btn:hover:not(:disabled){border-color:#8b6bc3;background:#faf7ff;transform:translateY(-1px)}.topic-btn.active{border-color:#6a43b5;background:#eee8f7;box-shadow:0 0 0 3px rgba(106,67,181,.1)}.topic-btn:disabled{cursor:not-allowed;opacity:.45}.topic-name{display:block;font-size:1rem}.topic-count{display:block;margin-top:5px;font-size:.86rem;color:var(--muted);font-weight:700}
+.practice-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.practice-header h2{margin:0}.page-info{color:var(--muted);font-weight:700}.question-page{display:grid;gap:22px}.question-card{background:#fff;border-radius:18px;padding:4px;box-shadow:0 4px 18px rgba(40,20,70,.06)}.question-card .multiple-choice-question{margin:0}.free-answer{width:100%;min-height:58px;padding:12px 14px;border:2px solid #d9ddea;border-radius:13px;background:#fff;color:#333642}.free-answer:focus{outline:3px solid rgba(102,126,234,.2);border-color:#667eea}
+.result{margin:14px 22px 20px;padding:13px;border-radius:12px}.result.correct{background:var(--green);color:#176044}.result.wrong{background:var(--red);color:#963943}.result.pending{background:#f5f3fa;color:#5b536b}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.btn{border:0;border-radius:12px;padding:12px 20px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.btn-primary{background:#6a43b5;color:#fff}.btn-secondary{background:#eee8f7;color:#4c347a}.btn-quiet{background:#fff;color:#5d536d;border:1px solid var(--line)}.empty{text-align:center;padding:30px}.status{margin-top:10px}
+@media(max-width:760px){.wrap{padding:18px 12px 50px}.hm-nav-wrap{align-items:flex-start}.hm-main-nav{gap:10px}.hm-main-nav a{font-size:1rem}.topic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero,.card{padding:20px}.multiple-choice-question{padding:17px}}
+@media(max-width:430px){.topic-grid{grid-template-columns:1fr}.hm-brand{font-size:1.55rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hm-nav-wrap">
+<a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+<nav class="hm-main-nav" aria-label="Homework navigation">
+<a href="/elevenplus-practice">11+ practice</a>
+<a href="/elevenplus/articles">11+ articles</a>
+<a href="/elevenplus-mock-exams">11+ mock exams</a>
+<a href="/elevenplus-topic-mastery">11+ topic mastery</a>
+    <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
+<a href="/app">Homework</a>
+<!--<a href="/homework-mistakes">Homework mistakes</a>-->
+<a href="/login" data-auth-login>Parent sign in</a>
+<a href="#" data-auth-logout hidden>Log out</a>
+</nav>
+</header>
+
+<section class="hero">
+<h1>🎯 My 11+ Mistake Practice</h1>
+<p>Questions you found tricky in 11+ practice are saved here so you can practise them again.</p>
+<p>Choose a topic area below, then work through <strong>10 questions at a time</strong>.</p>
+</section>
+
+<section class="card topic-section" aria-labelledby="topic-heading">
+<h2 id="topic-heading">Choose your 11+ topic</h2>
+<p>Each button shows how many saved mistakes you have in that topic.</p>
+<div class="topic-grid" id="topic-grid"></div>
+</section>
+
+<section class="card" id="status-card" aria-live="polite">
+<div class="practice-header"><h2 id="practice-title">Practice</h2><div class="page-info" id="page-info"></div></div>
+<div class="status" id="status">Loading your saved mistakes…</div>
+</section>
+<section id="practice" class="question-page" aria-live="polite"></section>
+</div>
+
+<script>
+(function(){
+'use strict';
+const TOPICS=[
+ {key:'Maths',label:'Maths'},
+ {key:'English',label:'English'},
+ {key:'Verbal Reasoning',label:'Verbal Reasoning'},
+ {key:'Non-Verbal Reasoning',label:'Non-Verbal Reasoning'}
+];
+const PAGE_SIZE=10;
+const topicGrid=document.getElementById('topic-grid'),status=document.getElementById('status'),root=document.getElementById('practice'),title=document.getElementById('practice-title'),pageInfo=document.getElementById('page-info');
+let subjectCounts={},selectedTopic='',allQuestions=[],page=0,marked=false;
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function setStatus(text){status.textContent=text;}
+function normaliseSubject(s){const raw=String(s||'').trim();const found=TOPICS.find(t=>t.key.toLowerCase()===raw.toLowerCase());return found?found.key:raw;}
+function renderTopics(){
+ topicGrid.innerHTML=TOPICS.map(t=>{
+  const count=Number(subjectCounts[t.key]||0);
+  const active=selectedTopic===t.key;
+  return `<button type="button" class="topic-btn${active?' active':''}" data-topic="${esc(t.key)}" ${count?'':'disabled'}><span class="topic-name">${esc(t.label)}</span><span class="topic-count">${count} mistake${count===1?'':'s'}</span></button>`;
+ }).join('');
+ topicGrid.querySelectorAll('[data-topic]').forEach(btn=>btn.addEventListener('click',()=>selectTopic(btn.dataset.topic)));
+}
+function questionMarkup(q,number){
+ const opts=Array.isArray(q.options)?q.options.filter(Boolean):[];
+ let body='';
+ if(opts.length){
+  body=`<div class="multiple-choice-options">${opts.map((o,i)=>{const label=esc(o.label||String.fromCharCode(65+i));const text=esc(o.text??o);return `<label class="multiple-choice-option"><input type="radio" name="answer-${esc(q.id)}" value="${label}"><span class="multiple-choice-option-body"><span class="multiple-choice-letter">${label}</span><span class="multiple-choice-option-text">${text}</span></span></label>`;}).join('')}</div>`;
+ }else{
+  body='<input class="free-answer" type="text" aria-label="Your answer" placeholder="Type your answer">';
+ }
+ return `<article class="question-card" data-qid="${esc(q.id)}"><fieldset class="multiple-choice-question"><legend><span class="multiple-choice-question-number">Question ${number}</span><span class="multiple-choice-question-text">${esc(q.question)}</span></legend>${body}</fieldset><div class="result pending" hidden></div></article>`;
+}
+function renderPage(){
+ const totalPages=Math.max(1,Math.ceil(allQuestions.length/PAGE_SIZE));
+ const start=page*PAGE_SIZE,end=Math.min(start+PAGE_SIZE,allQuestions.length),items=allQuestions.slice(start,end);marked=false;
+ title.textContent=selectedTopic+' mistake practice';
+ pageInfo.textContent=allQuestions.length?`Questions ${start+1}–${end} of ${allQuestions.length}`:'';
+ if(!items.length){root.innerHTML='<section class="card empty"><h2>No mistakes in this topic yet.</h2><p>When you miss an 11+ question, it can appear here for future practice.</p></section>';return;}
+ root.innerHTML=`<div>${items.map((q,i)=>questionMarkup(q,start+i+1)).join('')}<div class="actions"><button class="btn btn-primary" id="mark-btn" type="button">Mark</button><button class="btn btn-secondary" id="again-btn" type="button">Do it again</button><button class="btn btn-quiet" id="next-btn" type="button" ${page>=totalPages-1?'disabled':''}>Next</button></div></div>`;
+ document.getElementById('mark-btn').addEventListener('click',markPage);
+ document.getElementById('again-btn').addEventListener('click',()=>renderPage());
+ document.getElementById('next-btn').addEventListener('click',()=>{if(page<totalPages-1){page++;renderPage();window.scrollTo({top:0,behavior:'smooth'});}});
+}
+async function markPage(){
+ if(marked)return;
+ const btn=document.getElementById('mark-btn');btn.disabled=true;setStatus('Marking your answers…');
+ const cards=[...root.querySelectorAll('.question-card')];
+ let answered=0,correct=0;
+ await Promise.all(cards.map(async card=>{
+  const q=allQuestions.find(item=>String(item.id)===card.dataset.qid);if(!q)return;
+  const chosen=card.querySelector('input[type="radio"]:checked');const free=card.querySelector('.free-answer');const answer=chosen?chosen.value:(free?free.value.trim():'');const box=card.querySelector('.result');
+  if(!answer){box.hidden=false;box.className='result pending';box.textContent='Please choose or enter an answer.';return;}
+  answered++;
+  try{
+   const r=await fetch('/api/elevenplus/mistake-practice/check',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({mistake_id:q.id,answer})});
+   const data=await r.json().catch(()=>({}));
+   if(r.status===401){location.href='/login';return;}
+   if(r.status===402){location.href='/pricing';return;}
+   if(!r.ok||!data.success)throw new Error(data.error||'Could not mark this answer.');
+   box.hidden=false;box.className='result '+(data.correct?'correct':'wrong');
+   box.innerHTML=data.correct?'<strong>✅ Correct!</strong> Great job.':`<strong>❌ Not quite.</strong> The answer is <strong>${esc(data.correct_answer)}</strong>${data.explanation?`<p>${esc(data.explanation)}</p>`:''}`;
+   if(data.correct)correct++;
+  }catch(e){box.hidden=false;box.className='result wrong';box.textContent=e.message||'Could not mark this answer.';}
+ }));
+ marked=true;btn.disabled=false;setStatus(answered?`You got ${correct} of ${answered} answered question${answered===1?'':'s'} correct.`:'Choose an answer for each question you want to mark.');
+}
+async function selectTopic(topic){
+ selectedTopic=topic;page=0;allQuestions=[];renderTopics();setStatus(`Loading ${topic} mistakes…`);root.innerHTML='';
+ try{
+  const r=await fetch(`/api/elevenplus/mistake-practice?subject=${encodeURIComponent(topic)}&limit=300`,{credentials:'same-origin'});
+  const data=await r.json().catch(()=>({}));
+  if(r.status===401){location.href='/login';return;}
+  if(r.status===402){status.innerHTML='11+ Premium is required for saved mistake practice. <a href="/pricing">See plans</a>';return;}
+  if(!r.ok||!data.success)throw new Error(data.error||'Could not load your mistakes.');
+  allQuestions=Array.isArray(data.questions)?data.questions:[];
+  if(!allQuestions.length){setStatus(`No saved ${topic} mistakes yet.`);pageInfo.textContent='';return;}
+  setStatus(`${allQuestions.length} saved ${topic} mistake${allQuestions.length===1?'':'s'} ready to practise.`);renderPage();
+ }catch(e){setStatus(e.message||'Could not load your saved mistakes.');}
+}
+async function loadSummary(){
+ try{
+  const r=await fetch('/api/elevenplus/mistake-practice?summary=true&limit=1',{credentials:'same-origin'});
+  const data=await r.json().catch(()=>({}));
+  if(r.status===401){location.href='/login';return;}
+  if(r.status===402){status.innerHTML='11+ Premium is required for saved mistake practice. <a href="/pricing">See plans</a>';return;}
+  if(!r.ok||!data.success)throw new Error(data.error||'Could not load your mistakes.');
+  subjectCounts={};Object.entries(data.subject_counts||{}).forEach(([key,value])=>{subjectCounts[normaliseSubject(key)]=Number(value||0);});
+  renderTopics();
+  const first=TOPICS.find(t=>Number(subjectCounts[t.key]||0)>0);
+  if(first)await selectTopic(first.key);else{title.textContent='11+ mistake practice';setStatus('No saved 11+ mistakes yet. Complete some 11+ practice, topic-mastery work, a year-round session, or a mock exam and any questions you miss will appear here.');}
+ }catch(e){setStatus(e.message||'Could not load your saved mistakes.');renderTopics();}
+}
+loadSummary();
+})();
+</script>
+<script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+<script src="/static/js/avatar-data.js?v=20260811-avatar-pet-1" defer></script>
+<script src="/static/js/avatar-character.js?v=20260811-avatar-pet-1" defer></script>
+<script src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1" defer></script>
+</body>
+</html>

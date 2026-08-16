@@ -282,9 +282,8 @@
 }());
 
 
-// 11+ Topic Mastery is a premium feature.
-// Keep the link visible, but send non-premium users to pricing so the feature
-// cannot be accidentally presented as free.
+// 11+ Topic Mastery requires 11+ Premium or approved test access.
+// Keep the link visible, but send users without server-confirmed access to pricing.
 function protectElevenPlusTopicMasteryLinks() {
   document.querySelectorAll('a[href*="elevenplus-topic-mastery"]').forEach((link) => {
     const originalHref = link.getAttribute('href');
@@ -293,14 +292,13 @@ function protectElevenPlusTopicMasteryLinks() {
     link.addEventListener('click', async (event) => {
       // Allow the normal navigation for users already entitled to 11+ Premium.
       try {
-        const response = await fetch('/api/subscription/status', {
+        const response = await fetch('/api/elevenplus/topic-mastery/access', {
           credentials: 'same-origin',
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
         });
         const data = response.ok ? await response.json() : null;
-        const plan = (data && data.subscription && data.subscription.plan) || '';
-        const premium = plan === 'elevenplus_monthly' || plan === 'family_11plus_monthly';
-        if (premium) return;
+        if (data && data.has_access === true) return;
       } catch (_) {
         // If entitlement cannot be checked, fail closed for this premium link.
       }

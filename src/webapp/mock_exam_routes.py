@@ -22,7 +22,7 @@ from src.elevenplus_mock_exams import (
     start_mock_exam,
 )
 
-from .runtime import run_blocking
+from .runtime import is_30_day_study_plan_enabled, run_blocking
 
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,9 @@ def build_mock_exam_router(
 
     @router.get("/study-plan")
     async def study_plan(request: Request):
-        """Return the latest 30-day plan when the family has 11+ Premium."""
+        """Return the latest 30-day plan when the feature is enabled and entitled."""
+        if not is_30_day_study_plan_enabled():
+            raise HTTPException(status_code=404, detail="The 30-day study plan is currently disabled.")
         identity, _username, new_anon_id, has_access = await access_context(request)
         if not has_access:
             response = private_json({
@@ -221,11 +223,39 @@ def build_mock_exam_router(
                 detail="We could not mark this mock just now. Please try again.",
             ) from exc
 
+        # Save wrong 11+ mock questions into the learner's compact mistake
+        # bank. Only the question/answer key is retained; the child's wrong
+        # answer is not stored.
+        if exam:
+            try:
+                from src.progress_db import save_mistake_questions
+                save_mistake_questions(
+                    str(identity),
+                    [
+                        {
+                            "question": item.get("question"),
+                            "subject": item.get("subject") or "11+",
+                            "topic": item.get("topic") or "General",
+                            "mistake_type": item.get("topic") or "General",
+                            "source_type": "mock_exam",
+                            "source_doc_id": exam.get("id"),
+                            "options": item.get("options") or [],
+                            "correct_letter": item.get("correct_answer"),
+                            "correct_answer": item.get("correct_answer_text"),
+                            "explanation": item.get("explanation"),
+                        }
+                        for item in (result.get("questions") or [])
+                        if not item.get("correct")
+                    ],
+                )
+            except Exception:
+                logger.exception("Could not save 11+ mock-exam mistakes")
+
         # Paid mocks automatically start an adaptive 30-day plan build. The
         # generation is deliberately a background task so marking the exam stays
         # fast even when an LLM fallback is needed. The free diagnostic remains
         # a diagnostic only and does not create a premium study plan.
-        if exam and exam["id"] != FREE_MOCK_EXAM_ID:
+        if is_30_day_study_plan_enabled() and exam and exam["id"] != FREE_MOCK_EXAM_ID:
             try:
                 from src.progress_db import get_student_detail, save_mock_study_plan
                 from src.elevenplus_study_plan import generate_mock_study_plan

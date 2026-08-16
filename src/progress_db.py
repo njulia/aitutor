@@ -15,6 +15,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
@@ -140,6 +141,57 @@ ai_requests = Table(
     Column("langfuse_trace_id", String(100), nullable=True),
     Column("metadata_json", Text, nullable=True),
 )
+homework_mistake_questions = Table(
+    "homework_mistake_questions", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("year_group", Integer, nullable=False, index=True),
+    Column("subject", String(80), nullable=False, index=True),
+    Column("topic", String(160), nullable=False, default="General"),
+    Column("mistake_type", String(160), nullable=False, default="General"),
+    Column("source_type", String(40), nullable=False, default="homework"),
+    Column("source_doc_id", String(120), nullable=True),
+    Column("question_hash", String(64), nullable=False),
+    Column("question", Text, nullable=False),
+    Column("options_json", Text, nullable=True),
+    Column("correct_letter", String(4), nullable=True),
+    Column("correct_answer", Text, nullable=False),
+    Column("explanation", Text, nullable=True),
+    Column("miss_count", Integer, nullable=False, default=1),
+    Column("practice_attempts", Integer, nullable=False, default=0),
+    Column("practice_correct", Integer, nullable=False, default=0),
+    Column("last_missed_at", DateTime(timezone=True), nullable=False),
+    Column("last_practiced_at", DateTime(timezone=True), nullable=True),
+    Column("next_review_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("student_id", "year_group", "question_hash", name="uq_homework_mistake_student_year_question"),
+)
+mistake_questions = Table(
+    "mistake_questions", metadata,
+    Column("id", String(80), primary_key=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("subject", String(80), nullable=False, index=True),
+    Column("topic", String(160), nullable=False, default="General"),
+    Column("mistake_type", String(160), nullable=False, default="General"),
+    Column("source_type", String(40), nullable=False, default="11plus_practice"),
+    Column("source_doc_id", String(120), nullable=True),
+    Column("question_hash", String(64), nullable=False),
+    Column("question", Text, nullable=False),
+    Column("options_json", Text, nullable=True),
+    Column("correct_letter", String(4), nullable=True),
+    Column("correct_answer", Text, nullable=False),
+    Column("explanation", Text, nullable=True),
+    Column("miss_count", Integer, nullable=False, default=1),
+    Column("practice_attempts", Integer, nullable=False, default=0),
+    Column("practice_correct", Integer, nullable=False, default=0),
+    Column("last_missed_at", DateTime(timezone=True), nullable=False),
+    Column("last_practiced_at", DateTime(timezone=True), nullable=True),
+    Column("next_review_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("student_id", "question_hash", name="uq_mistake_student_question"),
+)
 mock_study_plans = Table(
     "mock_study_plans", metadata,
     Column("student_id", String(80), primary_key=True),
@@ -203,6 +255,411 @@ def get_mock_study_plan(student_id: str) -> Optional[Dict[str, Any]]:
     if isinstance(plan, dict):
         plan["created_at"] = plan.get("created_at") or row._mapping["created_at"].isoformat()
     return plan
+
+
+
+def _mistake_hash(question: str, subject: str, topic: str) -> str:
+    import hashlib
+    canonical = "|".join(
+        re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+        for value in (subject, topic, question)
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def save_mistake_questions(
+    student_id: str,
+    mistakes: List[Dict[str, Any]],
+    *,
+    max_items: int = 300,
+) -> int:
+    """Save a small, deduplicated 11+ mistake bank.
+
+    Only the question, answer key and learning metadata are retained. The
+    pupil's submitted wrong answer is intentionally not stored. A compact
+    relational table is substantially cheaper than creating a personalised
+    pgvector document for every mistake.
+    """
+    clean_student = str(student_id or "").strip()
+    if not clean_student or clean_student.startswith("anon_") or not mistakes:
+        return 0
+
+    now = _now()
+    saved = 0
+    with _engine.begin() as conn:
+        for raw in mistakes[:50]:
+            item = dict(raw or {})
+            question = re.sub(r"\s+", " ", str(item.get("question") or "").strip())[:4000]
+            correct_answer = re.sub(r"\s+", " ", str(item.get("correct_answer") or "").strip())[:1000]
+            subject = re.sub(r"\s+", " ", str(item.get("subject") or "11+"))[:80]
+            topic = re.sub(r"\s+", " ", str(item.get("topic") or "General"))[:160]
+            mistake_type = re.sub(r"\s+", " ", str(item.get("mistake_type") or topic or "General"))[:160]
+            if not question or not correct_answer:
+                continue
+            question_hash = _mistake_hash(question, subject, topic)
+            options = item.get("options") or []
+            if isinstance(options, list):
+                safe_options = []
+                for option in options[:8]:
+                    if isinstance(option, dict):
+                        label = re.sub(r"\s+", " ", str(option.get("label") or "").strip())[:4]
+                        text = re.sub(r"\s+", " ", str(option.get("text") or "").strip())[:500]
+                        if text:
+                            safe_options.append({"label": label, "text": text})
+                    else:
+                        text = re.sub(r"\s+", " ", str(option).strip())[:500]
+                        if text:
+                            safe_options.append({"label": "", "text": text})
+                options_json = json.dumps(safe_options, ensure_ascii=False, separators=(",", ":")) if safe_options else None
+            else:
+                options_json = None
+            existing = conn.execute(
+                select(mistake_questions.c.id, mistake_questions.c.miss_count, mistake_questions.c.options_json)
+                .where(
+                    and_(
+                        mistake_questions.c.student_id == clean_student,
+                        mistake_questions.c.question_hash == question_hash,
+                    )
+                )
+            ).first()
+            if existing:
+                conn.execute(
+                    update(mistake_questions)
+                    .where(mistake_questions.c.id == existing._mapping["id"])
+                    .values(
+                        miss_count=int(existing._mapping["miss_count"] or 0) + 1,
+                        topic=topic,
+                        mistake_type=mistake_type,
+                        source_type=str(item.get("source_type") or "11plus_practice")[:40],
+                        source_doc_id=str(item.get("source_doc_id") or "")[:120] or None,
+                        options_json=options_json or existing._mapping.get("options_json"),
+                        correct_letter=re.sub(r"\s+", "", str(item.get("correct_letter") or "").upper())[:4] or None,
+                        correct_answer=correct_answer,
+                        explanation=re.sub(r"\s+", " ", str(item.get("explanation") or "").strip())[:2000] or None,
+                        last_missed_at=now,
+                        next_review_at=now,
+                        updated_at=now,
+                    )
+                )
+            else:
+                conn.execute(
+                    insert(mistake_questions).values(
+                        id=f"mist_{uuid.uuid4().hex}",
+                        student_id=clean_student,
+                        subject=subject,
+                        topic=topic,
+                        mistake_type=mistake_type,
+                        source_type=str(item.get("source_type") or "11plus_practice")[:40],
+                        source_doc_id=str(item.get("source_doc_id") or "")[:120] or None,
+                        question_hash=question_hash,
+                        question=question,
+                        options_json=options_json,
+                        correct_letter=re.sub(r"\s+", "", str(item.get("correct_letter") or "").upper())[:4] or None,
+                        correct_answer=correct_answer,
+                        explanation=re.sub(r"\s+", " ", str(item.get("explanation") or "").strip())[:2000] or None,
+                        miss_count=1,
+                        practice_attempts=0,
+                        practice_correct=0,
+                        last_missed_at=now,
+                        last_practiced_at=None,
+                        next_review_at=now,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            saved += 1
+
+        # Keep storage bounded. Old, rarely missed items are removed first.
+        rows = conn.execute(
+            select(mistake_questions.c.id)
+            .where(mistake_questions.c.student_id == clean_student)
+            .order_by(mistake_questions.c.next_review_at.asc(), mistake_questions.c.miss_count.desc())
+        ).all()
+        if len(rows) > max_items:
+            for row in rows[max_items:]:
+                conn.execute(delete(mistake_questions).where(mistake_questions.c.id == row._mapping["id"]))
+    return saved
+
+
+def _normalise_homework_year(year_group: Any) -> int:
+    try:
+        year = int(year_group)
+    except (TypeError, ValueError):
+        year = 3
+    return max(1, min(year, 6))
+
+
+def _cleanup_old_homework_mistakes(conn, student_id: str, *, year_group: Optional[int] = None) -> None:
+    cutoff = _now() - timedelta(days=365)
+    query = delete(homework_mistake_questions).where(
+        and_(homework_mistake_questions.c.student_id == student_id, homework_mistake_questions.c.created_at < cutoff)
+    )
+    if year_group is not None:
+        query = query.where(homework_mistake_questions.c.year_group == _normalise_homework_year(year_group))
+    conn.execute(query)
+
+
+def save_homework_mistakes(
+    student_id: str,
+    year_group: int,
+    mistakes: List[Dict[str, Any]],
+    *,
+    max_items_per_year: int = 300,
+) -> int:
+    """Save Year 1-6 homework mistakes for at most one year.
+
+    Mistakes are grouped by school year, deduplicated, and retained for
+    365 days from first save. The pupil's submitted wrong answer is never
+    stored. This uses the relational database only; no embeddings are created.
+    """
+    clean_student = str(student_id or '').strip()
+    if not clean_student or clean_student.startswith('anon_') or not mistakes:
+        return 0
+    year = _normalise_homework_year(year_group)
+    now = _now()
+    saved = 0
+    with _engine.begin() as conn:
+        _cleanup_old_homework_mistakes(conn, clean_student)
+        for raw in mistakes[:50]:
+            item = dict(raw or {})
+            question = re.sub(r"\s+", " ", str(item.get('question') or '').strip())[:4000]
+            correct_answer = re.sub(r"\s+", " ", str(item.get('correct_answer') or '').strip())[:1000]
+            subject = re.sub(r"\s+", " ", str(item.get('subject') or 'General').strip())[:80]
+            topic = re.sub(r"\s+", " ", str(item.get('topic') or 'General').strip())[:160]
+            mistake_type = re.sub(r"\s+", " ", str(item.get('mistake_type') or topic or 'General').strip())[:160]
+            if not question or not correct_answer:
+                continue
+            question_hash = _mistake_hash(question, subject, topic)
+            options = item.get('options') or []
+            safe_options = []
+            if isinstance(options, list):
+                for option in options[:8]:
+                    if isinstance(option, dict):
+                        label = re.sub(r"\s+", " ", str(option.get('label') or '').strip())[:4]
+                        text = re.sub(r"\s+", " ", str(option.get('text') or '').strip())[:500]
+                        if text:
+                            safe_options.append({'label': label, 'text': text})
+                    else:
+                        text = re.sub(r"\s+", " ", str(option).strip())[:500]
+                        if text:
+                            safe_options.append({'label': '', 'text': text})
+            options_json = json.dumps(safe_options, ensure_ascii=False, separators=(',', ':')) if safe_options else None
+            existing = conn.execute(
+                select(homework_mistake_questions.c.id, homework_mistake_questions.c.miss_count, homework_mistake_questions.c.options_json)
+                .where(and_(
+                    homework_mistake_questions.c.student_id == clean_student,
+                    homework_mistake_questions.c.year_group == year,
+                    homework_mistake_questions.c.question_hash == question_hash,
+                ))
+            ).first()
+            values = dict(
+                year_group=year, subject=subject, topic=topic, mistake_type=mistake_type,
+                source_type=str(item.get('source_type') or 'homework')[:40],
+                source_doc_id=str(item.get('source_doc_id') or '')[:120] or None,
+                options_json=options_json or (existing._mapping.get('options_json') if existing else None),
+                correct_letter=re.sub(r"\s+", '', str(item.get('correct_letter') or '').upper())[:4] or None,
+                correct_answer=correct_answer,
+                explanation=re.sub(r"\s+", ' ', str(item.get('explanation') or '').strip())[:2000] or None,
+                last_missed_at=now, next_review_at=now, updated_at=now,
+            )
+            if existing:
+                values['miss_count'] = int(existing._mapping['miss_count'] or 0) + 1
+                conn.execute(update(homework_mistake_questions).where(homework_mistake_questions.c.id == existing._mapping['id']).values(**values))
+            else:
+                conn.execute(insert(homework_mistake_questions).values(
+                    id=f'hwmist_{uuid.uuid4().hex}', student_id=clean_student, question_hash=question_hash, question=question,
+                    miss_count=1, practice_attempts=0, practice_correct=0, last_practiced_at=None,
+                    created_at=now, **values
+                ))
+            saved += 1
+
+        # Bound each Year group without ever retaining data older than one year.
+        rows = conn.execute(
+            select(homework_mistake_questions.c.id)
+            .where(and_(homework_mistake_questions.c.student_id == clean_student, homework_mistake_questions.c.year_group == year))
+            .order_by(homework_mistake_questions.c.next_review_at.asc(), homework_mistake_questions.c.miss_count.desc(), homework_mistake_questions.c.updated_at.asc())
+        ).all()
+        for row in rows[max_items_per_year:]:
+            conn.execute(delete(homework_mistake_questions).where(homework_mistake_questions.c.id == row._mapping['id']))
+    return saved
+
+
+def get_homework_mistakes(
+    student_id: str,
+    *,
+    year_group: Optional[int] = None,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    clean_student = str(student_id or '').strip()
+    if not clean_student or clean_student.startswith('anon_'):
+        return []
+    safe_limit = max(1, min(int(limit or 20), 50))
+    with _engine.begin() as conn:
+        _cleanup_old_homework_mistakes(conn, clean_student, year_group=year_group)
+        query = select(homework_mistake_questions).where(homework_mistake_questions.c.student_id == clean_student)
+        if year_group is not None:
+            query = query.where(homework_mistake_questions.c.year_group == _normalise_homework_year(year_group))
+        rows = conn.execute(query.order_by(homework_mistake_questions.c.next_review_at.asc(), homework_mistake_questions.c.miss_count.desc(), homework_mistake_questions.c.updated_at.asc()).limit(safe_limit)).all()
+    result = []
+    for row in rows:
+        item = _dict(row)
+        try:
+            item['options'] = json.loads(item.get('options_json') or '[]')
+        except (TypeError, json.JSONDecodeError):
+            item['options'] = []
+        item.pop('options_json', None)
+        item.pop('correct_answer', None)
+        item.pop('correct_letter', None)
+        item.pop('explanation', None)
+        result.append(item)
+    return result
+
+
+def check_homework_mistake(
+    student_id: str, mistake_id: str, answer: str,
+) -> Dict[str, Any]:
+    clean_student = str(student_id or '').strip()
+    with _engine.begin() as conn:
+        _cleanup_old_homework_mistakes(conn, clean_student)
+        row = conn.execute(select(homework_mistake_questions).where(and_(
+            homework_mistake_questions.c.id == str(mistake_id),
+            homework_mistake_questions.c.student_id == clean_student,
+        ))).first()
+        if not row:
+            return {'success': False, 'error': 'That practice question is no longer available.'}
+        data = row._mapping
+        submitted = re.sub(r"\s+", ' ', str(answer or '').strip()).casefold()
+        correct_letter = re.sub(r"\s+", '', str(data['correct_letter'] or '')).casefold()
+        correct_answer = re.sub(r"\s+", ' ', str(data['correct_answer'] or '').strip()).casefold()
+        is_correct = bool(submitted) and (submitted == correct_letter or submitted == correct_answer)
+        attempts = int(data['practice_attempts'] or 0) + 1
+        corrects = int(data['practice_correct'] or 0) + (1 if is_correct else 0)
+        now = _now()
+        intervals = [1, 3, 7, 14, 30]
+        interval_days = intervals[min(corrects, len(intervals) - 1)] if is_correct else 1
+        conn.execute(update(homework_mistake_questions).where(homework_mistake_questions.c.id == str(mistake_id)).values(
+            practice_attempts=attempts, practice_correct=corrects, last_practiced_at=now,
+            next_review_at=now + timedelta(days=interval_days), updated_at=now,
+        ))
+        return {
+            'success': True, 'correct': is_correct, 'year_group': data['year_group'],
+            'subject': data['subject'], 'topic': data['topic'], 'mistake_type': data['mistake_type'],
+            'correct_answer': data['correct_answer'], 'explanation': data['explanation'] or '',
+            'practice_attempts': attempts, 'practice_correct': corrects,
+        }
+
+
+def get_mistake_questions(
+    student_id: str,
+    *,
+    subject: Optional[str] = None,
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    clean_student = str(student_id or "").strip()
+    if not clean_student or clean_student.startswith("anon_"):
+        return []
+    safe_limit = max(1, min(int(limit or 12), 300))
+    with _engine.begin() as conn:
+        query = select(mistake_questions).where(mistake_questions.c.student_id == clean_student)
+        if subject:
+            query = query.where(mistake_questions.c.subject == str(subject)[:80])
+        rows = conn.execute(
+            query.order_by(
+                mistake_questions.c.next_review_at.asc(),
+                mistake_questions.c.miss_count.desc(),
+                mistake_questions.c.updated_at.asc(),
+            ).limit(safe_limit)
+        ).all()
+    result = []
+    for row in rows:
+        item = _dict(row)
+        try:
+            item["options"] = json.loads(item.get("options_json") or "[]")
+        except (TypeError, json.JSONDecodeError):
+            item["options"] = []
+        # Never send the answer key to the child-facing practice endpoint.
+        item.pop("options_json", None)
+        item.pop("correct_answer", None)
+        item.pop("correct_letter", None)
+        item.pop("explanation", None)
+        result.append(item)
+    return result
+
+
+def get_mistake_subject_counts(student_id: str) -> Dict[str, int]:
+    """Return the number of saved 11+ mistakes grouped by subject."""
+    clean_student = str(student_id or "").strip()
+    if not clean_student or clean_student.startswith("anon_"):
+        return {}
+    with _engine.begin() as conn:
+        rows = conn.execute(
+            select(
+                mistake_questions.c.subject,
+                func.count().label("count"),
+            )
+            .where(mistake_questions.c.student_id == clean_student)
+            .group_by(mistake_questions.c.subject)
+        ).all()
+    return {
+        str(row._mapping["subject"] or "11+"): int(row._mapping["count"] or 0)
+        for row in rows
+    }
+
+
+def check_mistake_question(
+    student_id: str,
+    mistake_id: str,
+    answer: str,
+) -> Dict[str, Any]:
+    clean_student = str(student_id or "").strip()
+    with _engine.begin() as conn:
+        row = conn.execute(
+            select(mistake_questions).where(
+                and_(
+                    mistake_questions.c.id == str(mistake_id),
+                    mistake_questions.c.student_id == clean_student,
+                )
+            )
+        ).first()
+        if not row:
+            return {"success": False, "error": "That practice question is no longer available."}
+
+        data = row._mapping
+        submitted = re.sub(r"\s+", " ", str(answer or "").strip()).casefold()
+        correct_letter = re.sub(r"\s+", "", str(data["correct_letter"] or "")).casefold()
+        correct_answer = re.sub(r"\s+", " ", str(data["correct_answer"] or "").strip()).casefold()
+        is_correct = bool(submitted) and (
+            submitted == correct_letter or submitted == correct_answer
+        )
+        attempts = int(data["practice_attempts"] or 0) + 1
+        corrects = int(data["practice_correct"] or 0) + (1 if is_correct else 0)
+        now = _now()
+        # Simple spaced review: a correct answer moves the question out for
+        # longer; a miss makes it due again soon.
+        intervals = [1, 3, 7, 14, 30]
+        interval_days = intervals[min(corrects, len(intervals) - 1)] if is_correct else 1
+        next_review = now + timedelta(days=interval_days)
+        conn.execute(
+            update(mistake_questions)
+            .where(mistake_questions.c.id == str(mistake_id))
+            .values(
+                practice_attempts=attempts,
+                practice_correct=corrects,
+                last_practiced_at=now,
+                next_review_at=next_review,
+                updated_at=now,
+            )
+        )
+        return {
+            "success": True,
+            "correct": is_correct,
+            "topic": data["topic"],
+            "mistake_type": data["mistake_type"],
+            "correct_answer": data["correct_answer"],
+            "explanation": data["explanation"] or "",
+            "practice_attempts": attempts,
+            "practice_correct": corrects,
+        }
 
 
 def init_db() -> None:
@@ -492,6 +949,7 @@ def delete_student(student_id: str) -> bool:
 def hard_delete_student(student_id: str) -> bool:
     """硬删除（UK GDPR 被遗忘权）：彻底移除学生及所有关联数据"""
     with _engine.begin() as conn:
+        conn.execute(delete(mistake_questions).where(mistake_questions.c.student_id == student_id))
         conn.execute(delete(topic_progress).where(topic_progress.c.student_id == student_id))
         conn.execute(delete(practice_sessions).where(practice_sessions.c.student_id == student_id))
         conn.execute(delete(homework_sessions).where(homework_sessions.c.student_id == student_id))

@@ -178,8 +178,9 @@
       <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
       <nav class="hm-main-nav" aria-label="Main navigation">
         <a href="/elevenplus-practice">11+ practice</a>
-        <a href="/elevenplus-mock-exams">11+ mock exams</a>
+        <a href="/elevenplus-mistakes">11+ mistakes</a>
         <a href="/elevenplus/articles">11+ articles</a>
+        <a href="/elevenplus-mock-exams">11+ mock exams</a>
         <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
         <a href="/app">Homework</a>
         <a href="/login" data-auth-login>Parent sign in</a>
@@ -193,14 +194,14 @@
         <div class="eyebrow">🏆 Focus on one skill at a time</div>
         <h1 id="page-title">11+ Topic Mastery</h1>
         <p>Choose a subject, topic and level. Each step opens one exact pre-generated practice set from the topic-mastery library.</p>
-        <p><strong>11+ Premium</strong> unlocks all 55 sets per subject with instant marking.</p>
+        <p><strong>11+ Premium</strong> unlocks all 55 sets per subject with instant marking. Test accounts can use Topic Mastery free.</p>
         <div class="steps" aria-label="Plan summary"><span>4 subjects</span><span>11 topics each</span><span>5 levels</span><span>55 sets per subject</span></div>
     </section>
 
     <section class="premium-gate hidden" id="premium-gate" aria-labelledby="gate-title">
         <span class="gate-badge">11+ Premium</span>
-        <h2 id="gate-title">Topic Mastery requires 11+ Premium</h2>
-        <p>Practise 55 progressive sets per subject with instant marking. Upgrade to 11+ Premium to get started.</p>
+        <h2 id="gate-title">11+ Topic Mastery is for 11+ Premium</h2>
+        <p>Practise 55 progressive sets per subject with instant marking. 11+ Premium subscribers and approved test accounts can use Topic Mastery.</p>
         <div class="gate-actions">
             <a class="gate-primary" href="/pricing">Get 11+ Premium</a>
             <a class="gate-secondary" href="/elevenplus-mock-exams">Try a free mock</a>
@@ -373,19 +374,19 @@
     }
     async function initialise() {
         restoreState();
-        // 检查 11+ Premium 订阅状态
-        let hasPremium = false;
+        // Server-side entitlement check: 11+ Premium and test users are allowed.
+        let hasAccess = false;
         try {
-            const subResponse = await fetch('/api/subscription/status', {credentials:'same-origin', headers:{'Accept':'application/json'}});
-            if (subResponse.ok) {
-                const subData = await subResponse.json();
-                const plan = (subData.subscription && subData.subscription.plan) || '';
-                hasPremium = plan === 'elevenplus_monthly' || plan === 'family_11plus_monthly';
+            const accessResponse = await fetch('/api/elevenplus/topic-mastery/access', {credentials:'same-origin', headers:{'Accept':'application/json'}, cache:'no-store'});
+            if (accessResponse.status === 401) { window.location.href = '/login'; return; }
+            if (accessResponse.ok) {
+                const accessData = await accessResponse.json();
+                hasAccess = accessData.has_access === true;
             }
         } catch (_) {
-            // 无法检查时默认无订阅，显示付费墙
+            // If entitlement cannot be checked, fail closed and show the gate.
         }
-        if (!hasPremium) {
+        if (!hasAccess) {
             document.getElementById('premium-gate').classList.remove('hidden');
             document.getElementById('choose-card').classList.add('hidden');
             return;

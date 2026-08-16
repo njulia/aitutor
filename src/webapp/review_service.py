@@ -33,6 +33,10 @@ DETAIL_REVIEW_MODEL = (
     os.getenv("DETAIL_REVIEW_MODEL")
     or "deepseek-v4-flash"
 ).strip()
+FALLBACK_REVIEW_MODEL = (
+    os.getenv("FALLBACK_REVIEW_MODEL")
+    or "gemini-3.7-flash"
+).strip()
 
 PRACTICE_GENERATION_UNAVAILABLE_MESSAGE = (
     "The AI tutor did not return any usable practice questions, so no new content "
@@ -267,6 +271,7 @@ def _pair_rag_answers(
                 "correct_letter": _clean_answer(selected.get("correct_letter") or selected.get("correctLetter")).upper(),
                 "explanation": _clean_answer(selected.get("explanation")),
                 "tip": _clean_answer(selected.get("tip") or selected.get("coaching_strategy")),
+                "options": selected.get("options") if isinstance(selected.get("options"), list) else [],
             }
         else:
             answer = _clean_answer(selected)
@@ -286,6 +291,7 @@ def _pair_rag_answers(
                     "correct_letter": _clean_answer(item.get("correct_letter") or item.get("correctLetter")).upper(),
                     "explanation": _clean_answer(item.get("explanation")),
                     "tip": _clean_answer(item.get("tip") or item.get("coaching_strategy")),
+                    "options": item.get("options") if isinstance(item.get("options"), list) else [],
                 })
     elif isinstance(raw_answers, list):
         for index, answer in enumerate(raw_answers):
@@ -295,6 +301,7 @@ def _pair_rag_answers(
                 {
                     "question": questions[index].get("full_content") or questions[index]["content"],
                     "answer": _clean_answer(answer),
+                    "options": [],
                 }
             )
 
@@ -364,6 +371,7 @@ def _mark_rows(
                 "correct_letter": _clean_answer(item.get("correct_letter")).upper(),
                 "explanation": _clean_answer(item.get("explanation")),
                 "tip": _clean_answer(item.get("tip")),
+                "options": item.get("options") if isinstance(item.get("options"), list) else [],
                 "is_correct": is_correct,
             }
         )
@@ -683,6 +691,94 @@ def _extract_score(text: str) -> tuple[Optional[float], Optional[int]]:
     return numerator, denominator
 
 
+
+def _mistake_topic(profile: Dict[str, Any], subject: str) -> str:
+    topic = str(profile.get("topic") or "").strip()
+    if topic:
+        return compact_text(topic, 160)
+    goals = profile.get("learning_goals")
+    if isinstance(goals, (list, tuple)) and goals:
+        first = str(goals[0] or "").strip()
+        if first:
+            return compact_text(first, 160)
+    return compact_text(subject_display_name(subject), 160) or "General"
+
+
+def _save_11plus_mistakes(
+    rows: List[Dict[str, Any]],
+    *,
+    student_id: str,
+    subject: str,
+    profile: Dict[str, Any],
+    homework_doc_id: Optional[str],
+    source_type: str,
+) -> int:
+    if not student_id or str(student_id).startswith("anon_") or not rows:
+        return 0
+    mistakes = []
+    topic = _mistake_topic(profile, subject)
+    for row in rows:
+        if row.get("is_correct"):
+            continue
+        mistakes.append({
+            "question": row.get("question"),
+            "subject": subject,
+            "topic": topic,
+            "mistake_type": topic,
+            "source_type": source_type,
+            "source_doc_id": homework_doc_id,
+            "options": row.get("options") or [],
+            "correct_letter": row.get("correct_letter"),
+            "correct_answer": row.get("correct_answer"),
+            "explanation": row.get("explanation") or row.get("tip") or "",
+        })
+    if not mistakes:
+        return 0
+    try:
+        from src.progress_db import save_mistake_questions
+        return save_mistake_questions(str(student_id), mistakes)
+    except Exception:
+        logger.exception("Could not save 11+ mistake questions")
+        return 0
+
+
+def _save_year_homework_mistakes(
+    rows: List[Dict[str, Any]],
+    *,
+    student_id: str,
+    year_group: int,
+    subject: str,
+    homework_doc_id: Optional[str],
+) -> int:
+    """Persist Year 1-6 homework mistakes for one year only."""
+    if not student_id or str(student_id).startswith("anon_") or not rows:
+        return 0
+    mistakes = []
+    for row in rows:
+        if row.get("is_correct"):
+            continue
+        mistakes.append({
+            "question": row.get("question"),
+            "subject": subject,
+            "topic": compact_text(row.get("topic") or subject_display_name(subject), 160),
+            "mistake_type": compact_text(row.get("mistake_type") or row.get("topic") or subject_display_name(subject), 160),
+            "source_type": "homework",
+            "source_doc_id": homework_doc_id,
+            "options": row.get("options") or [],
+            "correct_letter": row.get("correct_letter"),
+            "correct_answer": row.get("correct_answer"),
+            "explanation": row.get("explanation") or row.get("tip") or "",
+        })
+    if not mistakes:
+        return 0
+    try:
+        from src.progress_db import save_homework_mistakes
+        return save_homework_mistakes(str(student_id), int(year_group), mistakes)
+    except Exception:
+        logger.exception("Could not save Year 1-6 homework mistakes")
+        return 0
+
+
 def review_homework(
     homework_content: str,
     student_answers: str,
@@ -732,7 +828,7 @@ def review_homework(
         (
             "review_uploaded_v1"
             if uploaded_work
-            else ("review_detail_v6" if use_detail_model else "review_quick_v6")
+            else ("review_detail_v8" if use_detail_model else "review_quick_v8")
         ),
         selected_model,
         subject,
@@ -785,6 +881,24 @@ def review_homework(
             "llm_fallback": True,
             "display_review": display_review,
         }
+        if is_eleven_plus:
+            _save_11plus_mistakes(
+                rows,
+                student_id=str(student_id),
+                subject=subject,
+                profile=profile,
+                homework_doc_id=homework_doc_id,
+                source_type=(
+                    "topic_mastery" if profile.get("topic_mastery")
+                    else ("year_round" if profile.get("plan_week") else "11plus_practice")
+                ),
+            )
+        else:
+            _save_year_homework_mistakes(
+                rows, student_id=str(student_id),
+                year_group=int(profile.get("year_group", 3)),
+                subject=subject, homework_doc_id=homework_doc_id,
+            )
         review_cache.set(cache_key, result)
         # 保存作业记录到 progress 数据库，供进度页面使用
         if not is_tutor_mode and student_id not in {None, "", "anonymous"} and not str(student_id).startswith("anon_"):
@@ -994,6 +1108,26 @@ def review_homework(
         # provider recovers.
         review_cache.set(cache_key, result)
 
+    if rows:
+        if is_eleven_plus:
+            _save_11plus_mistakes(
+                rows,
+                student_id=str(student_id),
+                subject=subject,
+                profile=profile,
+                homework_doc_id=homework_doc_id,
+                source_type=(
+                    "topic_mastery" if profile.get("topic_mastery")
+                    else ("year_round" if profile.get("plan_week") else "11plus_practice")
+                ),
+            )
+        else:
+            _save_year_homework_mistakes(
+                rows, student_id=str(student_id),
+                year_group=int(profile.get("year_group", 3)),
+                subject=subject, homework_doc_id=homework_doc_id,
+            )
+
     if not is_tutor_mode and student_id not in {None, "", "anonymous"} and not str(student_id).startswith("anon_"):
         try:
             from src.progress_db import save_homework_session
@@ -1013,6 +1147,71 @@ def review_homework(
 
     return result
 
+def _build_detail_explanation_fallback(
+    rows: List[Dict[str, Any]],
+    review_feedback: str,
+) -> str:
+    """Build a useful detailed result when the detail model returns no text.
+
+    RAG answer keys already contain the trusted answer, explanation and tip, so
+    we can give the child a deterministic explanation without asking another
+    model.  For non-RAG reviews, keep the existing teacher feedback visible
+    rather than replacing it with a blank panel.
+    """
+    sections: List[str] = []
+
+    if rows:
+        correct_count = sum(1 for row in rows if row.get("is_correct"))
+        sections.append(_table(rows))
+        sections.append(f"**Score: {correct_count}/{len(rows)}**\n\n")
+        sections.append(
+            "## Step-by-step help\n\n"
+            "Here is the trusted answer-key feedback for each question.\n\n"
+        )
+        for index, row in enumerate(rows, start=1):
+            question = _clean_question_text(row.get("question", ""))
+            if row.get("is_correct"):
+                sections.append(
+                    f"### Question {index}\n\n"
+                    f"✅ **Correct!** Your answer was **{row.get('student_answer', '')}**.\n\n"
+                )
+                if row.get("explanation"):
+                    sections.append(
+                        f"**Why it is correct:** {row['explanation']}\n\n"
+                    )
+            else:
+                sections.append(
+                    f"### Question {index}\n\n"
+                    f"**Question:** {question}\n\n"
+                    f"**Your answer:** {row.get('student_answer', '')}\n\n"
+                    f"**Correct answer:** {row.get('correct_answer', '')}\n\n"
+                )
+                if row.get("explanation"):
+                    sections.append(
+                        f"**How to work it out:** {row['explanation']}\n\n"
+                    )
+                if row.get("tip"):
+                    sections.append(f"**Tip:** {row['tip']}\n\n")
+        return "".join(sections).strip()
+
+    feedback = _without_rendered_solution_methods(review_feedback)
+    if feedback:
+        return (
+            f"{feedback}\n\n"
+            "## Detailed explanation\n\n"
+            "The detailed AI explanation is temporarily unavailable, "
+            "but your teacher feedback above is still available. Please try "
+            "again in a moment for the step-by-step version."
+        ).strip()
+
+    return (
+        "## Detailed explanation\n\n"
+        "I could not create the step-by-step explanation just now. "
+        "Your answers are still safely kept on the page. Please try again "
+        "in a moment."
+    )
+
+
 def explain_deep(
     homework_content: str,
     student_answers: str,
@@ -1029,6 +1228,8 @@ def explain_deep(
 
     With RAG, correct items are compact and wrong items carry full answer-key
     context. Without RAG, the detail model receives all questions and answers.
+    If the model fails or returns an empty response, return a deterministic
+    learner-safe fallback instead of a successful-but-empty result.
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
@@ -1048,7 +1249,7 @@ def explain_deep(
         _without_rendered_solution_methods(review_feedback),
     )
     cache_key = stable_cache_key(
-        "review_detail_v7",
+        "review_detail_v9",
         DETAIL_REVIEW_MODEL,
         subject,
         budget,
@@ -1083,6 +1284,8 @@ def explain_deep(
         except Exception:
             logger.exception("RAG answer lookup failed in explain_deep for %s", homework_doc_id)
 
+    llm_fallback = False
+    explanation = ""
     if rows:
         correct_count = sum(1 for row in rows if row["is_correct"])
         prompt = format_prompt(
@@ -1091,33 +1294,46 @@ def explain_deep(
             subject=compact_text(subject_display_name(subject), 80),
             **_rag_prompt_context(rows),
         )
-        ai_explanation = _complete_review(
-            llm_client,
-            build_messages(prompt),
-            model=DETAIL_REVIEW_MODEL,
-            temperature=0.2,
-            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-            operation="detail_explanation_with_rag",
-        )
-        local_methods = [
-            {
-                "id": f"q{index}",
-                "method": compact_text(row.get("explanation"), 2_000),
-                "from_cache": True,
-            }
-            for index, row in enumerate(rows, start=1)
-            if compact_text(row.get("explanation"), 2_000)
-        ]
-        explanation = (
-            _table(rows)
-            + f"**Score: {correct_count}/{len(rows)}**\n\n"
-            + ai_explanation
-        )
-        rendered_methods = _render_solution_methods(local_methods)
-        if rendered_methods:
-            explanation = (
-                f"{explanation.rstrip()}\n\n{rendered_methods}"
+        try:
+            ai_explanation = _complete_review(
+                llm_client,
+                build_messages(prompt),
+                model=DETAIL_REVIEW_MODEL,
+                temperature=0.2,
+                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
+                operation="detail_explanation_with_rag",
             )
+        except Exception:
+            logger.exception("[Review] detail_explanation_with_rag failed; using local fallback")
+            ai_explanation = ""
+
+        if ai_explanation.strip():
+            local_methods = [
+                {
+                    "id": f"q{index}",
+                    "method": compact_text(row.get("explanation"), 2_000),
+                    "from_cache": True,
+                }
+                for index, row in enumerate(rows, start=1)
+                if compact_text(row.get("explanation"), 2_000)
+            ]
+            explanation = (
+                _table(rows)
+                + f"**Score: {correct_count}/{len(rows)}**\n\n"
+                + ai_explanation
+            )
+            rendered_methods = _render_solution_methods(local_methods)
+            if rendered_methods:
+                explanation = (
+                    f"{explanation.rstrip()}\n\n{rendered_methods}"
+                )
+        else:
+            logger.warning(
+                "[Review] detail_explanation_with_rag returned an empty response; "
+                "using trusted answer-key fallback"
+            )
+            llm_fallback = True
+            explanation = _build_detail_explanation_fallback(rows, review_feedback)
         score = float(correct_count)
         max_score = len(rows)
     else:
@@ -1128,17 +1344,36 @@ def explain_deep(
             homework_content=budget["homework_content"],
             student_answer=budget["student_answers"],
         )
-        explanation = _complete_review(
-            llm_client,
-            build_messages(prompt),
-            model=DETAIL_REVIEW_MODEL,
-            temperature=0.2,
-            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-            operation="detail_review_no_rag_all_answers",
-        )
+        try:
+            explanation = _complete_review(
+                llm_client,
+                build_messages(prompt),
+                model=DETAIL_REVIEW_MODEL,
+                temperature=0.2,
+                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
+                operation="detail_review_no_rag_all_answers",
+            )
+        except Exception:
+            logger.exception("[Review] detail_review_no_rag_all_answers failed; using review fallback")
+            explanation = ""
+
+        if not explanation.strip():
+            logger.warning(
+                "[Review] detail_review_no_rag_all_answers returned an empty response; "
+                "using existing teacher feedback fallback"
+            )
+            llm_fallback = True
+            explanation = _build_detail_explanation_fallback([], review_feedback)
         score, max_score = _extract_score(explanation)
 
-    model_used = _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
+    if rows and not is_eleven_plus:
+        _save_year_homework_mistakes(
+            rows, student_id=str(raw_profile.get("student_id") or ""),
+            year_group=int(profile.get("year_group", 3)),
+            subject=subject, homework_doc_id=homework_doc_id,
+        )
+
+    model_used = None if llm_fallback else _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
     result = {
         "success": True,
         "explanation": explanation,
@@ -1147,6 +1382,7 @@ def explain_deep(
         "max_score": max_score,
         "model_tier": "plus",
         "model_used": model_used,
+        "llm_fallback": llm_fallback,
     }
     explain_cache.set(cache_key, result)
     return result
@@ -1178,8 +1414,10 @@ def improve_practice(
         profile,
     )
     cache_key = stable_cache_key(
-        "practice_v5",
+        "practice_v6",
         DETAIL_REVIEW_MODEL,
+        QUICK_REVIEW_MODEL,
+        FALLBACK_REVIEW_MODEL,
         subject,
         budget,
         homework_doc_id,
@@ -1237,26 +1475,69 @@ def improve_practice(
         wrong_questions_section=compact_text(wrong_questions_section, 2_000),
         correct_answers_section=compact_text(correct_answers_section, 4_000),
     )
-    raw_result = _complete_review(
-        llm_client,
-        build_messages(prompt),
-        model=DETAIL_REVIEW_MODEL,
-        temperature=0.25,
-        max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 3000, maximum=5000),
-        operation="targeted_practice",
-    )
-    practice, questions = _usable_generated_practice(raw_result)
-    if not practice:
-        preview = str(raw_result or "")[:500]
+    messages = build_messages(prompt)
+    practice = ""
+    questions: List[Dict[str, Any]] = []
+    first_model = DETAIL_REVIEW_MODEL
+    fallback_models = []
+    for candidate in (QUICK_REVIEW_MODEL, FALLBACK_REVIEW_MODEL):
+        if candidate and candidate not in {first_model, *fallback_models}:
+            fallback_models.append(candidate)
+
+    # The detail model can occasionally return an empty body even though the HTTP
+    # request itself succeeds.  Retry through the quick-review model first, then
+    # the dedicated fallback model (Gemini by default). This keeps a transient
+    # provider problem from becoming a 502 for the pupil.
+    models_to_try = [first_model] + fallback_models
+    for attempt, model_name in enumerate(models_to_try, start=1):
+        try:
+            raw_result = _complete_review(
+                llm_client,
+                messages,
+                model=model_name,
+                temperature=0.25,
+                max_tokens=_token_limit("PRACTICE_MAX_TOKENS", 3000, maximum=8000),
+                operation=(
+                    "targeted_practice"
+                    if attempt == 1
+                    else "targeted_practice_fallback"
+                ),
+            )
+        except Exception:
+            logger.exception(
+                "[Review] targeted_practice model=%s failed on attempt=%s",
+                model_name,
+                attempt,
+            )
+            raw_result = ""
+
+        practice, questions = _usable_generated_practice(raw_result)
+        if practice:
+            if attempt > 1:
+                logger.warning(
+                    "[Review] targeted_practice succeeded with fallback model=%s",
+                    model_name,
+                )
+            practice_cache.set(cache_key, practice)
+            return {
+                "success": True,
+                "practice": practice,
+                "questions": questions,
+                "model_used": model_name,
+                "fallback_used": attempt > 1,
+            }
+
         logger.warning(
-            "[Review] targeted_practice returned no usable practice (raw=%r chars, preview=%r)",
+            "[Review] targeted_practice returned no usable practice "
+            "(model=%s attempt=%s raw=%r chars, preview=%r)",
+            model_name,
+            attempt,
             len(str(raw_result or "")),
-            preview,
+            str(raw_result or "")[:500],
         )
-        return {
-            "success": False,
-            "error": PRACTICE_GENERATION_UNAVAILABLE_MESSAGE,
-            "llm_no_response": True,
-        }
-    practice_cache.set(cache_key, practice)
-    return {"success": True, "practice": practice, "questions": questions}
+
+    return {
+        "success": False,
+        "error": PRACTICE_GENERATION_UNAVAILABLE_MESSAGE,
+        "llm_no_response": True,
+    }

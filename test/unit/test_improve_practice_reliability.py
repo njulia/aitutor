@@ -109,3 +109,41 @@ def test_help_me_improve_prompt_does_not_include_prior_review_results(monkeypatc
     assert "review result" not in prompt_text.lower()
     assert "deep explanation" not in prompt_text.lower()
     assert captured["kwargs"]["model"] == "deepseek-v4-flash"
+
+
+def test_empty_detail_model_falls_back_to_quick_review_model(monkeypatch) -> None:
+    monkeypatch.setattr(review_service, "DETAIL_REVIEW_MODEL", "detail-test-model")
+    monkeypatch.setattr(review_service, "QUICK_REVIEW_MODEL", "quick-test-model")
+
+    class RoutedLLM(ResultLLM):
+        def complete(self, _messages, **kwargs):
+            if kwargs.get("model") == "detail-test-model":
+                return ""
+            return """## Similar Practice Questions
+1. What is 8 + 5?
+2. What is 9 + 6?
+3. What is 7 + 8?
+
+## Quick Revision Notes
+Add the ones first, then the tens.
+
+## Tips and Tricks
+- Check your answer by counting on.
+- Write each number clearly.
+
+## Challenge Question
+What is 18 + 7?
+"""
+
+    result = review_service.improve_practice(
+        _question(),
+        "1. 6",
+        "Maths",
+        {"year_group": 3, "age": 7},
+        llm_client=RoutedLLM("ignored"),
+    )
+
+    assert result["success"] is True
+    assert result["fallback_used"] is True
+    assert result["model_used"] == "quick-test-model"
+    assert len(result["questions"]) == 3

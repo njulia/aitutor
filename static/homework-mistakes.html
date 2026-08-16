@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Homework Mistake Practice | Homework Magic</title>
+<meta name="description" content="Practise questions you found tricky in Years 1–6 homework.">
+<link rel="stylesheet" href="/static/css/theme.css?v=20260809-avatar-eyes-dresses-1">
+<link rel="stylesheet" href="/static/css/mock-exams.css?v=20260806-premium-access">
+<link rel="stylesheet" href="/static/css/multiple-choice.css?v=20260816-homework-mistakes">
+<style>
+:root {
+    --ink:#243047; --muted:#667085; --paper:#f6f8fc; --card:#fff;
+    --line:#dfe5f0; --purple:#6c63d9; --purple-dark:#5147b8;
+    --purple-soft:#efedff; --green:#248a62; --green-soft:#e9f7f0;
+    --coral:#c44f5a; --coral-soft:#ffeaed; --shadow:0 14px 38px rgba(36,48,71,.09); --radius:18px;
+}
+*{box-sizing:border-box} html{scroll-behavior:smooth}
+body.homework-mistakes-page{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+button,input,select,textarea{font:inherit}button{touch-action:manipulation}button:disabled{cursor:not-allowed;opacity:.55}
+main{max-width:1180px;margin:0 auto;padding:34px 22px 80px}
+.hero{overflow:hidden;position:relative;display:grid;grid-template-columns:1.45fr .8fr;gap:30px;align-items:center;padding:38px;border-radius:26px;background:linear-gradient(135deg,#645bd4,#7d55b7);color:#fff;box-shadow:var(--shadow)}
+.hero:after{content:"";position:absolute;width:260px;height:260px;right:-80px;bottom:-120px;border-radius:50%;background:rgba(255,255,255,.12)}
+.hero-copy,.hero-stats{position:relative;z-index:1}.eyebrow{display:inline-flex;gap:8px;align-items:center;margin-bottom:12px;padding:7px 12px;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(255,255,255,.12);font-size:.86rem;font-weight:750}
+h1{margin:0 0 12px;max-width:720px;font-size:clamp(2rem,5vw,3.55rem);line-height:1.06;letter-spacing:-.04em}.hero p{margin:0;max-width:710px;color:rgba(255,255,255,.91);font-size:1.05rem}
+.hero-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.hero-stat{padding:18px;border:1px solid rgba(255,255,255,.26);border-radius:16px;background:rgba(255,255,255,.12);text-align:center}.hero-stat strong{display:block;font-size:1.8rem;line-height:1.1}.hero-stat span{font-size:.82rem;opacity:.9}
+.card{margin-top:24px;padding:26px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow)}
+.section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:20px}.section-heading h2{margin:0 0 4px;font-size:1.45rem}.section-heading p{margin:0;color:var(--muted)}
+.year-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.year-button{min-height:112px;padding:14px 10px;border:2px solid var(--line);border-radius:16px;background:#fff;color:var(--ink);cursor:pointer;text-align:left;transition:transform .15s ease,border-color .15s ease,background .15s ease,box-shadow .15s ease}
+.year-button:hover:not(:disabled){transform:translateY(-2px);border-color:#aaa2ec;box-shadow:0 8px 18px rgba(81,71,184,.10)}
+.year-button.active{border-color:var(--purple);background:var(--purple-soft);box-shadow:0 8px 18px rgba(81,71,184,.12)}
+.year-button:disabled{background:#f8f9fc;color:#98a0b2}
+.year-name{display:block;font-weight:850;font-size:1.08rem;margin-bottom:7px}.year-total{display:block;color:var(--purple-dark);font-weight:850;font-size:.9rem;margin-bottom:7px}.year-button:disabled .year-total{color:#98a0b2}
+.subject-counts{display:flex;flex-wrap:wrap;gap:5px}.subject-chip{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#f1f3f8;color:#596275;font-size:.7rem;font-weight:800}.year-button.active .subject-chip{background:#fff;color:var(--purple-dark)}
+.loading,.empty{text-align:center;padding:30px;color:var(--muted)}
+.status-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.status-copy{font-weight:750}.page-badge{padding:7px 11px;border-radius:999px;background:var(--purple-soft);color:var(--purple-dark);font-size:.8rem;font-weight:850;white-space:nowrap}
+.practice-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.practice-header h2{margin:0 0 4px;font-size:1.45rem}.practice-header p{margin:0;color:var(--muted)}
+.question-list{display:grid;gap:18px}.question-card{padding:0;background:#fff;border:0;border-radius:0}.question-meta{margin:0 0 8px;color:#667eea;font-size:.9rem;font-weight:800}
+.question-shell{padding:20px;background:#f8f9ff;border:1px solid #e1e6ff;border-left:4px solid #667eea;border-radius:14px}.question-text{font-size:1.08rem;color:#2d3142;line-height:1.7;white-space:pre-wrap;margin-bottom:14px}.question-text p{margin:0 0 8px}
+.choice-wrap{margin-top:10px}.choice-wrap .multiple-choice-list{margin:0}.choice-wrap .question-response-group{margin:0}.choice-wrap .multiple-choice-question{margin:0;border:0;padding:0}.choice-wrap .multiple-choice-question legend{padding:0;width:100%;margin:0 0 10px}.choice-wrap .multiple-choice-question-number{display:none}.choice-wrap .multiple-choice-question-text{display:block;font-size:0}.choice-wrap .multiple-choice-question-text > *{display:none}
+.free-answer{display:block;width:100%;min-height:52px;margin-top:10px;padding:12px 14px;border:2px solid #dfe5f0;border-radius:12px;background:#fff;color:var(--ink)}
+.result{margin-top:14px;padding:13px 15px;border-radius:12px}.result.correct{background:var(--green-soft);color:#176044}.result.wrong{background:var(--coral-soft);color:#963943}.result strong{font-weight:850}.result p{margin:6px 0 0}
+.controls{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;margin-top:24px}.btn{min-height:48px;padding:11px 22px;border:0;border-radius:999px;cursor:pointer;font-weight:850;transition:transform .16s ease,box-shadow .16s ease}.btn:hover:not(:disabled){transform:translateY(-1px)}.btn-primary{background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:#fff}.btn-secondary{background:var(--purple-soft);color:var(--purple-dark)}.btn-quiet{background:#fff;color:var(--muted);border:1px solid var(--line)}
+@media(max-width:900px){.year-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hero{grid-template-columns:1fr}}
+@media(max-width:560px){main{padding:20px 12px 60px}.hero{padding:25px}.card{padding:18px}.year-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.year-button{min-height:105px}.hero-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.practice-header{flex-direction:column}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body class="homework-mistakes-page">
+<a class="hm-skip-link" href="#main-content">Skip to homework mistake practice</a>
+<header class="mock-header">
+    <div class="hm-nav-wrap">
+        <a class="hm-brand" href="/"><span class="hm-brand-mark" aria-hidden="true">✨</span> Homework Magic</a>
+        <nav class="hm-main-nav" aria-label="Main navigation">
+            <a href="/elevenplus-practice">11+ practice</a>
+            <a href="/elevenplus-mistakes">11+ mistakes</a>
+            <a href="/elevenplus/articles">11+ articles</a>
+            <a href="/elevenplus-mock-exams">11+ mock exams</a>
+<!--            <a href="/elevenplus-topic-mastery">11+ topic mastery</a>-->
+            <a href="/app">Homework</a>
+<!--            <a href="/homework-mistakes" aria-current="page">My homework mistakes</a>-->
+            <a href="/login" data-auth-login>Parent sign in</a>
+            <a href="#" data-auth-logout hidden>Log out</a>
+        </nav>
+    </div>
+</header>
+
+<main id="main-content">
+    <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+            <div class="eyebrow">📚 Learn from tricky questions</div>
+            <h1 id="page-title">My Homework Mistake Practice</h1>
+            <p>Choose a school year, practise your saved mistakes, and have another go when you are ready.</p>
+        </div>
+        <div class="hero-stats" aria-label="Practice summary">
+            <div class="hero-stat"><strong>10</strong><span>questions per set</span></div>
+            <div class="hero-stat"><strong>1 year</strong><span>mistake history</span></div>
+            <div class="hero-stat"><strong>Years 1–6</strong><span>school years</span></div>
+            <div class="hero-stat"><strong>3</strong><span>practice actions</span></div>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="year-title">
+        <div class="section-heading">
+            <div>
+                <h2 id="year-title">Choose your practice year</h2>
+                <p>Pick a year to see its saved wrong questions. Each button shows the subjects that need practice.</p>
+            </div>
+        </div>
+        <div id="year-grid" class="year-grid" aria-label="Practice year choices">
+            <div class="loading" style="grid-column:1/-1">Loading your saved mistakes…</div>
+        </div>
+    </section>
+
+    <section class="card" id="practice-card" aria-labelledby="practice-title">
+        <div id="status" class="loading" role="status" aria-live="polite">Choose a year to begin.</div>
+        <div id="practice"></div>
+    </section>
+</main>
+
+<script src="/static/js/marked-lite.js"></script>
+<script src="/static/js/safe_markdown.js"></script>
+<script src="/static/js/multiple-choice.js?v=20260816-homework-mistakes"></script>
+<script>
+(function () {
+    'use strict';
+    const status = document.getElementById('status');
+    const root = document.getElementById('practice');
+    const yearGrid = document.getElementById('year-grid');
+    const PAGE_SIZE = 10;
+    const YEARS = [1,2,3,4,5,6];
+    let yearData = {};
+    let selectedYear = 3;
+    let questions = [];
+    let pageStart = 0;
+    let marking = false;
+
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function (c) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+    }
+
+    function subjectName(value) {
+        const text = String(value || 'Homework').trim();
+        return text || 'Homework';
+    }
+
+    function normaliseOptions(options) {
+        if (!Array.isArray(options)) return [];
+        return options.map(function (option, index) {
+            if (typeof option === 'string') return {label:String.fromCharCode(65 + index), text:option};
+            return {
+                label:String(option && (option.label || option.value) || String.fromCharCode(65 + index)).trim().toUpperCase(),
+                text:String(option && (option.text || option.value || option.answer) || '').trim()
+            };
+        }).filter(function (option) { return option.text; });
+    }
+
+    function subjectCounts(items) {
+        const counts = {};
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            const subject = subjectName(item.subject || item.subject_label);
+            counts[subject] = (counts[subject] || 0) + 1;
+        });
+        return counts;
+    }
+
+    function renderYearButtons() {
+        const anyMistakes = YEARS.some(function (year) { return (yearData[year] || []).length > 0; });
+        if (!anyMistakes) {
+            yearGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><h2>🌟 No saved mistakes yet</h2><p>When you miss a question in your normal homework, it can appear here for future practice.</p></div>';
+            root.innerHTML = '';
+            status.textContent = 'No saved homework mistakes yet.';
+            return;
+        }
+
+        yearGrid.innerHTML = YEARS.map(function (year) {
+            const items = yearData[year] || [];
+            const counts = subjectCounts(items);
+            const chips = Object.keys(counts).sort().map(function (subject) {
+                return '<span class="subject-chip">' + esc(subject) + ' ' + counts[subject] + '</span>';
+            }).join('');
+            return '<button type="button" class="year-button' + (year === selectedYear && items.length ? ' active' : '') + '" data-year="' + year + '"' + (!items.length ? ' disabled' : '') + '>' +
+                '<span class="year-name">Year ' + year + '</span>' +
+                '<span class="year-total">' + (items.length ? items.length + ' wrong question' + (items.length === 1 ? '' : 's') : 'No mistakes') + '</span>' +
+                (chips ? '<span class="subject-counts">' + chips + '</span>' : '') +
+            '</button>';
+        }).join('');
+
+        yearGrid.querySelectorAll('.year-button:not(:disabled)').forEach(function (button) {
+            button.addEventListener('click', function () {
+                selectedYear = Number(button.dataset.year);
+                renderYearButtons();
+                loadYear(selectedYear);
+            });
+        });
+    }
+
+    function currentQuestions() { return questions.slice(pageStart, pageStart + PAGE_SIZE); }
+
+    function getAnswerFromCard(card) {
+        if (!card) return '';
+        const selected = card.querySelector('.multiple-choice-input:checked');
+        if (selected) return String(selected.value || '').trim();
+        const input = card.querySelector('.question-response-input, .free-answer');
+        return input ? String(input.value || '').trim() : '';
+    }
+
+    function buildQuestionItem(q, index) {
+        const options = normaliseOptions(q.options);
+        return {
+            subject: subjectName(q.subject),
+            question_text: String(q.question || ''),
+            question: String(q.question || ''),
+            options: options,
+            content: String(q.question || ''),
+            from_rag: false
+        };
+    }
+
+    function renderQuestionCard(q, localIndex) {
+        const number = pageStart + localIndex + 1;
+        const item = buildQuestionItem(q, localIndex);
+        const renderer = window.HomeworkQuestionRenderer;
+        let answerHtml = '';
+        if (renderer && renderer.hasChoiceQuestions(item)) {
+            answerHtml = '<div class="choice-wrap">' + renderer.renderResponseBlock(item, localIndex, {
+                outerClass:'question-response-block mistake-response-block',
+                headerClass:'question-renderer-header',
+                headerText:'',
+                groupPrefix:'mistake-choice-' + selectedYear,
+                showLibraryBadge:false
+            }) + '</div>';
+        } else {
+            answerHtml = '<input class="free-answer question-response-input" type="text" autocomplete="off" aria-label="Your answer for question ' + number + '">';
+        }
+        return '<article class="question-card" data-question-card="' + esc(q.id) + '">' +
+            '<div class="question-meta">Question ' + number + ' · ' + esc(subjectName(q.subject)) + (q.topic ? ' · ' + esc(q.topic) : '') + '</div>' +
+            '<div class="question-shell">' +
+                '<div class="question-text">' + esc(q.question || '') + '</div>' +
+                answerHtml +
+                '<div class="result" data-result-for="' + esc(q.id) + '" hidden></div>' +
+            '</div>' +
+        '</article>';
+    }
+
+    function render() {
+        const pageQuestions = currentQuestions();
+        if (!questions.length) {
+            root.innerHTML = '<div class="empty"><h2>No saved mistakes for Year ' + selectedYear + '.</h2><p>Choose another year above to practise saved questions.</p></div>';
+            return;
+        }
+        const first = pageStart + 1;
+        const last = pageStart + pageQuestions.length;
+        const pageNumber = Math.floor(pageStart / PAGE_SIZE) + 1;
+        const totalPages = Math.ceil(questions.length / PAGE_SIZE);
+        root.innerHTML =
+            '<div class="practice-header">' +
+                '<div><h2 id="practice-title">Year ' + selectedYear + ' practice</h2><p>Questions ' + first + '–' + last + ' of ' + questions.length + '</p></div>' +
+                '<span class="page-badge">Set ' + pageNumber + ' of ' + totalPages + '</span>' +
+            '</div>' +
+            '<div class="question-list">' + pageQuestions.map(renderQuestionCard).join('') + '</div>' +
+            '<div class="controls">' +
+                '<button type="button" class="btn btn-primary" id="mark-btn">Mark</button>' +
+                '<button type="button" class="btn btn-secondary" id="again-btn">Do it again</button>' +
+                '<button type="button" class="btn btn-quiet" id="next-btn" ' + (last >= questions.length ? 'disabled' : '') + '>Next</button>' +
+            '</div>';
+
+        if (window.HomeworkQuestionRenderer) window.HomeworkQuestionRenderer.bindAll(root);
+        document.getElementById('mark-btn').addEventListener('click', markSet);
+        document.getElementById('again-btn').addEventListener('click', resetSet);
+        document.getElementById('next-btn').addEventListener('click', function () {
+            if (pageStart + PAGE_SIZE < questions.length) {
+                pageStart += PAGE_SIZE;
+                render();
+                window.scrollTo({top:document.getElementById('practice-card').offsetTop - 20, behavior:'smooth'});
+            }
+        });
+    }
+
+    async function markSet() {
+        if (marking) return;
+        const pageQuestions = currentQuestions();
+        const cards = pageQuestions.map(function (q) { return document.querySelector('[data-question-card="' + CSS.escape(q.id) + '"]'); });
+        const missing = cards.filter(function (card) { return !getAnswerFromCard(card); });
+        if (missing.length) {
+            alert('Please answer all ' + pageQuestions.length + ' questions before you press Mark.');
+            const input = missing[0].querySelector('.multiple-choice-input, .question-response-input, .free-answer');
+            if (input) input.focus();
+            return;
+        }
+        marking = true;
+        const markButton = document.getElementById('mark-btn');
+        const againButton = document.getElementById('again-btn');
+        const nextButton = document.getElementById('next-btn');
+        markButton.disabled = true; againButton.disabled = true; if (nextButton) nextButton.disabled = true; markButton.textContent = 'Marking…';
+        try {
+            const results = await Promise.all(pageQuestions.map(async function (q, index) {
+                const answer = getAnswerFromCard(cards[index]);
+                const response = await fetch('/api/homework/mistake-practice/check', {
+                    method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({mistake_id:q.id, answer:answer})
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (response.status === 401) { window.location.href='/login'; throw new Error('Please sign in again.'); }
+                if (!response.ok || !data.success) throw new Error(data.error || 'Could not mark this answer.');
+                return {q:q,data:data};
+            }));
+            results.forEach(function (item) {
+                const box = document.querySelector('[data-result-for="' + CSS.escape(item.q.id) + '"]');
+                if (!box) return;
+                box.hidden = false;
+                box.className = 'result ' + (item.data.correct ? 'correct' : 'wrong');
+                box.innerHTML = item.data.correct
+                    ? '<strong>✅ Correct!</strong> Great job.'
+                    : '<strong>❌ Not quite.</strong> The answer is <strong>' + esc(item.data.correct_answer) + '</strong>' +
+                      (item.data.explanation ? '<p>' + esc(item.data.explanation) + '</p>' : '');
+            });
+            markButton.textContent = 'Marked';
+            if (nextButton && pageStart + PAGE_SIZE < questions.length) nextButton.disabled = false;
+            status.textContent = 'Set marked. Check the feedback below each question.';
+        } catch (error) {
+            alert(error.message || 'We could not mark your answers just now. Please try again.');
+            markButton.disabled = false; againButton.disabled = false;
+            if (nextButton && pageStart + PAGE_SIZE < questions.length) nextButton.disabled = false;
+            markButton.textContent = 'Mark';
+        } finally { marking = false; }
+    }
+
+    function resetSet() {
+        if (marking) return;
+        currentQuestions().forEach(function (q) {
+            const card = document.querySelector('[data-question-card="' + CSS.escape(q.id) + '"]');
+            if (!card) return;
+            card.querySelectorAll('input, textarea').forEach(function (input) {
+                if (input.type === 'radio' || input.type === 'checkbox') input.checked = false;
+                else input.value = '';
+            });
+            const result = card.querySelector('[data-result-for="' + CSS.escape(q.id) + '"]');
+            if (result) { result.hidden=true; result.innerHTML=''; }
+            const proxy = card.querySelector('.question-answer-proxy');
+            if (proxy) proxy.value = '';
+        });
+        const markButton = document.getElementById('mark-btn'); if (markButton) { markButton.disabled=false; markButton.textContent='Mark'; }
+        const againButton = document.getElementById('again-btn'); if (againButton) againButton.disabled=false;
+        const nextButton = document.getElementById('next-btn'); if (nextButton) nextButton.disabled=pageStart + PAGE_SIZE >= questions.length;
+        status.textContent = 'Answers cleared. Try the same set again.';
+    }
+
+    async function loadYear(year) {
+        pageStart=0; questions=0; questions=[]; root.innerHTML='';
+        status.textContent='Loading Year ' + year + ' mistakes…'; status.className='loading';
+        const items = yearData[year] || [];
+        questions = items;
+        if (!questions.length) { status.textContent='No saved Year ' + year + ' mistakes yet.'; render(); return; }
+        status.innerHTML='<div class="status-row"><span class="status-copy">' + questions.length + ' saved Year ' + year + ' mistake' + (questions.length===1?'':'s') + ' ready to practise.</span><span class="page-badge">10 questions per set</span></div>';
+        status.className='';
+        render();
+    }
+
+    async function loadAllYears() {
+        yearGrid.innerHTML='<div class="loading" style="grid-column:1/-1">Loading your saved mistakes…</div>';
+        try {
+            const responses = await Promise.all(YEARS.map(function (year) {
+                return fetch('/api/homework/mistake-practice?year_group=' + year + '&limit=50', {credentials:'same-origin'})
+                    .then(function (response) {
+                        return response.json().catch(function () { return {}; }).then(function (data) {
+                            if (response.status === 401) { window.location.href='/login'; throw new Error('Please sign in again.'); }
+                            if (!response.ok || !data.success) throw new Error(data.error || 'Could not load Year ' + year + ' mistakes.');
+                            return Array.isArray(data.questions) ? data.questions : [];
+                        });
+                    });
+            }));
+            YEARS.forEach(function (year, index) { yearData[year]=responses[index]; });
+            renderYearButtons();
+            const firstAvailable = YEARS.find(function (year) { return (yearData[year] || []).length > 0; });
+            if (firstAvailable && !(yearData[selectedYear] || []).length) selectedYear=firstAvailable;
+            renderYearButtons();
+            await loadYear(selectedYear);
+        } catch (error) {
+            yearGrid.innerHTML='<div class="empty" style="grid-column:1/-1">' + esc(error.message || 'Could not load your saved mistakes.') + '</div>';
+            status.textContent='Could not load your saved mistakes.';
+        }
+    }
+
+    loadAllYears();
+}());
+</script>
+<script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+</body>
+</html>

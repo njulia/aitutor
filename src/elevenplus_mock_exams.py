@@ -875,6 +875,8 @@ def score_mock_exam(
             "number": number,
             "subject": question["subject"],
             "topic": question["topic"],
+            "question": question.get("question", ""),
+            "options": question.get("options", []),
             "selected_answer": selected,
             "correct": is_correct,
             "correct_answer": question["answer"],

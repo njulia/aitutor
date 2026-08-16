@@ -65,8 +65,10 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") or DEFAULT_API_KEY
 DEEPSEEK_BASE_URL = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/") + "/"
 QUICK_REVIEW_PROVIDER = (os.getenv("QUICK_REVIEW_PROVIDER") or "deepseek").strip().lower()
 DETAIL_REVIEW_PROVIDER = (os.getenv("DETAIL_REVIEW_PROVIDER") or "deepseek").strip().lower()
+FALLBACK_REVIEW_PROVIDER = (os.getenv("FALLBACK_REVIEW_PROVIDER") or "vertex_ai").strip().lower()
 QUICK_REVIEW_MODEL = os.getenv("QUICK_REVIEW_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
 DETAIL_REVIEW_MODEL = os.getenv("DETAIL_REVIEW_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
+FALLBACK_REVIEW_MODEL = os.getenv("FALLBACK_REVIEW_MODEL", "gemini-3.7-flash").strip() or "gemini-3.7-flash"
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL") or QUICK_REVIEW_MODEL
 VISION_MODEL = os.getenv("DEFAULT_VISION_MODEL", "qwen-plus")
 GOOGLE_CLOUD_PROJECT = (os.getenv("GOOGLE_CLOUD_PROJECT") or "").strip()
@@ -240,6 +242,8 @@ class LLMClient:
             return _normalise_provider(os.getenv("DETAIL_REVIEW_PROVIDER") or DETAIL_REVIEW_PROVIDER)
         if selected_model == QUICK_REVIEW_MODEL:
             return _normalise_provider(os.getenv("QUICK_REVIEW_PROVIDER") or QUICK_REVIEW_PROVIDER)
+        if selected_model == FALLBACK_REVIEW_MODEL:
+            return _normalise_provider(os.getenv("FALLBACK_REVIEW_PROVIDER") or FALLBACK_REVIEW_PROVIDER)
         return self.provider
 
     def with_model(self, model: str) -> "LLMClient":

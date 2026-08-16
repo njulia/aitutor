@@ -29,6 +29,8 @@ QUICK_REVIEW_PROVIDER="${QUICK_REVIEW_PROVIDER:-deepseek}"
 QUICK_REVIEW_MODEL="${QUICK_REVIEW_MODEL:-deepseek-v4-flash}"
 DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-deepseek}"
 DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-flash}"
+FALLBACK_REVIEW_PROVIDER="${FALLBACK_REVIEW_PROVIDER:-vertex_ai}"
+FALLBACK_REVIEW_MODEL="${FALLBACK_REVIEW_MODEL:-gemini-3.7-flash}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REWARD_SECRET_HELPER="${SCRIPT_DIR}/ensure_reward_delivery_secret.sh"
@@ -52,12 +54,12 @@ DEPLOY_ENV_FILE_EFFECTIVE="${DEPLOY_ENV_FILE}"
 DEPLOY_ENV_TMP="$(mktemp "${TMPDIR:-/tmp}/homeworkmagic-env.XXXXXX.yaml")"
 trap 'rm -f "${DEPLOY_ENV_TMP}"' EXIT
 
-python3 - "${DEPLOY_ENV_FILE}" "${DEPLOY_ENV_TMP}" "${QUICK_REVIEW_PROVIDER}" "${QUICK_REVIEW_MODEL}" "${DETAIL_REVIEW_PROVIDER}" "${DETAIL_REVIEW_MODEL}" <<'PY'
+python3 - "${DEPLOY_ENV_FILE}" "${DEPLOY_ENV_TMP}" "${QUICK_REVIEW_PROVIDER}" "${QUICK_REVIEW_MODEL}" "${DETAIL_REVIEW_PROVIDER}" "${DETAIL_REVIEW_MODEL}" "${FALLBACK_REVIEW_PROVIDER}" "${FALLBACK_REVIEW_MODEL}" <<'PY'
 import pathlib
 import re
 import sys
 
-source, destination, quick_provider, quick_model, detail_provider, detail_model = sys.argv[1:]
+source, destination, quick_provider, quick_model, detail_provider, detail_model, fallback_provider, fallback_model = sys.argv[1:]
 text = pathlib.Path(source).read_text(encoding="utf-8")
 
 def upsert(text, key, value):
@@ -73,6 +75,8 @@ text = upsert(text, "QUICK_REVIEW_PROVIDER", quick_provider)
 text = upsert(text, "QUICK_REVIEW_MODEL", quick_model)
 text = upsert(text, "DETAIL_REVIEW_PROVIDER", detail_provider)
 text = upsert(text, "DETAIL_REVIEW_MODEL", detail_model)
+text = upsert(text, "FALLBACK_REVIEW_PROVIDER", fallback_provider)
+text = upsert(text, "FALLBACK_REVIEW_MODEL", fallback_model)
 pathlib.Path(destination).write_text(text, encoding="utf-8")
 PY
 DEPLOY_ENV_FILE_EFFECTIVE="${DEPLOY_ENV_TMP}"

@@ -28,6 +28,7 @@ from .account_store import (
     student_belongs_to_account,
 )
 from .reward_store import get_reward_store
+from .runtime import is_30_day_study_plan_enabled
 
 
 def _utcnow() -> datetime:
@@ -142,6 +143,7 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
         )
         return {
             "success": True,
+            "study_plan_enabled": is_30_day_study_plan_enabled(),
             "family_code": account.get("family_code"),
             "kids": list(kids),
             "student_limit": int(student_limit),
@@ -151,6 +153,8 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
     @router.get("/api/parent/11plus-study-plan/{student_id}")
     async def get_11plus_study_plan(request: Request, student_id: str):
         """Return a learner's latest 30-day 11+ plan to a subscribed parent."""
+        if not is_30_day_study_plan_enabled():
+            raise HTTPException(status_code=404, detail="The 30-day study plan is currently disabled.")
         account = await account_context(request)
         belongs = await asyncio.to_thread(
             student_belongs_to_account, student_id, account["id"]

@@ -1200,6 +1200,11 @@ async def eleven_plus_topic_mastery():
     return _static_page("static", "elevenplus-topic-mastery.html")
 
 
+@app.get("/elevenplus-mistakes")
+async def eleven_plus_mistakes():
+    return _static_page("static", "elevenplus-mistakes.html")
+
+
 @app.get("/check-my-homework")
 async def check_homework():
     return _static_page("static", "check-my-homework.html")
@@ -1785,6 +1790,171 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
     return response
 
 
+
+@app.get("/homework-mistakes")
+async def homework_mistakes_page():
+    return _static_page("static", "homework-mistakes.html")
+
+
+@app.get("/api/homework/mistake-practice")
+async def get_homework_mistake_practice(req: Request, year_group: Optional[int] = None, limit: int = 20):
+    """Return saved Year 1-6 homework mistakes, grouped by school year."""
+    try:
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
+        from src.progress_db import get_homework_mistakes
+        safe_year = None if year_group is None else max(1, min(int(year_group), 6))
+        items = await run_blocking(
+            get_homework_mistakes, str(resolved_student_id), year_group=safe_year,
+            limit=max(1, min(int(limit or 20), 50)), timeout=8, limit_concurrency=False,
+        )
+        response = JSONResponse({"success": True, "year_group": safe_year, "questions": items, "count": len(items)})
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Could not load Year 1-6 homework mistakes")
+        return JSONResponse(status_code=500, content={"success": False, "error": "We could not load your saved homework mistakes just now. Please try again."})
+
+
+@app.post("/api/homework/mistake-practice/check")
+async def check_homework_mistake_practice(req: Request):
+    """Check a saved Year 1-6 homework mistake without using an LLM."""
+    try:
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username)
+        body = await req.json()
+        mistake_id = str(body.get("mistake_id") or "").strip()
+        answer = str(body.get("answer") or "").strip()
+        if not mistake_id or not answer:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Please choose or enter an answer."})
+        from src.progress_db import check_homework_mistake
+        result = await run_blocking(check_homework_mistake, str(resolved_student_id), mistake_id, answer, timeout=8, limit_concurrency=False)
+        response = JSONResponse(result)
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Could not mark Year 1-6 homework mistake practice")
+        return JSONResponse(status_code=500, content={"success": False, "error": "We could not mark that answer just now. Please try again."})
+
+
+@app.get("/api/elevenplus/mistake-practice")
+async def get_11plus_mistake_practice(
+    req: Request,
+    subject: Optional[str] = None,
+    limit: int = 12,
+    summary: bool = False,
+):
+    """Return saved 11+ mistakes without exposing answer keys to the browser."""
+    try:
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(
+            req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
+        )
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            ELEVENPLUS_PREMIUM_PLAN,
+            True,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "My Mistake Practice", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+            )
+        from src.progress_db import get_mistake_questions, get_mistake_subject_counts
+        items = await run_blocking(
+            get_mistake_questions,
+            str(resolved_student_id),
+            subject=subject,
+            limit=max(1, min(int(limit or 12), 300)),
+            timeout=8,
+            limit_concurrency=False,
+        )
+        subject_counts = {}
+        if summary:
+            subject_counts = await run_blocking(
+                get_mistake_subject_counts,
+                str(resolved_student_id),
+                timeout=8,
+                limit_concurrency=False,
+            )
+        response = JSONResponse({
+            "success": True,
+            "questions": items,
+            "count": len(items),
+            "subject_counts": subject_counts,
+        })
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Could not load 11+ mistake practice")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "We could not load your saved mistakes just now. Please try again."},
+        )
+
+
+@app.post("/api/elevenplus/mistake-practice/check")
+async def check_11plus_mistake_practice(req: Request):
+    """Mark one saved mistake question without sending it to an LLM."""
+    try:
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(
+            req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
+        )
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            ELEVENPLUS_PREMIUM_PLAN,
+            True,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "My Mistake Practice", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+            )
+        body = await req.json()
+        mistake_id = str(body.get("mistake_id") or "").strip()
+        answer = str(body.get("answer") or "").strip()
+        if not mistake_id or not answer:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Please choose or enter an answer."},
+            )
+        from src.progress_db import check_mistake_question
+        result = await run_blocking(
+            check_mistake_question,
+            str(resolved_student_id),
+            mistake_id,
+            answer,
+            timeout=8,
+            limit_concurrency=False,
+        )
+        response = JSONResponse(result)
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Could not mark saved 11+ mistake practice")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "We could not mark that answer just now. Please try again."},
+        )
+
+
 @app.post("/api/generate")
 async def api_generate(req: Request, request: ProfileRequest):
     try:
@@ -2269,10 +2439,7 @@ async def api_explain_deep(req: Request, request_body: ExplainDeepRequest):
             question_index=request_body.question_index,
             timeout=120,
         )
-        response = JSONResponse(
-            status_code=502 if result.get("llm_no_response") else 200,
-            content=result,
-        )
+        response = JSONResponse(content=result)
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
     except HTTPException:

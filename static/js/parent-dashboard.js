@@ -1,6 +1,7 @@
 'use strict';
 
 const familyState = {
+  studyPlanEnabled: false,
   kids: new Map(),
   familyCode: '',
   limit: 0,
@@ -287,10 +288,14 @@ function renderKids() {
     const rewardLink = node('a', 'btn-link', 'Rewards');
     rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
     rewardLink.style.marginLeft = 'auto';
-    const planButton = node('button', 'btn-link', '30-day 11+ plan');
-    planButton.type = 'button';
-    planButton.addEventListener('click', () => openStudyPlan(kid));
-    actions.append(progressLink, planButton, rewardLink);
+    if (familyState.studyPlanEnabled) {
+      const planButton = node('button', 'btn-link', '30-day 11+ plan');
+      planButton.type = 'button';
+      planButton.addEventListener('click', () => openStudyPlan(kid));
+      actions.append(progressLink, planButton, rewardLink);
+    } else {
+      actions.append(progressLink, rewardLink);
+    }
 //    const edit = node('button', 'btn btn-secondary', 'Edit profile');
 //    edit.type = 'button';
 //    edit.addEventListener('click', () => showProfileForm(kid));
@@ -343,6 +348,7 @@ async function loadOverview() {
   familyState.familyCode = data.family_code || '';
   familyState.limit = Number(data.student_limit || 0);
   familyState.canAdd = data.can_add_student === true;
+  familyState.studyPlanEnabled = data.study_plan_enabled === true;
   familyState.kids = new Map((data.kids || []).map((kid) => [kid.id, kid]));
   familyState.overviewLoaded = true;
   byId('family-limit-note').textContent = familyState.limit
