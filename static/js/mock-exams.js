@@ -198,7 +198,16 @@
   function renderCatalogue(data) {
     commonGrid.replaceChildren();
     schoolGrid.replaceChildren();
-    (data.exams || []).forEach(function (exam) {
+    const exams = (data.exams || []).slice();
+    exams.sort(function (a, b) {
+      if (a.category === 'school_target' && b.category === 'school_target') {
+        const nameA = String(a.school || a.title || '').toLowerCase();
+        const nameB = String(b.school || b.title || '').toLowerCase();
+        return nameA < nameB ? -1 : (nameA > nameB ? 1 : 0);
+      }
+      return 0;
+    });
+    exams.forEach(function (exam) {
       const target = exam.category === 'school_target' ? schoolGrid : commonGrid;
       target.appendChild(renderMockCard(exam));
     });
