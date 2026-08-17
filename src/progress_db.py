@@ -117,6 +117,7 @@ auth_users = Table(
     Column("salt", String(64), nullable=False),
     Column("is_test", Boolean, nullable=False, default=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("last_login_at", DateTime(timezone=True), nullable=True),
 )
 ai_requests = Table(
     "ai_requests", metadata,
@@ -1084,7 +1085,30 @@ def set_user_password(username: str, new_password: str) -> bool:
 
 
 def ensure_user_columns():
-    return None
+    """Add authentication metadata columns to existing databases safely."""
+    engine = get_engine(_URL)
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "ALTER TABLE auth_users ADD COLUMN last_login_at TIMESTAMP NULL"
+            )
+    except Exception:
+        # Column already exists (or the backend does not need the migration).
+        pass
+
+
+def record_user_login(username: str) -> bool:
+    """Record a successful password login without storing credentials."""
+    clean = str(username or "").strip().lower()
+    if not clean:
+        return False
+    with _engine.begin() as conn:
+        result = conn.execute(
+            update(auth_users)
+            .where(auth_users.c.username == clean)
+            .values(last_login_at=_now())
+        )
+    return bool(result.rowcount)
 
 
 def set_user_test_flag(username: str, is_test: bool) -> bool:
@@ -1142,11 +1166,12 @@ def get_local_subscription_stats() -> Dict[str, Any]:
 
 def list_all_users(limit: int = 100, offset: int = 0):
     with _engine.begin() as conn:
-        rows=conn.execute(select(auth_users.c.username,auth_users.c.created_at,auth_users.c.is_test).order_by(auth_users.c.created_at.desc()).limit(max(1,min(limit,1000))).offset(max(0,offset))).all()
+        rows=conn.execute(select(auth_users.c.username,auth_users.c.created_at,auth_users.c.last_login_at,auth_users.c.is_test).order_by(auth_users.c.created_at.desc()).limit(max(1,min(limit,1000))).offset(max(0,offset))).all()
     return [_dict(r) for r in rows]
 
 
 init_db()
+ensure_user_columns()
 
 
 def delete_user_account(username: str) -> bool:

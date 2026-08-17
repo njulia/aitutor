@@ -35,3 +35,14 @@ def test_topic_mastery_frontend_uses_server_access_and_mentions_test_users():
     assert "accessData.has_access === true" in page
     assert "/api/elevenplus/topic-mastery/access" in pricing
     assert "data.has_access === true" in pricing
+
+
+def test_topic_mastery_access_endpoint_allows_test_user(client, unique_email, monkeypatch):
+    register_or_login(client, unique_email)
+    import web_app
+
+    monkeypatch.setattr(web_app, "is_user_test", lambda username: True)
+    monkeypatch.setattr(web_app, "user_has_subscription", lambda *args, **kwargs: True)
+    response = client.get("/api/elevenplus/topic-mastery/access")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"success": True, "has_access": True}

@@ -442,7 +442,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                     response.headers["Cache-Control"] = static_cache_control
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+        response.headers.setdefault("X-DNS-Prefetch-Control", "off")
+        response.headers.setdefault("X-Download-Options", "noopen")
+        # Keep authenticated/child-facing areas out of search engines even when
+        # they are reachable through clean application routes.
+        private_page_prefixes = (
+            "/app", "/progress", "/rewards", "/memory", "/daily-quest",
+            "/playtime", "/character-customise", "/parent-dashboard",
+            "/messages", "/admin", "/login", "/register", "/forgot-password",
+            "/reset-password", "/kid-login", "/elevenplus-mistakes",
+            "/homework-mistakes",
+        )
+        if request.url.path.startswith(private_page_prefixes):
+            response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response.headers["Cache-Control"] = "no-store, private"
         if not settings.dev_mode:
+            # HSTS is only sent over production HTTPS. Cloud Run terminates TLS
+            # before the app, so this is safe for the public production origin.
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 

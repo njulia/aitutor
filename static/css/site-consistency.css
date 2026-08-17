@@ -1,0 +1,18 @@
+/* Homework Magic universal page layer — consistent, child-friendly and accessible. */
+:root { --hm-content-width: 1180px; --hm-gap: 18px; --hm-focus: #2f7de1; }
+body.hm-page, body.hm-app, body.hm-eleven, body.hm-rewards, body.hm-pricing, body.hm-article {
+  min-height:100vh; color:#233247; font-family:"Nunito","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+body.hm-page, body.hm-eleven, body.hm-rewards { background:#fffdf8; }
+.header, .mock-header, .site-header, .hm-site-header { background:rgba(255,255,255,.97); border-bottom:1px solid #dfe4f0; box-shadow:0 3px 16px rgba(35,50,71,.07); }
+.header-content, .hm-nav-wrap, .header-inner { width:min(var(--hm-content-width), calc(100% - 36px)); min-height:76px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.logo, .brand, .hm-brand { white-space:nowrap; }
+.nav-links, .site-nav, .hm-main-nav { display:flex; align-items:center; justify-content:flex-end; gap:10px 16px; flex-wrap:nowrap; min-width:0; overflow-x:auto; scrollbar-width:thin; }
+.nav-links a, .site-nav a, .hm-main-nav a { white-space:nowrap; text-decoration:none; font-weight:700; color:#344054; padding:9px 4px; }
+.nav-links a:hover, .site-nav a:hover, .hm-main-nav a:hover { color:#5d3ca8; }
+.container, .wrap, main { max-width:var(--hm-content-width); margin-left:auto; margin-right:auto; }
+.card, .panel, .practice-card, .question-card { border-radius:20px; }
+button, .btn, a.button { min-height:44px; touch-action:manipulation; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:4px solid rgba(47,125,225,.28)!important; outline-offset:3px; }
+@media (max-width:760px){ .header-content,.hm-nav-wrap,.header-inner{width:min(var(--hm-content-width),calc(100% - 24px));min-height:68px;gap:12px;} .nav-links,.site-nav,.hm-main-nav{justify-content:flex-start;gap:8px 12px;} .nav-links a,.site-nav a,.hm-main-nav a{font-size:.95rem;padding:8px 3px;} }
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}

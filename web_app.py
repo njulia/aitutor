@@ -1679,6 +1679,33 @@ app.include_router(build_mock_exam_router(
     set_anon_cookie=_set_anon_cookie,
 ))
 
+@app.get("/api/elevenplus/topic-mastery/access")
+async def get_topic_mastery_access(req: Request):
+    """Return the server-authoritative Topic Mastery entitlement.
+
+    Test accounts are intentionally allowed through ``user_has_subscription``
+    so they can exercise premium 11+ features without a Stripe subscription.
+    """
+    resolved_student_id, logged_in_username, _ = await _resolve_request_identity(req)
+    if not logged_in_username and not (resolved_student_id and not str(resolved_student_id).startswith("anon_")):
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "has_access": False, "error": "Please sign in."},
+        )
+
+    has_access = await run_blocking(
+        user_has_subscription,
+        req,
+        resolved_student_id,
+        logged_in_username,
+        ELEVENPLUS_PREMIUM_PLAN,
+        True,
+        timeout=12,
+        limit_concurrency=False,
+    )
+    return {"success": True, "has_access": bool(has_access)}
+
+
 @app.get("/api/elevenplus/topic-mastery/catalog")
 async def get_topic_mastery_catalog():
     """Return the small static catalogue without loading RAG or an LLM."""

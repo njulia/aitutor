@@ -34,6 +34,7 @@ FALLBACK_REVIEW_MODEL="${FALLBACK_REVIEW_MODEL:-gemini-3.7-flash}"
 
 ASSUME_YES=false
 STAGING_ONLY=false
+GCLOUD_TIMEOUT_SECONDS="${GCLOUD_TIMEOUT_SECONDS:-60}"
 
 usage() {
   cat <<'USAGE'
@@ -65,8 +66,11 @@ Options:
   --yes                    Promote without an interactive confirmation
   -h, --help               Show this help
 
-Environment variables with the uppercase option names are also supported. It includes DEEPSEEK_API_KEY_SECRET
-and SMTP_PASSWORD_SECRET for the two runtime credentials.
+Environment:
+  GCLOUD_TIMEOUT_SECONDS   Timeout for individual Google Cloud checks (default: 60)
+
+Environment variables with the uppercase option names are also supported, including
+DEEPSEEK_API_KEY_SECRET, SMTP_PASSWORD_SECRET, and GCLOUD_TIMEOUT_SECONDS.
 
 Examples:
   ./deploy/deploy_code_gcp.sh
@@ -87,6 +91,37 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+run_gcloud_check() {
+  local label="$1"
+  shift
+
+  printf '  %-52s' "${label}..."
+  local start_time
+  start_time="$(date +%s)"
+
+  if command -v timeout >/dev/null 2>&1; then
+    if timeout --signal=TERM "${GCLOUD_TIMEOUT_SECONDS}s" gcloud "$@" >/dev/null; then
+      printf ' OK\n'
+      return 0
+    fi
+    local status=$?
+    if [ "${status}" -eq 124 ] || [ "${status}" -eq 143 ]; then
+      printf ' TIMEOUT\n' >&2
+      die "${label} timed out after ${GCLOUD_TIMEOUT_SECONDS}s. Check gcloud authentication, network connectivity, and Google Cloud API availability."
+    fi
+    printf ' FAILED\n' >&2
+    die "${label} failed (gcloud exit ${status}). Run the command manually for details: gcloud $*"
+  else
+    if gcloud "$@" >/dev/null; then
+      printf ' OK\n'
+      return 0
+    fi
+    local status=$?
+    printf ' FAILED\n' >&2
+    die "${label} failed (gcloud exit ${status}). Run the command manually for details: gcloud $*"
+  fi
 }
 
 RUNTIME_SECRET_ERRORS=()
@@ -465,21 +500,25 @@ ACTIVE_ACCOUNT="$(
 )"
 [ -n "${ACTIVE_ACCOUNT}" ] || die "No active gcloud account. Run: gcloud auth login"
 
-log "Checking Google Cloud resources"
-gcloud projects describe "${PROJECT_ID}" --format="value(projectId)" >/dev/null
-gcloud services enable \
-  run.googleapis.com \
-  cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com \
-  sqladmin.googleapis.com \
-  secretmanager.googleapis.com \
-  --project="${PROJECT_ID}" \
-  --quiet
+CONFIGURED_PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
+if [ -n "${CONFIGURED_PROJECT}" ] && [ "${CONFIGURED_PROJECT}" != "(unset)" ] && [ "${CONFIGURED_PROJECT}" != "${PROJECT_ID}" ]; then
+  printf 'WARNING: gcloud configured project is %s, but deployment target is %s.\n'     "${CONFIGURED_PROJECT}" "${PROJECT_ID}" >&2
+  printf 'The script will continue using --project=%s.\n' "${PROJECT_ID}" >&2
+fi
 
-gcloud run services describe "${SERVICE}" \
-  --project="${PROJECT_ID}" \
-  --region="${REGION}" \
-  --format="value(metadata.name)" >/dev/null
+log "Checking Google Cloud resources"
+printf 'Project: %s\nRegion: %s\nService: %s\nActive account: %s\n\n' \
+  "${PROJECT_ID}" "${REGION}" "${SERVICE}" "${ACTIVE_ACCOUNT}"
+
+run_gcloud_check   "Google Cloud project"   projects describe "${PROJECT_ID}" --format="value(projectId)"
+
+log "Checking required Google Cloud APIs"
+for API in   run.googleapis.com   cloudbuild.googleapis.com   artifactregistry.googleapis.com   sqladmin.googleapis.com   secretmanager.googleapis.com
+do
+  run_gcloud_check "API ${API}" services enable "${API}" --project="${PROJECT_ID}" --quiet
+done
+
+run_gcloud_check   "Cloud Run service ${SERVICE}"   run services describe "${SERVICE}"   --project="${PROJECT_ID}"   --region="${REGION}"   --format="value(metadata.name)"
 
 MISSING_PUBLIC_SETTINGS="$(
   gcloud run services describe "${SERVICE}" \
@@ -516,15 +555,12 @@ if [ -n "${MISSING_PUBLIC_SETTINGS}" ]; then
   die "The Cloud Run service is missing required public business settings: ${MISSING_PUBLIC_SETTINGS}. Configure deploy/cloud-run.env.yaml and run deploy/deploy_gcp.sh first."
 fi
 
-gcloud sql instances describe "${SQL_INSTANCE}" \
-  --project="${PROJECT_ID}" \
-  --format="value(name)" >/dev/null
+run_gcloud_check   "Cloud SQL instance ${SQL_INSTANCE}"   sql instances describe "${SQL_INSTANCE}"   --project="${PROJECT_ID}"   --format="value(name)"
 
-gcloud iam service-accounts describe "${SERVICE_ACCOUNT_EMAIL}" \
-  --project="${PROJECT_ID}" \
-  --format="value(email)" >/dev/null
+run_gcloud_check   "Runtime service account"   iam service-accounts describe "${SERVICE_ACCOUNT_EMAIL}"   --project="${PROJECT_ID}"   --format="value(email)"
 
 log "Checking required provider and email secrets"
+printf 'DeepSeek secret: %s\nSMTP secret: %s\n' "${DEEPSEEK_API_KEY_SECRET}" "${SMTP_PASSWORD_SECRET}"
 validate_runtime_secret \
   "DEEPSEEK_API_KEY" \
   "${DEEPSEEK_API_KEY_SECRET}" \
@@ -562,9 +598,11 @@ if [ -z "${OLD_REVISION}" ]; then
 fi
 printf 'Current production revision: %s\n' "${OLD_REVISION}"
 
+printf '  Checking Artifact Registry repository %s... ' "${REPOSITORY}"
 if gcloud artifacts repositories describe "${REPOSITORY}" \
   --project="${PROJECT_ID}" \
   --location="${REGION}" >/dev/null 2>&1; then
+  printf 'OK\n'
   REPOSITORY_FORMAT="$(
     gcloud artifacts repositories describe "${REPOSITORY}" \
       --project="${PROJECT_ID}" \
