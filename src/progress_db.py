@@ -43,6 +43,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from src.webapp.db import get_engine, normalise_database_url
+from src.models import subject_display_name
 
 _DEFAULT = Path(__file__).resolve().parents[1] / "data" / "aitutor.db"
 _URL = normalise_database_url(os.getenv("PROGRESS_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{_DEFAULT}")
@@ -292,7 +293,7 @@ def save_mistake_questions(
             item = dict(raw or {})
             question = re.sub(r"\s+", " ", str(item.get("question") or "").strip())[:4000]
             correct_answer = re.sub(r"\s+", " ", str(item.get("correct_answer") or "").strip())[:1000]
-            subject = re.sub(r"\s+", " ", str(item.get("subject") or "11+"))[:80]
+            subject = re.sub(r"\s+", " ", subject_display_name(str(item.get("subject") or "11+")))[:80]
             topic = re.sub(r"\s+", " ", str(item.get("topic") or "General"))[:160]
             mistake_type = re.sub(r"\s+", " ", str(item.get("mistake_type") or topic or "General"))[:160]
             if not question or not correct_answer:

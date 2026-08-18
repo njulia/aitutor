@@ -828,6 +828,37 @@ def _feedback(percent: int) -> tuple[str, str]:
     )
 
 
+
+def _save_mock_exam_mistakes(student_id: str, exam: Mapping[str, Any], results: list[Dict[str, Any]]) -> int:
+    """Persist wrong/unanswered mock questions in the student's 11+ mistake bank."""
+    clean_student = str(student_id or '').strip()
+    if not clean_student or clean_student in {'anonymous', 'None'} or clean_student.startswith('anon_'):
+        return 0
+    mistakes = []
+    for row in results:
+        if bool(row.get('correct')):
+            continue
+        mistakes.append({
+            'question': row.get('question'),
+            'subject': row.get('subject') or '11+',
+            'topic': row.get('topic') or 'General',
+            'mistake_type': row.get('topic') or 'Mock exam mistake',
+            'source_type': 'mock_exam',
+            'source_doc_id': str(exam.get('id') or '')[:120] or None,
+            'options': row.get('options') or [],
+            'correct_letter': row.get('correct_answer'),
+            'correct_answer': row.get('correct_answer_text') or row.get('correct_answer'),
+            'explanation': row.get('explanation') or '',
+        })
+    if not mistakes:
+        return 0
+    try:
+        from src.progress_db import save_mistake_questions
+        return int(save_mistake_questions(clean_student, mistakes))
+    except Exception:
+        return 0
+
+
 def score_mock_exam(
     exam_id: str,
     token: str,
@@ -884,6 +915,8 @@ def score_mock_exam(
             "explanation": question["explanation"],
         })
 
+    mistakes_saved = _save_mock_exam_mistakes(identity, exam, results)
+
     total = len(exam["question_ids"])
     percent = round((correct_count / total) * 100) if total else 0
     band, message = _feedback(percent)
@@ -924,6 +957,7 @@ def score_mock_exam(
             topic for topic, _count in missed_topics.most_common(4)
         ],
         "questions": results,
+        "mistakes_saved": mistakes_saved,
         "disclaimer": (
             "This practice score is not a predicted standardised score or an admissions result."
         ),

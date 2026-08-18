@@ -824,6 +824,7 @@ def review_homework(
     )
     use_detail_model = not use_quick_model
     selected_model = DETAIL_REVIEW_MODEL if use_detail_model else QUICK_REVIEW_MODEL
+    is_year_round = bool(is_eleven_plus and profile.get("plan_week"))
     cache_key = stable_cache_key(
         (
             "review_uploaded_v1"
@@ -838,10 +839,6 @@ def review_homework(
         bool(is_eleven_plus),
     )
     cached = review_cache.get(cache_key)
-    if cached:
-        if isinstance(cached, dict):
-            return {**cached, "from_cache": True}
-        return {"success": True, "review": str(cached), "from_cache": True}
 
     rows: List[Dict[str, Any]] = []
     if homework_doc_id and not uploaded_work:
@@ -857,7 +854,29 @@ def review_homework(
             rows = _mark_rows(pairs, budget["student_answers"], subject)
         except Exception:
             logger.exception("RAG answer lookup failed for %s", homework_doc_id)
-    
+
+    # A cached review is safe to reuse, but Year-Round Plan mistakes must still
+    # be persisted for the current student. Re-run the deterministic RAG marking
+    # above before returning the cached result so a previous cache hit cannot
+    # bypass the 11+ mistake-bank save.
+    if cached and is_year_round:
+        _save_11plus_mistakes(
+            rows,
+            student_id=str(student_id),
+            subject=subject,
+            profile=profile,
+            homework_doc_id=homework_doc_id,
+            source_type="year_round",
+        )
+        if isinstance(cached, dict):
+            return {**cached, "from_cache": True}
+        return {"success": True, "review": str(cached), "from_cache": True}
+
+    if cached:
+        if isinstance(cached, dict):
+            return {**cached, "from_cache": True}
+        return {"success": True, "review": str(cached), "from_cache": True}
+
     # Quick review with RAG answers: skip LLM call, return only table and score
     if quick_review and rows:
         correct_count = sum(1 for row in rows if row["is_correct"])
@@ -890,7 +909,7 @@ def review_homework(
                 homework_doc_id=homework_doc_id,
                 source_type=(
                     "topic_mastery" if profile.get("topic_mastery")
-                    else ("year_round" if profile.get("plan_week") else "11plus_practice")
+                    else ("year_round" if is_year_round else "11plus_practice")
                 ),
             )
         else:
@@ -1118,7 +1137,7 @@ def review_homework(
                 homework_doc_id=homework_doc_id,
                 source_type=(
                     "topic_mastery" if profile.get("topic_mastery")
-                    else ("year_round" if profile.get("plan_week") else "11plus_practice")
+                    else ("year_round" if is_year_round else "11plus_practice")
                 ),
             )
         else:
