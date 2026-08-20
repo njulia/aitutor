@@ -104,6 +104,10 @@ ADDITIONAL_PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
         "title": "Consortium of Selective Schools in Essex: 2027 examination",
         "url": "https://csse.org.uk/",
     },
+    "essex-grammar-2027": {
+        "title": "Essex County Council: grammar school places and 2027 entry",
+        "url": "https://www.essex.gov.uk/schools-and-learning/schools/admissions/grammar-school-places",
+    },
     "lrgs-2027": {
         "title": "Lancaster Royal Grammar School: 2027 entrance tests",
         "url": "https://www.lrgs.org.uk/join-the-school/admissions",
@@ -1914,10 +1918,98 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
         "format_note": "Condensed 50:25:25 verbal, maths and non-verbal/spatial mix; the official test has two papers.",
         "last_verified": "2026-08-06",
     },
+    "essex-csse-11plus-2": {
+        "id": "essex-csse-11plus-2",
+        "category": "school_target",
+        "title": "Essex 11+ Mock Exam — CSSE Practice 2",
+        "description": "Original Essex 11 plus mock exam practice in the CSSE English and Mathematics format, with a fresh question mix for repeat practice.",
+        "school": "Consortium of Selective Schools in Essex",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(49, 61)]
+            + [f"e{i:02d}" for i in range(37, 49)]
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
+        "format_note": "Original English and Mathematics practice shaped around the current CSSE two-paper format; the official CSSE examination uses separate 60-minute English and Mathematics tests.",
+        "last_verified": "2026-08-20",
+    },
+    "essex-csse-11plus-3": {
+        "id": "essex-csse-11plus-3",
+        "category": "school_target",
+        "title": "Essex 11+ Mock Exam — CSSE Practice 3",
+        "description": "Another original 11 plus mock exam for Essex CSSE preparation, focusing on English reading and writing skills plus non-calculator Mathematics.",
+        "school": "Consortium of Selective Schools in Essex",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(53, 65)]
+            + [f"e{i:02d}" for i in range(41, 53)]
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
+        "format_note": "Original English and Mathematics practice based on the published CSSE scope. It is an independent simulation, not an official CSSE paper.",
+        "last_verified": "2026-08-20",
+    },
+    "colchester-essex-11plus-1": {
+        "id": "colchester-essex-11plus-1",
+        "category": "school_target",
+        "title": "Colchester Essex 11+ Mock Exam — CSSE Target",
+        "description": "Original 11 plus mock exam practice for families targeting Colchester Royal Grammar School or Colchester County High School for Girls through the CSSE test.",
+        "school": "Colchester Royal Grammar School / Colchester County High School for Girls",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(37, 49)]
+            + [f"e{i:02d}" for i in range(53, 65)]
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
+        "format_note": "Colchester-targeted independent practice using the shared CSSE English and Mathematics entrance-test format. It is not an official school paper.",
+        "last_verified": "2026-08-20",
+    },
+    "southend-westcliff-essex-11plus-1": {
+        "id": "southend-westcliff-essex-11plus-1",
+        "category": "school_target",
+        "title": "Southend & Westcliff Essex 11+ Mock Exam — CSSE Target",
+        "description": "Original 11 plus mock exam practice for Southend and Westcliff selective schools using the common CSSE English and Mathematics format.",
+        "school": "Southend and Westcliff CSSE schools",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 50,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"m{i:02d}" for i in range(41, 53)]
+            + [f"e{i:02d}" for i in range(49, 61)]
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
+        "format_note": "Southend and Westcliff-targeted independent practice based on the shared CSSE English and Mathematics format used by member schools.",
+        "last_verified": "2026-08-20",
+    },
+    "chelmsford-essex-11plus-2": {
+        "id": "chelmsford-essex-11plus-2",
+        "category": "school_target",
+        "title": "Chelmsford Essex 11+ Mock Exam — CCHS FSCE Practice 2",
+        "description": "Original Chelmsford County High School for Girls 11 plus mock exam practice, extending the existing CCHS FSCE target mock with another question mix.",
+        "school": "Chelmsford County High School for Girls",
+        "stage": "FSCE Entrance Test familiarisation",
+        "duration_minutes": 45,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"fsce{i:02d}" for i in range(2, 8)]
+            + [f"fsce{i:02d}" for i in range(9, 15)]
+            + [f"fsce{i:02d}" for i in range(16, 23)]
+            + ["e55", "e56", "e61", "e62"]
+            + ["m54", "m56", "m59", "m61"]
+        ),
+        "source_ids": ("dfe-primary", "cchs-fsce-2027", "essex-grammar-2027"),
+        "format_note": "Independent CCHS/FSCE practice using publicly described mixed-subject familiarisation material; the official assessment may use other answer formats and creative work.",
+        "last_verified": "2026-08-20",
+    },
     "csse-essex-1": {
         "id": "csse-essex-1",
         "category": "school_target",
-        "title": "CSSE Essex 11+ Target Mock",
+        "title": "Essex 11+ Mock Exam — CSSE Practice 1",
         "description": "Original English and Mathematics practice for the Consortium of Selective Schools in Essex scope.",
         "school": "CSSE selective schools in Essex",
         "stage": "CSSE 11+ Examination",

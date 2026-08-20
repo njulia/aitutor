@@ -699,3 +699,19 @@ body.mock-page {
   .hm-funnel-steps { grid-template-columns: 1fr; }
   .hm-funnel-step { min-height: 175px; }
 }
+
+
+.mock-detail-button {
+  margin-top: 0.75rem;
+}
+
+.mock-detail-explanation {
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.035);
+}
+
+.mock-detail-content p:last-child {
+  margin-bottom: 0;
+}

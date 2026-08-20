@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse
+import hashlib
 from pydantic import BaseModel, Field
 
 from src.elevenplus_mock_exams import (
@@ -38,6 +39,7 @@ def build_mock_exam_router(
     resolve_identity: Callable[[Request], tuple[str, Optional[str], Optional[str]]],
     has_subscription: Callable[..., bool],
     set_anon_cookie: Callable[[JSONResponse, Optional[str], Request], None],
+    get_llm_client: Callable[[], Any] = lambda: None,
 ) -> APIRouter:
     """Build the mock router without coupling it to the main application module."""
     router = APIRouter(prefix="/api/elevenplus/mock-exams", tags=["11+ mock exams"])
@@ -184,6 +186,113 @@ def build_mock_exam_router(
                 detail="We could not start this mock just now. Please try again.",
             ) from exc
         response = private_json(result)
+        set_anon_cookie(response, new_anon_id, request)
+        return response
+
+    @router.post("/{exam_id}/questions/{question_id}/explanation")
+    async def question_explanation(exam_id: str, question_id: str, request: Request):
+        """Return one reusable, question-specific mock explanation."""
+        exam = EXAMS.get(str(exam_id or "").strip())
+        if exam is None or question_id not in set(exam.get("question_ids") or []):
+            raise HTTPException(status_code=404, detail="This mock question is not available.")
+        _identity, _username, new_anon_id, has_access = await access_context(request)
+        if exam["id"] != FREE_MOCK_EXAM_ID and not has_access:
+            response = private_json({
+                "success": False,
+                "locked": True,
+                "required_plan": MOCK_EXAM_PLAN,
+                "required_plan_name": MOCK_EXAM_PLAN_NAME,
+                "pricing_url": "/pricing",
+            }, status_code=402)
+            set_anon_cookie(response, new_anon_id, request)
+            return response
+
+        from src.elevenplus_mock_exams import _QUESTION_BY_ID
+        from src.progress_db import get_mock_exam_explanation, save_mock_exam_explanation
+        question = _QUESTION_BY_ID.get(question_id)
+        if not question:
+            raise HTTPException(status_code=404, detail="This question is not available.")
+        question_text = str(question.get("question") or "").strip()
+        options = question.get("options") or []
+        correct_label = str(question.get("answer") or "").strip()
+        correct_text = next(
+            (str(item.get("text") or "").strip() for item in options if item.get("label") == correct_label),
+            "",
+        )
+        fingerprint = hashlib.sha256(
+            (question_text + "\n" + "\n".join(
+                f"{item.get('label','')}. {item.get('text','')}" for item in options
+            )).strip().encode("utf-8")
+        ).hexdigest()
+        cached = await run_blocking(get_mock_exam_explanation, fingerprint, timeout=5, limit_concurrency=False)
+        if cached and str(cached.get("explanation") or "").strip():
+            response = private_json({
+                "success": True,
+                "explanation": cached["explanation"],
+                "question_id": question_id,
+                "from_saved": True,
+            })
+            set_anon_cookie(response, new_anon_id, request)
+            return response
+
+        llm_client = get_llm_client()
+        if llm_client is None:
+            raise HTTPException(status_code=503, detail="The explanation service is temporarily unavailable.")
+        from src.llm_client import build_messages
+        from src.webapp.review_service import DETAIL_REVIEW_MODEL, _complete_review, _resolved_model
+        prompt = f"""You are a friendly UK 11+ tutor for a child aged 9-11.
+Explain this one multiple-choice question step by step so the child can learn the method.
+Use simple, clear language.
+Do not mention the child's answer.
+Do not state the correct option letter or give a standalone final answer.
+You may use the trusted answer information below to make the reasoning accurate, but do not reveal it directly.
+End with a short 'Remember' tip.
+
+Subject: {question.get('subject','11+')}
+Topic: {question.get('topic','General')}
+Question:
+{question_text}
+
+Options:
+{chr(10).join(f"{item.get('label','')}. {item.get('text','')}" for item in options)}
+
+Trusted answer information (do not reveal directly):
+Correct option: {correct_label}
+Correct option text: {correct_text}
+"""
+        try:
+            explanation = _complete_review(
+                llm_client,
+                build_messages(prompt),
+                model=DETAIL_REVIEW_MODEL,
+                temperature=0.2,
+                max_tokens=1800,
+                operation="mock_exam_question_detail_explanation",
+            )
+        except Exception as exc:
+            logger.exception("Unable to create mock question explanation")
+            raise HTTPException(status_code=503, detail="We could not create the explanation just now. Please try again.") from exc
+        if not explanation.strip():
+            raise HTTPException(status_code=503, detail="We could not create the explanation just now. Please try again.")
+        model_used = _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
+        await run_blocking(
+            save_mock_exam_explanation,
+            fingerprint,
+            explanation,
+            exam_id=exam_id,
+            question_id=question_id,
+            subject=question.get("subject"),
+            topic=question.get("topic"),
+            model_used=model_used,
+            timeout=5,
+            limit_concurrency=False,
+        )
+        response = private_json({
+            "success": True,
+            "explanation": explanation,
+            "question_id": question_id,
+            "from_saved": False,
+        })
         set_anon_cookie(response, new_anon_id, request)
         return response
 

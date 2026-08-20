@@ -90,6 +90,28 @@
     node.classList.toggle('error', Boolean(isError));
   }
 
+  function formatMarkdown(text) {
+    const container = document.createElement('div');
+    const lines = String(text || '').split(/\r?\n/);
+    lines.forEach(function (line) {
+      const paragraph = document.createElement('p');
+      const clean = line.replace(/^#{1,6}\s*/, '').trim();
+      if (!clean) return;
+      const parts = clean.split(/(\*\*[^*]+\*\*)/g);
+      parts.forEach(function (part) {
+        if (/^\*\*[^*]+\*\*$/.test(part)) {
+          const strong = document.createElement('strong');
+          strong.textContent = part.slice(2, -2);
+          paragraph.appendChild(strong);
+        } else {
+          paragraph.appendChild(document.createTextNode(part));
+        }
+      });
+      container.appendChild(paragraph);
+    });
+    return container.innerHTML;
+  }
+
   async function readJson(response) {
     const data = await response.json().catch(function () { return {}; });
     if (!response.ok) {
@@ -501,6 +523,39 @@
     }
   }
 
+  async function fetchExplanation(examId, questionId) {
+    const response = await fetch(
+      '/api/elevenplus/mock-exams/' + encodeURIComponent(examId) +
+      '/questions/' + encodeURIComponent(questionId) + '/explanation',
+      { method: 'POST', credentials: 'same-origin', headers: {'Accept': 'application/json'} }
+    );
+    const payload = await response.json();
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.detail || payload.error || 'Unable to load explanation');
+    }
+    return payload.explanation || '';
+  }
+
+  function attachDetailedExplanation(details, examId, questionId, target) {
+    let loaded = false;
+    let loading = false;
+    details.addEventListener('toggle', function () {
+      if (!details.open || loaded || loading) return;
+      loading = true;
+      target.replaceChildren(element('p', '', 'Working through this question…'));
+      fetchExplanation(examId, questionId).then(function (text) {
+        loaded = true;
+        target.replaceChildren();
+        const content = element('div', 'mock-detail-content');
+        content.innerHTML = formatMarkdown(text || '');
+        target.appendChild(content);
+      }).catch(function (error) {
+        loading = false;
+        target.replaceChildren(element('p', '', error.message || 'Please try again.'));
+      });
+    });
+  }
+
   function renderResults(data) {
     examView.hidden = true;
     catalogueView.hidden = true;
@@ -568,10 +623,15 @@
         result.correct_answer + '. ' + result.correct_answer_text
       ));
       body.appendChild(correctRow);
-      const explanationRow = element('p');
-      explanationRow.appendChild(element('strong', '', 'Why: '));
-      explanationRow.appendChild(document.createTextNode(result.explanation));
+      const explanationRow = element('div', 'mock-why-row');
+      const shortWhy = element('span', 'mock-why-short');
+      shortWhy.appendChild(element('strong', '', 'Why: '));
+      shortWhy.appendChild(document.createTextNode(result.explanation));
+      explanationRow.appendChild(shortWhy);
+      const whyContent = element('div', 'mock-detail-explanation');
+      explanationRow.appendChild(whyContent);
       body.appendChild(explanationRow);
+      attachDetailedExplanation(details, data.exam.id, result.id, whyContent);
       details.appendChild(body);
       review.appendChild(details);
     });

@@ -50,8 +50,8 @@ def test_explain_deep_empty_llm_returns_trusted_rag_fallback(monkeypatch):
     assert result["llm_fallback"] is True
     assert result["model_used"] is None
     assert result["explanation"]
-    assert "## Step-by-step help" in result["explanation"]
-    assert "Take 2 away from 5 to get 3." in result["explanation"]
+    assert "## How to solve it" in result["explanation"]
+    assert "Take 2 away from 5 to get 3." not in result["explanation"]
 
 
 def test_explain_deep_keeps_existing_feedback_when_non_rag_model_is_empty():
@@ -66,8 +66,9 @@ def test_explain_deep_keeps_existing_feedback_when_non_rag_model_is_empty():
 
     assert result["success"] is True
     assert result["llm_fallback"] is True
-    assert "Your answer is correct." in result["explanation"]
-    assert "temporarily unavailable" in result["explanation"]
+    assert "Your answer is correct." not in result["explanation"]
+    assert "How to solve it" in result["explanation"]
+    assert "## Helpful tip" in result["explanation"]
 
 
 def test_app_study_plan_tab_does_not_poll_every_15_seconds():

@@ -486,6 +486,8 @@ _store: Optional[HomeworkRAGStore] = None
 _store_lock = threading.Lock()
 _solution_method_store: Optional[PGVectorStore] = None
 _solution_method_store_lock = threading.Lock()
+_detail_explanation_store: Optional[PGVectorStore] = None
+_detail_explanation_store_lock = threading.Lock()
 
 
 def get_homework_rag_store() -> HomeworkRAGStore:
@@ -584,6 +586,204 @@ def save_solution_methods(
         subject,
         year_group,
     )
+
+
+def _get_detail_explanation_store() -> PGVectorStore:
+    global _detail_explanation_store
+    if _detail_explanation_store is None:
+        with _detail_explanation_store_lock:
+            if _detail_explanation_store is None:
+                _detail_explanation_store = PGVectorStore(
+                    collection_name="detail_explanation_collection"
+                )
+    return _detail_explanation_store
+
+
+def detail_explanation_key(
+    question: Any, subject: Any, year_group: Any, *, is_eleven_plus: bool = False
+) -> str:
+    """Return a stable opaque key for a reusable one-question explanation."""
+    try:
+        year = int(year_group)
+    except (TypeError, ValueError):
+        year = 3
+    raw = (
+        f"{'11plus' if is_eleven_plus else 'primary'}|"
+        f"{str(subject or '').strip().casefold()}|{year}|"
+        f"{_normalise_method_question(question)}"
+    )
+    return "explain_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def load_detail_explanation(
+    question: Any, subject: str, year_group: int, *, is_eleven_plus: bool = False
+) -> Optional[str]:
+    """Load the saved detailed explanation for one question, if present."""
+    key = detail_explanation_key(
+        question, subject, year_group, is_eleven_plus=is_eleven_plus
+    )
+    for row in _get_detail_explanation_store().get_by_ids([key]):
+        content = str(row.get("content") or "").strip()
+        if content:
+            return content
+    return None
+
+
+def save_detail_explanation(
+    records: Iterable[Dict[str, Any]],
+    subject: str,
+    year_group: int,
+    *,
+    is_eleven_plus: bool = False,
+) -> Dict[str, str]:
+    """Persist reusable explanations once so later pupils reuse them."""
+    materialised = list(records or [])
+    clean_records = []
+    for record in materialised:
+        question = str(record.get("question") or "").strip()
+        explanation = str(record.get("explanation") or "").strip()
+        if not question or not explanation:
+            continue
+        clean_records.append(
+            (
+                detail_explanation_key(
+                    question, subject, year_group, is_eleven_plus=is_eleven_plus
+                ),
+                question,
+                explanation,
+            )
+        )
+    if not clean_records:
+        return {}
+
+    store = _get_detail_explanation_store()
+    embedding_dimension = int(getattr(store, "embedding_dimension", 384))
+    fixed_embedding = [1.0] + [0.0] * (embedding_dimension - 1)
+    store.add_documents_if_absent(
+        texts=[explanation for _, _, explanation in clean_records],
+        metadatas=[
+            {"kind": "detail_explanation", "schema_version": 1}
+            for _ in clean_records
+        ],
+        ids=[key for key, _, _ in clean_records],
+        embeddings=[list(fixed_embedding) for _ in clean_records],
+    )
+    saved: Dict[str, str] = {}
+    for key, question, explanation in clean_records:
+        saved[key] = explanation
+    return saved
+
+
+def list_explanation_source_sets(*, is_eleven_plus: Optional[bool] = None, limit: int = 500) -> List[Dict[str, Any]]:
+    """List shared homework/11+ RAG sets that can have saved explanations.
+
+    The returned records intentionally contain only admin-facing metadata and a
+    short title; the full question content is not exposed by the admin API.
+    """
+    stores = []
+    if is_eleven_plus is None or not is_eleven_plus:
+        stores.append((get_homework_rag_store(), False))
+    if is_eleven_plus is None or is_eleven_plus:
+        try:
+            from src.elevenplus_rag import get_elevenplus_rag_store
+            stores.append((get_elevenplus_rag_store(), True))
+        except Exception:
+            logger.exception("Could not initialise 11+ RAG store for admin explanation management")
+
+    results: List[Dict[str, Any]] = []
+    for store, eleven_plus in stores:
+        try:
+            total = min(int(store.store.count()), max(0, int(limit)))
+            offset = 0
+            while offset < total:
+                rows = store.store.get_stats_metadata(limit=min(100, total - offset), offset=offset)
+                # Stats metadata does not include ids, so fetch the corresponding
+                # documents by page from the underlying vector store.
+                docs = store.store.get_all(limit=min(100, total - offset), offset=offset) if hasattr(store.store, "get_all") else []
+                if not docs:
+                    break
+                for row in docs:
+                    metadata = row.get("metadata") or {}
+                    doc_id = str(row.get("doc_id") or "").strip()
+                    if not doc_id:
+                        continue
+                    content_type = str(metadata.get("content_type") or metadata.get("content_kind") or "").strip().casefold()
+                    # The admin tool is for reusable explanations attached to
+                    # homework / 11+ practice sets, not mock exams or Topic Mastery.
+                    if eleven_plus and ("mock" in content_type or "mastery" in content_type):
+                        continue
+                    results.append({
+                        "doc_id": doc_id,
+                        "is_eleven_plus": eleven_plus,
+                        "subject": str(metadata.get("subject") or "").strip(),
+                        "year_group": metadata.get("year_group"),
+                        "week_num": metadata.get("week_num"),
+                        "content_type": str(metadata.get("content_type") or metadata.get("content_kind") or "").strip(),
+                        "title": str(metadata.get("title") or metadata.get("name") or "").strip(),
+                    })
+                offset += len(docs)
+        except Exception:
+            logger.exception("Could not list explanation source sets")
+    return results[:max(0, int(limit))]
+
+
+def delete_saved_explanations_for_set(doc_id: str, *, is_eleven_plus: bool = False) -> int:
+    """Delete all reusable per-question explanations belonging to one set.
+
+    Explanations are keyed by question rather than by source document, so we
+    first load the selected set, extract its questions, calculate the same
+    stable explanation keys, and delete only those records.
+    """
+    clean_id = str(doc_id or "").strip()
+    if not clean_id:
+        return 0
+
+    if is_eleven_plus:
+        from src.elevenplus_rag import get_elevenplus_rag_store, get_homework_questions
+        source_store = get_elevenplus_rag_store()
+    else:
+        source_store = get_homework_rag_store()
+        try:
+            from src.elevenplus_rag import get_homework_questions
+        except Exception:
+            get_homework_questions = None
+
+    docs = source_store.store.get_by_ids(ids=[clean_id])
+    if not docs:
+        return 0
+    doc = docs[0]
+    content = str(doc.get("content") or "")
+    metadata = doc.get("metadata") or {}
+    subject = str(metadata.get("subject") or "general")
+    try:
+        year_group = int(metadata.get("year_group") or 3)
+    except (TypeError, ValueError):
+        year_group = 3
+
+    questions = []
+    if get_homework_questions:
+        try:
+            parsed = get_homework_questions(clean_id, content)
+            for item in parsed or []:
+                if isinstance(item, dict):
+                    q = item.get("question") or item.get("text")
+                else:
+                    q = item
+                if str(q or "").strip():
+                    questions.append(str(q).strip())
+        except Exception:
+            logger.exception("Could not extract questions for explanation deletion: %s", clean_id)
+
+    if not questions:
+        return 0
+
+    store = _get_solution_method_store()
+    ids = [solution_method_key(q, subject, year_group) for q in questions]
+    try:
+        return int(store.delete(ids))
+    except Exception:
+        logger.exception("Could not delete saved explanations for set %s", clean_id)
+        return 0
 
 
 def store_homework(

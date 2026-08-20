@@ -152,6 +152,7 @@
         <div class="tab" onclick="switchTab('users')">Students</div>
         <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
+        <div class="tab" onclick="switchTab('explanations')">Saved Explanations</div>
         <div class="tab" onclick="switchTab('schools')">School Finder</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
         <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
@@ -242,6 +243,31 @@
                         </tr>
                     </thead>
                     <tbody id="subsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Saved Explanations Panel -->
+        <div class="panel" id="panel-explanations">
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>Saved Question Explanations</h3>
+                        <div style="font-size:12px;color:#888;margin-top:4px;">Select a homework set or 11+ practice set to remove its reusable question explanations. This does not delete the homework set itself.</div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <select id="explanationSetType" onchange="loadExplanationSets()" style="padding:9px 12px;border:1px solid #e0e0e0;border-radius:8px;">
+                            <option value="">Homework + 11+ Practice</option>
+                            <option value="false">Homework</option>
+                            <option value="true">11+ Practice</option>
+                        </select>
+                        <button class="btn btn-outline" onclick="loadExplanationSets()">Refresh</button>
+                    </div>
+                </div>
+                <div style="padding:12px 20px;color:#777;font-size:13px;">Deleting explanations only means the next pupil who asks for a detailed explanation will create a fresh explanation.</div>
+                <table>
+                    <thead><tr><th>Type</th><th>Subject</th><th>Year</th><th>Week</th><th>Set</th><th>Action</th></tr></thead>
+                    <tbody id="explanationSetsTable"></tbody>
                 </table>
             </div>
         </div>
@@ -428,6 +454,53 @@
                     </thead>
                     <tbody id="evalSubjectsTable"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Operations Panel -->
+        <div class="panel" id="panel-operations">
+            <div class="stats-grid" id="opsStats">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+
+            <div class="ops-grid">
+                <div class="ops-card">
+                    <h3>Website Access · Last 30 Days</h3>
+                    <div id="siteAccessTotal">
+                        <div class="loading" style="padding:20px 0"><div class="spinner"></div></div>
+                    </div>
+                    <div id="pageAccessTable" style="margin-top:14px;"></div>
+                </div>
+                <div class="ops-card">
+                    <h3>System Health</h3>
+                    <div id="healthChecks">
+                        <div class="loading" style="padding:20px 0"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ops-grid">
+                <div class="ops-card">
+                    <h3>Growth · Last 30 Days</h3>
+                    <div id="growthSummary">
+                        <div class="loading" style="padding:20px 0"><div class="spinner"></div></div>
+                    </div>
+                </div>
+                <div class="ops-card">
+                    <h3>Voice Usage</h3>
+                    <div id="voiceUsageTable">
+                        <div class="loading" style="padding:20px 0"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ops-card" style="margin-bottom:24px;">
+                <h3>Maintenance</h3>
+                <div class="ops-actions">
+                    <button class="btn btn-outline" onclick="clearAppCache()">Clear App Cache</button>
+                    <button class="btn btn-outline" onclick="cleanupEmbeddingCache()">Clean Embedding Cache</button>
+                </div>
+                <div class="mini-note" id="maintenanceStatus"></div>
             </div>
         </div>
     </div>
@@ -644,6 +717,7 @@
                 case 'users': loadUsers(); break;
                 case 'auth-users': loadAuthUsers(); break;
                 case 'subscriptions': loadSubscriptions(); break;
+                case 'explanations': loadExplanationSets(); break;
                 case 'schools': loadExcludedSchools(); loadSchoolReports(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
                 case 'ai-eval': loadAIEval(); break;
@@ -903,6 +977,42 @@
         }
 
         // Subscriptions
+        async function loadExplanationSets() {
+            const tbody = document.getElementById('explanationSetsTable');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
+            const type = document.getElementById('explanationSetType')?.value || '';
+            let url = API + '/explanation-sets?limit=500';
+            if (type !== '') url += '&eleven_plus=' + encodeURIComponent(type);
+            try {
+                const resp = await fetch(url, {credentials:'same-origin', cache:'no-store'});
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not load sets');
+                const rows = data.sets || [];
+                if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:24px;">No homework or 11+ practice sets found.</td></tr>'; return; }
+                tbody.innerHTML = rows.map(row => {
+                    const typeLabel = row.is_eleven_plus ? '11+ Practice' : 'Homework';
+                    const title = row.title || row.content_type || 'Practice set';
+                    const week = row.week_num == null ? '—' : 'Week ' + escapeHtml(String(row.week_num));
+                    return `<tr><td><span class="badge ${row.is_eleven_plus ? 'badge-blue' : 'badge-green'}">${typeLabel}</span></td><td>${escapeHtml(row.subject || '—')}</td><td>${escapeHtml(row.year_group == null ? '—' : String(row.year_group))}</td><td>${week}</td><td>${escapeHtml(title)}</td><td><button class="btn btn-danger btn-sm" onclick="deleteSavedExplanations(${JSON.stringify(row.doc_id)}, ${row.is_eleven_plus ? 'true' : 'false'}, ${JSON.stringify(title)})">Delete saved explanations</button></td></tr>`;
+                }).join('');
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#c53030;padding:24px;">${escapeHtml(err.message || 'Could not load saved explanations.')}</td></tr>`;
+            }
+        }
+
+        async function deleteSavedExplanations(docId, isElevenPlus, title) {
+            if (!confirm(`Delete all saved question explanations for “${title}”? The practice/homework set itself will not be deleted.`)) return;
+            try {
+                const resp = await fetch(API + '/explanation-sets/' + encodeURIComponent(docId) + '?eleven_plus=' + (isElevenPlus ? 'true' : 'false'), {method:'DELETE', credentials:'same-origin'});
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not delete saved explanations');
+                alert(`${data.deleted || 0} saved explanation(s) deleted.`);
+                await loadExplanationSets();
+            } catch (err) { console.error(err); alert(err.message || 'Could not delete saved explanations.'); }
+        }
+
         async function loadSubscriptions(refreshStripe = true) {
             try {
                 const data = await api(`/subscriptions?refresh=${refreshStripe ? 'true' : 'false'}`);
@@ -2040,11 +2150,46 @@
                     <div class="health-row"><span>Learning sessions</span><strong>${escapeHtml(sessions30)}</strong></div>
                     <div class="health-row"><span>Voice events</span><strong>${escapeHtml(voice.total_events ?? voice.events ?? '-')}</strong></div>
                 `;
+                renderSiteAccess(marketing);
                 await loadVoiceUsage(voice);
             } catch(e) {
                 stats.innerHTML = `<div class="stat-card"><div class="label">Operations</div><div class="value" style="font-size:14px;color:#c53030">${escapeHtml(e.message)}</div></div>`;
                 health.innerHTML = `<div style="color:#c53030;font-size:13px">${escapeHtml(e.message)}</div>`;
             }
+        }
+
+        function renderSiteAccess(marketing){
+            const totalEl = document.getElementById('siteAccessTotal');
+            const tableEl = document.getElementById('pageAccessTable');
+            const totals = marketing.totals || {};
+            const totalVisits = Number(totals.landing_page_visit || 0);
+
+            // 按页面聚合访问次数，仅统计 landing_page_visit 事件
+            const pageCounts = {};
+            (marketing.daily || []).forEach(d => {
+                if (d.event === 'landing_page_visit' && d.page) {
+                    pageCounts[d.page] = (pageCounts[d.page] || 0) + Number(d.count || 0);
+                }
+            });
+
+            totalEl.innerHTML = `
+                <div class="people-stat-values">
+                    <div><div class="people-stat-number">${totalVisits.toLocaleString()}</div><div class="people-stat-caption">Total visits</div></div>
+                </div>
+                ${marketing.enabled === false ? '<div class="mini-note">Website access tracking is disabled for this environment.</div>' : ''}
+            `;
+
+            const entries = Object.entries(pageCounts).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) {
+                tableEl.innerHTML = '<div class="mini-note">No page visit data in the last 30 days.</div>';
+                return;
+            }
+            tableEl.innerHTML = `
+                <table>
+                    <thead><tr><th>Page</th><th>Visits</th></tr></thead>
+                    <tbody>${entries.map(([page, count]) => `<tr><td>${escapeHtml(page)}</td><td>${count.toLocaleString()}</td></tr>`).join('')}</tbody>
+                </table>
+            `;
         }
 
         async function loadVoiceUsage(prefetched=null){

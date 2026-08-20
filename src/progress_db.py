@@ -43,7 +43,6 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from src.webapp.db import get_engine, normalise_database_url
-from src.models import subject_display_name
 
 _DEFAULT = Path(__file__).resolve().parents[1] / "data" / "aitutor.db"
 _URL = normalise_database_url(os.getenv("PROGRESS_DATABASE_URL") or os.getenv("DATABASE_URL") or f"sqlite+pysqlite:///{_DEFAULT}")
@@ -194,6 +193,18 @@ mistake_questions = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("student_id", "question_hash", name="uq_mistake_student_question"),
 )
+mock_exam_explanations = Table(
+    "mock_exam_explanations", metadata,
+    Column("question_hash", String(64), primary_key=True),
+    Column("exam_id", String(120), nullable=True, index=True),
+    Column("question_id", String(120), nullable=True, index=True),
+    Column("subject", String(80), nullable=True, index=True),
+    Column("topic", String(160), nullable=True),
+    Column("explanation", Text, nullable=False),
+    Column("model_used", String(160), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
 mock_study_plans = Table(
     "mock_study_plans", metadata,
     Column("student_id", String(80), primary_key=True),
@@ -203,6 +214,53 @@ mock_study_plans = Table(
 )
 
 metadata.create_all(_engine)
+
+
+def get_mock_exam_explanation(question_hash: str) -> Optional[Dict[str, Any]]:
+    key = str(question_hash or "").strip()
+    if not key:
+        return None
+    with _engine.begin() as conn:
+        row = conn.execute(
+            select(mock_exam_explanations).where(mock_exam_explanations.c.question_hash == key)
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def save_mock_exam_explanation(
+    question_hash: str,
+    explanation: str,
+    *,
+    exam_id: Optional[str] = None,
+    question_id: Optional[str] = None,
+    subject: Optional[str] = None,
+    topic: Optional[str] = None,
+    model_used: Optional[str] = None,
+) -> None:
+    key = str(question_hash or "").strip()
+    text = str(explanation or "").strip()
+    if not key or not text:
+        return
+    now = _now()
+    values = {
+        "question_hash": key, "exam_id": exam_id, "question_id": question_id,
+        "subject": subject, "topic": topic, "explanation": text[:12000],
+        "model_used": model_used, "created_at": now, "updated_at": now,
+    }
+    with _engine.begin() as conn:
+        existing = conn.execute(
+            select(mock_exam_explanations.c.question_hash).where(
+                mock_exam_explanations.c.question_hash == key
+            )
+        ).first()
+        if existing:
+            conn.execute(
+                update(mock_exam_explanations)
+                .where(mock_exam_explanations.c.question_hash == key)
+                .values(explanation=text[:12000], model_used=model_used, updated_at=now)
+            )
+        else:
+            conn.execute(insert(mock_exam_explanations).values(**values))
 
 
 def _now() -> datetime:
@@ -293,7 +351,7 @@ def save_mistake_questions(
             item = dict(raw or {})
             question = re.sub(r"\s+", " ", str(item.get("question") or "").strip())[:4000]
             correct_answer = re.sub(r"\s+", " ", str(item.get("correct_answer") or "").strip())[:1000]
-            subject = re.sub(r"\s+", " ", subject_display_name(str(item.get("subject") or "11+")))[:80]
+            subject = re.sub(r"\s+", " ", str(item.get("subject") or "11+"))[:80]
             topic = re.sub(r"\s+", " ", str(item.get("topic") or "General"))[:160]
             mistake_type = re.sub(r"\s+", " ", str(item.get("mistake_type") or topic or "General"))[:160]
             if not question or not correct_answer:

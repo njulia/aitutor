@@ -382,11 +382,14 @@ def _clean_question_text(text: str) -> str:
     """Remove full homework headers including Topic and (Set XXX) while preserving leading numbers."""
     if not text:
         return ""
+    # 去除 "Choice group {N}:" 前缀（题库为区分重复题干自动加入，保留题号）
+    clean = re.sub(r"^(\d+[\.\)]\s*)choice\s+group\s+\d+\s*:\s*", r"\1", str(text), flags=re.IGNORECASE)
+    clean = re.sub(r"^choice\s+group\s+\d+\s*:\s*", "", clean, flags=re.IGNORECASE)
     # Remove "Maths Homework - Year X - Topic (Set Y)" or similar prefixes
     # Matches: "Maths Homework - Year 2 - Fractions (Halves and Quarters) (Set 12) "
     # or "English Homework - Year 3 - Punctuation "
     pattern = r"^[a-zA-Z\s]+Homework\s*-\s*Year\s*\d+\s*-\s*.*?(?:\(Set\s*\d+\))?\s*"
-    clean = re.sub(pattern,"", str(text), flags=re.IGNORECASE).strip()
+    clean = re.sub(pattern,"", clean, flags=re.IGNORECASE).strip()
 
     if "Homework" in clean:
         # \1 captures leading number like "1. "
@@ -419,7 +422,7 @@ def _table(rows: List[Dict[str, Any]]) -> str:
             markdown_cell(row["correct_answer"]),
         ]
         body.append("| " + " | ".join(values) + " |")
-    return "\n\n## Homework Review Summary\n\n" + header + "\n".join(body) + "\n\n"
+    return "\n\n## Review Summary\n\n" + header + "\n".join(body) + "\n\n"
 
 
 def _score_summary(rows: List[Dict[str, Any]]) -> str:
@@ -829,7 +832,7 @@ def review_homework(
         (
             "review_uploaded_v1"
             if uploaded_work
-            else ("review_detail_v8" if use_detail_model else "review_quick_v8")
+            else ("review_quick_v8" if quick_review else "review_detail_v8")
         ),
         selected_model,
         subject,
@@ -1231,6 +1234,30 @@ def _build_detail_explanation_fallback(
     )
 
 
+
+def _select_detail_question(
+    homework_content: str,
+    subject: str,
+    question_index: Optional[int],
+) -> tuple[str, int, int]:
+    """Return one safe question for the one-question detail workflow."""
+    items = _split_homework_into_questions(homework_content, subject)
+    if not items:
+        text = str(homework_content or "").strip()
+        return text, 1, 1
+    index = int(question_index or 0)
+    if index < 0 or index >= len(items):
+        raise IndexError("Question index is outside the homework set.")
+    item = items[index]
+    question = str(
+        item.get("full_content")
+        or item.get("content")
+        or item.get("question_text")
+        or ""
+    ).strip()
+    return question, index + 1, len(items)
+
+
 def explain_deep(
     homework_content: str,
     student_answers: str,
@@ -1243,164 +1270,181 @@ def explain_deep(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
-    """Run the detailed-check path using the configured detail model.
+    """Explain exactly one question and persist it for future pupils.
 
-    With RAG, correct items are compact and wrong items carry full answer-key
-    context. Without RAG, the detail model receives all questions and answers.
-    If the model fails or returns an empty response, return a deterministic
-    learner-safe fallback instead of a successful-but-empty result.
+    The pupil's answer is deliberately ignored. The explanation is a generic
+    teaching resource keyed by a stable hash of the question, subject and
+    year group. The first request uses the detail LLM; later pupils reuse the
+    saved explanation without another LLM call.
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import REVIEW_DETAIL_WITH_RAG_PROMPT, REVIEW_DETAIL_WITHOUT_RAG_PROMPT
+    from src.prompts import EXPLAIN_SINGLE_QUESTION_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
-    intervention = safety_result("explanation", student_answers)
-    if intervention is not None:
-        return intervention
+
     raw_profile = dict(profile or {})
     profile = _normalise_profile(raw_profile)
-    budget = budget_review_inputs(
-        homework_content,
-        student_answers,
-        profile,
-        _without_rendered_solution_methods(review_feedback),
+    year_group = int(profile.get("year_group", 3))
+
+    # Never use or persist the pupil's answer for this reusable explanation.
+    question, question_number, total_questions = _select_detail_question(
+        homework_content, subject, question_index
     )
-    cache_key = stable_cache_key(
-        "review_detail_v9",
-        DETAIL_REVIEW_MODEL,
-        subject,
-        budget,
-        homework_doc_id,
-        question_index,
-        bool(is_eleven_plus),
-    )
-    cached = explain_cache.get(cache_key)
-    if cached:
-        if isinstance(cached, dict):
-            return {**cached, "from_cache": True}
+    if not question:
         return {
-            "success": True,
-            "explanation": str(cached),
-            "from_cache": True,
-            "model_tier": "plus",
-            "model_used": DETAIL_REVIEW_MODEL,
+            "success": False,
+            "error": "No question was found to explain.",
+            "question_number": question_number,
+            "total_questions": total_questions,
+            "has_more": question_number < total_questions,
         }
 
-    rows: List[Dict[str, Any]] = []
+    from src import homework_rag
+
+    persistent_key = homework_rag.detail_explanation_key(
+        question, subject, year_group, is_eleven_plus=is_eleven_plus
+    )
+    saved = homework_rag.load_detail_explanation(
+        question, subject, year_group, is_eleven_plus=is_eleven_plus
+    )
+    if saved:
+        result = {
+            "success": True,
+            "explanation": saved,
+            "question": question,
+            "question_number": question_number,
+            "total_questions": total_questions,
+            "has_more": question_number < total_questions,
+            "from_cache": True,
+            "saved": True,
+            "model_tier": "plus",
+            "model_used": None,
+        }
+        explain_cache.set(
+            stable_cache_key(
+                "review_detail_question_v1",
+                persistent_key,
+            ),
+            result,
+        )
+        return result
+
+    # Short-lived process/Redis cache is only an optimisation. Persistent
+    # question-level storage above remains the source of truth.
+    cache_key = stable_cache_key(
+        "review_detail_question_v1",
+        persistent_key,
+    )
+    cached = explain_cache.get(cache_key)
+    if isinstance(cached, dict) and cached.get("explanation"):
+        return {
+            **cached,
+            "question_number": question_number,
+            "total_questions": total_questions,
+            "has_more": question_number < total_questions,
+            "from_cache": True,
+        }
+
+    trusted_answer = ""
+    trusted_method = ""
     if homework_doc_id:
         try:
             raw_answers = _load_rag_answers(homework_doc_id, is_eleven_plus)
             pairs = _pair_rag_answers(
                 raw_answers,
-                budget["homework_content"],
+                homework_content,
                 subject,
-                is_tutor_mode=question_index is not None,
+                is_tutor_mode=True,
                 question_index=question_index,
             )
-            rows = _mark_rows(pairs, budget["student_answers"], subject)
+            if pairs:
+                trusted_answer = compact_text(pairs[0].get("answer"), 800)
+                trusted_method = compact_text(pairs[0].get("explanation"), 1200)
         except Exception:
-            logger.exception("RAG answer lookup failed in explain_deep for %s", homework_doc_id)
+            logger.exception(
+                "RAG answer lookup failed for one-question detail explanation"
+            )
 
-    llm_fallback = False
+    # The LLM sees only the question and trusted answer-key information when
+    # available. It never receives the pupil's answer or previous review.
+    prompt = format_prompt(
+        EXPLAIN_SINGLE_QUESTION_PROMPT,
+        student_profile=str(_prompt_profile(profile)),
+        subject=compact_text(subject_display_name(subject), 80),
+        question=compact_text(question, 4_000),
+        trusted_answer=trusted_answer or "Not supplied. Work out the answer yourself.",
+        trusted_method=trusted_method or "Not supplied.",
+    )
+
     explanation = ""
-    if rows:
-        correct_count = sum(1 for row in rows if row["is_correct"])
-        prompt = format_prompt(
-            REVIEW_DETAIL_WITH_RAG_PROMPT,
-            student_profile=str(_prompt_profile(budget["profile"])),
-            subject=compact_text(subject_display_name(subject), 80),
-            **_rag_prompt_context(rows),
+    try:
+        explanation = _complete_review(
+            llm_client,
+            build_messages(prompt),
+            model=DETAIL_REVIEW_MODEL,
+            temperature=0.2,
+            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 2400, maximum=8000),
+            operation="detail_explanation_single_question",
         )
-        try:
-            ai_explanation = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.2,
-                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-                operation="detail_explanation_with_rag",
-            )
-        except Exception:
-            logger.exception("[Review] detail_explanation_with_rag failed; using local fallback")
-            ai_explanation = ""
+    except Exception:
+        logger.exception(
+            "[Review] detail_explanation_single_question failed for question %s",
+            question_number,
+        )
 
-        if ai_explanation.strip():
-            local_methods = [
-                {
-                    "id": f"q{index}",
-                    "method": compact_text(row.get("explanation"), 2_000),
-                    "from_cache": True,
-                }
-                for index, row in enumerate(rows, start=1)
-                if compact_text(row.get("explanation"), 2_000)
-            ]
-            explanation = (
-                _table(rows)
-                + f"**Score: {correct_count}/{len(rows)}**\n\n"
-                + ai_explanation
-            )
-            rendered_methods = _render_solution_methods(local_methods)
-            if rendered_methods:
-                explanation = (
-                    f"{explanation.rstrip()}\n\n{rendered_methods}"
-                )
-        else:
-            logger.warning(
-                "[Review] detail_explanation_with_rag returned an empty response; "
-                "using trusted answer-key fallback"
-            )
-            llm_fallback = True
-            explanation = _build_detail_explanation_fallback(rows, review_feedback)
-        score = float(correct_count)
-        max_score = len(rows)
+    if not str(explanation or "").strip():
+        # Keep the workflow useful if the provider is temporarily empty, but
+        # never turn this fallback into a per-pupil answer review.
+        explanation = (
+            "## How to solve it\n"
+            "Read the question carefully and underline the important information. "
+            "Choose the rule, operation, or idea that matches what the question is asking. "
+            "Work through the steps in order and check that your result answers the question.\n\n"
+            "## Why it works\n"
+            "Breaking a question into small steps helps you choose the right method "
+            "and makes it easier to check your thinking.\n\n"
+            "## Helpful tip\n"
+            "Take your time, show each step, and check the question again when you finish."
+        )
+        llm_fallback = True
     else:
-        prompt = format_prompt(
-            REVIEW_DETAIL_WITHOUT_RAG_PROMPT,
-            student_profile=str(_prompt_profile(budget["profile"])),
-            subject=compact_text(subject_display_name(subject), 80),
-            homework_content=budget["homework_content"],
-            student_answer=budget["student_answers"],
+        explanation = str(explanation).strip()
+        llm_fallback = False
+
+    # Persist immediately after the successful LLM response. add-if-absent
+    # protects the shared explanation if two pupils request the same question
+    # at nearly the same time.
+    saved_ok = False
+    try:
+        saved_values = homework_rag.save_detail_explanation(
+            [{
+                "question": question,
+                "explanation": explanation,
+            }],
+            subject,
+            year_group,
+            is_eleven_plus=is_eleven_plus,
         )
-        try:
-            explanation = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.2,
-                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 3000, maximum=8000),
-                operation="detail_review_no_rag_all_answers",
-            )
-        except Exception:
-            logger.exception("[Review] detail_review_no_rag_all_answers failed; using review fallback")
-            explanation = ""
-
-        if not explanation.strip():
-            logger.warning(
-                "[Review] detail_review_no_rag_all_answers returned an empty response; "
-                "using existing teacher feedback fallback"
-            )
-            llm_fallback = True
-            explanation = _build_detail_explanation_fallback([], review_feedback)
-        score, max_score = _extract_score(explanation)
-
-    if rows and not is_eleven_plus:
-        _save_year_homework_mistakes(
-            rows, student_id=str(raw_profile.get("student_id") or ""),
-            year_group=int(profile.get("year_group", 3)),
-            subject=subject, homework_doc_id=homework_doc_id,
+        saved_ok = bool(saved_values)
+    except Exception:
+        logger.exception(
+            "Could not persist one-question detail explanation for %s",
+            persistent_key,
         )
 
-    model_used = None if llm_fallback else _resolved_model(llm_client, DETAIL_REVIEW_MODEL)
     result = {
         "success": True,
         "explanation": explanation,
-        "from_rag_answers": bool(rows),
-        "score": score,
-        "max_score": max_score,
+        "question": question,
+        "question_number": question_number,
+        "total_questions": total_questions,
+        "has_more": question_number < total_questions,
+        "from_cache": False,
+        "saved": saved_ok,
         "model_tier": "plus",
-        "model_used": model_used,
+        "model_used": None if llm_fallback else _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
         "llm_fallback": llm_fallback,
     }
     explain_cache.set(cache_key, result)

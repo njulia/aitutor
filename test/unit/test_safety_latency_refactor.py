@@ -50,7 +50,7 @@ def test_profile_fallback_removes_identity_before_llm(monkeypatch) -> None:
     assert profile["student_id"] == "custom_student"
 
 
-def test_detailed_rag_explanation_is_local_and_child_friendly(monkeypatch) -> None:
+def test_detailed_rag_explanation_calls_llm_without_student_or_answer_key_text(monkeypatch) -> None:
     monkeypatch.setattr(
         review_service,
         "_load_rag_answers",
@@ -81,8 +81,9 @@ def test_detailed_rag_explanation_is_local_and_child_friendly(monkeypatch) -> No
 
     assert result["success"] is True
     assert result["model_tier"] == "plus"
-    assert "Connect one half with 0.5" in result["explanation"]
-    assert "One half means one of two equal parts" in result["explanation"]
+    assert "Connect one half with 0.5" in result["explanations"][0]["explanation"]
+    assert "correct_answer" not in result["explanations"][0]
+    assert "student_answer" not in result["explanations"][0]
     assert llm.complete.call_args.kwargs["model"] == review_service.DETAIL_REVIEW_MODEL
     prompt_messages = llm.complete.call_args.args[0]
     assert "One half means one of two equal parts" not in prompt_messages[0]["content"]

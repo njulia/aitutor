@@ -34,7 +34,7 @@ FALLBACK_REVIEW_MODEL="${FALLBACK_REVIEW_MODEL:-gemini-3.7-flash}"
 
 ASSUME_YES=false
 STAGING_ONLY=false
-GCLOUD_TIMEOUT_SECONDS="${GCLOUD_TIMEOUT_SECONDS:-60}"
+GCLOUD_TIMEOUT_SECONDS="${GCLOUD_TIMEOUT_SECONDS:-10}"
 
 usage() {
   cat <<'USAGE'
@@ -67,7 +67,7 @@ Options:
   -h, --help               Show this help
 
 Environment:
-  GCLOUD_TIMEOUT_SECONDS   Timeout for individual Google Cloud checks (default: 60)
+  GCLOUD_TIMEOUT_SECONDS   Timeout for individual Google Cloud checks (default: 10)
 
 Environment variables with the uppercase option names are also supported, including
 DEEPSEEK_API_KEY_SECRET, SMTP_PASSWORD_SECRET, and GCLOUD_TIMEOUT_SECONDS.

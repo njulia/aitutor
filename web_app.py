@@ -1677,6 +1677,7 @@ app.include_router(build_mock_exam_router(
     resolve_identity=_get_user_or_anonymous_id,
     has_subscription=user_has_subscription,
     set_anon_cookie=_set_anon_cookie,
+    get_llm_client=lambda: llm,
 ))
 
 @app.get("/api/elevenplus/topic-mastery/access")

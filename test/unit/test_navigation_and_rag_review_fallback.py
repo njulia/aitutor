@@ -72,7 +72,7 @@ def test_rag_review_keeps_summary_and_score_when_llm_is_unavailable(
     assert result["max_score"] == 2
     assert result["correct_count"] == 1
     assert result["attempted"] == 2
-    assert "## Homework Review Summary" in result["review"]
+    assert "## Review Summary" in result["review"]
     assert "| ✅ | 1. What is 2 + 2? | 4 | 4 |" in result["review"]
     assert "| ❌ | 2. What is 5 - 2? | 4 | 3 |" in result["review"]
     assert "**Score: 1/2**" in result["review"]

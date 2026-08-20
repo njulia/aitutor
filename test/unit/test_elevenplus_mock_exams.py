@@ -119,7 +119,7 @@ def test_expanded_catalogue_preserves_initial_mocks_and_question_bank() -> None:
         "lancaster-royal-grammar-1",
     }
 
-    assert len(mocks.EXAMS) == 38
+    assert len(mocks.EXAMS) == 43
     assert len(mocks._QUESTIONS) == 278
     assert expected_new_exams <= set(mocks.EXAMS)
     assert all(not mocks.EXAMS[exam_id]["is_free"] for exam_id in expected_new_exams)
@@ -272,7 +272,7 @@ def test_catalogue_adds_supported_top_50_a_level_school_targets() -> None:
 
     assert sum(
         exam["category"] == "school_target" for exam in mocks.EXAMS.values()
-    ) == 29
+    ) == 34
     for exam_id, (school, source_id) in expected_new_targets.items():
         exam = mocks.EXAMS[exam_id]
         assert exam["school"] == school
@@ -549,3 +549,31 @@ def test_start_response_matches_frontend_contract(monkeypatch) -> None:
     assert isinstance(attempt["token"], str) and len(attempt["token"]) > 20
     assert isinstance(attempt["deadline"], int) and attempt["deadline"] > attempt.get("started_at", 0)
     assert isinstance(attempt["started_at"], int)
+
+
+def test_mock_page_has_three_filter_controls_in_one_row_and_real_filter_logic() -> None:
+    page = Path("static/elevenplus-mock-exams.html").read_text(encoding="utf-8")
+    script = Path("static/js/mock-exams.js").read_text(encoding="utf-8")
+    css = Path("static/css/mock-exams.css").read_text(encoding="utf-8")
+
+    assert page.count('class="mock-filter-control"') == 3
+    assert 'id="mock-search"' in page
+    assert 'id="mock-region"' in page
+    assert 'id="mock-type"' in page
+    assert 'mock-filter-controls { display: grid; grid-template-columns:' in css
+    assert 'const matches = all.filter(function (exam)' in script
+    assert "const regionOk = region === 'all' || mockRegionFor(exam) === region;" in script
+    assert "const typeOk = type === 'all' || examType === type;" in script
+    assert 'commonGrid.replaceChildren();' in script
+    assert 'schoolGrid.replaceChildren();' in script
+
+
+def test_mock_page_deduplicates_and_sorts_catalogue_before_filtering() -> None:
+    script = Path("static/js/mock-exams.js").read_text(encoding="utf-8")
+
+    assert 'function dedupeAndSortExams(exams)' in script
+    assert "const seen = new Set();" in script
+    assert "if (seen.has(key)) return;" in script
+    assert 'const exams = dedupeAndSortExams(data && data.exams);' in script
+    assert "const nameA = normalizeText(a.school || a.title);" in script
+    assert "const nameB = normalizeText(b.school || b.title);" in script

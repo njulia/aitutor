@@ -91,7 +91,7 @@
         .set-badge { flex: 0 0 auto; background: var(--purple-soft); color: var(--purple-dark); padding: 7px 10px; border-radius: 999px; font-weight: 800; }
         .question-response-block > h3 { display: none; }
         .practice-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-        .feedback { margin-top: 18px; padding: 18px; border-radius: 15px; background: var(--green-soft); border: 1px solid #b9e4cd; }
+        .feedback { margin-top: 18px; padding: 18px; border-radius: 15px; background: var(--green-soft); border: 1px solid #b9e4cd; overflow-x: auto; }
         .feedback > :first-child { margin-top: 0; }
         .feedback > :last-child { margin-bottom: 0; }
 
@@ -143,34 +143,61 @@
         .premium-gate .gate-actions a.gate-primary:hover { background: var(--purple-dark); }
         .premium-gate .gate-actions a.gate-secondary { color: var(--ink); background: #fff; }
 
-        /* Review summary 表格样式 */
+        /* Review summary 表格样式 — 与 year-round-plan 保持一致 */
         .feedback table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 14px 0;
-          font-size: 0.93em;
+            width: 100%;
+            min-width: 680px;
+            margin: 16px 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            border: 1px solid #cfd9d3;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(36, 48, 71, 0.06);
         }
-        .feedback thead th {
-          background: #d6efe1;
-          color: #176747;
-          font-weight: 700;
-          text-align: left;
-          padding: 10px 12px;
-          border-bottom: 2px solid #b9e4cd;
+        .feedback th,
+        .feedback td {
+            padding: 12px 14px;
+            border-right: 1px solid #dfe7e2;
+            border-bottom: 1px solid #dfe7e2;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.45;
         }
-        .feedback tbody td {
-          padding: 9px 12px;
-          border-bottom: 1px solid #e0efe7;
-          vertical-align: top;
+        .feedback th:last-child,
+        .feedback td:last-child { border-right: 0; }
+        .feedback tbody tr:last-child td { border-bottom: 0; }
+        .feedback th {
+            background: #247c5c;
+            color: #fff;
+            font-weight: 800;
+            white-space: nowrap;
         }
-        .feedback tbody tr:nth-child(even) {
-          background: #f9fcfa;
+        .feedback tbody tr:nth-child(even) td { background: #f5faf7; }
+        .feedback td:first-child,
+        .feedback th:first-child {
+            width: 74px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .feedback td:nth-child(3),
+        .feedback td:nth-child(4) {
+            min-width: 125px;
         }
         @media (max-width: 790px) { .subject-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .selector-grid { grid-template-columns: 1fr 1fr; } .selector-grid .btn { grid-column: 1/-1; } }
         @media (max-width: 560px) { main { padding: 20px 13px 55px; } .hero,.card { padding: 20px; } .subject-grid,.selector-grid { grid-template-columns: 1fr; } .practice-heading { flex-direction: column; } }
         @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation-duration: .001ms !important; } }
     </style>
 <link rel="stylesheet" href="/static/css/site-consistency.css?v=20260817-1">
+
+    <style>
+        #detail-explanation { margin-top: 18px; }
+        #detail-explanation-list .card { box-shadow: none; }
+        .detail-question-text { color: var(--muted); margin-bottom: 12px; white-space: pre-wrap; }
+        .detail-question-body { line-height: 1.65; }
+        .detail-question-body small { color: var(--muted); }
+    </style>
 </head>
 <body class="hm-eleven hm-page">
 <a class="skip-link" href="#main-content">Skip to topic mastery</a>
@@ -183,8 +210,7 @@
         <a href="/elevenplus/articles">11+ articles</a>
         <a href="/elevenplus-mock-exams">11+ mock exams</a>
         <a href="/elevenplus-year-round-plan">11+ year-round plan</a>
-        <a href="/app">Homework</a>
-        <a href="/login" data-auth-login>Parent sign in</a>
+        <a href="/login" data-auth-login>Login</a>
         <a href="#" data-auth-logout hidden>Log out</a>
       </nav>
     </div>
@@ -230,10 +256,16 @@
         <div class="loading hidden" id="loading"><span class="spinner" aria-hidden="true"></span><span>Opening your set…</span></div>
         <div id="question-container"></div>
         <div class="practice-actions hidden" id="practice-actions">
-            <button class="btn btn-primary" id="check-button" type="button">Check my answers</button>
-            <button class="btn btn-secondary" id="change-button" type="button">Choose another set</button>
+            <button class="btn btn-primary" id="check-button" type="button">Check Answers</button>
+            <button class="btn btn-secondary" id="explain-button" type="button">Explain in Detail</button>
+            <button class="btn btn-secondary" id="change-button" type="button">New Practice Set</button>
         </div>
         <div class="feedback hidden" id="feedback" aria-live="polite"></div>
+        <section class="feedback hidden" id="detail-explanation" aria-live="polite" aria-labelledby="detail-explanation-title">
+            <h3 id="detail-explanation-title">Explain in detail</h3>
+            <p class="section-help">We explain one question at a time. Each explanation is saved so it can be reused for another pupil.</p>
+            <div id="detail-explanation-list"></div>
+        </section>
     </section>
 
   <section class="hm-article-funnel" aria-labelledby="article-funnel-title">
@@ -273,7 +305,7 @@
 (function () {
     'use strict';
     const STORAGE_KEY = 'homeworkMagic.elevenplusTopicMastery.v1';
-    const state = { catalogue: null, subjectKey: '', topicIndex: 1, masteryLevel: 1, homework: null };
+    const state = { catalogue: null, subjectKey: '', topicIndex: 1, masteryLevel: 1, homework: null, explanations: {} };
 
     function escapeHtml(value) {
         return String(value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
@@ -333,6 +365,9 @@
         document.getElementById('question-container').innerHTML = '';
         document.getElementById('practice-actions').classList.add('hidden');
         document.getElementById('feedback').classList.add('hidden');
+        document.getElementById('detail-explanation').classList.add('hidden');
+        document.getElementById('detail-explanation-list').innerHTML = '';
+        state.explanations = {};
         setLoading(true);
         card.scrollIntoView({behavior: 'smooth', block: 'start'});
         try {
@@ -405,6 +440,78 @@
         } catch (error) { showStatus(error.message || 'Something went wrong while checking.'); }
         finally { button.disabled = false; button.textContent = 'Check my answers'; }
     }
+    async function explainInDetail() {
+        if (!state.homework || !Array.isArray(state.homework.questions)) return;
+
+        const button = document.getElementById('explain-button');
+        button.disabled = true;
+        button.textContent = 'Explaining…';
+        const section = document.getElementById('detail-explanation');
+        const list = document.getElementById('detail-explanation-list');
+        section.classList.remove('hidden');
+
+        try {
+            for (let index = 0; index < state.homework.questions.length; index += 1) {
+                const question = state.homework.questions[index] || {};
+                const questionText = String(
+                    question.full_content || question.question || question.content || ''
+                ).replace(/^\s*choice\s+group\s+\d+\s*:\s*/i, '').trim();
+                if (!questionText) continue;
+
+                const existing = state.explanations[index];
+                if (existing) continue;
+
+                const cardId = 'detail-question-' + index;
+                let card = document.getElementById(cardId);
+                if (!card) {
+                    card = document.createElement('article');
+                    card.id = cardId;
+                    card.className = 'card';
+                    card.style.marginTop = '12px';
+                    card.innerHTML = '<h4>Question ' + (index + 1) + '</h4><div class="detail-question-text"></div><div class="detail-question-body">Loading…</div>';
+                    card.querySelector('.detail-question-text').textContent = questionText;
+                    list.appendChild(card);
+                }
+
+                const body = card.querySelector('.detail-question-body');
+                try {
+                    const response = await fetch('/api/elevenplus/topic-mastery/explain', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({
+                            subject: state.subjectKey,
+                            topic_index: state.topicIndex,
+                            mastery_level: state.masteryLevel,
+                            doc_id: state.homework.doc_id,
+                            question_index: index,
+                            question: questionText,
+                            topic: state.homework.topic || ''
+                        })
+                    });
+                    const data = await response.json().catch(function () { return {}; });
+                    if (response.status === 401) { window.location.href = '/login'; return; }
+                    if (response.status === 402) { window.location.href = '/pricing'; return; }
+                    if (!response.ok || !data.success) {
+                        body.textContent = data.error || 'This explanation could not be created. You can try again.';
+                        continue;
+                    }
+
+                    state.explanations[index] = data.explanation || '';
+                    body.innerHTML = typeof window.renderSafeMarkdown === 'function'
+                        ? window.renderSafeMarkdown(data.explanation || '')
+                        : escapeHtml(data.explanation || '');
+                } catch (error) {
+                    body.textContent = 'This explanation could not be created. You can try again.';
+                }
+            }
+            section.scrollIntoView({behavior:'smooth', block:'start'});
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Explain in detail';
+        }
+    }
+
     async function initialise() {
         restoreState();
         // Server-side entitlement check: 11+ Premium and test users are allowed.
@@ -437,6 +544,7 @@
     document.getElementById('level-select').addEventListener('change', function (event) { state.masteryLevel = Number(event.target.value); updateSummary(); saveState(); });
     document.getElementById('open-set-button').addEventListener('click', openPracticeSet);
     document.getElementById('check-button').addEventListener('click', checkAnswers);
+    document.getElementById('explain-button').addEventListener('click', explainInDetail);
     document.getElementById('change-button').addEventListener('click', function () { document.getElementById('choose-title').scrollIntoView({behavior:'smooth'}); });
     initialise();
 }());

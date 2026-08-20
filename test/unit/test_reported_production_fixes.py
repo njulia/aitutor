@@ -28,7 +28,7 @@ def test_multiline_multiple_choice_question_stays_inside_summary_table() -> None
         ]
     )
 
-    assert "## Homework Review Summary" in summary
+    assert "## Review Summary" in summary
     assert "\n\nA. 4:45" not in summary
     assert "| ❌ | 1. It is 4:00." in summary
     assert summary.count("| ❌ |") == 1

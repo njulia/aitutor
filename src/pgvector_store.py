@@ -336,6 +336,21 @@ class PGVectorStore:
             if doc_id in by_id
         ]
 
+    def get_all(self, *, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Return a bounded page of documents for admin maintenance tasks."""
+        with self.Session() as session:
+            rows = session.execute(
+                select(VectorDocument)
+                .where(VectorDocument.collection_name == self.collection_name)
+                .order_by(VectorDocument.created_at.desc(), VectorDocument.id.asc())
+                .offset(max(0, int(offset)))
+                .limit(max(1, int(limit)))
+            ).scalars().all()
+        return [
+            {"doc_id": row.id, "content": row.content, "metadata": row.metadata_json or {}}
+            for row in rows
+        ]
+
     def get_by_metadata(
         self,
         filters: Dict[str, Any],

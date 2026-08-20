@@ -3077,69 +3077,136 @@
             const reviewEl = document.querySelector('#review-result .teacher-feedback-output');
             const reviewFeedback = reviewEl ? reviewEl.innerText : '';
 
-            showReviewLoading('Making your step-by-step explanation…', {
+            /*
+             * Explain in Detail is a whole-homework action.  The API intentionally
+             * explains one question per request (question_index) so that each
+             * explanation can be cached and reused.  The old UI sent no index,
+             * which made the API default to question 1.  Send one request for
+             * every generated question and combine the results below.
+             */
+            const questionItems = Array.isArray(currentHomework)
+                ? currentHomework
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ item }) => String(
+                        item && (item.content || item.full_content || item.question_text || '')
+                    ).trim())
+                : [];
+
+            if (!questionItems.length) {
+                alert('No questions were found to explain.');
+                return;
+            }
+
+            showReviewLoading(`Making step-by-step explanations for all ${questionItems.length} questions…`, {
                 preserveExisting: true
             });
 
             try {
-                const response = await fetch('/api/explain-deep', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        homework: homework,
-                        answers: combinedAnswers,
-                        subject: subject,
-                        profile: Object.assign({}, getLearnerReviewProfile(), {topic: reviewContext.topic || null}),
-                        review_feedback: reviewFeedback,
-                        from_rag: fromRag,
-                        homework_doc_id: reviewContext.homework_doc_id || null,
-                        is_eleven_plus: Boolean(reviewContext.is_eleven_plus),
-                        question_index: Number.isInteger(reviewContext.question_index)
-                            ? reviewContext.question_index : null
+                const results = await Promise.all(
+                    questionItems.map(async ({ item, index }) => {
+                        const response = await fetch('/api/explain-deep', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                homework: homework,
+                                answers: combinedAnswers,
+                                subject: item.subject || subject,
+                                profile: Object.assign({}, getLearnerReviewProfile(), {
+                                    topic: item.topic || reviewContext.topic || null
+                                }),
+                                review_feedback: reviewFeedback,
+                                from_rag: Boolean(item.from_rag ?? fromRag),
+                                homework_doc_id: item.doc_id || reviewContext.homework_doc_id || null,
+                                is_eleven_plus: Boolean(item.is_eleven_plus ?? reviewContext.is_eleven_plus),
+                                question_index: index
+                            })
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (response.status === 402) {
+                            return {
+                                subscriptionRequired: true,
+                                error: data.error || 'Subscription required for this feature.',
+                                resumeSessionId: data.resume_session_id || null
+                            };
+                        }
+                        if (response.status === 401) {
+                            return {
+                                loginRequired: true,
+                                resumeSessionId: data.resume_session_id || null
+                            };
+                        }
+
+                        if (!response.ok || !data.success) {
+                            return {
+                                error: data.error || 'The detailed explanation for this question is temporarily unavailable.'
+                            };
+                        }
+
+                        return {
+                            explanation: String(data.explanation || '').trim(),
+                            questionNumber: Number.isInteger(data.question_number)
+                                ? data.question_number : index + 1
+                        };
                     })
-                });
+                );
 
-                const data = await response.json().catch(() => ({}));
-                if (response.status === 402) {
-                    alert(data.error || 'Subscription required for this feature.');
-                    redirectToPricing(data.resume_session_id || null);
-                    return;
-                }
-                if (response.status === 401) {
-                    redirectToLogin(data.resume_session_id || null);
+                const subscriptionFailure = results.find(result => result && result.subscriptionRequired);
+                if (subscriptionFailure) {
+                    alert(subscriptionFailure.error);
+                    redirectToPricing(subscriptionFailure.resumeSessionId || null);
                     return;
                 }
 
-                if (response.status === 504) {
-                    alert('That took too long. Please try again or use a shorter question.');
+                const loginFailure = results.find(result => result && result.loginRequired);
+                if (loginFailure) {
+                    redirectToLogin(loginFailure.resumeSessionId || null);
                     return;
                 }
 
-                const explanation = String(data.explanation || '').trim();
-                if (response.ok && data.success && explanation) {
-                    displayExplainDeep(explanation);
-                } else {
-                    const errorMsg = data.error || (data.detail && typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail) || 'The detailed explanation is temporarily unavailable. Please try again in a moment.';
-                    alert('Error: ' + errorMsg);
+                const failed = results.filter(result => result && result.error);
+                const explanations = results
+                    .filter(result => result && result.explanation)
+                    .sort((a, b) => a.questionNumber - b.questionNumber);
+
+                if (!explanations.length) {
+                    alert(failed[0]?.error || 'The detailed explanations are temporarily unavailable. Please try again in a moment.');
+                    return;
                 }
+
+                displayExplainDeep(explanations, failed.length);
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred during deep explanation');
+                alert('An error occurred while making the detailed explanations. Your answers are still safely kept on the page.');
             } finally {
                 hideLoading();
             }
         }
 
-        function displayExplainDeep(explanation) {
+        function displayExplainDeep(explanations, failedCount = 0) {
             const container = document.getElementById('review-result');
             const hasSavedReview = savedHomeworkState && savedHomeworkState.reviewHTML && savedHomeworkState.reviewHTML.trim();
+
+            const explanationCards = explanations.map(item => `
+                <section class="review-output" style="margin-bottom: 24px;">
+                    <h4 style="margin-bottom: 12px;">Question ${item.questionNumber}</h4>
+                    ${renderSafeMarkdown(item.explanation)}
+                </section>
+            `).join('');
+
+            const warning = failedCount > 0
+                ? `<p style="margin: 12px 0; color: #8a5a00;">${failedCount} question${failedCount === 1 ? '' : 's'} could not be explained just now. Please try again for those questions.</p>`
+                : '';
+
             container.innerHTML = `
                 ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
                 <div class="review-header" style="margin-top: 20px; margin-bottom: 20px;">
-                    <h3>Deep Explanation</h3>
-                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read explanation aloud">\uD83D\uDD0A Read it to me</button>` : ''}
+                    <h3>Step-by-Step Explanations</h3>
+                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read explanations aloud">\uD83D\uDD0A Read it to me</button>` : ''}
                 </div>
-                <div class="review-output">${renderSafeMarkdown(explanation)}</div>
+                ${warning}
+                ${explanationCards}
             `;
 
             document.getElementById('results').style.display = 'block';

@@ -11,6 +11,7 @@
             .trim()
             .replace(/^\s*#{1,6}\s+/, '')
             .replace(/^\s*\*\*(.*?)\*\*\s*$/, '$1')
+            .replace(/^\s*choice\s+group\s+\d+\s*:\s*/i, '')
             .trim();
     }
 

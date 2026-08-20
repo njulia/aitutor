@@ -63,11 +63,13 @@ def test_explain_in_detail_keeps_questions_and_answers_visible() -> None:
     page = (ROOT / "static/app.html").read_text(encoding="utf-8")
     script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
 
-    explain_deep = _function(script, "ExplainDeep", "displayExplainDeep")
-    detailed_result = _function(script, "displayExplainDeep", "backToReview")
+    explain_deep = _function(script, "ExplainDeep", "ensureExplainDeepSection")
+    detailed_result = _function(script, "ensureExplainDeepSection", "backToReview")
     review_loading = _function(script, "showReviewLoading", "hideLoading")
 
-    assert "showReviewLoading('Making your step-by-step explanation…'" in explain_deep
+    assert "showReviewLoading('Explaining question 1…'" in explain_deep
+    assert "question_index: Number.isInteger(reviewContext.question_index)" in explain_deep
+    assert "while (nextIndex < (totalQuestions || Infinity))" in explain_deep
     assert "preserveExisting: true" in explain_deep
     assert "showLoading();" not in explain_deep
     assert "insertAdjacentHTML('beforeend', pendingMarkup)" in review_loading

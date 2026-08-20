@@ -551,6 +551,21 @@
             background: var(--amber-soft);
             color: #7f4b10;
         }
+        #detail-explanation { margin-top: 18px; }
+        #detail-explanation-list .detail-explanation-card {
+            margin-top: 16px;
+            padding: 20px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+        #detail-explanation-list .detail-explanation-card h4 { margin: 0 0 10px; }
+        .detail-question-text { margin-bottom: 12px; color: var(--muted); white-space: pre-wrap; }
+        .detail-question-body { line-height: 1.65; }
+        .detail-question-body h1, .detail-question-body h2, .detail-question-body h3 { margin: 0.75em 0 0.35em; }
+        .detail-question-body p, .detail-question-body li { margin: 0.6em 0; }
+        .detail-question-body small { color: var(--muted); }
         .hidden { display: none !important; }
         footer {
             padding: 28px 22px 42px;
@@ -598,7 +613,7 @@
             <a href="/elevenplus-mock-exams">11+ mock exams</a>
             <a href="/elevenplus-topic-mastery">11+ topic mastery</a>
 <!--            <a href="/app">Homework</a>-->
-            <a href="/login" data-auth-login>Parent sign in</a>
+            <a href="/login" data-auth-login>Login</a>
             <a href="#" data-auth-logout hidden>Log out</a>
         </nav>
     </div>
@@ -1143,12 +1158,16 @@
         }).filter(function (option) { return option.text; });
     }
 
+    function stripChoiceGroupPrefix(text) {
+        return String(text || '').replace(/^\s*choice\s+group\s+\d+\s*:\s*/i, '').trim();
+    }
+
     function getPracticeQuestions(item) {
         if (!item || !Array.isArray(item.questions)) return [];
         return item.questions.map(function (question, questionIndex) {
             return {
                 number: Number(question.number) || questionIndex + 1,
-                question: String(question.question || question.questionText || '').trim(),
+                question: stripChoiceGroupPrefix(String(question.question || question.questionText || '')),
                 options: normalisePracticeOptions(question.options)
             };
         }).filter(function (question) {
@@ -1197,15 +1216,24 @@
                 '<div class="practice-header"><h3>' + escapeHtml(item.subject_label || displaySubjectName(item.subject) || '11+ Practice') + '</h3>' +
                 (item.from_rag ? '<span class="source-badge">From practice library · Week ' + activeWeek.week + '</span>' : '') + '</div>' +
                 questionArea +
-                '<div class="feedback hidden" id="feedback-' + index + '" aria-live="polite"></div>' +
             '</article>';
         }).join('') +
         '<div class="practice-actions">' +
             '<button class="btn btn-primary" id="check-practice-btn" type="button">Check answers</button>' +
+            '<button class="btn btn-secondary" id="explain-practice-btn" type="button">Explain in Detail</button>' +
             '<button class="btn btn-secondary" id="finish-week-btn" type="button">Mark Week ' + activeWeek.week + ' complete</button>' +
-        '</div>';
+        '</div>' +
+        activeHomework.map(function (item, index) {
+            return '<div class="feedback hidden" id="feedback-' + index + '" aria-live="polite"></div>';
+        }).join('') +
+        '<section class="feedback hidden" id="detail-explanation" aria-live="polite" aria-labelledby="detail-explanation-title">' +
+            '<h3 id="detail-explanation-title">Explain in detail</h3>' +
+            '<p style="color:var(--muted);margin-top:5px;">We explain one question at a time. Each explanation is saved so it can be reused for another pupil.</p>' +
+            '<div id="detail-explanation-list"></div>' +
+        '</section>';
 
         document.getElementById('check-practice-btn').addEventListener('click', reviewPractice);
+        document.getElementById('explain-practice-btn').addEventListener('click', explainInDetail);
         document.getElementById('finish-week-btn').addEventListener('click', function () {
             if (!state.completedWeeks.includes(activeWeek.week)) {
                 state.completedWeeks.push(activeWeek.week);
@@ -1297,6 +1325,7 @@
                             plan_week: activeWeek.week,
                             plan_phase: activeWeek.phase
                         },
+                        quick_review: true,
                         from_rag: Boolean(item.from_rag),
                         homework_doc_id: item.doc_id || null,
                         is_eleven_plus: true
@@ -1325,6 +1354,117 @@
         } finally {
             button.disabled = false;
             button.textContent = 'Check answers';
+        }
+    }
+
+    function normaliseExplanationList(markdown) {
+        // 讲解里常出现多个 "1."（每步都从 1 重新编号）。只有从 1 严格递增的
+        // 编号序列才保留，否则统一替换为项目符号 "*"。
+        const text = String(markdown || '');
+        const lines = text.split('\n');
+        const numbered = [];
+        lines.forEach(function (line, index) {
+            const match = line.match(/^(\s*)(\d+)\s*[.)]\s+(.*)$/);
+            if (match) {
+                numbered.push({ index: index, indent: match[1], num: parseInt(match[2], 10), rest: match[3] });
+            }
+        });
+
+        const validSequence = numbered.length > 0 && numbered.every(function (item, i) {
+            return item.num === i + 1;
+        });
+        if (validSequence) return text;
+
+        numbered.forEach(function (item) {
+            lines[item.index] = item.indent + '* ' + item.rest;
+        });
+        return lines.join('\n');
+    }
+
+    function buildFullQuestionText(question) {
+        const lines = [String(question.question || '').trim()];
+        (question.options || []).forEach(function (option) {
+            const label = String(option.label || '').trim().toUpperCase();
+            const text = String(option.text || '').trim();
+            if (text) lines.push(label + ') ' + text);
+        });
+        return lines.filter(Boolean).join('\n');
+    }
+
+    async function explainInDetail() {
+        const button = document.getElementById('explain-practice-btn');
+        const section = document.getElementById('detail-explanation');
+        const list = document.getElementById('detail-explanation-list');
+        button.disabled = true;
+        button.textContent = 'Explaining…';
+        section.classList.remove('hidden');
+        list.innerHTML = '';
+
+        try {
+            for (let homeworkIndex = 0; homeworkIndex < activeHomework.length; homeworkIndex += 1) {
+                const item = activeHomework[homeworkIndex];
+                if (!item.doc_id) continue;
+                const questions = getPracticeQuestions(item);
+                if (!questions.length) continue;
+
+                for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
+                    const question = questions[questionIndex];
+                    const questionText = buildFullQuestionText(question);
+                    if (!questionText) continue;
+
+                    const cardId = 'detail-question-' + homeworkIndex + '-' + questionIndex;
+                    let card = document.getElementById(cardId);
+                    if (!card) {
+                        card = document.createElement('article');
+                        card.id = cardId;
+                        card.className = 'detail-explanation-card';
+                        card.innerHTML = '<h4>' + escapeHtml(item.subject_label || displaySubjectName(item.subject) || '11+ Practice') + ' · Question ' + question.number + '</h4>' +
+                            '<div class="detail-question-text"></div>' +
+                            '<div class="detail-question-body">Loading…</div>';
+                        card.querySelector('.detail-question-text').textContent = questionText;
+                        list.appendChild(card);
+                    }
+
+                    const body = card.querySelector('.detail-question-body');
+                    try {
+                        const response = await fetch('/api/elevenplus/year-round/explain', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                doc_id: item.doc_id,
+                                question_index: questionIndex,
+                                question: questionText,
+                                topic: activeWeek.topic || '',
+                                subject: item.subject || subjectMap[activeWeek.primaryKey],
+                                plan_week: activeWeek.week
+                            })
+                        });
+                        const data = await response.json().catch(function () { return {}; });
+                        if (response.status === 401) {
+                            alert(data.error || 'A parent or guardian needs to sign in.');
+                            window.location.href = '/login';
+                            return;
+                        }
+                        if (response.status === 402) {
+                            alert(data.error || 'Explain in Detail requires 11+ Premium.');
+                            window.location.href = '/pricing';
+                            return;
+                        }
+                        if (!response.ok || !data.success) {
+                            body.textContent = data.error || 'This explanation could not be created. You can try again.';
+                            continue;
+                        }
+                        body.innerHTML = markdownToSafeHtml(normaliseExplanationList(data.explanation || ''));
+                    } catch (error) {
+                        body.textContent = 'This explanation could not be created. You can try again.';
+                    }
+                }
+            }
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Explain in Detail';
         }
     }
 
