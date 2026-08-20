@@ -65,6 +65,14 @@ PUBLIC_PAGES = {
     "/elevenplus/supporting-child-preparation": "elevenplus/supporting-child-preparation.html",
     "/elevenplus/tutoring-vs-self-study": "elevenplus/tutoring-vs-self-study.html",
     "/elevenplus/verbal-reasoning-tips": "elevenplus/verbal-reasoning-tips.html",
+    "/elevenplus/11plus-pass-mark-standardised-scores": "elevenplus/11plus-pass-mark-standardised-scores.html",
+    "/elevenplus/11plus-exam-dates-registration-2027": "elevenplus/11plus-exam-dates-registration-2027.html",
+    "/elevenplus/gl-assessment-vs-cem": "elevenplus/gl-assessment-vs-cem.html",
+    "/elevenplus/11plus-preparation-year-4": "elevenplus/11plus-preparation-year-4.html",
+    "/elevenplus/11plus-preparation-year-5": "elevenplus/11plus-preparation-year-5.html",
+    "/elevenplus/11plus-practice-papers-how-to-use": "elevenplus/11plus-practice-papers-how-to-use.html",
+    "/elevenplus/11plus-synonyms-antonyms": "elevenplus/11plus-synonyms-antonyms.html",
+    "/elevenplus/11plus-cloze-tests": "elevenplus/11plus-cloze-tests.html",
 }
 
 

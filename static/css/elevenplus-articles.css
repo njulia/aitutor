@@ -651,3 +651,16 @@ a { color: inherit; }
   .hm-funnel-steps { grid-template-columns: 1fr; }
   .hm-funnel-step { min-height: 175px; }
 }
+
+
+/* Article-guide cards: keep each guide's content left aligned for easier scanning and SEO-friendly reading. */
+.hm-article-list .article-card {
+  text-align: left;
+  align-items: flex-start;
+}
+.hm-article-list .article-card .icon {
+  margin-left: 0;
+}
+.hm-article-list .article-card .tag {
+  align-self: flex-start;
+}

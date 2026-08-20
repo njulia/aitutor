@@ -1515,6 +1515,38 @@ async def elevenplus_tutoring_vs_self_study():
 async def elevenplus_grammar_guide():
     return _static_page("static", "elevenplus", "uk_grammar_guide.html")
 
+@app.get("/elevenplus/11plus-pass-mark-standardised-scores")
+async def elevenplus_pass_mark_standardised_scores():
+    return _static_page("static", "elevenplus", "11plus-pass-mark-standardised-scores.html")
+
+@app.get("/elevenplus/11plus-exam-dates-registration-2027")
+async def elevenplus_exam_dates_registration_2027():
+    return _static_page("static", "elevenplus", "11plus-exam-dates-registration-2027.html")
+
+@app.get("/elevenplus/gl-assessment-vs-cem")
+async def elevenplus_gl_assessment_vs_cem():
+    return _static_page("static", "elevenplus", "gl-assessment-vs-cem.html")
+
+@app.get("/elevenplus/11plus-preparation-year-4")
+async def elevenplus_preparation_year_4():
+    return _static_page("static", "elevenplus", "11plus-preparation-year-4.html")
+
+@app.get("/elevenplus/11plus-preparation-year-5")
+async def elevenplus_preparation_year_5():
+    return _static_page("static", "elevenplus", "11plus-preparation-year-5.html")
+
+@app.get("/elevenplus/11plus-practice-papers-how-to-use")
+async def elevenplus_practice_papers_how_to_use():
+    return _static_page("static", "elevenplus", "11plus-practice-papers-how-to-use.html")
+
+@app.get("/elevenplus/11plus-synonyms-antonyms")
+async def elevenplus_synonyms_antonyms():
+    return _static_page("static", "elevenplus", "11plus-synonyms-antonyms.html")
+
+@app.get("/elevenplus/11plus-cloze-tests")
+async def elevenplus_cloze_tests():
+    return _static_page("static", "elevenplus", "11plus-cloze-tests.html")
+
 @app.get("/elevenplus/verbal-reasoning-tips")
 async def elevenplus_verbal_reasoning_tips():
     return _static_page("static", "elevenplus", "verbal-reasoning-tips.html")
