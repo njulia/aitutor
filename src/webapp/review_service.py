@@ -1240,7 +1240,7 @@ def _select_detail_question(
     subject: str,
     question_index: Optional[int],
 ) -> tuple[str, int, int]:
-    """Return one safe question for the one-question detail workflow."""
+    """Return one question for the legacy one-question detail workflow."""
     items = _split_homework_into_questions(homework_content, subject)
     if not items:
         text = str(homework_content or "").strip()
@@ -1249,13 +1249,26 @@ def _select_detail_question(
     if index < 0 or index >= len(items):
         raise IndexError("Question index is outside the homework set.")
     item = items[index]
-    question = str(
-        item.get("full_content")
-        or item.get("content")
-        or item.get("question_text")
-        or ""
-    ).strip()
+    question = str(item.get("full_content") or item.get("content") or item.get("question_text") or "").strip()
     return question, index + 1, len(items)
+
+
+def _question_for_detail(item: Dict[str, Any]) -> str:
+    return str(item.get("full_content") or item.get("content") or item.get("question_text") or "").strip()
+
+
+def _detail_explanation_fallback() -> str:
+    return (
+        "## How to solve it\n"
+        "Read the question carefully and underline the important information. "
+        "Choose the rule, operation, or idea that matches what the question is asking. "
+        "Work through the steps in order and check that your result answers the question.\n\n"
+        "## Why it works\n"
+        "Breaking a question into small steps helps you choose the right method "
+        "and makes it easier to check your thinking.\n\n"
+        "## Helpful tip\n"
+        "Take your time, show each step, and check the question again when you finish."
+    )
 
 
 def explain_deep(
@@ -1270,16 +1283,16 @@ def explain_deep(
     question_index: Optional[int] = None,
     llm_client: Any = None,
 ) -> Dict[str, Any]:
-    """Explain exactly one question and persist it for future pupils.
+    """Create detailed explanations for the whole homework set.
 
-    The pupil's answer is deliberately ignored. The explanation is a generic
-    teaching resource keyed by a stable hash of the question, subject and
-    year group. The first request uses the detail LLM; later pupils reuse the
-    saved explanation without another LLM call.
+    ``question_index`` is retained for compatibility with the tutor's
+    one-question workflow. The normal Explain in Detail button sends null,
+    which deliberately explains every question. Cached explanations are reused
+    and only missing questions are sent to the detail model.
     """
     from src.cache import explain_cache
     from src.llm_client import build_messages, format_prompt
-    from src.prompts import EXPLAIN_SINGLE_QUESTION_PROMPT
+    from src.prompts import EXPLAIN_SINGLE_QUESTION_PROMPT, EXPLAIN_ALL_QUESTIONS_PROMPT
 
     if llm_client is None:
         raise RuntimeError("LLM client is not configured")
@@ -1288,167 +1301,157 @@ def explain_deep(
     profile = _normalise_profile(raw_profile)
     year_group = int(profile.get("year_group", 3))
 
-    # Never use or persist the pupil's answer for this reusable explanation.
-    question, question_number, total_questions = _select_detail_question(
-        homework_content, subject, question_index
-    )
-    if not question:
-        return {
-            "success": False,
-            "error": "No question was found to explain.",
-            "question_number": question_number,
-            "total_questions": total_questions,
-            "has_more": question_number < total_questions,
-        }
+    items = _split_homework_into_questions(homework_content, subject)
+    if not items:
+        text = str(homework_content or "").strip()
+        if not text:
+            return {"success": False, "error": "No question was found to explain."}
+        items = [{"full_content": text, "content": text}]
+
+    # Keep the old API contract: an explicit index means explain only that item.
+    if question_index is not None:
+        if question_index < 0 or question_index >= len(items):
+            return {"success": False, "error": "Question index is outside the homework set."}
+        selected = [(question_index, items[question_index])]
+    else:
+        selected = list(enumerate(items))
 
     from src import homework_rag
 
-    persistent_key = homework_rag.detail_explanation_key(
-        question, subject, year_group, is_eleven_plus=is_eleven_plus
-    )
-    saved = homework_rag.load_detail_explanation(
-        question, subject, year_group, is_eleven_plus=is_eleven_plus
-    )
-    if saved:
-        result = {
-            "success": True,
-            "explanation": saved,
-            "question": question,
-            "question_number": question_number,
-            "total_questions": total_questions,
-            "has_more": question_number < total_questions,
-            "from_cache": True,
-            "saved": True,
-            "model_tier": "plus",
-            "model_used": None,
-        }
-        explain_cache.set(
-            stable_cache_key(
-                "review_detail_question_v1",
-                persistent_key,
-            ),
-            result,
+    results: List[str] = []
+    missing: List[Dict[str, Any]] = []
+
+    for idx, item in selected:
+        question = _question_for_detail(item)
+        if not question:
+            continue
+        saved = homework_rag.load_detail_explanation(
+            question, subject, year_group, is_eleven_plus=is_eleven_plus
         )
-        return result
+        if saved:
+            explanation = str(saved).strip()
+            results.append(f"## Question {idx + 1}\n\n{explanation}")
+            continue
+        cache_key = stable_cache_key(
+            "review_detail_question_v2",
+            homework_rag.detail_explanation_key(question, subject, year_group, is_eleven_plus=is_eleven_plus),
+        )
+        cached = explain_cache.get(cache_key)
+        if isinstance(cached, dict) and cached.get("explanation"):
+            results.append(f"## Question {idx + 1}\n\n{str(cached['explanation']).strip()}")
+            continue
+        missing.append({"index": idx, "question": question, "cache_key": cache_key})
 
-    # Short-lived process/Redis cache is only an optimisation. Persistent
-    # question-level storage above remains the source of truth.
-    cache_key = stable_cache_key(
-        "review_detail_question_v1",
-        persistent_key,
-    )
-    cached = explain_cache.get(cache_key)
-    if isinstance(cached, dict) and cached.get("explanation"):
-        return {
-            **cached,
-            "question_number": question_number,
-            "total_questions": total_questions,
-            "has_more": question_number < total_questions,
-            "from_cache": True,
-        }
+    # Generate all missing explanations in one model call. This avoids the
+    # previous behaviour where a multi-question homework could appear to hang
+    # while waiting for one request per question.
+    if missing:
+        question_blocks = []
+        for entry in missing:
+            trusted_answer = ""
+            trusted_method = ""
+            if homework_doc_id:
+                try:
+                    raw_answers = _load_rag_answers(homework_doc_id, is_eleven_plus)
+                    pairs = _pair_rag_answers(
+                        raw_answers,
+                        homework_content,
+                        subject,
+                        is_tutor_mode=True,
+                        question_index=entry["index"],
+                    )
+                    if pairs:
+                        trusted_answer = compact_text(pairs[0].get("answer"), 800)
+                        trusted_method = compact_text(pairs[0].get("explanation"), 1200)
+                except Exception:
+                    logger.exception("RAG answer lookup failed for question %s", entry["index"] + 1)
+            question_blocks.append(
+                f"QUESTION {entry['index'] + 1}\n"
+                f"Question: {compact_text(entry['question'], 4_000)}\n"
+                f"Trusted answer: {trusted_answer or 'Not supplied. Work it out yourself.'}\n"
+                f"Trusted method: {trusted_method or 'Not supplied.'}"
+            )
 
-    trusted_answer = ""
-    trusted_method = ""
-    if homework_doc_id:
+        prompt_template = EXPLAIN_SINGLE_QUESTION_PROMPT if question_index is not None else EXPLAIN_ALL_QUESTIONS_PROMPT
+        prompt = format_prompt(
+            prompt_template,
+            student_profile=str(_prompt_profile(profile)),
+            subject=compact_text(subject_display_name(subject), 80),
+            question="\n\n".join(question_blocks),
+            trusted_answer="See the trusted answer for each question above.",
+            trusted_method="See the trusted method for each question above.",
+        )
+
+        explanation_text = ""
         try:
-            raw_answers = _load_rag_answers(homework_doc_id, is_eleven_plus)
-            pairs = _pair_rag_answers(
-                raw_answers,
-                homework_content,
-                subject,
-                is_tutor_mode=True,
-                question_index=question_index,
+            explanation_text = _complete_review(
+                llm_client,
+                build_messages(prompt),
+                model=DETAIL_REVIEW_MODEL,
+                temperature=0.2,
+                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 8000, maximum=12000),
+                operation="detail_explanation_all_questions",
             )
-            if pairs:
-                trusted_answer = compact_text(pairs[0].get("answer"), 800)
-                trusted_method = compact_text(pairs[0].get("explanation"), 1200)
         except Exception:
-            logger.exception(
-                "RAG answer lookup failed for one-question detail explanation"
-            )
+            logger.exception("[Review] detail_explanation_all_questions failed")
 
-    # The LLM sees only the question and trusted answer-key information when
-    # available. It never receives the pupil's answer or previous review.
-    prompt = format_prompt(
-        EXPLAIN_SINGLE_QUESTION_PROMPT,
-        student_profile=str(_prompt_profile(profile)),
-        subject=compact_text(subject_display_name(subject), 80),
-        question=compact_text(question, 4_000),
-        trusted_answer=trusted_answer or "Not supplied. Work out the answer yourself.",
-        trusted_method=trusted_method or "Not supplied.",
-    )
+        # Parse the model's Question N sections. If the model misses a section,
+        # keep a useful fallback rather than returning a blank page.
+        import re
+        parsed: Dict[int, str] = {}
+        text = str(explanation_text or "").strip()
+        if text:
+            matches = list(re.finditer(r"(?im)^\s*##\s*Question\s+(\d+)\s*$", text))
+            for pos, match in enumerate(matches):
+                number = int(match.group(1))
+                end_pos = matches[pos + 1].start() if pos + 1 < len(matches) else len(text)
+                body = text[match.end():end_pos].strip()
+                if body:
+                    parsed[number] = body
 
-    explanation = ""
-    try:
-        explanation = _complete_review(
-            llm_client,
-            build_messages(prompt),
-            model=DETAIL_REVIEW_MODEL,
-            temperature=0.2,
-            max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 2400, maximum=8000),
-            operation="detail_explanation_single_question",
-        )
-    except Exception:
-        logger.exception(
-            "[Review] detail_explanation_single_question failed for question %s",
-            question_number,
-        )
+        for entry in missing:
+            idx = entry["index"]
+            body = parsed.get(idx + 1, _detail_explanation_fallback())
+            results.append(f"## Question {idx + 1}\n\n{body}")
+            try:
+                saved_values = homework_rag.save_detail_explanation(
+                    [{"question": entry["question"], "explanation": body}],
+                    subject,
+                    year_group,
+                    is_eleven_plus=is_eleven_plus,
+                )
+                if saved_values:
+                    explain_cache.set(
+                        entry["cache_key"],
+                        {"success": True, "explanation": body},
+                    )
+            except Exception:
+                logger.exception("Could not persist detail explanation for question %s", idx + 1)
 
-    if not str(explanation or "").strip():
-        # Keep the workflow useful if the provider is temporarily empty, but
-        # never turn this fallback into a per-pupil answer review.
-        explanation = (
-            "## How to solve it\n"
-            "Read the question carefully and underline the important information. "
-            "Choose the rule, operation, or idea that matches what the question is asking. "
-            "Work through the steps in order and check that your result answers the question.\n\n"
-            "## Why it works\n"
-            "Breaking a question into small steps helps you choose the right method "
-            "and makes it easier to check your thinking.\n\n"
-            "## Helpful tip\n"
-            "Take your time, show each step, and check the question again when you finish."
-        )
-        llm_fallback = True
-    else:
-        explanation = str(explanation).strip()
-        llm_fallback = False
+    if not results:
+        return {"success": False, "error": "No questions were found to explain."}
 
-    # Persist immediately after the successful LLM response. add-if-absent
-    # protects the shared explanation if two pupils request the same question
-    # at nearly the same time.
-    saved_ok = False
-    try:
-        saved_values = homework_rag.save_detail_explanation(
-            [{
-                "question": question,
-                "explanation": explanation,
-            }],
-            subject,
-            year_group,
-            is_eleven_plus=is_eleven_plus,
-        )
-        saved_ok = bool(saved_values)
-    except Exception:
-        logger.exception(
-            "Could not persist one-question detail explanation for %s",
-            persistent_key,
-        )
-
-    result = {
+    # Preserve question order even when cached and newly generated sections were
+    # mixed together.
+    def sort_key(block: str) -> int:
+        m = re.match(r"## Question (\d+)", block)
+        return int(m.group(1)) if m else 999999
+    results.sort(key=sort_key)
+    explanation = "\n\n".join(results)
+    first_index = selected[0][0] if selected else 0
+    last_index = selected[-1][0] if selected else first_index
+    return {
         "success": True,
         "explanation": explanation,
-        "question": question,
-        "question_number": question_number,
-        "total_questions": total_questions,
-        "has_more": question_number < total_questions,
-        "from_cache": False,
-        "saved": saved_ok,
+        "question_number": first_index + 1,
+        "total_questions": len(items),
+        "explained_questions": len(results),
+        "has_more": last_index < len(items) - 1,
+        "from_cache": not bool(missing),
+        "saved": True,
         "model_tier": "plus",
-        "model_used": None if llm_fallback else _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
-        "llm_fallback": llm_fallback,
+        "model_used": None if not missing else _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
     }
-    explain_cache.set(cache_key, result)
-    return result
 
 def improve_practice(
     homework_content: str,

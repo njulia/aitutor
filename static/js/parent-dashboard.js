@@ -241,12 +241,12 @@ function renderKids() {
     const codeValue = combinedLoginCode(kid.kid_code);
     const code = node('div', 'kid-code');
     const codeText = node('span', 'kid-code-value');
-    codeText.append(node('span', '', 'Kid login: '), node('strong', '', codeValue || 'Not assigned'));
+    codeText.append(node('span', '', 'Login code: '), node('strong', '', codeValue || 'Not assigned'));
     code.append(codeText);
     if (codeValue) {
       const copy = node('button', 'btn btn-secondary copy-code-button', 'Copy');
       copy.type = 'button';
-      copy.setAttribute('aria-label', `Copy kid login for ${kid.name || 'learner'}`);
+      copy.setAttribute('aria-label', `Copy login code for ${kid.name || 'learner'}`);
       copy.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(codeValue);
@@ -258,7 +258,7 @@ function renderKids() {
       });
       code.append(copy);
     }
-    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Login');
+    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Student Login');
     loginBtn.type = 'button';
     loginBtn.setAttribute('aria-label', `Login as ${kid.name || 'learner'}`);
     loginBtn.addEventListener('click', () => {

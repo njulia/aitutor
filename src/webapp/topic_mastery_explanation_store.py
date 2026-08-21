@@ -38,7 +38,8 @@ _TABLE = __import__("sqlalchemy").Table(
     Column("doc_id", String(256), nullable=False),
     Column("subject", String(80), nullable=False),
     Column("topic", String(200), nullable=False),
-    Column("mastery_level", Integer, nullable=False),
+    Column("mastery_level", Integer, nullable=True),
+    Column("plan_week", Integer, nullable=True),
     Column("question_index", Integer, nullable=False),
     Column("explanation", Text, nullable=False),
     Column("model_used", String(200), nullable=True),
@@ -51,6 +52,27 @@ _TABLE = __import__("sqlalchemy").Table(
 def init_topic_mastery_explanation_store() -> None:
     engine = _engine()
     _METADATA.create_all(engine)
+    _migrate_topic_mastery_explanation_store(engine)
+
+
+def _migrate_topic_mastery_explanation_store(engine: Engine) -> None:
+    """为已存在的表补充 plan_week 列并放宽 mastery_level 约束。
+
+    ``create_all`` 不会修改已存在的表，而生产库早已建好该表，因此需要
+    显式迁移：新增 ``plan_week`` 列，并去掉 ``mastery_level`` 的 NOT NULL
+    约束（52 周计划的讲解不携带 mastery_level）。
+    """
+    table_name = "elevenplus_topic_mastery_explanations"
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        return
+
+    existing = {col["name"] for col in inspector.get_columns(table_name)}
+    with engine.begin() as conn:
+        if "plan_week" not in existing:
+            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN plan_week INTEGER"))
+        if engine.dialect.name == "postgresql":
+            conn.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN mastery_level DROP NOT NULL"))
 
 
 def question_key(
@@ -74,6 +96,27 @@ def question_key(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def year_round_question_key(
+    *,
+    doc_id: str,
+    subject: str,
+    topic: str,
+    plan_week: int,
+    question_index: int,
+    question: str,
+) -> str:
+    canonical = " ".join(str(question or "").split()).casefold()
+    raw = "|".join([
+        str(doc_id or ""),
+        str(subject or ""),
+        str(topic or ""),
+        str(plan_week),
+        str(question_index),
+        canonical,
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def get_explanation(key: str) -> Optional[dict]:
     init_topic_mastery_explanation_store()
     with _engine().connect() as conn:
@@ -89,10 +132,11 @@ def save_explanation(
     doc_id: str,
     subject: str,
     topic: str,
-    mastery_level: int,
+    mastery_level: Optional[int],
     question_index: int,
     explanation: str,
     model_used: Optional[str],
+    plan_week: Optional[int] = None,
 ) -> dict:
     init_topic_mastery_explanation_store()
     now = datetime.now(UTC)
@@ -102,7 +146,8 @@ def save_explanation(
         "doc_id": str(doc_id),
         "subject": str(subject),
         "topic": str(topic),
-        "mastery_level": int(mastery_level),
+        "mastery_level": mastery_level,
+        "plan_week": plan_week,
         "question_index": int(question_index),
         "explanation": str(explanation).strip(),
         "model_used": model_used,

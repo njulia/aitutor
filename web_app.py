@@ -1036,6 +1036,25 @@ class TopicMasteryPracticeRequest(BaseModel):
     mastery_level: int = Field(..., ge=1, le=5)
 
 
+class TopicMasteryExplainRequest(BaseModel):
+    subject: str
+    topic_index: int = Field(..., ge=1, le=11)
+    mastery_level: int = Field(..., ge=1, le=5)
+    doc_id: Optional[str] = None
+    question_index: int = Field(..., ge=0, le=500)
+    question: str = Field(min_length=1, max_length=20_000)
+    topic: str = Field(default="", max_length=200)
+
+
+class YearRoundExplainRequest(BaseModel):
+    doc_id: Optional[str] = None
+    question_index: int = Field(..., ge=0, le=500)
+    question: str = Field(min_length=1, max_length=20_000)
+    topic: str = Field(default="", max_length=200)
+    subject: str = Field(default="Maths", min_length=1, max_length=80)
+    plan_week: int = Field(..., ge=1, le=52)
+
+
 class ReviewRequest(BaseModel):
     homework: str = Field(min_length=1, max_length=20_000)
     answers: str = Field(min_length=1, max_length=12_000)
@@ -1848,6 +1867,253 @@ async def get_topic_mastery_practice(req: Request, request: TopicMasteryPractice
     _resolved_id, _username, new_anon_session_id = await _resolve_request_identity(req)
     _set_anon_cookie(response, new_anon_session_id, req)
     return response
+
+
+def load_elevenplus_explanation(key: str) -> Optional[str]:
+    """返回已保存的单题讲解，若不存在则返回 None。"""
+    from src.webapp.topic_mastery_explanation_store import get_explanation
+
+    row = get_explanation(key)
+    if row and str(row.get("explanation") or "").strip():
+        return str(row["explanation"]).strip()
+    return None
+
+
+def save_topic_mastery_explanation(
+    *,
+    key: str,
+    doc_id: str,
+    subject: str,
+    topic: str,
+    mastery_level: int,
+    question_index: int,
+    explanation: str,
+    model_used: Optional[str] = None,
+) -> None:
+    """持久化单题讲解，供后续学生复用（不含任何学生答案）。"""
+    from src.webapp.topic_mastery_explanation_store import save_explanation
+
+    save_explanation(
+        key=key,
+        doc_id=doc_id,
+        subject=subject,
+        topic=topic,
+        mastery_level=mastery_level,
+        question_index=question_index,
+        explanation=explanation,
+        model_used=model_used,
+    )
+
+
+def save_year_round_explanation(
+    *,
+    key: str,
+    doc_id: str,
+    subject: str,
+    topic: str,
+    plan_week: int,
+    question_index: int,
+    explanation: str,
+    model_used: Optional[str] = None,
+) -> None:
+    """持久化 52 周计划的单题讲解，供后续学生复用（不含任何学生答案）。"""
+    from src.webapp.topic_mastery_explanation_store import save_explanation
+
+    save_explanation(
+        key=key,
+        doc_id=doc_id,
+        subject=subject,
+        topic=topic,
+        mastery_level=None,
+        plan_week=plan_week,
+        question_index=question_index,
+        explanation=explanation,
+        model_used=model_used,
+    )
+
+
+def _generate_elevenplus_explanation(question: str, subject: str) -> str:
+    """为 11+ 练习的单个题目生成讲解（无学生答案）。"""
+    from src.llm_client import build_messages, format_prompt
+    from src.models import subject_display_name
+    from src.prompts import EXPLAIN_SINGLE_QUESTION_PROMPT
+    from src.webapp.review_service import _complete_review, _token_limit
+
+    prompt = format_prompt(
+        EXPLAIN_SINGLE_QUESTION_PROMPT,
+        student_profile="A UK primary school pupil preparing for the 11+ exam.",
+        subject=compact_text(subject_display_name(subject), 80),
+        question=compact_text(question, 4000),
+        trusted_answer="Not supplied. Work it out yourself.",
+        trusted_method="Not supplied.",
+    )
+    return _complete_review(
+        llm,
+        build_messages(prompt),
+        model=DETAIL_REVIEW_MODEL,
+        temperature=0.2,
+        max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 2000, maximum=4000),
+        operation="elevenplus_explain",
+    )
+
+
+@app.post("/api/elevenplus/topic-mastery/explain")
+async def get_topic_mastery_explanation(req: Request, request: TopicMasteryExplainRequest):
+    """生成并缓存 11+ Topic Mastery 的单题讲解。"""
+    try:
+        initialize()
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(
+            req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
+        )
+
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            ELEVENPLUS_PREMIUM_PLAN,
+            True,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "Explain in Detail", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+            )
+
+        from src.webapp.topic_mastery_explanation_store import question_key
+
+        key = question_key(
+            doc_id=request.doc_id or "",
+            subject=request.subject,
+            topic=request.topic,
+            mastery_level=request.mastery_level,
+            question_index=request.question_index,
+            question=request.question,
+        )
+
+        saved = load_elevenplus_explanation(key)
+        if saved:
+            response = JSONResponse({"success": True, "explanation": saved})
+            _set_anon_cookie(response, new_anon_session_id, req)
+            return response
+
+        explanation = await run_blocking(
+            _generate_elevenplus_explanation,
+            request.question,
+            request.subject,
+            timeout=120,
+            limit_concurrency=False,
+        )
+        explanation = str(explanation or "").strip()
+        if not explanation:
+            return JSONResponse(
+                status_code=502,
+                content={"success": False, "error": "This explanation could not be created. You can try again."},
+            )
+
+        save_topic_mastery_explanation(
+            key=key,
+            doc_id=request.doc_id or "",
+            subject=request.subject,
+            topic=request.topic,
+            mastery_level=request.mastery_level,
+            question_index=request.question_index,
+            explanation=explanation,
+            model_used=DETAIL_REVIEW_MODEL,
+        )
+        response = JSONResponse({"success": True, "explanation": explanation})
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Topic Mastery explanation failed")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "We could not make the explanation just now. Please try again."},
+        )
+
+
+
+@app.post("/api/elevenplus/year-round/explain")
+async def get_year_round_explanation(req: Request, request: YearRoundExplainRequest):
+    """生成并缓存 11+ 52 周计划的单题讲解。"""
+    try:
+        initialize()
+        resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
+        await _require_registered_identity(
+            req, resolved_student_id=resolved_student_id, logged_in_username=logged_in_username
+        )
+
+        has_sub = await run_blocking(
+            user_has_subscription,
+            req,
+            resolved_student_id,
+            logged_in_username,
+            ELEVENPLUS_PREMIUM_PLAN,
+            True,
+            timeout=12,
+            limit_concurrency=False,
+        )
+        if not has_sub:
+            return _subscription_required_response(
+                "Explain in Detail", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
+            )
+
+        from src.webapp.topic_mastery_explanation_store import year_round_question_key
+
+        key = year_round_question_key(
+            doc_id=request.doc_id or "",
+            subject=request.subject,
+            topic=request.topic,
+            plan_week=request.plan_week,
+            question_index=request.question_index,
+            question=request.question,
+        )
+
+        saved = load_elevenplus_explanation(key)
+        if saved:
+            response = JSONResponse({"success": True, "explanation": saved})
+            _set_anon_cookie(response, new_anon_session_id, req)
+            return response
+
+        explanation = await run_blocking(
+            _generate_elevenplus_explanation,
+            request.question,
+            request.subject,
+            timeout=120,
+            limit_concurrency=False,
+        )
+        explanation = str(explanation or "").strip()
+        if not explanation:
+            return JSONResponse(
+                status_code=502,
+                content={"success": False, "error": "This explanation could not be created. You can try again."},
+            )
+
+        save_year_round_explanation(
+            key=key,
+            doc_id=request.doc_id or "",
+            subject=request.subject,
+            topic=request.topic,
+            plan_week=request.plan_week,
+            question_index=request.question_index,
+            explanation=explanation,
+            model_used=DETAIL_REVIEW_MODEL,
+        )
+        response = JSONResponse({"success": True, "explanation": explanation})
+        _set_anon_cookie(response, new_anon_session_id, req)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("11+ year-round explanation failed")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "We could not make the explanation just now. Please try again."},
+        )
 
 
 

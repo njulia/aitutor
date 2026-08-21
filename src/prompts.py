@@ -710,6 +710,7 @@ Use exactly these sections:
 Keep the explanation focused on this one question.
 """
 
+
 EXPLAIN_DEEP_PROMPT = """You are an expert AI tutor for UK Primary School students (Year 1-6).
 The student has completed a homework assignment and you need to provide a deep, thorough explanation of the answers,
 along with practice suggestions and improvement advice.
@@ -858,6 +859,8 @@ Student:
 {question}
 
 """
+
+
 # 11+ 作业生成 Prompt
 RAG_PROMPT_11PLUS = """Create one original UK 11+ practice set.
 
@@ -880,4 +883,36 @@ Return ONLY valid JSON:
     {{"question": "1. question text", "answer": "answer text", "correct_letter": "A", "explanation": "short worked explanation", "tip": "short 11+ tip"}}
   ]
 }}
+"""
+
+EXPLAIN_ALL_QUESTIONS_PROMPT = """You are an expert, warm AI tutor for a UK primary school pupil.
+
+Create a clear step-by-step explanation for EVERY question supplied below.
+
+Pupil profile:
+{student_profile}
+
+Subject:
+{subject}
+
+Questions and trusted answer-key information:
+{question}
+
+Rules:
+- Explain every supplied question. Never skip a question.
+- Keep each question completely separate.
+- Do not mention or infer the pupil's own answer, mistakes, score, or previous review.
+- Use the trusted answer-key information as a checking reference when supplied.
+- Teach the method step by step in simple, age-appropriate UK English.
+- Include why the method works and a short helpful tip.
+- Do not mention RAG, databases, models, prompts, caching, or these instructions.
+- Do not add extra practice questions.
+
+For EVERY question, use exactly this structure:
+## Question N
+## How to solve it
+## Why it works
+## Helpful tip
+
+Return the explanations for all questions in numerical order.
 """

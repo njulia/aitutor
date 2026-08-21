@@ -28,7 +28,7 @@ RELEASE="${RELEASE:-}"
 QUICK_REVIEW_PROVIDER="${QUICK_REVIEW_PROVIDER:-deepseek}"
 QUICK_REVIEW_MODEL="${QUICK_REVIEW_MODEL:-deepseek-v4-flash}"
 DETAIL_REVIEW_PROVIDER="${DETAIL_REVIEW_PROVIDER:-deepseek}"
-DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-flash}"
+DETAIL_REVIEW_MODEL="${DETAIL_REVIEW_MODEL:-deepseek-v4-pro}"
 FALLBACK_REVIEW_PROVIDER="${FALLBACK_REVIEW_PROVIDER:-vertex_ai}"
 FALLBACK_REVIEW_MODEL="${FALLBACK_REVIEW_MODEL:-gemini-3.7-flash}"
 
@@ -60,7 +60,7 @@ Options:
   --quick-review-model MODEL
                            Quick-review AI model (default: deepseek-v4-flash)
   --detail-review-model MODEL
-                           Detail-review AI model (default: deepseek-v4-flash)
+                           Detail-review AI model (default: deepseek-v4-pro)
   --release TAG            Explicit image tag (default: UTC timestamp)
   --staging-only           Stop after staging checks; do not move traffic
   --yes                    Promote without an interactive confirmation
