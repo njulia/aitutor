@@ -263,6 +263,30 @@ def save_mock_exam_explanation(
             conn.execute(insert(mock_exam_explanations).values(**values))
 
 
+def list_mock_exam_explanations(*, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+    """分页列出所有 mock exam 的题目讲解。"""
+    with _engine.connect() as conn:
+        rows = conn.execute(
+            select(mock_exam_explanations)
+            .order_by(mock_exam_explanations.c.updated_at.desc())
+            .offset(max(0, int(offset)))
+            .limit(max(1, min(int(limit), 1000)))
+        ).all()
+    return [_dict(row) for row in rows]
+
+
+def delete_mock_exam_explanations(keys: List[str]) -> int:
+    """按 question_hash 批量删除 mock exam 讲解，返回删除条数。"""
+    clean = [str(key) for key in keys if str(key).strip()]
+    if not clean:
+        return 0
+    with _engine.begin() as conn:
+        result = conn.execute(
+            delete(mock_exam_explanations).where(mock_exam_explanations.c.question_hash.in_(clean))
+        )
+    return int(result.rowcount or 0)
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 

@@ -253,21 +253,28 @@
                 <div class="table-header">
                     <div>
                         <h3>Saved Question Explanations</h3>
-                        <div style="font-size:12px;color:#888;margin-top:4px;">Select a homework set or 11+ practice set to remove its reusable question explanations. This does not delete the homework set itself.</div>
+                        <div style="font-size:12px;color:#888;margin-top:4px;">Search and remove individual reusable explanations. Deleting an explanation means the next pupil who asks for it will generate a fresh one.</div>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <select id="explanationSetType" onchange="loadExplanationSets()" style="padding:9px 12px;border:1px solid #e0e0e0;border-radius:8px;">
-                            <option value="">Homework + 11+ Practice</option>
-                            <option value="false">Homework</option>
-                            <option value="true">11+ Practice</option>
+                        <select id="explanationSource" onchange="loadExplanations()" style="padding:9px 12px;border:1px solid #e0e0e0;border-radius:8px;">
+                            <option value="">All sources</option>
+                            <option value="detail">Homework / 11+ Practice</option>
+                            <option value="mock_exam">Mock Exam</option>
+                            <option value="topic_mastery">Topic Mastery</option>
+                            <option value="year_round">Year Round</option>
                         </select>
-                        <button class="btn btn-outline" onclick="loadExplanationSets()">Refresh</button>
+                        <input class="search-box" id="explanationSubject" type="text" placeholder="Subject e.g. Maths" onkeydown="if(event.key==='Enter')loadExplanations()">
+                        <input class="search-box" id="explanationSearch" type="text" placeholder="Search explanation text" onkeydown="if(event.key==='Enter')loadExplanations()">
+                        <button class="btn btn-outline" onclick="loadExplanations()">Search</button>
                     </div>
                 </div>
-                <div style="padding:12px 20px;color:#777;font-size:13px;">Deleting explanations only means the next pupil who asks for a detailed explanation will create a fresh explanation.</div>
+                <div style="padding:12px 20px;color:#777;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span id="explanationCount"></span>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedExplanations()">Delete selected</button>
+                </div>
                 <table>
-                    <thead><tr><th>Type</th><th>Subject</th><th>Year</th><th>Week</th><th>Set</th><th>Action</th></tr></thead>
-                    <tbody id="explanationSetsTable"></tbody>
+                    <thead><tr><th style="width:36px;"><input type="checkbox" id="explanationSelectAll" onclick="toggleSelectAllExplanations()"></th><th>Source</th><th>Subject</th><th>Topic / Detail</th><th>Explanation preview</th><th>Updated</th><th>Action</th></tr></thead>
+                    <tbody id="explanationsTable"></tbody>
                 </table>
             </div>
         </div>
@@ -717,7 +724,7 @@
                 case 'users': loadUsers(); break;
                 case 'auth-users': loadAuthUsers(); break;
                 case 'subscriptions': loadSubscriptions(); break;
-                case 'explanations': loadExplanationSets(); break;
+                case 'explanations': loadExplanations(); break;
                 case 'schools': loadExcludedSchools(); loadSchoolReports(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
                 case 'ai-eval': loadAIEval(); break;
@@ -977,40 +984,104 @@
         }
 
         // Subscriptions
-        async function loadExplanationSets() {
-            const tbody = document.getElementById('explanationSetsTable');
+        let selectedExplanations = new Set();
+
+        async function loadExplanations() {
+            const tbody = document.getElementById('explanationsTable');
+            const countEl = document.getElementById('explanationCount');
+            const selectAll = document.getElementById('explanationSelectAll');
             if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
-            const type = document.getElementById('explanationSetType')?.value || '';
-            let url = API + '/explanation-sets?limit=500';
-            if (type !== '') url += '&eleven_plus=' + encodeURIComponent(type);
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
+            selectedExplanations.clear();
+            const source = document.getElementById('explanationSource')?.value || '';
+            const subject = document.getElementById('explanationSubject')?.value.trim() || '';
+            const q = document.getElementById('explanationSearch')?.value.trim() || '';
+            const params = new URLSearchParams();
+            if (source) params.set('source', source);
+            if (subject) params.set('subject', subject);
+            if (q) params.set('q', q);
+            params.set('limit', '500');
             try {
-                const resp = await fetch(url, {credentials:'same-origin', cache:'no-store'});
-                const data = await resp.json();
-                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not load sets');
-                const rows = data.sets || [];
-                if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:24px;">No homework or 11+ practice sets found.</td></tr>'; return; }
+                const data = await api('/explanations?' + params.toString());
+                if (!data.success) throw new Error(data.detail || 'Could not load explanations');
+                const rows = data.items || [];
+                if (countEl) countEl.textContent = `${data.total || rows.length} explanation(s)`;
+                if (selectAll) selectAll.checked = false;
+                if (!rows.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:24px;">No saved explanations found.</td></tr>';
+                    return;
+                }
                 tbody.innerHTML = rows.map(row => {
-                    const typeLabel = row.is_eleven_plus ? '11+ Practice' : 'Homework';
-                    const title = row.title || row.content_type || 'Practice set';
-                    const week = row.week_num == null ? '—' : 'Week ' + escapeHtml(String(row.week_num));
-                    return `<tr><td><span class="badge ${row.is_eleven_plus ? 'badge-blue' : 'badge-green'}">${typeLabel}</span></td><td>${escapeHtml(row.subject || '—')}</td><td>${escapeHtml(row.year_group == null ? '—' : String(row.year_group))}</td><td>${week}</td><td>${escapeHtml(title)}</td><td><button class="btn btn-danger btn-sm" onclick="deleteSavedExplanations(${JSON.stringify(row.doc_id)}, ${row.is_eleven_plus ? 'true' : 'false'}, ${JSON.stringify(title)})">Delete saved explanations</button></td></tr>`;
+                    const detail = [
+                        row.topic,
+                        row.doc_id,
+                        row.question_index != null ? 'Q' + row.question_index : '',
+                        row.mastery_level != null ? 'Level ' + row.mastery_level : '',
+                        row.plan_week != null ? 'Week ' + row.plan_week : ''
+                    ].filter(Boolean).join(' · ');
+                    return `<tr>
+                        <td><input type="checkbox" class="explanation-check" data-key="${escapeHtml(row.key)}" onchange="onExplanationCheck(this)"></td>
+                        <td><span class="badge badge-blue">${escapeHtml(row.label)}</span></td>
+                        <td>${escapeHtml(row.subject || '—')}</td>
+                        <td>${escapeHtml(detail || '—')}</td>
+                        <td><div style="max-width:420px;white-space:normal;word-break:break-word;">${escapeHtml(row.preview || '')}</div></td>
+                        <td>${formatAdminDate(row.updated_at)}</td>
+                        <td><button class="btn btn-danger btn-sm" data-key="${escapeHtml(row.key)}" onclick="deleteOneExplanation(this.getAttribute('data-key'))">Delete</button></td>
+                    </tr>`;
                 }).join('');
             } catch (err) {
                 console.error(err);
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#c53030;padding:24px;">${escapeHtml(err.message || 'Could not load saved explanations.')}</td></tr>`;
+                if (countEl) countEl.textContent = '';
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#c53030;padding:24px;">${escapeHtml(err.message || 'Could not load saved explanations.')}</td></tr>`;
             }
         }
 
-        async function deleteSavedExplanations(docId, isElevenPlus, title) {
-            if (!confirm(`Delete all saved question explanations for “${title}”? The practice/homework set itself will not be deleted.`)) return;
+        function onExplanationCheck(checkbox) {
+            const key = checkbox.getAttribute('data-key');
+            if (checkbox.checked) selectedExplanations.add(key); else selectedExplanations.delete(key);
+        }
+
+        function toggleSelectAllExplanations() {
+            const all = document.getElementById('explanationSelectAll');
+            const boxes = document.querySelectorAll('.explanation-check');
+            boxes.forEach(b => {
+                b.checked = all.checked;
+                const key = b.getAttribute('data-key');
+                if (all.checked) selectedExplanations.add(key); else selectedExplanations.delete(key);
+            });
+        }
+
+        async function deleteSelectedExplanations() {
+            const keys = Array.from(selectedExplanations);
+            if (!keys.length) { alert('Select at least one explanation to delete.'); return; }
+            if (!confirm(`Delete ${keys.length} selected explanation(s)?`)) return;
             try {
-                const resp = await fetch(API + '/explanation-sets/' + encodeURIComponent(docId) + '?eleven_plus=' + (isElevenPlus ? 'true' : 'false'), {method:'DELETE', credentials:'same-origin'});
+                const resp = await fetch(API + '/explanations/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({keys})
+                });
                 const data = await resp.json();
-                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not delete saved explanations');
-                alert(`${data.deleted || 0} saved explanation(s) deleted.`);
-                await loadExplanationSets();
-            } catch (err) { console.error(err); alert(err.message || 'Could not delete saved explanations.'); }
+                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not delete explanations');
+                alert(`${data.deleted || 0} explanation(s) deleted.`);
+                await loadExplanations();
+            } catch (err) { console.error(err); alert(err.message || 'Could not delete explanations.'); }
+        }
+
+        async function deleteOneExplanation(key) {
+            if (!confirm('Delete this explanation?')) return;
+            try {
+                const resp = await fetch(API + '/explanations/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({keys: [key]})
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) throw new Error(data.detail || 'Could not delete explanation');
+                await loadExplanations();
+            } catch (err) { console.error(err); alert(err.message || 'Could not delete explanation.'); }
         }
 
         async function loadSubscriptions(refreshStripe = true) {

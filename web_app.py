@@ -3963,6 +3963,189 @@ async def admin_dev_mode_status():
     return {"is_dev_mode": _dev_mode}
 
 
+# ---- Saved explanations 管理（题目级）----
+
+_EXPLANATION_SOURCE_LABELS = {
+    "detail": "Homework / 11+ Practice",
+    "mock_exam": "Mock Exam",
+    "topic_mastery": "Topic Mastery",
+    "year_round": "Year Round",
+}
+_EXPLANATION_FETCH_CAP = 1000
+
+
+def _iso_timestamp(value) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+@app.get("/api/admin/explanations")
+async def admin_list_explanations(
+    req: Request,
+    source: str = None,
+    subject: str = None,
+    q: str = None,
+    limit: int = 200,
+    offset: int = 0,
+):
+    """列出所有已保存的详细讲解，支持按来源/科目/关键词筛选。"""
+    _require_admin(req)
+    limit = max(1, min(int(limit), 1000))
+    offset = max(0, int(offset))
+    source_q = (source or "").strip().casefold()
+    subject_q = (subject or "").strip().casefold()
+    text_q = (q or "").strip().casefold()
+
+    items: List[dict] = []
+
+    def _matches(meta_subject: Any, meta_topic: Any, text: str) -> bool:
+        if subject_q and subject_q not in str(meta_subject or "").casefold():
+            return False
+        if text_q:
+            haystack = " ".join([str(meta_topic or ""), str(text or "")]).casefold()
+            if text_q not in haystack:
+                return False
+        return True
+
+    # 1) Homework / 11+ practice（通用详细讲解）
+    if not source_q or source_q in ("detail", "all"):
+        try:
+            from src.homework_rag import list_detail_explanations
+            for row in list_detail_explanations(limit=_EXPLANATION_FETCH_CAP, offset=0):
+                text = str(row.get("content") or "")
+                if not _matches("", "", text):
+                    continue
+                key = str(row.get("doc_id") or "").strip()
+                if not key:
+                    continue
+                items.append({
+                    "key": f"detail:{key}",
+                    "source": "detail",
+                    "label": _EXPLANATION_SOURCE_LABELS["detail"],
+                    "subject": "",
+                    "topic": "",
+                    "doc_id": "",
+                    "question_index": None,
+                    "mastery_level": None,
+                    "plan_week": None,
+                    "preview": text[:220],
+                    "model_used": "",
+                    "updated_at": None,
+                })
+        except Exception:
+            logger.exception("admin_list_explanations: 读取通用详细讲解失败")
+
+    # 2) Mock exam 讲解
+    if not source_q or source_q in ("mock_exam", "all"):
+        try:
+            from src.progress_db import list_mock_exam_explanations
+            for row in list_mock_exam_explanations(limit=_EXPLANATION_FETCH_CAP, offset=0):
+                text = str(row.get("explanation") or "")
+                if not _matches(row.get("subject"), row.get("topic"), text):
+                    continue
+                key = str(row.get("question_hash") or "").strip()
+                if not key:
+                    continue
+                items.append({
+                    "key": f"mock_exam:{key}",
+                    "source": "mock_exam",
+                    "label": _EXPLANATION_SOURCE_LABELS["mock_exam"],
+                    "subject": row.get("subject") or "",
+                    "topic": row.get("topic") or "",
+                    "doc_id": row.get("exam_id") or "",
+                    "question_index": None,
+                    "mastery_level": None,
+                    "plan_week": None,
+                    "preview": text[:220],
+                    "model_used": row.get("model_used") or "",
+                    "updated_at": _iso_timestamp(row.get("updated_at")),
+                })
+        except Exception:
+            logger.exception("admin_list_explanations: 读取 mock exam 讲解失败")
+
+    # 3) Topic Mastery + Year Round 讲解（同一张表，plan_week 区分）
+    if not source_q or source_q in ("topic_mastery", "year_round", "all"):
+        try:
+            from src.webapp.topic_mastery_explanation_store import list_explanations as list_tm
+            for row in list_tm(limit=_EXPLANATION_FETCH_CAP, offset=0):
+                plan_week = row.get("plan_week")
+                row_source = "year_round" if plan_week is not None else "topic_mastery"
+                if source_q and source_q != "all" and source_q != row_source:
+                    continue
+                text = str(row.get("explanation") or "")
+                if not _matches(row.get("subject"), row.get("topic"), text):
+                    continue
+                key = str(row.get("question_key") or "").strip()
+                if not key:
+                    continue
+                items.append({
+                    "key": f"{row_source}:{key}",
+                    "source": row_source,
+                    "label": _EXPLANATION_SOURCE_LABELS[row_source],
+                    "subject": row.get("subject") or "",
+                    "topic": row.get("topic") or "",
+                    "doc_id": row.get("doc_id") or "",
+                    "question_index": row.get("question_index"),
+                    "mastery_level": row.get("mastery_level"),
+                    "plan_week": plan_week,
+                    "preview": text[:220],
+                    "model_used": row.get("model_used") or "",
+                    "updated_at": _iso_timestamp(row.get("updated_at")),
+                })
+        except Exception:
+            logger.exception("admin_list_explanations: 读取 topic mastery 讲解失败")
+
+    items.sort(key=lambda it: it.get("updated_at") or "", reverse=True)
+    total = len(items)
+    page = items[offset:offset + limit]
+    return {"success": True, "total": total, "items": page}
+
+
+@app.post("/api/admin/explanations/delete")
+async def admin_delete_explanations(req: Request):
+    """按题目批量删除已保存的详细讲解。请求体: {"keys": ["source:key", ...]}"""
+    _require_admin(req)
+    data = await req.json()
+    raw_keys = [str(k).strip() for k in (data.get("keys") or []) if str(k).strip()]
+    if not raw_keys:
+        raise HTTPException(status_code=400, detail="No explanations selected")
+
+    buckets: Dict[str, List[str]] = {
+        "detail": [], "mock_exam": [], "topic_mastery": [], "year_round": []
+    }
+    for composite in raw_keys:
+        if ":" in composite:
+            src, key = composite.split(":", 1)
+            if src in buckets and key:
+                buckets[src].append(key)
+
+    deleted = 0
+    if buckets["detail"]:
+        try:
+            from src.homework_rag import delete_detail_explanations
+            deleted += delete_detail_explanations(buckets["detail"])
+        except Exception:
+            logger.exception("admin_delete_explanations: 删除通用详细讲解失败")
+    if buckets["mock_exam"]:
+        try:
+            from src.progress_db import delete_mock_exam_explanations
+            deleted += delete_mock_exam_explanations(buckets["mock_exam"])
+        except Exception:
+            logger.exception("admin_delete_explanations: 删除 mock exam 讲解失败")
+    tm_keys = buckets["topic_mastery"] + buckets["year_round"]
+    if tm_keys:
+        try:
+            from src.webapp.topic_mastery_explanation_store import delete_explanations
+            deleted += delete_explanations(tm_keys)
+        except Exception:
+            logger.exception("admin_delete_explanations: 删除 topic mastery 讲解失败")
+
+    return {"success": True, "deleted": deleted}
+
+
 # ---- AI 监控 API ----
 
 @app.get("/api/admin/ai-monitor/stats")

@@ -9,9 +9,9 @@ import hashlib
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Text, UniqueConstraint, select
+from sqlalchemy import Column, DateTime, Integer, MetaData, String, Text, UniqueConstraint, delete, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
@@ -167,3 +167,29 @@ def save_explanation(
                 return dict(existing)
             raise
     return values
+
+
+def list_explanations(*, limit: int = 1000, offset: int = 0) -> List[dict]:
+    """分页列出所有已保存的题目讲解（含 topic mastery 与 year round）。"""
+    init_topic_mastery_explanation_store()
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            select(_TABLE)
+            .order_by(_TABLE.c.updated_at.desc(), _TABLE.c.id.desc())
+            .offset(max(0, int(offset)))
+            .limit(max(1, min(int(limit), 1000)))
+        ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def delete_explanations(keys: List[str]) -> int:
+    """按 question_key 批量删除讲解，返回删除条数。"""
+    clean = [str(key) for key in keys if str(key).strip()]
+    if not clean:
+        return 0
+    init_topic_mastery_explanation_store()
+    with _engine().begin() as conn:
+        result = conn.execute(
+            delete(_TABLE).where(_TABLE.c.question_key.in_(clean))
+        )
+    return int(result.rowcount or 0)

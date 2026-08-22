@@ -674,6 +674,23 @@ def save_detail_explanation(
     return saved
 
 
+def list_detail_explanations(*, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
+    """分页列出已保存的通用详细讲解（homework / 11+ practice）。"""
+    return _get_detail_explanation_store().get_all(limit=limit, offset=offset)
+
+
+def delete_detail_explanations(keys: List[str]) -> int:
+    """按 doc_id（讲解键）批量删除通用详细讲解，返回删除条数。"""
+    clean = [str(key) for key in keys if str(key).strip()]
+    if not clean:
+        return 0
+    store = _get_detail_explanation_store()
+    before = store.count()
+    store.delete(clean)
+    after = store.count()
+    return max(0, before - after)
+
+
 def list_explanation_source_sets(*, is_eleven_plus: Optional[bool] = None, limit: int = 500) -> List[Dict[str, Any]]:
     """List shared homework/11+ RAG sets that can have saved explanations.
 
