@@ -109,7 +109,7 @@ function scoreSeries(kid, index) {
     .sort((a, b) => a.date - b.date);
   return {
     id: kid.id,
-    name: kid.name || 'Learner',
+    name: kid.name || 'Child',
     colour: SCORE_TREND_COLOURS[index % SCORE_TREND_COLOURS.length],
     points,
   };
@@ -154,7 +154,7 @@ function renderScoreTrend() {
     empty.hidden = false;
     empty.textContent = series.length
       ? 'No marked scores are available yet. The chart will appear after homework is reviewed.'
-      : 'Add a learner profile to start tracking score trends.';
+      : 'Add a Child profile to start tracking score trends.';
     canvas.setAttribute('aria-label', 'No marked scores are available for the family yet.');
     return;
   }
@@ -223,20 +223,20 @@ function renderKids() {
   const grid = byId('kids-grid');
   clearNode(grid);
   if (!familyState.kids.size) {
-    grid.append(node('div', 'empty', 'No learner profiles yet.'));
+    grid.append(node('div', 'empty', 'No Child profiles yet.'));
     return;
   }
 
   familyState.kids.forEach((kid) => {
     const card = node('article', 'kid-card');
     const title = node('div', 'kid-title');
-    title.append(node('h3', '', kid.name || 'Learner'));
+    title.append(node('h3', '', kid.name || 'Child'));
     if (kid.is_default) title.append(node('span', 'default-badge', 'Default'));
     const edit = node('button', 'btn btn-secondary', 'Edit profile');
     edit.type = 'button';
     edit.addEventListener('click', () => showProfileForm(kid));
     title.append(edit);
-    card.append(title, node('p', 'muted', `Year ${kid.year_group} · Age ${kid.age}`));
+    card.append(title, node('p', 'muted', `Year ${kid.year_group}`));
 
     const codeValue = combinedLoginCode(kid.kid_code);
     const code = node('div', 'kid-code');
@@ -246,7 +246,7 @@ function renderKids() {
     if (codeValue) {
       const copy = node('button', 'btn btn-secondary copy-code-button', 'Copy');
       copy.type = 'button';
-      copy.setAttribute('aria-label', `Copy login code for ${kid.name || 'learner'}`);
+      copy.setAttribute('aria-label', `Copy login code for ${kid.name || 'Child'}`);
       copy.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(codeValue);
@@ -258,15 +258,50 @@ function renderKids() {
       });
       code.append(copy);
     }
-    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Student Login');
+    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Child Login');
     loginBtn.type = 'button';
-    loginBtn.setAttribute('aria-label', `Login as ${kid.name || 'learner'}`);
+    loginBtn.setAttribute('aria-label', `Login as ${kid.name || 'Child'}`);
     loginBtn.addEventListener('click', () => {
       const loginUrl = `/kid-login${codeValue ? `?code=${encodeURIComponent(codeValue)}` : ''}`;
       window.open(loginUrl, '_blank');
     });
     code.append(loginBtn);
     card.append(code);
+
+    const target = kid.learning_target || {};
+    const targetBox = node('div', 'target-form');
+    targetBox.append(node('strong', '', 'Learning target'));
+    const row = node('div', 'form-row');
+    const dailyField = node('div', 'field');
+    const dailyLabel = node('label', '', 'Daily activities');
+    const daily = node('input');
+    daily.type = 'number'; daily.min = '1'; daily.max = '10'; daily.value = target.daily_goal || 1;
+    dailyLabel.htmlFor = `daily-${kid.id}`; daily.id = `daily-${kid.id}`;
+    dailyField.append(dailyLabel, daily);
+    const weeklyField = node('div', 'field');
+    const weeklyLabel = node('label', '', 'Weekly XP goal');
+    const weekly = node('input');
+    weekly.type = 'number'; weekly.min = '10'; weekly.max = '2000'; weekly.value = target.weekly_xp_goal || 100;
+    weeklyLabel.htmlFor = `weekly-${kid.id}`; weekly.id = `weekly-${kid.id}`;
+    weeklyField.append(weeklyLabel, weekly);
+    const save = node('button', 'btn btn-primary', 'Save target');
+    save.type = 'button';
+    save.addEventListener('click', () => requestPassword(async (password) => {
+      await api('/api/parent/learning-target', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: kid.id,
+          daily_goal: Number(daily.value),
+          weekly_xp_goal: Number(weekly.value),
+          parent_password: password,
+        }),
+      });
+      setStatus(`Learning target saved for ${kid.name}.`);
+      await loadOverview();
+    }));
+    row.append(dailyField, weeklyField, save);
+    targetBox.append(row);
+    card.append(targetBox);
 
     const wallet = kid.wallet || {};
     const progress = kid.progress || {};
@@ -305,40 +340,6 @@ function renderKids() {
     }
     card.append(actions);
 
-    const target = kid.learning_target || {};
-    const targetBox = node('div', 'target-form');
-    targetBox.append(node('strong', '', 'Learning target'));
-    const row = node('div', 'form-row');
-    const dailyField = node('div', 'field');
-    const dailyLabel = node('label', '', 'Daily activities');
-    const daily = node('input');
-    daily.type = 'number'; daily.min = '1'; daily.max = '10'; daily.value = target.daily_goal || 1;
-    dailyLabel.htmlFor = `daily-${kid.id}`; daily.id = `daily-${kid.id}`;
-    dailyField.append(dailyLabel, daily);
-    const weeklyField = node('div', 'field');
-    const weeklyLabel = node('label', '', 'Weekly XP goal');
-    const weekly = node('input');
-    weekly.type = 'number'; weekly.min = '10'; weekly.max = '2000'; weekly.value = target.weekly_xp_goal || 100;
-    weeklyLabel.htmlFor = `weekly-${kid.id}`; weekly.id = `weekly-${kid.id}`;
-    weeklyField.append(weeklyLabel, weekly);
-    const save = node('button', 'btn btn-primary', 'Save target');
-    save.type = 'button';
-    save.addEventListener('click', () => requestPassword(async (password) => {
-      await api('/api/parent/learning-target', {
-        method: 'POST',
-        body: JSON.stringify({
-          student_id: kid.id,
-          daily_goal: Number(daily.value),
-          weekly_xp_goal: Number(weekly.value),
-          parent_password: password,
-        }),
-      });
-      setStatus(`Learning target saved for ${kid.name}.`);
-      await loadOverview();
-    }));
-    row.append(dailyField, weeklyField, save);
-    targetBox.append(row);
-    card.append(targetBox);
     grid.append(card);
   });
 }
@@ -352,9 +353,9 @@ async function loadOverview() {
   familyState.kids = new Map((data.kids || []).map((kid) => [kid.id, kid]));
   familyState.overviewLoaded = true;
   byId('family-limit-note').textContent = familyState.limit
-    ? `${familyState.kids.size} of ${familyState.limit} learner profiles used.` : '';
+    ? `${familyState.kids.size} of ${familyState.limit} student profiles used.` : '';
   byId('add-child-button').disabled = !familyState.canAdd;
-  byId('add-child-button').title = familyState.canAdd ? '' : 'Your current plan has reached its learner limit.';
+  byId('add-child-button').title = familyState.canAdd ? '' : 'Your current plan has reached its user limit.';
   renderKids();
   renderScoreTrend();
 }
@@ -362,11 +363,10 @@ async function loadOverview() {
 function showProfileForm(kid = null) {
   if (!kid && !familyState.canAdd) return;
   familyState.editingId = kid ? kid.id : null;
-  byId('profile-form-title').textContent = kid ? 'Edit learner profile' : 'Add a child';
+  byId('profile-form-title').textContent = kid ? 'Edit Child profile' : 'Add a child';
   byId('save-profile-button').textContent = kid ? 'Save profile' : 'Add child';
   byId('profile-name').value = kid ? kid.name : '';
   byId('profile-year').value = String(kid ? kid.year_group : 3);
-  byId('profile-age').value = String(kid ? kid.age : 7);
   byId('profile-form').classList.add('show');
   byId('profile-name').focus();
 }
@@ -382,7 +382,7 @@ async function saveProfile(event) {
   const body = {
     name: byId('profile-name').value.trim(),
     year_group: Number(byId('profile-year').value),
-    age: Number(byId('profile-age').value),
+    age: Number(byId('profile-year').value) + 5,
   };
   const editing = familyState.editingId;
   await api(editing ? `/api/students/${encodeURIComponent(editing)}` : '/api/students', {
@@ -390,7 +390,7 @@ async function saveProfile(event) {
     body: JSON.stringify(body),
   });
   hideProfileForm();
-  setStatus(editing ? 'Learner profile updated.' : 'Learner profile added.');
+  setStatus(editing ? 'Child profile updated.' : 'Child profile added.');
   await loadOverview();
 }
 
@@ -478,7 +478,7 @@ async function openStudyPlan(kid) {
   const status = byId('study-plan-modal-status');
   const body = byId('study-plan-modal-body');
   modal.classList.add('show');
-  status.textContent = `Loading ${kid.name || 'learner'}'s plan…`;
+  status.textContent = `Loading ${kid.name || 'Child'}'s plan…`;
   clearNode(body);
   try {
     const data = await api(`/api/parent/11plus-study-plan/${encodeURIComponent(kid.id)}`);
@@ -546,9 +546,6 @@ byId('add-child-button').addEventListener('click', () => showProfileForm());
 byId('cancel-profile-button').addEventListener('click', hideProfileForm);
 byId('profile-form').addEventListener('submit', (event) => {
   saveProfile(event).catch((error) => setStatus(error.message, true));
-});
-byId('profile-year').addEventListener('change', () => {
-  if (!familyState.editingId) byId('profile-age').value = String(Math.min(11, Number(byId('profile-year').value) + 4));
 });
 byId('catalog-form').addEventListener('submit', (event) => {
   event.preventDefault();

@@ -152,7 +152,7 @@
           trial.textContent = 'Five-day access unavailable';
         }
         loadStripePricingTable();
-        setStatus('Your free beta access is active. You can upgrade to a monthly plan below.');
+        setStatus('Your free beta access is active. You can upgrade to a monthly plan.');
         return;
       }
       accountActions.hidden = true;

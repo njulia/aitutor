@@ -1038,7 +1038,12 @@
             const params = new URLSearchParams(window.location.search);
             const requestedYear = Number(params.get('year'));
             const requestedSubject = String(params.get('subject') || '').trim();
-            const safeSubjects = ['Maths', 'English', 'Science'];
+            const safeSubjects = [
+                'Maths', 'English', 'Science', 'History', 'Geography',
+                'Design and Technology', 'Art and Design', 'Computing', 'Music',
+                'Physical Education', 'Religious Education', 'PSHE',
+                'French', 'German', 'Spanish', 'Italian', 'Polish', 'Arabic', 'Latin', 'Chinese'
+            ];
             const hasYear = Number.isInteger(requestedYear)
                 && requestedYear >= 1
                 && requestedYear <= 6;
@@ -1170,6 +1175,9 @@
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
             </button>
+            <button class="btn btn-secondary" onclick="window.location.href='/homework-mistakes'">
+                Practice My Mistakes
+            </button>
         `;
 
         const INDEPENDENT_REVIEW_ACTION_BUTTONS_HTML = `
@@ -1178,6 +1186,9 @@
             </button>
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
+            </button>
+            <button class="btn btn-secondary" onclick="window.location.href='/homework-mistakes'">
+                Practice My Mistakes
             </button>
         `;
 
@@ -3430,6 +3441,13 @@
 
             saveStateToSessionStorage();
             progressWindow.location.replace('/progress');
+        }
+
+        // 根据当前练习类型跳转到对应的错题练习页面
+        function practiceMistakes() {
+            const isElevenPlus = currentPracticeIsElevenPlus
+                || (Array.isArray(currentHomework) && currentHomework.some(item => item && item.is_eleven_plus));
+            window.location.href = isElevenPlus ? '/elevenplus-mistakes' : '/homework-mistakes';
         }
 
         // ---- Admin Tools Functions ----

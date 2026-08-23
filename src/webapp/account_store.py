@@ -206,6 +206,7 @@ def _ensure_legacy_columns() -> None:
     additions = [
         ("accounts", "family_code", "VARCHAR(16)"),
         ("students", "kid_code", "VARCHAR(20)"),
+        ("students", "last_login_at", "TIMESTAMP NULL"),
     ]
     for table_name, column_name, column_type in additions:
         try:
@@ -669,6 +670,20 @@ def get_student_by_kid_code(kid_code: str) -> Optional[Dict[str, Any]]:
         ).first())
 
 
+def record_student_login(student_id: str) -> bool:
+    """记录孩子最近一次登录时间，供管理后台展示。"""
+    clean = str(student_id or "").strip()
+    if not clean:
+        return False
+    with _engine().begin() as conn:
+        result = conn.execute(
+            update(students)
+            .where(students.c.id == clean)
+            .values(last_login_at=_now())
+        )
+    return bool(result.rowcount)
+
+
 def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     """管理员查询所有账号下的学生（跨账号），供管理后台使用"""
     with _engine().begin() as conn:
@@ -682,6 +697,7 @@ def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[st
                 students.c.is_active,
                 students.c.created_at,
                 students.c.updated_at,
+                students.c.last_login_at,
                 students.c.account_id,
             )
             .select_from(students.join(accounts, students.c.account_id == accounts.c.id))

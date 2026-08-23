@@ -43,7 +43,7 @@
     <p>Memory is off until a signed-in parent turns it on.</p>
   </section>
   <section class="card">
-    <label for="student">Learner profile</label>
+    <label for="student">Child profile</label>
     <select id="student"></select>
     <label><input id="enabled" type="checkbox"> Remember structured learning progress</label>
     <label for="retention">Keep learning events for</label>
@@ -104,14 +104,14 @@ async function loadMemory() {
 async function start() {
   try {
     const account=await jsonFetch('/api/account'); const select=document.getElementById('student');
-    (account.students||[]).forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.name || 'Learner'; select.append(o); });
+    (account.students||[]).forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.name || 'Child'; select.append(o); });
     studentId=account.default_student_id || select.value; select.value=studentId;
     select.onchange=async()=>{studentId=select.value; await loadMemory();}; await loadMemory();
   } catch(e) { status('Please sign in as a parent or guardian to manage learning memory.', true); }
 }
 document.getElementById('save-settings').onclick=async()=>{try{await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}/settings`,{method:'PUT',body:JSON.stringify({enabled:document.getElementById('enabled').checked,retention_days:Number(document.getElementById('retention').value)})});status('Memory settings saved.');await loadMemory();}catch(e){status(e.message,true);}};
 document.getElementById('save-preferences').onclick=async()=>{try{await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}/preferences`,{method:'PUT',body:JSON.stringify({explanation_style:document.getElementById('explanation').value,hint_style:document.getElementById('hints').value,accessibility:{}})});status('Tutor preferences saved.');}catch(e){status(e.message,true);}};
-document.getElementById('clear').onclick=async()=>{if(!confirm('Delete all remembered learning progress for this learner?'))return;try{await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}`,{method:'DELETE'});status('Learning memory deleted.');await loadMemory();}catch(e){status(e.message,true);}};
+document.getElementById('clear').onclick=async()=>{if(!confirm('Delete all remembered learning progress for this child?'))return;try{await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}`,{method:'DELETE'});status('Learning memory deleted.');await loadMemory();}catch(e){status(e.message,true);}};
 document.getElementById('export').onclick=async()=>{try{const data=await jsonFetch(`/api/memory/${encodeURIComponent(studentId)}/export`);const blob=new Blob([JSON.stringify(data.memory_export,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='learning-memory.json';a.click();URL.revokeObjectURL(a.href);status('Memory export created.');}catch(e){status(e.message,true);}};
 start();
 </script>

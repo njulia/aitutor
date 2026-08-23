@@ -831,7 +831,7 @@
                     <td>${u.parent_username || '-'}</td>
                     <td>${u.name || 'Student'}</td>
                     <td>Year ${u.year_group}</td>
-                    <td>${u.age}</td>
+                    <td>${formatAdminDateTime(u.last_login_at, 'Never')}</td>
                     <td>${u.total_sessions || 0}</td>
                     <td>${u.avg_score ? u.avg_score.toFixed(1) : '-'}</td>
                     <td>${u.xp || 0}</td>

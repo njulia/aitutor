@@ -3389,7 +3389,7 @@ class KidLoginRequest(BaseModel):
 async def api_kid_login(request_body: KidLoginRequest, req: Request):
     """孩子使用组合登录码或 family_code + kid_code 登录。"""
     try:
-        from src.webapp.account_store import verify_family_kid_codes, verify_combined_login_code
+        from src.webapp.account_store import verify_family_kid_codes, verify_combined_login_code, record_student_login
         from src.webapp.kid_session_store import create_kid_session
 
         login_code = str(request_body.login_code or "").strip()
@@ -3417,6 +3417,10 @@ async def api_kid_login(request_body: KidLoginRequest, req: Request):
                 status_code=401,
                 content={"success": False, "error": "The codes are not correct. Please check and try again."},
             )
+        await run_blocking(
+            record_student_login, student["id"],
+            timeout=10, limit_concurrency=False,
+        )
         session = await run_blocking(
             create_kid_session, student["id"], 3600,
             timeout=10, limit_concurrency=False,
@@ -3685,6 +3689,7 @@ async def admin_list_users(limit: int = 100, offset: int = 0):
             "avg_score": ss.get("avg_score"),
             "is_active": u.get("is_active", True),
             "created_at": str(u.get("created_at") or ""),
+            "last_login_at": u.get("last_login_at").isoformat() if u.get("last_login_at") else None,
         })
 
     # 同一家长的孩子们排在一起；组内按昵称升序，组间按组内最新时间降序

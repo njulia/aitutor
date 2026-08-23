@@ -1,7 +1,7 @@
 # Homework Magic
 
 Homework Magic is a FastAPI web application for UK primary-school homework,
-guided 11+ practice, timed mock exams, marking and parent-managed learner
+guided 11+ practice, timed mock exams, marking and parent-managed child
 progress.
 
 The request path is RAG-first: it searches the PostgreSQL/pgvector homework
