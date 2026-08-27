@@ -68,3 +68,35 @@ def test_parent_can_enable_export_and_clear_structured_memory(authenticated_clie
         f"/api/memory/{student_id}?include_preferences=true"
     )
     assert cleared.status_code == 200
+
+
+def test_successful_parent_login_updates_auth_user_last_login(client, unique_email, admin_client) -> None:
+    register_response = client.post(
+        "/api/register",
+        json={"email": unique_email, "password": "StrongPass123!"},
+    )
+    assert register_response.status_code == 200, register_response.text
+
+    from src.progress_db import get_user_by_username
+
+    before = get_user_by_username(unique_email)
+    assert before is not None
+    assert before["last_login_at"] is not None
+
+    client.post("/api/logout")
+    login_response = client.post(
+        "/api/login",
+        json={"email": unique_email, "password": "StrongPass123!"},
+    )
+    assert login_response.status_code == 200, login_response.text
+
+    after = get_user_by_username(unique_email)
+    assert after is not None
+    assert after["last_login_at"] is not None
+    assert after["last_login_at"] >= before["last_login_at"]
+
+    from src.progress_db import list_all_users
+
+    matching = next(u for u in list_all_users() if u["username"] == unique_email)
+    assert matching["last_login_at"] is not None
+

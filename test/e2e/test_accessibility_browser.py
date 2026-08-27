@@ -10,7 +10,7 @@ pytestmark = pytest.mark.e2e
     ("path", "heading"),
     [
         ("/login", "Welcome back"),
-        ("/register", "Create your family account"),
+        ("/register", "Create your account"),
         ("/privacy", "Privacy notice"),
         ("/safety", "Your safety matters"),
     ],

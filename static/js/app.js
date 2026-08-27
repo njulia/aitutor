@@ -580,7 +580,7 @@
                 quickStart.id = 'eleven-quick-start';
             }
 
-            quickStart.className = 'quick-start-card';
+            quickStart.className = 'homework-quick-start quick-start-card';
 
             // Keep quick start outside the editor, just like Make Homework.
             // Older HTML/JS versions may already have placed it inside the
@@ -593,11 +593,24 @@
             // Rebuild once so pre-existing page markup cannot leave an
             // unbound "Change it" button.
             if (quickStart.dataset.elevenQuickStartReady !== 'true') {
-                const title = document.createElement('h3');
+                const teacherRow = document.createElement('div');
+                teacherRow.className = 'guide-teacher-row';
+
+                const avatar = document.createElement('div');
+                avatar.className = 'guide-avatar';
+                avatar.setAttribute('aria-hidden', 'true');
+                avatar.textContent = '🪄';
+
+                const text = document.createElement('div');
+
+                const title = document.createElement('h2');
                 title.id = 'eleven-quick-title';
 
                 const detail = document.createElement('p');
                 detail.id = 'eleven-quick-detail';
+
+                text.append(title, detail);
+                teacherRow.append(avatar, text);
 
                 const actions = document.createElement('div');
                 actions.className = 'quick-start-actions';
@@ -606,7 +619,7 @@
                 startButton.type = 'button';
                 startButton.id = 'eleven-quick-start-button';
                 startButton.className = 'btn btn-primary';
-                startButton.textContent = 'Start now';
+                startButton.textContent = 'Start now ✨';
                 startButton.addEventListener('click', generateCustomHomeworkEleven);
 
                 const changeButton = document.createElement('button');
@@ -617,7 +630,7 @@
                 changeButton.addEventListener('click', changeElevenGuide);
 
                 actions.append(startButton, changeButton);
-                quickStart.replaceChildren(title, detail, actions);
+                quickStart.replaceChildren(teacherRow, actions);
                 quickStart.dataset.elevenQuickStartReady = 'true';
             }
 

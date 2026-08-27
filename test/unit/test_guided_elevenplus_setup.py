@@ -78,7 +78,7 @@ def test_guided_frontend_replaces_long_child_profile_and_does_not_send_school() 
 
     assert 'id="eleven-profile"' not in html
     assert 'id="eleven-guide-question"' in html
-    assert "Plan my practice with me" in html
+    assert "Plan 11+ practice with me" in html
     assert "not sent to the AI" in html
 
     function_body = javascript.split(

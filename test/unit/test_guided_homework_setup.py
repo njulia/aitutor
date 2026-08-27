@@ -71,7 +71,7 @@ def test_guided_frontend_replaces_learner_textbox_and_keeps_notes_ephemeral() ->
     assert 'id="homework-year"' in html
     assert 'id="homework-guide-question"' in html
     assert 'id="homework-quick-start"' in html
-    assert "Make today’s homework with me" in html
+    assert "Plan today’s homework with me" in html
     assert "Learning notes are not saved in this browser" in html
     assert "Tell me about your learner" not in html
 

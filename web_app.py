@@ -3249,7 +3249,7 @@ def _password_error(password: str) -> Optional[str]:
 @app.post("/api/register")
 async def api_register(request_body: AuthRequest, req: Request, background_tasks: BackgroundTasks):
     try:
-        from src.progress_db import create_user
+        from src.progress_db import create_user, record_user_login
         from src.auth_tokens import generate_token
         from src.webapp.account_store import ensure_account, ensure_default_student
 
@@ -3280,6 +3280,9 @@ async def api_register(request_body: AuthRequest, req: Request, background_tasks
 
         account = await run_blocking(ensure_account, username, timeout=10, limit_concurrency=False)
         await run_blocking(ensure_default_student, account["id"], timeout=10, limit_concurrency=False)
+        # Registration signs the parent in immediately, so it is also the
+        # first successful login for audit/display purposes.
+        await run_blocking(record_user_login, username, timeout=10, limit_concurrency=False)
         token = await run_blocking(generate_token, username, timeout=10, limit_concurrency=False)
         background_tasks.add_task(send_registration_confirmation_email, to_email=username)
         background_tasks.add_task(
@@ -3314,7 +3317,7 @@ async def api_register(request_body: AuthRequest, req: Request, background_tasks
 @app.post("/api/login")
 async def api_login(request_body: AuthRequest, req: Request):
     try:
-        from src.progress_db import verify_user_credentials
+        from src.progress_db import record_user_login, verify_user_credentials
         from src.auth_tokens import generate_token
 
         username = request_body.get_username().lower()
@@ -3324,6 +3327,11 @@ async def api_login(request_body: AuthRequest, req: Request):
         ok = await run_blocking(verify_user_credentials, username, password, timeout=15, limit_concurrency=False)
         if not ok:
             return JSONResponse(status_code=401, content={"success": False, "error": "The email address or password is not correct."})
+
+        # Keep the admin Auth Users "Last LogIn" field in sync with successful
+        # parent logins. Authentication remains token-based; this is only audit
+        # metadata and never stores credentials.
+        await run_blocking(record_user_login, username, timeout=10, limit_concurrency=False)
         token = await run_blocking(generate_token, username, timeout=10, limit_concurrency=False)
         response = JSONResponse({"success": True})
         response.set_cookie(
