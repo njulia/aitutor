@@ -96,6 +96,9 @@ students = Table(
     Column("default_for_account", String(80), nullable=True, unique=True),
     # 永久孩子登录码，与家庭码配对使用，不包含任何个人数据
     Column("kid_code", String(20), nullable=True, unique=True, index=True),
+    # --- ADD THE FOLLOWING LINE HERE ---
+    Column("last_login_at", DateTime(timezone=True), nullable=True),
+    # ------------------------------------
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )

@@ -40,6 +40,142 @@
     .metric strong { color: #5149c4; display: block; font-size: 1.15rem; }
     .metric span { color: #738098; font-size: .7rem; }
     .card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+
+    /* Weekly goal completion — mirrors the Daily Goal Completion figure on progress.html. */
+    .weekly-goal-completion {
+      border-top: 1px solid #e0e5f0;
+      margin-top: 14px;
+      padding-top: 14px;
+      width: 100%;
+    }
+
+    .weekly-goal-completion.status-low {
+      background: #fff1f1;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .weekly-goal-completion.status-mid {
+      background: #fff8e8;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .weekly-goal-completion.status-complete {
+      background: #edf9f1;
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .weekly-goal-completion h4 {
+      color: #27345a;
+      font-size: .98rem;
+      margin: 0 0 5px;
+    }
+    .weekly-goal-help {
+      color: #68758d;
+      font-size: .82rem;
+      line-height: 1.45;
+      margin: 0 0 10px;
+    }
+    .weekly-goal-details {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, 1fr);
+      margin: 10px 0 12px;
+    }
+    .weekly-goal-detail {
+      background: #fff;
+      border-radius: 8px;
+      padding: 9px 5px;
+      text-align: center;
+    }
+    .weekly-goal-detail strong {
+      color: #5149c4;
+      display: block;
+      font-size: 1.05rem;
+    }
+    .weekly-goal-detail span {
+      color: #738098;
+      font-size: .68rem;
+      line-height: 1.25;
+    }
+    .weekly-goal-grid {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .weekly-day-cell {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7em;
+      font-weight: 600;
+      color: white;
+      position: relative;
+    }
+    .weekly-day-cell.goal-met {
+      background: linear-gradient(135deg, #11998e, #38ef7d);
+    }
+    .weekly-day-cell.goal-not-met {
+      background: #ffd28a;
+      color: #6c4900;
+    }
+    .weekly-day-cell.no-activity {
+      background: #e7e9ef;
+      color: #98a0ae;
+    }
+    .weekly-day-cell.today {
+      outline: 3px solid rgba(102, 126, 234, .28);
+      outline-offset: 2px;
+    }
+    .weekly-day-cell .weekly-day-tooltip {
+      display: none;
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: .85em;
+      white-space: nowrap;
+      z-index: 20;
+    }
+    .weekly-day-cell:hover .weekly-day-tooltip {
+      display: block;
+    }
+    .weekly-goal-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      color: #68758d;
+      font-size: .72rem;
+      margin-top: 10px;
+    }
+    .weekly-goal-legend-item {
+      align-items: center;
+      display: inline-flex;
+      gap: 5px;
+    }
+    .weekly-goal-swatch {
+      border-radius: 4px;
+      display: inline-block;
+      height: 11px;
+      width: 11px;
+    }
+    .weekly-goal-swatch.met { background: #20b981; }
+    .weekly-goal-swatch.started { background: #ffd28a; }
+    .weekly-goal-swatch.rest { background: #e7e9ef; }
+
+    @media (max-width: 650px) {
+      .weekly-goal-details { grid-template-columns: repeat(3, 1fr); }
+    }
+
     .target-form { border-top: 1px solid #e0e5f0; margin-top: 14px; padding-top: 14px; }
     .target-form .form-row { align-items: end; }
     .digest-wrap { overflow-x: auto; }
@@ -201,5 +337,223 @@
   <script src="/static/js/chart-lite.js?v=20260807" defer></script>
   <script src="/static/js/session-context.js?v=20260806" defer></script>
   <script src="/static/js/parent-dashboard.js?v=20260807" defer></script>
+
+  <script>
+  /*
+   * Weekly Goal Completion
+   * Uses the same three-state visual language as progress.html:
+   * green = goal met, amber = practised but goal not met, grey = no session.
+   * The current daily learning target is used to calculate the weekly target.
+   */
+  (() => {
+    'use strict';
+
+    const escapeWeeklyHtml = value => String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const localDateKeyWeekly = date => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const startOfWeekWeekly = date => {
+      const result = new Date(date);
+      result.setHours(0, 0, 0, 0);
+      const day = result.getDay(); // Sunday = 0
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      result.setDate(result.getDate() + mondayOffset);
+      return result;
+    };
+
+    const formatDayWeekly = date => date.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short'
+    });
+
+    const findStudentIdWeekly = card => {
+      const direct = [
+        card.dataset.studentId,
+        card.dataset.student,
+        card.getAttribute('data-student-id'),
+        card.getAttribute('data-student')
+      ].find(Boolean);
+      if (direct) return direct;
+
+      const candidates = card.querySelectorAll('a[href], button[data-student-id], [data-student-id]');
+      for (const element of candidates) {
+        const dataId = element.dataset && element.dataset.studentId;
+        if (dataId) return dataId;
+
+        const href = element.getAttribute('href') || '';
+        try {
+          const url = new URL(href, window.location.origin);
+          const id = url.searchParams.get('student_id') || url.searchParams.get('studentId');
+          if (id) return id;
+        } catch (_) {}
+      }
+
+      const idMatch = (card.id || '').match(/(?:kid|child|student)[_-]([A-Za-z0-9-]+)/i);
+      return idMatch ? idMatch[1] : null;
+    };
+
+    const getDailyGoalFromCard = card => {
+      const text = card.textContent || '';
+      const match = text.match(/(?:sessions?\s+)?(?:per|each)\s+day[^0-9]{0,30}(\d+)/i);
+      return match ? Math.max(1, Number(match[1])) : 1;
+    };
+
+    async function renderWeeklyGoal(card, host) {
+      const studentId = findStudentIdWeekly(card);
+      if (!studentId) {
+        host.innerHTML = '<p class="weekly-goal-help">Weekly progress will appear here once this child profile has a progress ID.</p>';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/progress/${encodeURIComponent(studentId)}`, {
+          credentials: 'same-origin'
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+          host.innerHTML = '<p class="weekly-goal-help">Weekly progress is not available yet.</p>';
+          return;
+        }
+
+        const dailyGoal = data.daily_goal || {};
+        const dailyTarget = Math.max(
+          1,
+          Math.round(Number(dailyGoal.daily_goal || getDailyGoalFromCard(card) || 1))
+        );
+        const weeklyTarget = dailyTarget * 7;
+
+        const counts = new Map();
+        const source = Array.isArray(dailyGoal.daily_breakdown)
+          ? dailyGoal.daily_breakdown
+          : (Array.isArray(dailyGoal.daily_counts) ? dailyGoal.daily_counts : []);
+
+        source.forEach(item => {
+          const key = String(item.date || '').slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+            counts.set(key, Math.max(0, Math.round(Number(item.count) || 0)));
+          }
+        });
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const monday = startOfWeekWeekly(today);
+        const days = [];
+
+        for (let i = 0; i < 7; i += 1) {
+          const date = new Date(monday);
+          date.setDate(monday.getDate() + i);
+          const key = localDateKeyWeekly(date);
+          const count = counts.get(key) || 0;
+          days.push({
+            date,
+            key,
+            count,
+            goalMet: count >= dailyTarget
+          });
+        }
+
+        const completedSessions = days.reduce((sum, day) => sum + day.count, 0);
+        const goalDays = days.filter(day => day.goalMet).length;
+        const weekRate = weeklyTarget
+          ? Math.min(100, Math.round(completedSessions / weeklyTarget * 1000) / 10)
+          : 0;
+        const todayKey = localDateKeyWeekly(today);
+
+        const completionClass = weekRate < 50
+          ? 'status-low'
+          : (weekRate >= 100 ? 'status-complete' : 'status-mid');
+
+        host.innerHTML = `
+          <div class="weekly-goal-completion ${completionClass}">
+            <h4>Weekly Goal Completion</h4>
+            <p class="weekly-goal-help">
+              This week’s progress, Monday to Sunday. The weekly target is based on the daily learning target.
+            </p>
+            <div class="weekly-goal-details">
+              <div class="weekly-goal-detail">
+                <strong>${weeklyTarget}</strong>
+                <span>Sessions this week</span>
+              </div>
+              <div class="weekly-goal-detail">
+                <strong>${completedSessions}</strong>
+                <span>Sessions completed</span>
+              </div>
+              <div class="weekly-goal-detail">
+                <strong>${weekRate}%</strong>
+                <span>Weekly completion</span>
+              </div>
+            </div>
+            <div class="weekly-goal-grid" aria-label="Weekly goal completion">
+              ${days.map(day => {
+                const className = day.goalMet
+                  ? 'goal-met'
+                  : (day.count > 0 ? 'goal-not-met' : 'no-activity');
+                const todayClass = day.key === todayKey ? ' today' : '';
+                const label = day.goalMet
+                  ? `${formatDayWeekly(day.date)}: ${day.count} session${day.count === 1 ? '' : 's'} — goal met`
+                  : day.count > 0
+                    ? `${formatDayWeekly(day.date)}: ${day.count} session${day.count === 1 ? '' : 's'} — goal not met`
+                    : `${formatDayWeekly(day.date)}: no session recorded`;
+
+                return `
+                  <div class="weekly-day-cell ${className}${todayClass}"
+                       aria-label="${escapeWeeklyHtml(label)}">
+                    ${day.date.toLocaleDateString('en-GB', { weekday: 'narrow' })}
+                    <span class="weekly-day-tooltip">${escapeWeeklyHtml(label)}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div class="weekly-goal-legend" aria-label="Weekly goal colour guide">
+              <span class="weekly-goal-legend-item"><span class="weekly-goal-swatch met"></span>Goal met</span>
+              <span class="weekly-goal-legend-item"><span class="weekly-goal-swatch started"></span>Practised, goal not met</span>
+              <span class="weekly-goal-legend-item"><span class="weekly-goal-swatch rest"></span>No session</span>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.warn('Weekly goal completion could not be loaded:', error);
+        host.innerHTML = '<p class="weekly-goal-help">Weekly progress could not be loaded just now.</p>';
+      }
+    }
+
+    function enhanceLearningTarget(card) {
+      if (card.querySelector('.weekly-goal-host')) return;
+
+      const targetForm = card.querySelector('.target-form');
+      if (!targetForm) return;
+
+      const host = document.createElement('div');
+      host.className = 'weekly-goal-host';
+      targetForm.insertAdjacentElement('afterend', host);
+      renderWeeklyGoal(card, host);
+    }
+
+    function scanLearningTargets() {
+      document.querySelectorAll('#kids-grid .kid-card').forEach(enhanceLearningTarget);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      scanLearningTargets();
+
+      const grid = document.getElementById('kids-grid');
+      if (!grid) return;
+
+      const observer = new MutationObserver(() => scanLearningTargets());
+      observer.observe(grid, { childList: true, subtree: true });
+    });
+  })();
+  </script>
+
 </body>
 </html>

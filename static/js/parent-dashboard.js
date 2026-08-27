@@ -318,9 +318,9 @@ function renderKids() {
     card.append(metrics);
 
     const actions = node('div', 'card-actions');
-    const progressLink = node('a', 'btn-link', 'Full progress');
+    const progressLink = node('a', 'btn-link', 'Track Child Progress');
     progressLink.href = `/progress?student_id=${encodeURIComponent(kid.id)}`;
-    const rewardLink = node('a', 'btn-link', 'Rewards');
+    const rewardLink = node('a', 'btn-link', 'Reward Child');
     rewardLink.href = `/rewards?student_id=${encodeURIComponent(kid.id)}`;
     rewardLink.style.marginLeft = 'auto';
     if (familyState.studyPlanEnabled) {

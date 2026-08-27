@@ -439,6 +439,112 @@
             margin: 20px 0 0 66px;
         }
         
+
+        /* Parent-friendly workflow */
+        .parents-workflow {
+            max-width: 980px;
+            margin: 30px auto;
+            border: 1px solid #dedcf0;
+            border-radius: 18px;
+            background: #fbfaff;
+            overflow: hidden;
+        }
+
+        .parents-workflow summary {
+            padding: 18px 22px;
+            cursor: pointer;
+            color: #3f3568;
+            font-size: 1.1rem;
+            font-weight: 800;
+            list-style-position: inside;
+        }
+
+        .parents-workflow summary::marker {
+            color: #667eea;
+        }
+
+        .parents-workflow-content {
+            padding: 4px 22px 24px;
+        }
+
+        .parents-workflow-intro {
+            margin: 0 0 20px;
+            color: #625c75;
+            line-height: 1.55;
+        }
+
+        .parent-workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .parent-workflow-step {
+            position: relative;
+            padding: 18px 16px;
+            border: 1px solid #dedcf0;
+            border-radius: 15px;
+            background: white;
+        }
+
+        .parent-workflow-number {
+            display: inline-grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            margin-bottom: 10px;
+            border-radius: 50%;
+            background: #ece9ff;
+            color: #4b3f72;
+            font-weight: 800;
+        }
+
+        .parent-workflow-step h3 {
+            margin-bottom: 7px;
+            color: #4b3f72;
+            font-size: 1.05rem;
+        }
+
+        .parent-workflow-step p {
+            color: #625c75;
+            line-height: 1.5;
+            font-size: 0.94rem;
+        }
+
+        .parent-workflow-tools {
+            padding: 16px 18px;
+            border-radius: 14px;
+            background: #f0effa;
+            color: #514b68;
+            line-height: 1.55;
+        }
+
+        .parent-workflow-tools strong {
+            color: #4b3f72;
+        }
+
+        .parent-workflow-tools ul {
+            margin: 8px 0 0 20px;
+        }
+
+        @media (max-width: 760px) {
+            .parent-workflow-steps {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 520px) {
+            .parent-workflow-steps {
+                grid-template-columns: 1fr;
+            }
+
+            .parents-workflow-content {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+        }
+
         /* Loading */
         .loading {
             display: none;
@@ -1257,7 +1363,7 @@
         <!-- 11+ Practice Tab -->
         <div id="eleven" class="content">
             <div class="card">
-                <div class="eleven-guide" aria-labelledby="eleven-guide-title">
+                <div class="homework-guide eleven-guide" aria-labelledby="eleven-guide-title">
                     <div class="guide-heading">
                         <h2 id="eleven-guide-title">Plan my practice with me</h2>
 <!--                        <p>Your Magic Teacher will ask one short question at a time. You do not need to type a long answer.</p>-->
@@ -1291,7 +1397,7 @@
                     </div>
                 </div>
 
-                <section class="homework-quick-start" id="eleven-quick-start" aria-labelledby="eleven-quick-title" hidden>
+                <section class="homework-quick-start quick-start-card" id="eleven-quick-start" aria-labelledby="eleven-quick-title" hidden>
                     <div class="guide-teacher-row">
                         <div class="guide-avatar" aria-hidden="true">🪄</div>
                         <div>
@@ -1310,7 +1416,7 @@
                 </section>
 
                 <details class="parent-setup">
-                    <summary>Parent setup (optional)</summary>
+                    <summary>Parent settings (optional)</summary>
                     <div class="parent-setup-content">
                         <p class="privacy-note">
                             Please do not enter your child’s name, current school, home address, postcode,
@@ -1480,6 +1586,66 @@
             </div>
         </div>
 
+
+        <!-- Parent guide -->
+        <details class="parents-workflow">
+            <summary>👨‍👩‍👧 For parents: a simple way to use Homework Magic</summary>
+            <div class="parents-workflow-content">
+                <p class="parents-workflow-intro">
+                    You do not need to plan every lesson. Pick the tool that matches your child’s goal,
+                    let them work through a short session, then use the results to decide what to practise next.
+                </p>
+
+                <div class="parent-workflow-steps">
+                    <article class="parent-workflow-step">
+                        <span class="parent-workflow-number">1</span>
+                        <h3>Choose a goal</h3>
+                        <p>
+                            Use <strong>Make Homework</strong> for everyday Year 1–6 practice,
+                            or <strong>11+ Practice</strong> when preparing for selective-school tests.
+                        </p>
+                    </article>
+
+                    <article class="parent-workflow-step">
+                        <span class="parent-workflow-number">2</span>
+                        <h3>Let your child practise</h3>
+                        <p>
+                            Choose a short session. Your child can work <strong>one question at a time</strong>
+                            with the tutor or see questions <strong>all together</strong>.
+                        </p>
+                    </article>
+
+                    <article class="parent-workflow-step">
+                        <span class="parent-workflow-number">3</span>
+                        <h3>Check and learn</h3>
+                        <p>
+                            Use review and explanations to see what went well and understand mistakes.
+                            Focus on learning, not just the score.
+                        </p>
+                    </article>
+
+                    <article class="parent-workflow-step">
+                        <span class="parent-workflow-number">4</span>
+                        <h3>Choose the next step</h3>
+                        <p>
+                            For 11+, use <strong>Topic Mastery</strong>, the <strong>Year-Round Plan</strong>,
+                            or <strong>Mock Exams</strong> when your child is ready.
+                        </p>
+                    </article>
+                </div>
+
+                <div class="parent-workflow-tools">
+                    <strong>A simple routine:</strong> 10–15 minutes of practice → review mistakes →
+                    repeat the tricky topic later. You can change the choices whenever your child’s needs change.
+                    <ul>
+                        <li><strong>Everyday homework:</strong> Make Homework → practise → review.</li>
+                        <li><strong>11+ preparation:</strong> 11+ Practice → review → Topic Mastery → Mock Exams.</li>
+                        <li><strong>Long-term preparation:</strong> use the 11+ Year-Round Plan to keep practice steady.</li>
+                    </ul>
+                </div>
+            </div>
+        </details>
+
         <!-- Loading -->
         <div id="loading" class="loading" role="status" aria-live="polite">
             <div class="spinner"></div>
@@ -1530,11 +1696,6 @@
 
             </div>
         </div>
-    </div>
-
-    <div class="footer">
-        <p>Made with 💜 Homework Magic © 2026</p>
-        <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
     </div>
 
     <script src="/static/js/session-context.js?v=20260806" defer></script>
@@ -1614,6 +1775,9 @@
       </a>
     </div>
   </section>
-
+   <div class="footer">
+        <p>Made with 💜 Homework Magic © 2026</p>
+        <p style="margin-top: 10px;"><a href="/messages" style="color: inherit; font-weight: 600;">Contact us</a></p>
+    </div>
 </body>
 </html>
