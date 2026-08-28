@@ -47,19 +47,19 @@ PLAN_ENV_VARS = {
     TRIAL_PLAN: "STRIPE_PRICE_TRIAL_5DAY",
     "homework_monthly": "STRIPE_PRICE_HOMEWORK_MONTHLY",
     "elevenplus_monthly": "STRIPE_PRICE_ELEVENPLUS_MONTHLY",
-    # "elevenplus_mock_monthly": "STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY",
-    # "family_monthly": "STRIPE_PRICE_FAMILY_MONTHLY",
-}
+    "school_homework_monthly": "STRIPE_PRICE_SCHOOL_HOMEWORK_MONTHLY",
+   }
 REQUIRED_PUBLIC_PLANS = (
     TRIAL_PLAN,
     "homework_monthly",
     "elevenplus_monthly",
-    # "elevenplus_mock_monthly",
+    "school_homework_monthly",
 )
 PLAN_EXPECTATIONS = {
     TRIAL_PLAN: {"currency": "gbp", "unit_amount": 99, "interval": None},
     "homework_monthly": {"currency": "gbp", "unit_amount": 499, "interval": "month"},
     "elevenplus_monthly": {"currency": "gbp", "unit_amount": 999, "interval": "month"},
+    "school_homework_monthly": {"currency": "gbp", "unit_amount": 1999, "interval": "month"},
 }
 _validated_prices: set[tuple[str, bool]] = set()
 _price_validation_lock = threading.Lock()
@@ -71,6 +71,7 @@ _PLAN_PRODUCT_NAMES = {
     "11+ premium": "elevenplus_monthly",
     "11 plus premium": "elevenplus_monthly",
     "eleven plus premium": "elevenplus_monthly",
+    "school homework premium": "school_homework_monthly",
     "family premium": "family_monthly",
 }
 
@@ -227,13 +228,14 @@ def portal_configuration_issues() -> list[str]:
 def pricing_table_configuration_issues() -> list[str]:
     """Return blockers for the authenticated Stripe Pricing Table."""
     issues: list[str] = []
-    for plan in ("homework_monthly", "elevenplus_monthly"):
+    for plan in ("homework_monthly", "elevenplus_monthly", "school_homework_monthly"):
         for issue in billing_configuration_issues(plan):
             if issue not in issues:
                 issues.append(issue)
     monthly_prices = [
         _plans().get("homework_monthly"),
         _plans().get("elevenplus_monthly"),
+        _plans().get("school_homework_monthly"),
     ]
     if all(monthly_prices) and len(set(monthly_prices)) != len(monthly_prices):
         issues.append("The monthly plans must use different Stripe Price IDs")

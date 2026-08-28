@@ -812,9 +812,11 @@
         let hasSubscription = null; // null = 未检查, true/false = 已检查
         const HOMEWORK_PREMIUM_PLAN = 'homework_monthly';
         const ELEVENPLUS_PREMIUM_PLAN = 'elevenplus_monthly';
+        const SCHOOL_HOMEWORK_PREMIUM_PLAN = 'school_homework_monthly';
         const PREMIUM_PLAN_NAMES = {
             [HOMEWORK_PREMIUM_PLAN]: 'Homework Premium',
-            [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
+            [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium',
+            [SCHOOL_HOMEWORK_PREMIUM_PLAN]: 'School Homework Premium'
         };
         const LEARNING_CHOICES_KEY = 'homeworkMagic.learningChoices.v1';
 

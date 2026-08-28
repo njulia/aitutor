@@ -62,6 +62,7 @@
     var planNames = {
       homework_monthly: 'Homework Premium',
       elevenplus_monthly: '11+ Premium',
+      school_homework_monthly: 'School Homework Premium',
       family_monthly: 'Family Premium',
       trial_5day: 'Five-day access',
       beta_year3: 'Free parent beta'

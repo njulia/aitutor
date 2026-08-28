@@ -413,15 +413,16 @@ Manually test these journeys on staging:
 
 ### 10.1 Configure a Stripe sandbox first
 
-In Stripe sandbox/test mode, create exactly these three Prices because the code validates currency, amount and interval before checkout:
+In Stripe sandbox/test mode, create exactly these four Prices because the code validates currency, amount and interval before checkout:
 
 | Application plan | Stripe price | Type |
 | --- | ---: | --- |
 | `trial_5day` | GBP 0.99 | One-time |
 | `homework_monthly` | GBP 4.99 | Recurring monthly |
 | `elevenplus_monthly` | GBP 9.99 | Recurring monthly |
+| `school_homework_monthly` | GBP 4.99 | Recurring monthly |
 
-Copy the three sandbox `price_...` identifiers.
+Copy the four sandbox `price_...` identifiers.
 
 Configure the Stripe customer portal in sandbox mode. Allow customers to update payment methods, see invoices and cancel at the end of the billing period. The application creates short-lived portal sessions and returns users to `/pricing`. See Stripe’s [customer portal configuration](https://docs.stripe.com/customer-management/configure-portal) and [portal API integration](https://docs.stripe.com/customer-management/integrate-customer-portal).
 

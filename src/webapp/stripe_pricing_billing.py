@@ -371,9 +371,7 @@ def _portal_price_ids() -> list[str]:
     configured = (
         os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "").strip(),
         os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "").strip(),
-        # os.getenv("STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY", "").strip(),
-        # os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", "").strip(),
-        # os.getenv("STRIPE_PRICE_FAMILY_11PLUS_MONTHLY", "").strip(),
+        os.getenv("STRIPE_PRICE_SCHOOL_HOMEWORK_MONTHLY", "").strip(),
     )
     return list(
         dict.fromkeys(
@@ -565,8 +563,7 @@ def _plan_for_price(price_id: Optional[str], product_id: Optional[str]) -> str:
         "trial_5day": os.getenv("STRIPE_PRICE_TRIAL_5DAY", "").strip(),
         "homework_monthly": os.getenv("STRIPE_PRICE_HOMEWORK_MONTHLY", "").strip(),
         "elevenplus_monthly": os.getenv("STRIPE_PRICE_ELEVENPLUS_MONTHLY", "").strip(),
-        # "elevenplus_mock_monthly": os.getenv("STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY", "").strip(),
-        # "family_monthly": os.getenv("STRIPE_PRICE_FAMILY_MONTHLY", "").strip(),
+        "school_homework_monthly": os.getenv("STRIPE_PRICE_SCHOOL_HOMEWORK_MONTHLY", "").strip(),
     }
     for plan, configured_price in configured.items():
         if configured_price and configured_price == price_id:

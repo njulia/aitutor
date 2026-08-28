@@ -51,20 +51,19 @@ BETA_PLAN = "beta_year3"
 # 定价计划常量
 HOMEWORK_PREMIUM_PLAN = "homework_monthly"
 ELEVENPLUS_PREMIUM_PLAN = "elevenplus_monthly"
-# FAMILY_MONTHLY_PLAN = "family_monthly"
-# FAMILY_11PLUS_MONTHLY_PLAN = "family_11plus_monthly"
+SCHOOL_HOMEWORK_PREMIUM_PLAN = "school_homework_monthly"
 
 PREMIUM_PLAN_NAMES = {
     HOMEWORK_PREMIUM_PLAN: "Homework Premium",
     ELEVENPLUS_PREMIUM_PLAN: "11+ Premium",
-    # FAMILY_MONTHLY_PLAN: "Family Premium",
-    # FAMILY_11PLUS_MONTHLY_PLAN: "Family 11+ Premium",
-}
+    SCHOOL_HOMEWORK_PREMIUM_PLAN: "School Homework Premium",
+ }
 
 # 各计划允许的最大孩子数量
 MAX_STUDENTS_BY_PLAN = {
     ELEVENPLUS_PREMIUM_PLAN: 4,
     HOMEWORK_PREMIUM_PLAN: 2,
+    SCHOOL_HOMEWORK_PREMIUM_PLAN: 40,
 }
 DEFAULT_MAX_STUDENTS = 2  # 无订阅或未知计划时的默认限制
 
@@ -864,8 +863,8 @@ def subscription_active_for_student(
     # 家庭档含 11+ 套餐与五日体验覆盖全部学习区
     if plan in {"elevenplus_monthly", "trial_5day"}:
         return True
-    # 家庭档不含 11+ 套餐与免费 beta 仅覆盖 Years 1-6 家庭作业
-    if plan in {"homework_monthly", BETA_PLAN}:
+    # 家庭档不含 11+ 套餐、学校档与免费 beta 仅覆盖 Years 1-6 家庭作业
+    if plan in {"homework_monthly", "school_homework_monthly", BETA_PLAN}:
         return "homework_monthly" in set(required_plans)
     return plan in set(required_plans)
 
