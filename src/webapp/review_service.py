@@ -1397,7 +1397,6 @@ def explain_deep(
 
         # Parse the model's Question N sections. If the model misses a section,
         # keep a useful fallback rather than returning a blank page.
-        import re
         parsed: Dict[int, str] = {}
         text = str(explanation_text or "").strip()
         if text:

@@ -439,7 +439,6 @@
             margin: 20px 0 0 66px;
         }
         
-
         /* Loading */
         .loading {
             display: none;
@@ -740,6 +739,45 @@
 
         .tutor-question-only-block .single-question-card {
             margin: 0;
+        }
+
+        /* Explain in Detail: Topic Mastery-style, one complete card per question. */
+        .deep-explanation-section { margin-top: 20px; }
+        .deep-explanation-header {
+            display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+            margin-bottom: 16px; padding: 0 0 12px; border-bottom: 1px solid #e4e7f0;
+        }
+        .deep-explanation-header h3 { margin: 0; font-size: 1.3rem; color: #2d3142; }
+        .deep-explanation-help { margin: 5px 0 0; color: #667085; line-height: 1.5; }
+        .deep-explanation-list { display: grid; gap: 18px; }
+        .deep-explanation-card {
+            margin: 0; padding: 22px 24px; background: #fff; border: 1px solid #dfe5ff;
+            border-radius: 16px; box-shadow: none;
+        }
+        .deep-explanation-question { color: #667085; margin: 0 0 20px; line-height: 1.7; font-size: 1.02rem; }
+        .deep-explanation-question > :first-child { margin-top: 0; }
+        .deep-explanation-question > :last-child { margin-bottom: 0; }
+        .deep-explanation-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 32%); gap: 28px; align-items: start; }
+        .deep-explanation-solution h4, .deep-explanation-callout h4 {
+            margin: 0 0 14px; font-size: 1.18rem; color: #26364f;
+        }
+        .deep-explanation-solution h4 { font-size: 1.55rem; }
+        .deep-explanation-body { color: #2d3b55; line-height: 1.75; }
+        .deep-explanation-body > :first-child { margin-top: 0; }
+        .deep-explanation-body > :last-child { margin-bottom: 0; }
+        .deep-explanation-aside { display: grid; gap: 18px; }
+        .deep-explanation-callout { padding: 18px 20px; border-radius: 13px; line-height: 1.65; }
+        .deep-explanation-callout.why { background: #fffaf0; border: 1px solid #f1c76a; }
+        .deep-explanation-callout.tip { background: #f1f7ff; border: 1px solid #a8c8ff; }
+        .deep-explanation-callout.why h4 { color: #7a5712; }
+        .deep-explanation-callout.tip h4 { color: #24466f; }
+        .deep-explanation-loading { color: #667085; font-size: 0.95rem; }
+        .deep-explanation-empty { margin: 0; padding: 14px 16px; border-radius: 12px; background: #fff7ed; color: #9a3412; }
+        @media (max-width: 760px) {
+            .deep-explanation-layout { grid-template-columns: 1fr; gap: 18px; }
+            .deep-explanation-card { padding: 18px; }
+            .deep-explanation-solution h4 { font-size: 1.35rem; }
+            .deep-explanation-header { flex-direction: column; }
         }
 
         @media (max-width: 760px) {
@@ -1258,7 +1296,7 @@
         <!-- 11+ Practice Tab -->
         <div id="eleven" class="content">
             <div class="card">
-                <div class="homework-guide eleven-guide" aria-labelledby="eleven-guide-title">
+                <div class="eleven-guide" aria-labelledby="eleven-guide-title">
                     <div class="guide-heading">
                         <h2 id="eleven-guide-title">Plan my practice with me</h2>
 <!--                        <p>Your Magic Teacher will ask one short question at a time. You do not need to type a long answer.</p>-->
@@ -1292,7 +1330,7 @@
                     </div>
                 </div>
 
-                <section class="homework-quick-start quick-start-card" id="eleven-quick-start" aria-labelledby="eleven-quick-title" hidden>
+                <section class="homework-quick-start" id="eleven-quick-start" aria-labelledby="eleven-quick-title" hidden>
                     <div class="guide-teacher-row">
                         <div class="guide-avatar" aria-hidden="true">🪄</div>
                         <div>
@@ -1311,7 +1349,7 @@
                 </section>
 
                 <details class="parent-setup">
-                    <summary>Parent settings (optional)</summary>
+                    <summary>Parent setup (optional)</summary>
                     <div class="parent-setup-content">
                         <p class="privacy-note">
                             Please do not enter your child’s name, current school, home address, postcode,
@@ -1480,7 +1518,6 @@
                 </button>
             </div>
         </div>
-
 
         <!-- Loading -->
         <div id="loading" class="loading" role="status" aria-live="polite">

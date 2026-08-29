@@ -580,7 +580,7 @@
                 quickStart.id = 'eleven-quick-start';
             }
 
-            quickStart.className = 'homework-quick-start quick-start-card';
+            quickStart.className = 'quick-start-card';
 
             // Keep quick start outside the editor, just like Make Homework.
             // Older HTML/JS versions may already have placed it inside the
@@ -593,24 +593,11 @@
             // Rebuild once so pre-existing page markup cannot leave an
             // unbound "Change it" button.
             if (quickStart.dataset.elevenQuickStartReady !== 'true') {
-                const teacherRow = document.createElement('div');
-                teacherRow.className = 'guide-teacher-row';
-
-                const avatar = document.createElement('div');
-                avatar.className = 'guide-avatar';
-                avatar.setAttribute('aria-hidden', 'true');
-                avatar.textContent = '🪄';
-
-                const text = document.createElement('div');
-
-                const title = document.createElement('h2');
+                const title = document.createElement('h3');
                 title.id = 'eleven-quick-title';
 
                 const detail = document.createElement('p');
                 detail.id = 'eleven-quick-detail';
-
-                text.append(title, detail);
-                teacherRow.append(avatar, text);
 
                 const actions = document.createElement('div');
                 actions.className = 'quick-start-actions';
@@ -619,7 +606,7 @@
                 startButton.type = 'button';
                 startButton.id = 'eleven-quick-start-button';
                 startButton.className = 'btn btn-primary';
-                startButton.textContent = 'Start now ✨';
+                startButton.textContent = 'Start now';
                 startButton.addEventListener('click', generateCustomHomeworkEleven);
 
                 const changeButton = document.createElement('button');
@@ -630,7 +617,7 @@
                 changeButton.addEventListener('click', changeElevenGuide);
 
                 actions.append(startButton, changeButton);
-                quickStart.replaceChildren(teacherRow, actions);
+                quickStart.replaceChildren(title, detail, actions);
                 quickStart.dataset.elevenQuickStartReady = 'true';
             }
 
@@ -812,11 +799,9 @@
         let hasSubscription = null; // null = 未检查, true/false = 已检查
         const HOMEWORK_PREMIUM_PLAN = 'homework_monthly';
         const ELEVENPLUS_PREMIUM_PLAN = 'elevenplus_monthly';
-        const SCHOOL_HOMEWORK_PREMIUM_PLAN = 'school_homework_monthly';
         const PREMIUM_PLAN_NAMES = {
             [HOMEWORK_PREMIUM_PLAN]: 'Homework Premium',
-            [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium',
-            [SCHOOL_HOMEWORK_PREMIUM_PLAN]: 'School Homework Premium'
+            [ELEVENPLUS_PREMIUM_PLAN]: '11+ Premium'
         };
         const LEARNING_CHOICES_KEY = 'homeworkMagic.learningChoices.v1';
 
@@ -3158,16 +3143,105 @@
             }
         }
 
+        function parseDeepExplanationSections(explanation) {
+            const text = String(explanation || '').trim();
+            if (!text) return [];
+            const matches = [...text.matchAll(/^\s*##\s*Question\s+(\d+)\s*$/gim)];
+            if (!matches.length) {
+                return [{ number: 1, body: text }];
+            }
+            return matches.map((match, index) => {
+                const end = index + 1 < matches.length ? matches[index + 1].index : text.length;
+                return { number: Number(match[1]), body: text.slice(match.index + match[0].length, end).trim() };
+            }).filter(section => section.body);
+        }
+
+        function splitExplanationParts(body) {
+            const text = String(body || '').trim();
+            const headings = [...text.matchAll(/^\s*##\s+(How to solve it|Why it works|Helpful tip)\s*$/gim)];
+            const parts = { solve: '', why: '', tip: '' };
+            if (!headings.length) {
+                parts.solve = text;
+                return parts;
+            }
+            headings.forEach((match, index) => {
+                const end = index + 1 < headings.length ? headings[index + 1].index : text.length;
+                const content = text.slice(match.index + match[0].length, end).trim();
+                const key = match[1].toLowerCase() === 'how to solve it' ? 'solve'
+                    : match[1].toLowerCase() === 'why it works' ? 'why' : 'tip';
+                parts[key] = content;
+            });
+            return parts;
+        }
+
+        function getDeepExplanationQuestionTexts(reviewContext) {
+            // Make Homework and the 11+ Practice tab use the same question source
+            // and therefore the same visual explanation card. 11+ generated items
+            // can contain a structured `questions` array, while normal homework may
+            // only contain a numbered content block.
+            const context = reviewContext || {};
+            const structured = [];
+            if (Array.isArray(currentHomework) && currentHomework.length) {
+                currentHomework.forEach(item => {
+                    if (item && Array.isArray(item.questions)) {
+                        item.questions.forEach(question => {
+                            const text = questionTextFromObject(question);
+                            if (text) structured.push(text);
+                        });
+                    } else if (item) {
+                        const text = questionTextFromObject(item);
+                        if (text) structured.push(text);
+                    }
+                });
+            }
+            if (structured.length) return structured;
+            return splitQuestionOnlyHomework({ content: context.homework || '' });
+        }
+
         function displayExplainDeep(explanation) {
+            // This is the single renderer for Explain in Detail in both Make Homework
+            // and the 11+ Practice tab. Keep the layout identical: question text first,
+            // then How to solve it on the left and Why it works / Helpful tip on the right.
+            // Do not add another "Question N" heading because the question is already
+            // visible in the card.
+            const sections = parseDeepExplanationSections(explanation);
+            const reviewContext = getReviewActionContext() || {};
+            const homeworkQuestions = getDeepExplanationQuestionTexts(reviewContext);
             const container = document.getElementById('review-result');
             const hasSavedReview = savedHomeworkState && savedHomeworkState.reviewHTML && savedHomeworkState.reviewHTML.trim();
+
+            const cards = sections.map((section, index) => {
+                const parts = splitExplanationParts(section.body);
+                const questionText = homeworkQuestions[index] || '';
+                return `
+                    <article class="deep-explanation-card deep-explanation-topic-style">
+                        ${questionText ? `<div class="deep-explanation-question">${formatQuestions(renderSafeMarkdown(questionText))}</div>` : ''}
+                        <div class="deep-explanation-layout">
+                            <div class="deep-explanation-solution">
+                                <h4>How to solve it</h4>
+                                <div class="deep-explanation-body">${renderSafeMarkdown(parts.solve || section.body)}</div>
+                            </div>
+                            <div class="deep-explanation-aside">
+                                ${parts.why ? `<div class="deep-explanation-callout why"><h4>💡 Why it works</h4><div>${renderSafeMarkdown(parts.why)}</div></div>` : ''}
+                                ${parts.tip ? `<div class="deep-explanation-callout tip"><h4>⭐ Helpful tip</h4><div>${renderSafeMarkdown(parts.tip)}</div></div>` : ''}
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
             container.innerHTML = `
                 ${hasSavedReview ? '<div style="margin-top: 20px; text-align: right;"><button class="btn btn-secondary" onclick="backToReview()">Back to Review</button></div>' : ''}
-                <div class="review-header" style="margin-top: 20px; margin-bottom: 20px;">
-                    <h3>Deep Explanation</h3>
-                    ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read explanation aloud">\uD83D\uDD0A Read it to me</button>` : ''}
-                </div>
-                <div class="review-output">${renderSafeMarkdown(explanation)}</div>
+                <section class="deep-explanation-section" aria-labelledby="deep-explanation-title">
+                    <div class="deep-explanation-header" style="margin-top:20px;">
+                        <div>
+                            <h3 id="deep-explanation-title">Explain in detail</h3>
+                            <p class="deep-explanation-help">We explain each question step by step.</p>
+                        </div>
+                        ${ttsSupported ? `<button type="button" class="voice-btn" id="speak-review-btn" onclick="speakReviewFeedback()" title="Read explanation aloud">🔊 Read it to me</button>` : ''}
+                    </div>
+                    <div class="deep-explanation-list">${cards || '<p class="deep-explanation-empty">No detailed explanations were created. Please try again.</p>'}</div>
+                </section>
             `;
 
             document.getElementById('results').style.display = 'block';

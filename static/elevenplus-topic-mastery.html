@@ -192,11 +192,36 @@
 <link rel="stylesheet" href="/static/css/site-consistency.css?v=20260817-1">
 
     <style>
-        #detail-explanation { margin-top: 18px; }
-        #detail-explanation-list .card { box-shadow: none; }
-        .detail-question-text { color: var(--muted); margin-bottom: 12px; white-space: pre-wrap; }
-        .detail-question-body { line-height: 1.65; }
-        .detail-question-body small { color: var(--muted); }
+        /* Keep Topic Mastery Explain in Detail identical to the Make Homework renderer. */
+        .deep-explanation-section { margin-top: 20px; }
+        .deep-explanation-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; padding:0 0 12px; border-bottom:1px solid #e4e7f0; }
+        .deep-explanation-header h3 { margin:0; font-size:1.3rem; color:#2d3142; }
+        .deep-explanation-help { margin:5px 0 0; color:#667085; line-height:1.5; }
+        .deep-explanation-list { display:grid; gap:18px; }
+        .deep-explanation-card { margin:0; padding:22px 24px; background:#fff; border:1px solid #dfe5ff; border-radius:16px; box-shadow:none; }
+        .deep-explanation-question { color:#667085; margin:0 0 20px; line-height:1.7; font-size:1.02rem; }
+        .deep-explanation-question > :first-child { margin-top:0; }
+        .deep-explanation-question > :last-child { margin-bottom:0; }
+        .deep-explanation-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,32%); gap:28px; align-items:start; }
+        .deep-explanation-solution h4, .deep-explanation-callout h4 { margin:0 0 14px; font-size:1.18rem; color:#26364f; }
+        .deep-explanation-solution h4 { font-size:1.55rem; }
+        .deep-explanation-body { color:#2d3b55; line-height:1.75; }
+        .deep-explanation-body > :first-child { margin-top:0; }
+        .deep-explanation-body > :last-child { margin-bottom:0; }
+        .deep-explanation-aside { display:grid; gap:18px; }
+        .deep-explanation-callout { padding:18px 20px; border-radius:13px; line-height:1.65; }
+        .deep-explanation-callout.why { background:#fffaf0; border:1px solid #f1c76a; }
+        .deep-explanation-callout.tip { background:#f1f7ff; border:1px solid #a8c8ff; }
+        .deep-explanation-callout.why h4 { color:#7a5712; }
+        .deep-explanation-callout.tip h4 { color:#24466f; }
+        .deep-explanation-loading { color:#667085; font-size:.95rem; }
+        .deep-explanation-empty { margin:0; padding:14px 16px; border-radius:12px; background:#fff7ed; color:#9a3412; }
+        @media (max-width:760px) {
+            .deep-explanation-layout { grid-template-columns:1fr; gap:18px; }
+            .deep-explanation-card { padding:18px; }
+            .deep-explanation-solution h4 { font-size:1.35rem; }
+            .deep-explanation-header { flex-direction:column; }
+        }
     </style>
 </head>
 <body class="hm-eleven hm-page">
@@ -441,76 +466,88 @@
         } catch (error) { showStatus(error.message || 'Something went wrong while checking.'); }
         finally { button.disabled = false; button.textContent = 'Check my answers'; }
     }
+    function parseDeepExplanationSections(explanation) {
+        const text=String(explanation||'').trim();
+        if(!text) return [];
+        const matches=[...text.matchAll(/^\s*##\s*Question\s+(\d+)\s*$/gim)];
+        if(!matches.length) return [{number:1,body:text}];
+        return matches.map((match,index)=>{
+            const end=index+1<matches.length?matches[index+1].index:text.length;
+            return {number:Number(match[1]),body:text.slice(match.index+match[0].length,end).trim()};
+        }).filter(section=>section.body);
+    }
+
+    function splitExplanationParts(body) {
+        const text=String(body||'').trim();
+        const headings=[...text.matchAll(/^\s*##\s+(How to solve it|Why it works|Helpful tip)\s*$/gim)];
+        const parts={solve:'',why:'',tip:''};
+        if(!headings.length){ parts.solve=text; return parts; }
+        headings.forEach((match,index)=>{
+            const end=index+1<headings.length?headings[index+1].index:text.length;
+            const content=text.slice(match.index+match[0].length,end).trim();
+            const key=match[1].toLowerCase()==='how to solve it'?'solve':match[1].toLowerCase()==='why it works'?'why':'tip';
+            parts[key]=content;
+        });
+        return parts;
+    }
+
+    function renderDetailedExplanation(questionText, explanation) {
+        const sections=parseDeepExplanationSections(explanation);
+        const section=sections[0]||{body:String(explanation||'')};
+        const parts=splitExplanationParts(section.body);
+        const renderMarkdown=typeof window.renderSafeMarkdown==='function'?window.renderSafeMarkdown:escapeHtml;
+        return `<article class="deep-explanation-card deep-explanation-topic-style">
+            ${questionText?`<div class="deep-explanation-question">${renderMarkdown(questionText)}</div>`:''}
+            <div class="deep-explanation-layout">
+                <div class="deep-explanation-solution">
+                    <h4>How to solve it</h4>
+                    <div class="deep-explanation-body">${renderMarkdown(parts.solve||section.body)}</div>
+                </div>
+                <div class="deep-explanation-aside">
+                    ${parts.why?`<div class="deep-explanation-callout why"><h4>💡 Why it works</h4><div>${renderMarkdown(parts.why)}</div></div>`:''}
+                    ${parts.tip?`<div class="deep-explanation-callout tip"><h4>⭐ Helpful tip</h4><div>${renderMarkdown(parts.tip)}</div></div>`:''}
+                </div>
+            </div>
+        </article>`;
+    }
+
     async function explainInDetail() {
         if (!state.homework || !Array.isArray(state.homework.questions)) return;
-
-        const button = document.getElementById('explain-button');
-        button.disabled = true;
-        button.textContent = 'Explaining…';
-        const section = document.getElementById('detail-explanation');
-        const list = document.getElementById('detail-explanation-list');
-        section.classList.remove('hidden');
-
+        const button=document.getElementById('explain-button');
+        button.disabled=true; button.textContent='Explaining…';
+        const section=document.getElementById('detail-explanation');
+        const list=document.getElementById('detail-explanation-list');
+        section.classList.remove('hidden'); list.innerHTML='';
         try {
-            for (let index = 0; index < state.homework.questions.length; index += 1) {
-                const question = state.homework.questions[index] || {};
-                const questionText = String(
-                    question.full_content || question.question || question.content || ''
-                ).replace(/^\s*choice\s+group\s+\d+\s*:\s*/i, '').trim();
-                if (!questionText) continue;
-
-                const existing = state.explanations[index];
-                if (existing) continue;
-
-                const cardId = 'detail-question-' + index;
-                let card = document.getElementById(cardId);
-                if (!card) {
-                    card = document.createElement('article');
-                    card.id = cardId;
-                    card.className = 'card';
-                    card.style.marginTop = '12px';
-                    card.innerHTML = '<h4>Question ' + (index + 1) + '</h4><div class="detail-question-text"></div><div class="detail-question-body">Loading…</div>';
-                    card.querySelector('.detail-question-text').textContent = questionText;
-                    list.appendChild(card);
-                }
-
-                const body = card.querySelector('.detail-question-body');
+            for(let index=0; index<state.homework.questions.length; index+=1){
+                const question=state.homework.questions[index]||{};
+                const questionText=String(question.full_content||question.question||question.content||'').replace(/^\s*choice\s+group\s+\d+\s*:\s*/i,'').trim();
+                if(!questionText) continue;
+                const existing=state.explanations[index];
+                if(existing){ list.insertAdjacentHTML('beforeend',renderDetailedExplanation(questionText,existing)); continue; }
+                const card=document.createElement('article');
+                card.className='deep-explanation-card deep-explanation-topic-style';
+                const renderMarkdown=typeof window.renderSafeMarkdown==='function'?window.renderSafeMarkdown:escapeHtml;
+                card.innerHTML=`<div class="deep-explanation-question">${renderMarkdown(questionText)}</div>
+                    <div class="deep-explanation-layout">
+                        <div class="deep-explanation-solution"><h4>How to solve it</h4><div class="deep-explanation-body deep-explanation-loading">Loading…</div></div>
+                        <div class="deep-explanation-aside"></div>
+                    </div>`;
+                list.appendChild(card);
                 try {
-                    const response = await fetch('/api/elevenplus/topic-mastery/explain', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({
-                            subject: state.subjectKey,
-                            topic_index: state.topicIndex,
-                            mastery_level: state.masteryLevel,
-                            doc_id: state.homework.doc_id,
-                            question_index: index,
-                            question: questionText,
-                            topic: state.homework.topic || ''
-                        })
-                    });
-                    const data = await response.json().catch(function () { return {}; });
-                    if (response.status === 401) { window.location.href = '/login'; return; }
-                    if (response.status === 402) { window.location.href = '/pricing'; return; }
-                    if (!response.ok || !data.success) {
-                        body.textContent = data.error || 'This explanation could not be created. You can try again.';
-                        continue;
-                    }
-
-                    state.explanations[index] = data.explanation || '';
-                    body.innerHTML = typeof window.renderSafeMarkdown === 'function'
-                        ? window.renderSafeMarkdown(data.explanation || '')
-                        : escapeHtml(data.explanation || '');
-                } catch (error) {
-                    body.textContent = 'This explanation could not be created. You can try again.';
-                }
+                    const response=await fetch('/api/elevenplus/topic-mastery/explain',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+                        subject:state.subjectKey,topic_index:state.topicIndex,mastery_level:state.masteryLevel,doc_id:state.homework.doc_id,question_index:index,question:questionText,topic:state.homework.topic||''
+                    })});
+                    const data=await response.json().catch(function(){return {};});
+                    if(response.status===401){window.location.href='/login';return;}
+                    if(response.status===402){window.location.href='/pricing';return;}
+                    if(!response.ok||!data.success){card.querySelector('.deep-explanation-body').textContent=data.error||'This explanation could not be created. You can try again.';continue;}
+                    state.explanations[index]=data.explanation||'';
+                    card.outerHTML=renderDetailedExplanation(questionText,data.explanation||'');
+                } catch(error) { card.querySelector('.deep-explanation-body').textContent='This explanation could not be created. You can try again.'; }
             }
-            section.scrollIntoView({behavior:'smooth', block:'start'});
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Explain in detail';
-        }
+            section.scrollIntoView({behavior:'smooth',block:'start'});
+        } finally { button.disabled=false; button.textContent='Explain in detail'; }
     }
 
     async function initialise() {
