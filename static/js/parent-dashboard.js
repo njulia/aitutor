@@ -531,7 +531,7 @@ function closePasswordModal() {
 async function initialise() {
   try {
     const context = await window.HomeworkMagicSession.get(true);
-    if (!context.authenticated || context.role !== 'parent') {
+    if (!context.authenticated || context.role !== 'parent' && context.role !== 'teacher') {
       window.location.replace(context.role === 'kid' ? '/app' : '/login?next=/parent-dashboard');
       return;
     }

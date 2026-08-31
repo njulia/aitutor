@@ -1125,10 +1125,12 @@ class AdminUserCreateRequest(BaseModel):
 
 
 class AdminSubscriptionCreateRequest(BaseModel):
-    """管理员创建订阅请求"""
+    """Admin-created test entitlement; never charges Stripe."""
     email: str
     name: str
-    duration: str  # "5_days" 或 "30_days"
+    plan: str = HOMEWORK_PREMIUM_PLAN
+    duration: str  # "5_days", "1_month", or "months"
+    months: Optional[int] = None
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -3845,8 +3847,9 @@ async def admin_migrate_students_status(req: Request):
 
 
 @app.get("/api/admin/subscriptions")
-async def admin_subscriptions(refresh: bool = True):
+async def admin_subscriptions(req: Request, refresh: bool = True):
     """Return the subscription overview after an optional Stripe repair pass."""
+    _require_admin(req)
     stripe_sync: Dict[str, Any] = {
         "attempted": False,
         "succeeded": True,
@@ -3878,22 +3881,28 @@ async def admin_subscriptions(refresh: bool = True):
 
 
 @app.post("/api/admin/subscriptions")
-async def admin_create_subscription(request: AdminSubscriptionCreateRequest):
-    """Developer-only manual subscription helper."""
-    if not _dev_mode:
-        raise HTTPException(status_code=410, detail="Manual subscriptions are disabled. Use Stripe Checkout and verified webhooks.")
+async def admin_create_subscription(req: Request, request: AdminSubscriptionCreateRequest):
+    """Create a local admin test entitlement without creating a Stripe charge."""
+    _require_admin(req)
     from src.admin import create_admin_subscription
     if not request.email or not request.email.strip():
         raise HTTPException(status_code=400, detail="Email is required")
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
-    if request.duration not in ("5_days", "30_days"):
-        raise HTTPException(status_code=400, detail="Duration must be '5_days' or '30_days'")
+    if request.plan not in PREMIUM_PLAN_NAMES:
+        raise HTTPException(status_code=400, detail="Unknown subscription plan")
+    if request.duration not in ("5_days", "1_month", "months"):
+        raise HTTPException(status_code=400, detail="Duration must be '5_days', '1_month', or 'months'")
+    if request.duration == "months":
+        if request.months is None or not 1 <= int(request.months) <= 120:
+            raise HTTPException(status_code=400, detail="Months must be between 1 and 120")
     try:
         result = create_admin_subscription(
             email=request.email.strip(),
             name=request.name.strip(),
             duration=request.duration,
+            plan=request.plan,
+            months=request.months,
         )
         return {"success": True, "subscription": result}
     except ValueError as e:
@@ -3938,8 +3947,9 @@ async def admin_create_test_account(req: Request):
 
 
 @app.post("/api/admin/users/{username}/test-toggle")
-async def admin_toggle_test(username: str, enable: bool = True):
+async def admin_toggle_test(req: Request, username: str, enable: bool = True):
     """Toggle a persistent user's test status (enable=true/false)."""
+    _require_admin(req)
     from src.progress_db import get_user_by_username, set_user_test_flag
     user = get_user_by_username(username)
     if not user:
@@ -4219,11 +4229,84 @@ async def admin_ai_monitor_conversations(student_id: str = None, limit: int = 50
 # --- Admin endpoints: embedding cache & auth-user management ---
 
 @app.get("/api/admin/auth-users")
-async def admin_auth_users(limit: int = 100, offset: int = 0):
+async def admin_auth_users(req: Request, limit: int = 100, offset: int = 0):
     """List registered auth users (username, created_at, is_test)"""
+    _require_admin(req)
     from src.progress_db import list_all_users
     users = list_all_users(limit=limit, offset=offset)
     return {"success": True, "users": users}
+
+
+@app.delete("/api/admin/auth-users/{username}")
+async def admin_delete_auth_user(username: str, req: Request):
+    """Hard-delete an auth user and all linked learner/billing data."""
+    admin_username = _require_admin(req)
+    clean = (username or "").strip().lower()
+    if not clean:
+        raise HTTPException(status_code=400, detail="Username is required")
+    if clean == admin_username.strip().lower():
+        raise HTTPException(status_code=400, detail="You cannot delete the administrator account you are using")
+
+    from src.progress_db import get_user_by_username, delete_user_account
+    if not get_user_by_username(clean):
+        raise HTTPException(status_code=404, detail="Auth user not found")
+
+    # Cancel real Stripe subscriptions before deleting local billing data.
+    # Test/manual subscriptions have no Stripe subscription ID and are simply
+    # removed locally. If Stripe cancellation fails, stop before deleting the
+    # account so an orphaned paid subscription cannot keep billing.
+    try:
+        from src.webapp.account_store import get_account_by_email, list_subscriptions, delete_account
+        account = get_account_by_email(clean)
+        account_id = account.get("id") if account else None
+        stripe_ids = []
+        if account_id:
+            for sub in list_subscriptions(limit=1000):
+                if sub.get("account_id") == account_id and sub.get("stripe_subscription_id"):
+                    status = str(sub.get("status") or "").lower()
+                    if status in {"active", "trialing", "past_due", "unpaid", "incomplete"}:
+                        stripe_ids.append(str(sub["stripe_subscription_id"]))
+        if stripe_ids:
+            from src.webapp.stripe_pricing_billing import _stripe
+            stripe = _stripe()
+            for subscription_id in stripe_ids:
+                try:
+                    stripe.Subscription.cancel(subscription_id)
+                except Exception as exc:
+                    logger.error("admin_delete_auth_user: Stripe cancellation failed for %s: %s", subscription_id, exc)
+                    raise HTTPException(status_code=502, detail="Could not cancel the user's Stripe subscription; nothing was deleted")
+
+        account_deleted = False
+        if account_id:
+            account_deleted = delete_account(account_id)
+            try:
+                from src.webapp.reward_store import get_reward_store
+                get_reward_store().delete_account(account_id)
+            except Exception as exc:
+                logger.warning("admin_delete_auth_user: reward cleanup failed for %s: %s", clean, exc)
+
+        deleted = delete_user_account(clean)
+
+        try:
+            from src.auth_tokens import revoke_all_for_user
+            revoked_sessions = revoke_all_for_user(clean)
+        except Exception:
+            revoked_sessions = 0
+
+        return {
+            "success": True,
+            "username": clean,
+            "account_deleted": bool(account_deleted),
+            "auth_deleted": bool(deleted),
+            "stripe_subscriptions_cancelled": len(stripe_ids),
+            "sessions_revoked": int(revoked_sessions),
+            "message": "User, linked learner accounts and subscriptions deleted",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("admin_delete_auth_user failed for %s", clean)
+        raise HTTPException(status_code=500, detail="Could not delete the user and linked data")
 
 
 @app.post("/api/admin/broadcast-message")

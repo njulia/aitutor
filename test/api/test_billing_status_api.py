@@ -34,4 +34,5 @@ def test_billing_status_is_private_and_reports_no_active_plan(authenticated_clie
         "trial_5day",
         "homework_monthly",
         "elevenplus_monthly",
+        "school_homework_monthly",
     }

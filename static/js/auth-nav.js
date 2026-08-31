@@ -305,7 +305,7 @@
 
   function render(context) {
     const loggedIn = Boolean(context && context.authenticated);
-    const isParent = loggedIn && context.role === 'parent';
+    const isParent = loggedIn && (context.role === 'parent' || context.role === 'teacher');
     const isKid = loggedIn && context.role === 'kid';
     activeRole = loggedIn ? context.role : 'anonymous';
 
@@ -390,7 +390,7 @@
           });
       render(context);
       try {
-        if (context.authenticated && context.role === 'parent') {
+        if (context.authenticated && (context.role === 'parent' || context.role === 'teacher')) {
           window.localStorage.setItem('auth_state', 'logged_in');
         } else {
           window.localStorage.removeItem('auth_state');

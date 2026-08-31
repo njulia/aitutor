@@ -852,6 +852,14 @@ def subscription_active_for_student(
     student = get_student(student_id)
     if not student:
         return False
+    # Operator-controlled test users bypass all subscription-plan checks.
+    try:
+        from src.progress_db import is_user_test, get_user_by_username
+        account = get_account(student["account_id"])
+        if account and is_user_test(account.get("email", "")):
+            return True
+    except Exception:
+        pass
     sub = get_active_subscription(student["account_id"])
     if not sub:
         return False
@@ -1209,6 +1217,14 @@ def account_has_active_subscription(
     account = get_account_by_email(email)
     if not account:
         return False
+    # Test status is an explicit admin-controlled entitlement and overrides
+    # every feature's normal subscription/plan restriction until unmarked.
+    try:
+        from src.progress_db import is_user_test
+        if is_user_test(account.get("email", "")):
+            return True
+    except Exception:
+        pass
     sub = get_active_subscription(account["id"])
     if not sub:
         return False

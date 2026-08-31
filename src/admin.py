@@ -14,7 +14,7 @@
 import logging
 import os
 from calendar import monthrange
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
@@ -27,21 +27,26 @@ def is_dev_mode() -> bool:
     return os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
 
 
-def subscription_duration_days(duration: str, now: Optional[datetime] = None) -> int:
-    """Translate a test-plan term into days without calling 1 month "30 days".
+def subscription_duration_days(duration: str, now: Optional[datetime] = None, months: Optional[int] = None) -> int:
+    """Return the calendar-month entitlement as a day count for persistence.
 
-    Stripe monthly subscriptions renew on the same calendar day where possible.
-    The local development entitlement mirrors that calendar-month boundary.
-    ``30_days`` remains accepted only as a backward-compatible API alias.
+    Admin test subscriptions support 5 days, 1 calendar month, or a custom
+    number of calendar months. The account store persists an end timestamp,
+    so month lengths are calculated from the actual start date rather than
+    treating every month as 30 days.
     """
+    start = now or datetime.now(UTC)
     if duration == "5_days":
         return 5
-    if duration not in {"1_month", "30_days"}:
-        raise ValueError("Invalid duration, must be '5_days' or '1_month'")
-
-    start = now or datetime.now(UTC)
-    next_year = start.year + (1 if start.month == 12 else 0)
-    next_month = 1 if start.month == 12 else start.month + 1
+    month_count = 1 if duration == "1_month" else months if duration == "months" else None
+    if month_count is None:
+        raise ValueError("Invalid duration, must be '5_days', '1_month', or 'months'")
+    month_count = int(month_count)
+    if not 1 <= month_count <= 120:
+        raise ValueError("Months must be between 1 and 120")
+    total_month = start.year * 12 + (start.month - 1) + month_count
+    next_year, month_zero = divmod(total_month, 12)
+    next_month = month_zero + 1
     next_day = min(start.day, monthrange(next_year, next_month)[1])
     period_end = start.replace(year=next_year, month=next_month, day=next_day)
     return max(1, (period_end - start).days)
@@ -188,49 +193,47 @@ def get_subscription_overview() -> Dict[str, Any]:
     return result
 
 
-def create_admin_subscription(email: str, name: str, duration: str, plan: str = "homework_monthly") -> Dict[str, Any]:
-    """Create a local test entitlement only in development.
+def create_admin_subscription(
+    email: str,
+    name: str,
+    duration: str,
+    plan: str = "homework_monthly",
+    months: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Create a local admin test entitlement; never creates or charges Stripe."""
+    if plan not in {"homework_monthly", "elevenplus_monthly", "school_homework_monthly", "family_monthly"}:
+        raise ValueError("Unknown subscription plan")
+    duration_days = subscription_duration_days(duration, months=months)
 
-    Production subscriptions must start in authenticated Stripe Checkout and
-    become active only after a signed webhook has been processed.
-    """
-    if not is_dev_mode():
-        raise ValueError(
-            "Manual subscriptions are disabled in production. Use Stripe Checkout and verified webhooks."
-        )
-    duration_days = subscription_duration_days(duration)
-
-    from src.progress_db import create_local_subscription
     from src.webapp.account_store import ensure_account, create_subscription
 
-    # 1. Create legacy subscription (for dev-mode compatibility)
-    product_map = {
-        "homework_monthly": "Homework Premium",
-        "elevenplus_monthly": "11+ Premium",
-        "family_monthly": "Family Premium"
-    }
-    product_name = product_map.get(plan, "Homework Premium")
-    if duration == "5_days":
-        product_name += " (5-Day Trial)"
-
-    legacy = create_local_subscription(
-        customer_email=email, customer_name=name, product_name=product_name,
-        duration_days=duration_days,
-    )
-
-    # 2. Also create a materialised entitlement in the new account store
-    account = ensure_account(email)
+    account = ensure_account(email, display_name=name)
     new_sub = create_subscription(
         account_id=account["id"],
         plan=plan,
         status="active",
-        duration_days=duration_days
+        duration_days=duration_days,
     )
 
-    return {
-        "legacy": legacy,
-        "subscription": new_sub
-    }
+    # Keep the legacy development table in sync when running locally, but do
+    # not require it in production. The real entitlement is account_subscriptions.
+    legacy = None
+    if is_dev_mode():
+        from src.progress_db import create_local_subscription
+        product_name = {
+            "homework_monthly": "Homework Premium",
+            "elevenplus_monthly": "11+ Premium",
+            "school_homework_monthly": "School Homework Premium",
+            "family_monthly": "Family Premium",
+        }[plan]
+        if duration == "5_days":
+            product_name += " (5-Day Test)"
+        legacy = create_local_subscription(
+            customer_email=email, customer_name=name, product_name=product_name,
+            duration_days=duration_days,
+        )
+
+    return {"subscription": new_sub, "legacy": legacy, "is_test": True, "stripe_charged": False}
 
 
 # ---- 管理员认证（简单 token 验证） ----

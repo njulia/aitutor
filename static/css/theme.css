@@ -626,7 +626,7 @@ body.hm-register {
 .hm-auth .auth-card,
 .hm-register .register-container { border: 2px solid var(--hm-ink); border-radius: 26px; box-shadow: 9px 10px 0 #cec8f4; }
 .hm-auth .auth-card::before,
-.hm-register .register-container::before { content: "Parent & guardian area"; width: fit-content; display: block; margin: 0 auto 14px; padding: 6px 10px; border-radius: 999px; color: var(--hm-purple-dark); background: var(--hm-purple-soft); font-size: .76rem; font-weight: 900; text-transform: uppercase; letter-spacing: .045em; }
+.hm-register .register-container::before { content: "Parent & guardian & teacher area"; width: fit-content; display: block; margin: 0 auto 14px; padding: 6px 10px; border-radius: 999px; color: var(--hm-purple-dark); background: var(--hm-purple-soft); font-size: .76rem; font-weight: 900; text-transform: uppercase; letter-spacing: .045em; }
 .hm-auth .auth-card h1,
 .hm-register .page-title { color: var(--hm-ink); text-align: center; }
 .hm-auth .form-row input,

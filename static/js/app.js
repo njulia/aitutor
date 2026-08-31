@@ -1385,7 +1385,7 @@
             const appLoginLink = document.querySelector('nav.nav-links a[href="/login"]');
             const appRegisterLink = document.querySelector('nav.nav-links a[href="/register"]');
             const appParentLink = document.getElementById('parent-dashboard-link');
-            const authenticated = Boolean(currentStudentId);
+            const authenticated = Boolean(currentStudentId) || currentSessionRole === 'teacher';
             if (appLogoutLink) {
                 appLogoutLink.style.display = authenticated && currentSessionRole !== 'kid'
                     ? 'block' : 'none';

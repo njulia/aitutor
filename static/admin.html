@@ -619,11 +619,17 @@
             </div>
             <div class="form-group">
                 <label>Duration</label>
-                <select id="addSubDuration">
-                    <option value="5_days">5-Day Access</option>
-                    <option value="1_month">1-Month Access</option>
+                <select id="addSubDuration" onchange="toggleCustomSubMonths()">
+                    <option value="5_days">5 days</option>
+                    <option value="1_month">1 month</option>
+                    <option value="months">Custom number of months</option>
                 </select>
             </div>
+            <div class="form-group" id="customSubMonthsGroup" style="display:none;">
+                <label>Number of months</label>
+                <input type="number" id="addSubMonths" min="1" max="120" step="1" value="3" placeholder="e.g. 3">
+            </div>
+            <div class="mini-note" style="margin-top:4px;">Test access is recorded in Homework Magic only. No Stripe payment or subscription is created.</div>
             <div class="actions">
                 <button class="btn" onclick="closeAddSubModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="createSubscription()">Create</button>
@@ -1156,6 +1162,8 @@
             document.getElementById('addSubEmail').value = '';
             document.getElementById('addSubPlan').value = 'homework_monthly';
             document.getElementById('addSubDuration').value = '1_month';
+            document.getElementById('addSubMonths').value = '3';
+            toggleCustomSubMonths();
             document.getElementById('addSubModal').classList.add('show');
         }
 
@@ -1163,18 +1171,25 @@
             document.getElementById('addSubModal').classList.remove('show');
         }
 
+        function toggleCustomSubMonths() {
+            const duration = document.getElementById('addSubDuration').value;
+            document.getElementById('customSubMonthsGroup').style.display = duration === 'months' ? 'block' : 'none';
+        }
+
         async function createSubscription() {
             const name = document.getElementById('addSubName').value.trim();
             const email = document.getElementById('addSubEmail').value.trim();
             const plan = document.getElementById('addSubPlan').value;
             const duration = document.getElementById('addSubDuration').value;
+            const months = duration === 'months' ? Number(document.getElementById('addSubMonths').value) : null;
             if (!name) { alert('Please enter a customer name'); return; }
             if (!email) { alert('Please enter a customer email'); return; }
+            if (duration === 'months' && (!Number.isInteger(months) || months < 1 || months > 120)) { alert('Please enter between 1 and 120 months'); return; }
             try {
                 const resp = await fetch(API + '/subscriptions', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: name, email: email, plan: plan, duration: duration })
+                    body: JSON.stringify({ name: name, email: email, plan: plan, duration: duration, months: months })
                 });
                 const data = await resp.json();
                 if (!resp.ok) { alert('Error: ' + (data.detail || 'Unknown error')); return; }
@@ -1378,6 +1393,7 @@
                     <td>${u.is_test ? '<span class="badge badge-blue">Test</span>' : '<span class="badge">Regular</span>'}</td>
                     <td>
                         <button class="btn btn-sm" onclick="toggleTest('${escapeHtml(u.username)}', ${u.is_test ? 'false' : 'true'})">${u.is_test ? 'Unmark Test' : 'Mark Test'}</button>
+                        <button class="btn btn-sm" style="color:#c53030;border-color:#f3b4b4" onclick="deleteAuthUser('${escapeHtml(u.username)}')">Delete</button>
                     </td>
                 </tr>
             `).join('');
@@ -1479,6 +1495,20 @@
                 const j = await resp.json();
                 if(j.success){ loadAuthUsers(); } else { alert('Error: '+(j.error||JSON.stringify(j))); }
             }catch(e){ alert('Error: '+e.message); }
+        }
+
+        async function deleteAuthUser(username){
+            const confirmed = window.confirm(
+                `Delete ${username} and all linked learner accounts, subscriptions, progress and reward data?\n\nAny active Stripe subscriptions will be cancelled first. This cannot be undone.`
+            );
+            if(!confirmed) return;
+            try{
+                const resp = await fetch(`/api/admin/auth-users/${encodeURIComponent(username)}`, {method:'DELETE'});
+                const j = await resp.json();
+                if(!resp.ok) throw new Error(j.detail || j.error || `HTTP ${resp.status}`);
+                alert(`Deleted ${username}.`);
+                await loadAuthUsers();
+            }catch(e){ alert('Could not delete user: '+e.message); }
         }
 
         async function loadConversations() {

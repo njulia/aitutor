@@ -226,23 +226,30 @@ def portal_configuration_issues() -> list[str]:
 
 
 def pricing_table_configuration_issues() -> list[str]:
-    """Return blockers for the authenticated Stripe Pricing Table."""
+    """Return only blockers for rendering Stripe's embedded Pricing Table.
+
+    The Pricing Table is configured in Stripe itself.  It must therefore not
+    depend on every individual Checkout Price ID being present in the app
+    environment.  In particular, adding a new plan to the Stripe table should
+    not make the whole pricing page disappear while its optional server-side
+    Checkout mapping is being deployed.
+    """
     issues: list[str] = []
-    for plan in ("homework_monthly", "elevenplus_monthly", "school_homework_monthly"):
-        for issue in billing_configuration_issues(plan):
-            if issue not in issues:
-                issues.append(issue)
-    monthly_prices = [
-        _plans().get("homework_monthly"),
-        _plans().get("elevenplus_monthly"),
-        _plans().get("school_homework_monthly"),
-    ]
-    if all(monthly_prices) and len(set(monthly_prices)) != len(monthly_prices):
-        issues.append("The monthly plans must use different Stripe Price IDs")
+    if not _billing_enabled():
+        return ["Stripe billing is disabled"]
+
+    key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    expected_live = _expected_livemode()
+    if not key:
+        issues.append("STRIPE_SECRET_KEY is not configured")
+    elif expected_live and not key.startswith(("sk_live_", "rk_live_")):
+        issues.append("STRIPE_SECRET_KEY must be a live key")
+    elif not expected_live and not key.startswith(("sk_test_", "rk_test_")):
+        issues.append("STRIPE_SECRET_KEY must be a test key for this deployment")
+
     pricing_table_id = _pricing_table_id()
     publishable_key = _publishable_key()
-    expected_prefix = "pk_live_" if _expected_livemode() else "pk_test_"
-
+    expected_prefix = "pk_live_" if expected_live else "pk_test_"
     if not pricing_table_id.startswith("prctbl_"):
         issues.append("STRIPE_PRICING_TABLE_ID is not configured")
     if not publishable_key.startswith(expected_prefix):

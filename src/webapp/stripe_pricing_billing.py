@@ -309,6 +309,12 @@ def billing_account_has_active_subscription(
     valid across both learning areas.
     """
     try:
+        try:
+            from src.progress_db import is_user_test
+            if is_user_test(username):
+                return True
+        except Exception:
+            pass
         subscription = _active_subscription(username)
         if subscription is None:
             return False
