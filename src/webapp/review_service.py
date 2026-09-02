@@ -707,6 +707,32 @@ def _mistake_topic(profile: Dict[str, Any], subject: str) -> str:
     return compact_text(subject_display_name(subject), 160) or "General"
 
 
+def _progress_topic(profile: Dict[str, Any], subject: str, homework_content: str = "") -> str:
+    """Return a topic label for the Progress page without conflating it with subject."""
+    explicit = str(profile.get("topic") or "").strip()
+    if explicit:
+        return compact_text(explicit, 80)
+
+    text = f"{subject} {homework_content}".casefold()
+    topic_rules = [
+        (("fraction", "numerator", "denominator"), "Fractions"),
+        (("decimal",), "Decimals"),
+        (("percentage", "percent"), "Percentages"),
+        (("multiply", "multiplication", "times table", "×"), "Multiplication"),
+        (("divide", "division", "÷"), "Division"),
+        (("addition", " add ", "+"), "Addition"),
+        (("subtract", "subtraction", "−"), "Subtraction"),
+        (("shape", "angle", "perimeter", "area"), "Geometry and measures"),
+        (("grammar", "punctuation", "sentence"), "Grammar and punctuation"),
+        (("spelling",), "Spelling"),
+        (("comprehension", "passage", "read the"), "Reading comprehension"),
+    ]
+    for needles, topic in topic_rules:
+        if any(needle in text for needle in needles):
+            return topic
+    return compact_text(subject_display_name(subject), 80) + " general practice"
+
+
 def _save_11plus_mistakes(
     rows: List[Dict[str, Any]],
     *,
@@ -935,6 +961,7 @@ def review_homework(
                     score=float(correct_count),
                     review_text=display_review,
                     max_score=attempted,
+                    topic=_progress_topic(profile, subject, budget.get("homework_content", "")),
                 )
             except Exception:
                 logger.exception("Could not save homework progress")
@@ -1163,6 +1190,7 @@ def review_homework(
                 score=score,
                 review_text=review,
                 max_score=max_score or 10,
+                topic=_progress_topic(profile, subject, budget.get("homework_content", "")),
             )
         except Exception:
             logger.exception("Could not save homework progress")

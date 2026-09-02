@@ -42,7 +42,7 @@ from src.webapp.mock_exam_routes import build_mock_exam_router
 from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
-from src.webapp.parent_dashboard_routes import build_parent_dashboard_router
+from src.webapp.parent_dashboard_routes import build_parent_dashboard_router, send_target_learning_summary_if_reached
 from src.webapp.school_finder_routes import (
     build_school_finder_router,
     build_school_finder_admin_router,
@@ -2694,6 +2694,12 @@ async def api_review(
                         limit_concurrency=False,
                     )
                     result = {**result, "reward_update": reward_update}
+                    if reward_update.get("activity_xp", 0) > 0:
+                        background_tasks.add_task(
+                            send_target_learning_summary_if_reached,
+                            account["id"],
+                            resolved_student_id,
+                        )
                     if reward_update.get("is_first_family_activity"):
                         background_tasks.add_task(
                             record_marketing_event,

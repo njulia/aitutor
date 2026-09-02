@@ -774,11 +774,21 @@ def _raw_storage_enabled() -> bool:
     return os.getenv("STORE_RAW_LEARNER_CONTENT", "false").lower() in {"1", "true", "yes", "on"}
 
 
-def _upsert_topic_progress(conn, student_id: str, subject: str, score: float, max_score: float, now: datetime) -> None:
-    """向 topic_progress 表插入或更新某个科目的累计答题数据。"""
+def _upsert_topic_progress(
+    conn,
+    student_id: str,
+    subject: str,
+    score: float,
+    max_score: float,
+    now: datetime,
+    topic: str = None,
+) -> None:
+    """Insert/update cumulative progress for a real topic within a subject."""
     clean_subject = subject[:80]
-    # 用法科目本身作为 topic（因为没有更细粒度的 topic 信息）
-    topic = clean_subject
+    clean_topic = str(topic or "").strip()[:80]
+    # Keep the subject and topic separate. Older code used the subject itself as
+    # the topic, which made every row in "Topic Progress" show identical values.
+    topic = clean_topic or f"{clean_subject} general practice"
     attempted = int(max_score or 0)
     correct = int(score or 0)
     if attempted <= 0:
@@ -838,6 +848,7 @@ def save_homework_session(
     score: float = None,
     review_text: str = None,
     max_score: float = 10,
+    topic: str = None,
 ) -> str:
     now = _now()
     session_id = f"hw_{uuid.uuid4().hex}"
@@ -852,7 +863,7 @@ def save_homework_session(
             created_at=now,
         ))
         # 同步更新 topic_progress 表，供进度页面的 "Topic Progress" 使用
-        _upsert_topic_progress(conn, student_id, subject[:80], score, max_score, now)
+        _upsert_topic_progress(conn, student_id, subject[:80], score, max_score, now, topic=topic)
     return session_id
 
 
@@ -918,7 +929,16 @@ def get_topic_progress(student_id: str, subject: str = None) -> List[Dict]:
         q = q.where(topic_progress.c.subject == subject)
     with _engine.begin() as conn:
         rows = conn.execute(q.order_by(topic_progress.c.accuracy.asc())).all()
-    return [_dict(r) for r in rows]
+    result = []
+    for row in rows:
+        item = _dict(row)
+        # Legacy records used the subject itself as the topic. Keep them usable
+        # without displaying the same value in both columns. New records store a
+        # real topic at write time.
+        if str(item.get("topic") or "").strip() == str(item.get("subject") or "").strip():
+            item["topic"] = "General practice"
+        result.append(item)
+    return result
 
 
 def get_daily_goal_stats(student_id: str, daily_goal: int = 1) -> Dict[str, Any]:

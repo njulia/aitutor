@@ -52,3 +52,11 @@ def test_mistake_bank_is_deduplicated_and_answer_is_not_exposed(monkeypatch):
     assert result["success"] is True
     assert result["correct"] is True
     assert result["correct_answer"] == "1"
+
+
+def test_11plus_mistake_source_classification_covers_all_learning_paths():
+    from src.webapp.review_service import _mistake_source_type
+
+    assert _mistake_source_type({"topic_mastery": True}, True) == "topic_mastery"
+    assert _mistake_source_type({"plan_week": 12}, True) == "year_round"
+    assert _mistake_source_type({}, True) == "11plus_practice"

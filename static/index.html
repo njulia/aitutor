@@ -304,7 +304,6 @@
 
 <style>
 .hm-seo-intro{
-  max-width:760px;
   margin:14px 0 0;
   color:var(--hm-muted,#667085);
   font-size:.98rem;
@@ -317,10 +316,16 @@
 <style>
 /* Clean hero after removing the old example-mission visual */
 .hm-home .hm-hero{
-  grid-template-columns:1fr !important;
+  display:block !important;
 }
 .hm-home .hm-hero-copy{
-  max-width:900px;
+  max-width:none !important;
+}
+.hm-home .hm-hero h1{
+  max-width:none !important;
+}
+.hm-home .hm-hero-copy > p:not(.hm-eyebrow){
+  max-width:none !important;
 }
 .hm-home .hm-hero-actions{
   margin-top:20px;
@@ -331,18 +336,16 @@
 
 /* Clear section rhythm */
 .hm-home .hm-section{
-  margin-top:32px;
+  margin-top:16px;
+  padding:66px 0;
 }
 .hm-home .hm-section-heading{
+  max-width:none;
   margin-bottom:18px;
 }
 .hm-home .hm-section-heading h2{
   margin-bottom:6px;
 }
-.hm-home .hm-section-heading > p:not(.hm-kicker){
-  max-width:760px;
-}
-
 /* Put the main destinations first and make them visually consistent */
 .hm-home .hm-quick-links .hm-path-grid{
   grid-template-columns:repeat(3,minmax(0,1fr));
@@ -379,11 +382,7 @@
   max-width:none;
   box-sizing:border-box;
 }
-.hm-home .hm-hero-copy > p,
-.hm-home .hm-hero-copy > h1,
-.hm-home .hm-hero-copy > .hm-hero-actions,
-.hm-home .hm-hero-copy > .hm-seo-intro,
-.hm-home .hm-hero-copy > .hm-mini-proof{
+.hm-home .hm-faq{
   max-width:none;
 }
 @media (max-width:900px){
@@ -511,7 +510,7 @@
 <nav aria-label="Main navigation" class="hm-main-nav">
       <a href="/ks1-homework">KS1</a>
   <a href="/ks2-homework">KS2</a>
-<a href="/elevenplus-practice">11+ Practice</a>
+<a href="/elevenplus-practice">11+</a>
 <!--<a href="/elevenplus-mock-exams">11+ Mock Exams</a>-->
 <a href="/elevenplus/articles">11+ Articles</a>
 <a href="/school-finder">School Finder</a>
@@ -535,12 +534,13 @@
     <div class="hm-hero-actions">
       <a class="hm-button hm-button-primary" href="/app"><span aria-hidden="true">🚀</span> Start learning</a>
       <a class="hm-button hm-button-secondary" href="/elevenplus-practice">Explore 11+ practice</a>
+      <a class="hm-button hm-button-secondary" href="/pricing">Pricing</a>
     </div>
     <p class="hm-hero-note">Start with a short session. You do not need to plan a lesson.</p>
   </div>
 </section>
 
-<section id="how-homework-magic-works" class="hm-section hm-parent-guide" aria-labelledby="how-it-works-title">
+<section id="how-homework-magic-works" class="hm-section" aria-labelledby="how-it-works-title">
   <div class="hm-section-heading">
 <!--    <p class="hm-kicker">For parents</p>-->
     <h2 id="how-it-works-title">How Homework Magic works</h2>
@@ -558,8 +558,8 @@
 <section class="hm-section" aria-labelledby="homework-title">
   <div class="hm-section-heading"><p class="hm-kicker">Everyday learning</p><h2 id="homework-title">UK primary homework help for Years 1–6</h2><p>Quick practice for children in Key Stage 1 and Key Stage 2, designed to fit around normal family life.</p></div>
   <div class="hm-path-grid hm-simple-grid">
-    <a class="hm-path-card" href="/ks1-homework"><span aria-hidden="true">✏️</span><div><strong>KS1 homework</strong><small>Years 1–2 · Maths, English and more</small></div><b aria-hidden="true">→</b></a>
-    <a class="hm-path-card" href="/ks2-homework"><span aria-hidden="true">📚</span><div><strong>KS2 homework</strong><small>Years 3–6 · Maths, English, Science and more</small></div><b aria-hidden="true">→</b></a>
+    <a class="hm-path-card" href="/ks1-homework"><span aria-hidden="true">✏️</span><div><strong>KS1 Homework</strong><small>Years 1–2 · Maths, English and more</small></div><b aria-hidden="true">→</b></a>
+    <a class="hm-path-card" href="/ks2-homework"><span aria-hidden="true">📚</span><div><strong>KS2 Homework</strong><small>Years 3–6 · Maths, English, Science and more</small></div><b aria-hidden="true">→</b></a>
     <a class="hm-path-card" href="/app?tab=homework"><span aria-hidden="true">✨</span><div><strong>Make Homework</strong><small>Choose a Year, subject and short activity</small></div><b aria-hidden="true">→</b></a>
   </div>
 </section>
@@ -567,19 +567,27 @@
 <section class="hm-section hm-eleven-roadmap" aria-labelledby="eleven-title">
   <div class="hm-section-heading"><p class="hm-kicker">11+ preparation</p><h2 id="eleven-title">A simple 11+ practice path</h2><p>Use short practice sessions to build skills, find weak areas and become more confident before the 11+.</p></div>
   <div class="hm-roadmap" aria-label="11+ preparation steps">
-    <div class="hm-roadmap-step"><span class="hm-roadmap-number">1</span><h3><a href="/elevenplus-practice">Practise</a></h3><p>Work on Maths, English, verbal reasoning and non-verbal reasoning.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>
-    <div class="hm-roadmap-step"><span class="hm-roadmap-number">2</span><h3><a href="/elevenplus-topic-mastery">Build skills</a></h3><p>Focus on topics that need more practice and learn from mistakes.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>
-    <div class="hm-roadmap-step"><span class="hm-roadmap-number">3</span><h3><a href="/elevenplus-mock-exams">Try a mock</a></h3><p>Use mock exams to practise working through a full set of questions.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>
-    <div class="hm-roadmap-step"><span class="hm-roadmap-number">4</span><h3><a href="/elevenplus-year-round-plan">Keep practising</a></h3><p>Use the year-round plan to keep preparation steady when needed.</p></div>
+<!--    <div class="hm-roadmap-step"><span class="hm-roadmap-number">1</span><h3><a href="/elevenplus-practice">Practise</a></h3><p>Work on Maths, English, verbal reasoning and non-verbal reasoning.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>-->
+<!--    <div class="hm-roadmap-step"><span class="hm-roadmap-number">2</span><h3><a href="/elevenplus-topic-mastery">Build skills</a></h3><p>Focus on topics that need more practice and learn from mistakes.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>-->
+<!--    <div class="hm-roadmap-step"><span class="hm-roadmap-number">3</span><h3><a href="/elevenplus-mock-exams">Try a mock</a></h3><p>Use mock exams to practise working through a full set of questions.</p><span class="hm-roadmap-arrow" aria-hidden="true">→</span></div>-->
+<!--    <div class="hm-roadmap-step"><span class="hm-roadmap-number">4</span><h3><a href="/elevenplus-year-round-plan">Keep practising</a></h3><p>Use the year-round plan to keep preparation steady when needed.</p></div>-->
+      <a class="hm-path-card" href="/app?tab=eleven"><div><strong>Practise</strong><small>Work on Maths, English, verbal reasoning and non-verbal reasoning.</small></div><b aria-hidden="true">→</b></a>
+      <a class="hm-path-card" href="/elevenplus-topic-mastery"><div><strong>Build skills</strong><small>Focus on topics that need more practice and learn from mistakes.</small></div><b aria-hidden="true">→</b></a>
+      <a class="hm-path-card" href="/elevenplus-mock-exams"><div><strong>Try a mock exam</strong><small>Use mock exams to practise working through a full set of questions.</small></div><b aria-hidden="true">→</b></a>
+      <a class="hm-path-card" href="/elevenplus-year-round-plan"><div><strong>Keep practising</strong><small>Use the year-round plan to keep preparation steady when needed.</small></div><b aria-hidden="true">→</b></a>
   </div>
-  <div class="hm-roadmap-cta"><p>Planning schools? You can also use the <a href="/school-finder">11+ school finder</a>.</p><a class="hm-button hm-button-primary" href="/elevenplus-practice">Explore 11+ practice</a></div>
+  <div class="hm-roadmap-cta">
+      <a class="hm-button hm-button-primary" href="/elevenplus-practice">Explore 11+ practice</a>
+      <a class="hm-button hm-button-secondary" href="/elevenplus/articles">Explore 11+ articles</a>
+      <a class="hm-button hm-button-secondary" href="/school-finder">Find secondary schools</a>
+  </div>
 </section>
 
 <section class="hm-section" aria-labelledby="homework-title">
-  <div class="hm-section-heading"><p class="hm-kicker">Start learning</p><h2 id="homework-title">Quick access to homework</h2><p>Quick practice for children in Key Stage 1 and Key Stage 2, designed to fit around normal family life.</p></div>
+  <div class="hm-section-heading"><p class="hm-kicker">Start learning</p><h2 id="homework-title">Quick access to homework for Years 1-6</h2><p>Quick practice for children in Key Stage 1 and Key Stage 2, designed to fit around normal family life.</p></div>
   <div class="hm-path-grid hm-simple-grid">
-    <a class="hm-path-card" href="/ks1-homework"><span aria-hidden="true">✏️</span><div><strong>KS1 homework</strong><small>Years 1–2 · Maths, English and more</small></div><b aria-hidden="true">→</b></a>
-    <a class="hm-path-card" href="/ks2-homework"><span aria-hidden="true">📚</span><div><strong>KS2 homework</strong><small>Years 3–6 · Maths, English, Science and more</small></div><b aria-hidden="true">→</b></a>
+    <a class="hm-path-card" href="/ks1-homework"><span aria-hidden="true">✏️</span><div><strong>KS1 Homework</strong><small>Years 1–2 · Maths, English and more</small></div><b aria-hidden="true">→</b></a>
+    <a class="hm-path-card" href="/ks2-homework"><span aria-hidden="true">📚</span><div><strong>KS2 Homework</strong><small>Years 3–6 · Maths, English, Science and more</small></div><b aria-hidden="true">→</b></a>
     <a class="hm-path-card" href="/app?tab=homework"><span aria-hidden="true">✨</span><div><strong>Make Homework</strong><small>Choose a Year, subject and short activity</small></div><b aria-hidden="true">→</b></a>
 <a class="hm-path-card" href="/app?tab=homework&amp;year=1&amp;subject=Maths"><span aria-hidden="true">🔢</span><div><strong>Year 1 Maths</strong><small>Practice questions</small></div><b aria-hidden="true">→</b></a>
 <a class="hm-path-card" href="/app?tab=homework&amp;year=1&amp;subject=English"><span aria-hidden="true">📚</span><div><strong>Year 1 English</strong><small>Practice questions</small></div><b aria-hidden="true">→</b></a>

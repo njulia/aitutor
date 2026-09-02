@@ -970,6 +970,20 @@ class RewardStore:
         )
         return day_count, active_days, subjects
 
+    def get_daily_activity_count(self, *, student_id: str, local_day: str) -> int:
+        """Count rewarded learning activities for one child on the reward timezone's local day."""
+        with self.engine.begin() as conn:
+            value = conn.execute(
+                select(func.count()).select_from(self.events).where(
+                    and_(
+                        self.events.c.student_id == _clean_id(student_id, maximum=80),
+                        self.events.c.event_type == "checked_activity",
+                        self.events.c.local_day == str(local_day),
+                    )
+                )
+            ).scalar_one()
+        return int(value or 0)
+
     def award_checked_activity(
         self,
         *,

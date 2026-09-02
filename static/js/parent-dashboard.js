@@ -331,10 +331,6 @@ function renderKids() {
     } else {
       actions.append(progressLink, rewardLink);
     }
-//    const edit = node('button', 'btn btn-secondary', 'Edit profile');
-//    edit.type = 'button';
-//    edit.addEventListener('click', () => showProfileForm(kid));
-//    actions.append(progressLink, rewardLink, edit);
     if (Number(wallet.pending_rewards || 0) > 0) {
       actions.append(node('span', 'default-badge', `${wallet.pending_rewards} pending gift`));
     }
@@ -410,6 +406,32 @@ async function loadDigest() {
       node('td', '', kid.event_count || 0), node('td', '', subjects));
     body.append(row);
   });
+}
+
+async function loadSummaryPreferences() {
+  const data = await api('/api/parent/learning-summary/preferences');
+  const prefs = data.preferences || {};
+  byId('summary-email-enabled').checked = prefs.enabled !== false;
+  byId('summary-frequency').value = prefs.frequency || 'weekly';
+  byId('summary-interval-days').value = String(prefs.interval_days || 7);
+  toggleSummaryInterval();
+}
+
+function toggleSummaryInterval() {
+  const custom = byId('summary-frequency').value === 'custom';
+  byId('summary-interval-days').disabled = !custom;
+}
+
+async function saveSummaryPreferences(event) {
+  event.preventDefault();
+  const body = {
+    enabled: byId('summary-email-enabled').checked,
+    frequency: byId('summary-frequency').value,
+    interval_days: Number(byId('summary-interval-days').value || 7),
+  };
+  await api('/api/parent/learning-summary/preferences', {method: 'PUT', body: JSON.stringify(body)});
+  setStatus(body.enabled ? 'Learning summary email settings saved.' : 'Learning summary emails unsubscribed.');
+  await loadSummaryPreferences();
 }
 
 async function loadCatalog() {
@@ -535,7 +557,7 @@ async function initialise() {
       window.location.replace(context.role === 'kid' ? '/app' : '/login?next=/parent-dashboard');
       return;
     }
-    await Promise.all([loadOverview(), loadDigest(), loadCatalog(), loadGiftRequests()]);
+    await Promise.all([loadOverview(), loadDigest(), loadCatalog(), loadGiftRequests(), loadSummaryPreferences()]);
   } catch (error) {
     if (error.status === 401) window.location.replace('/login?next=/parent-dashboard');
     else setStatus(error.message || 'The dashboard could not be loaded.', true);
@@ -557,6 +579,10 @@ byId('catalog-form').addEventListener('submit', (event) => {
     await api('/api/rewards/catalog', {method: 'POST', body: JSON.stringify({...reward, parent_password: password})});
     byId('catalog-form').reset(); byId('reward-cost').value = '100'; setStatus('Reward added.'); await loadCatalog();
   });
+});
+byId('summary-frequency').addEventListener('change', toggleSummaryInterval);
+byId('summary-email-form').addEventListener('submit', (event) => {
+  saveSummaryPreferences(event).catch((error) => setStatus(error.message, true));
 });
 byId('send-digest-button').addEventListener('click', () => requestPassword(async (password) => {
   await api('/api/parent/xp-digest/send', {method: 'POST', body: JSON.stringify({parent_password: password})});

@@ -296,6 +296,33 @@
       </div>
     </section>
 
+    <section class="section" aria-labelledby="summary-email-title">
+      <h2 id="summary-email-title">Learning summary emails</h2>
+      <p class="muted">Target emails are sent when a child reaches their daily learning goal, unless you unsubscribe. Manual “Email summary” is always available.</p>
+      <form id="summary-email-form" class="profile-form show">
+        <div class="form-row">
+          <label class="field" style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+            <input id="summary-email-enabled" type="checkbox" checked>
+            <span>Send learning summary emails</span>
+          </label>
+          <div class="field">
+            <label for="summary-frequency">Recurring frequency</label>
+            <select id="summary-frequency">
+              <option value="custom">Every n days</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="field" style="max-width:180px">
+            <label for="summary-interval-days">n days</label>
+            <input id="summary-interval-days" type="number" min="1" max="365" value="7">
+          </div>
+          <button class="btn btn-primary" type="submit">Save email settings</button>
+        </div>
+      </form>
+    </section>
+
     <section class="section" aria-labelledby="requests-title">
       <h2 id="requests-title">Gift requests</h2>
       <p class="muted">Gift Points are used only after you approve a request.</p>

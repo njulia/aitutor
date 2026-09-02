@@ -780,13 +780,13 @@
         function formatAdminDate(value) {
             if (!value) return '-';
             const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
+            return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-GB', { timeZone: 'Europe/London' });
         }
 
         function formatAdminDateTime(value, emptyLabel = '-') {
             if (!value) return emptyLabel;
             const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? emptyLabel : date.toLocaleString();
+            return Number.isNaN(date.getTime()) ? emptyLabel : date.toLocaleString('en-GB', { timeZone: 'Europe/London', dateStyle: 'medium', timeStyle: 'short' });
         }
 
         // Overview

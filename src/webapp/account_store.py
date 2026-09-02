@@ -97,6 +97,9 @@ students = Table(
     Column("kid_code", String(20), nullable=True, unique=True, index=True),
     # --- ADD THE FOLLOWING LINE HERE ---
     Column("last_login_at", DateTime(timezone=True), nullable=True),
+    # The last date on which a parent explicitly selected the year group.
+    # This lets automatic September promotion resume in the following academic year.
+    Column("year_group_set_at", DateTime(timezone=True), nullable=True),
     # ------------------------------------
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
@@ -110,6 +113,27 @@ learning_targets = Table(
     Column("weekly_xp_goal", Integer, nullable=False, default=100),
     Column("focus_subjects", String(200), nullable=True),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+learning_summary_preferences = Table(
+    "learning_summary_preferences",
+    _metadata,
+    Column("account_id", String(80), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True),
+    Column("enabled", Boolean, nullable=False, default=True),
+    Column("frequency", String(20), nullable=False, default="weekly"),
+    Column("interval_days", Integer, nullable=False, default=7),
+    Column("next_send_at", DateTime(timezone=True), nullable=True),
+    Column("last_sent_at", DateTime(timezone=True), nullable=True),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+learning_summary_target_notifications = Table(
+    "learning_summary_target_notifications",
+    _metadata,
+    Column("account_id", String(80), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True),
+    Column("student_id", String(80), ForeignKey("students.id", ondelete="CASCADE"), primary_key=True),
+    Column("local_day", String(10), primary_key=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 subscriptions = Table(
@@ -209,6 +233,7 @@ def _ensure_legacy_columns() -> None:
         ("accounts", "family_code", "VARCHAR(16)"),
         ("students", "kid_code", "VARCHAR(20)"),
         ("students", "last_login_at", "TIMESTAMP NULL"),
+        ("students", "year_group_set_at", "TIMESTAMP NULL"),
     ]
     for table_name, column_name, column_type in additions:
         try:
@@ -308,6 +333,9 @@ def ensure_account(email: str, display_name: Optional[str] = None, role: str = "
     # 老账号补发永久家庭码，保证每个家庭都有可用的孩子登录入口
     if not data.get("family_code"):
         data = _backfill_family_code(data["id"]) or data
+    # Ensure every family has an explicit email-summary preference record so a
+    # scheduled worker can operate without requiring a dashboard visit first.
+    get_learning_summary_preferences(data["id"])
     return data
 
 
@@ -497,7 +525,7 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
                 with engine.begin() as conn:
                     conn.execute(insert(students).values(
                         id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
-                        year_group=year_group, age=age, is_active=True, is_default=True,
+                        year_group=year_group, age=age, year_group_set_at=now, is_active=True, is_default=True,
                         default_for_account=account_id, kid_code=_generate_code(KID_CODE_LENGTH),
                         created_at=now, updated_at=now,
                     ))
@@ -587,7 +615,7 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
                 conn.execute(
                     insert(students).values(
                         id=learner_id, account_id=account_id, name=nickname,
-                        year_group=year_group, age=age, is_active=True, is_default=False,
+                        year_group=year_group, age=age, year_group_set_at=now, is_active=True, is_default=False,
                         default_for_account=None, kid_code=_generate_code(KID_CODE_LENGTH),
                         created_at=now, updated_at=now,
                     )
@@ -624,13 +652,19 @@ def adjust_student_for_academic_year(student: Dict[str, Any]) -> Dict[str, Any]:
     else:
         current_academic_year = now.year - 1
 
-    # 计算注册时的学术年度
-    if created.month >= 9:
-        registration_academic_year = created.year
+    # Base promotion on the last explicit year-group selection when available.
+    # A parent selecting Year 3 on 2 September must see Year 3 until the next
+    # September; the automatic promotion then resumes normally.
+    year_group_set_at = student.get("year_group_set_at")
+    base_date = year_group_set_at or created
+    if getattr(base_date, "tzinfo", None) is None:
+        base_date = base_date.replace(tzinfo=UTC)
+    if base_date.month >= 9:
+        base_academic_year = base_date.year
     else:
-        registration_academic_year = created.year - 1
+        base_academic_year = base_date.year - 1
 
-    years_promoted = current_academic_year - registration_academic_year
+    years_promoted = current_academic_year - base_academic_year
     if years_promoted <= 0:
         return student
 
@@ -900,6 +934,10 @@ def update_student(student_id: str, account_id: str, **updates: Any) -> Optional
         "name": nickname, "year_group": year_group, "age": age,
         "is_active": bool(updates.get("is_active", current["is_active"])), "updated_at": _now(),
     }
+    # Explicit year-group edits are authoritative for the current academic
+    # year. Automatic September promotion uses this timestamp on later reads.
+    if "year_group" in updates:
+        values["year_group_set_at"] = _now()
     with _engine().begin() as conn:
         conn.execute(
             update(students).where(
@@ -1289,6 +1327,90 @@ def set_learning_target(
         )
     return get_learning_target(student_id)
 
+
+SUMMARY_FREQUENCIES = {"custom", "weekly", "monthly", "yearly"}
+
+def _add_calendar_period(value: datetime, frequency: str, interval_days: int) -> datetime:
+    if frequency == "weekly":
+        return value + timedelta(days=7)
+    if frequency == "yearly":
+        try:
+            return value.replace(year=value.year + 1)
+        except ValueError:
+            return value.replace(year=value.year + 1, day=28)
+    if frequency == "monthly":
+        month = value.month + 1
+        year = value.year + (month - 1) // 12
+        month = (month - 1) % 12 + 1
+        import calendar
+        day = min(value.day, calendar.monthrange(year, month)[1])
+        return value.replace(year=year, month=month, day=day)
+    return value + timedelta(days=max(1, min(int(interval_days), 365)))
+
+def get_learning_summary_preferences(account_id: str) -> Dict[str, Any]:
+    now = _now()
+    with _engine().begin() as conn:
+        row = conn.execute(select(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id)).first()
+        if row is None:
+            conn.execute(insert(learning_summary_preferences).values(account_id=account_id, enabled=True, frequency="weekly", interval_days=7, next_send_at=now + timedelta(days=7), last_sent_at=None, updated_at=now))
+            row = conn.execute(select(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id)).first()
+    return _dict(row) or {}
+
+def set_learning_summary_preferences(account_id: str, *, enabled: bool, frequency: str = "weekly", interval_days: int = 7) -> Dict[str, Any]:
+    frequency = str(frequency or "weekly").strip().lower()
+    if frequency not in SUMMARY_FREQUENCIES:
+        raise ValueError("Frequency must be custom, weekly, monthly or yearly")
+    interval_days = max(1, min(int(interval_days), 365))
+    now = _now()
+    next_send = _add_calendar_period(now, frequency, interval_days) if enabled else None
+    with _engine().begin() as conn:
+        existing = conn.execute(select(learning_summary_preferences.c.account_id).where(learning_summary_preferences.c.account_id == account_id)).first()
+        values = {"enabled": bool(enabled), "frequency": frequency, "interval_days": interval_days, "next_send_at": next_send, "updated_at": now}
+        if existing:
+            conn.execute(update(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id).values(**values))
+        else:
+            conn.execute(insert(learning_summary_preferences).values(account_id=account_id, last_sent_at=None, **values))
+        row = conn.execute(select(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id)).first()
+    return _dict(row) or {}
+
+def claim_learning_summary_target_notification(account_id: str, student_id: str, local_day: str) -> bool:
+    try:
+        with _engine().begin() as conn:
+            conn.execute(insert(learning_summary_target_notifications).values(account_id=account_id, student_id=student_id, local_day=str(local_day), created_at=_now()))
+        return True
+    except IntegrityError:
+        return False
+
+def release_learning_summary_target_notification(account_id: str, student_id: str, local_day: str) -> None:
+    with _engine().begin() as conn:
+        conn.execute(delete(learning_summary_target_notifications).where(
+            learning_summary_target_notifications.c.account_id == account_id,
+            learning_summary_target_notifications.c.student_id == student_id,
+            learning_summary_target_notifications.c.local_day == str(local_day),
+        ))
+
+def list_due_learning_summary_accounts(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    moment = now or _now()
+    with _engine().begin() as conn:
+        rows = conn.execute(select(learning_summary_preferences, accounts.c.email).join(accounts, accounts.c.id == learning_summary_preferences.c.account_id).where(learning_summary_preferences.c.enabled.is_(True), learning_summary_preferences.c.next_send_at.is_not(None), learning_summary_preferences.c.next_send_at <= moment)).all()
+    result = []
+    for row in rows:
+        item = _dict(row) or {}
+        item["email"] = row._mapping["email"]
+        result.append(item)
+    return result
+
+def mark_learning_summary_sent(account_id: str, sent_at: Optional[datetime] = None) -> Dict[str, Any]:
+    moment = sent_at or _now()
+    with _engine().begin() as conn:
+        row = conn.execute(select(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id)).first()
+        if not row:
+            return {}
+        data = _dict(row) or {}
+        next_send = _add_calendar_period(moment, data.get("frequency", "weekly"), int(data.get("interval_days") or 7)) if data.get("enabled") else None
+        conn.execute(update(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id).values(last_sent_at=moment, next_send_at=next_send, updated_at=moment))
+        updated = conn.execute(select(learning_summary_preferences).where(learning_summary_preferences.c.account_id == account_id)).first()
+    return _dict(updated) or {}
 
 def get_account_overview(email: str) -> Dict[str, Any]:
     account = ensure_account(email)

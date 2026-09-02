@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import secrets
 from datetime import datetime, timedelta, UTC
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -23,9 +26,16 @@ from .account_store import (
     get_learning_target,
     get_student_limit,
     get_student,
+    get_account,
     list_students,
     set_learning_target,
     student_belongs_to_account,
+    get_learning_summary_preferences,
+    set_learning_summary_preferences,
+    claim_learning_summary_target_notification,
+    release_learning_summary_target_notification,
+    list_due_learning_summary_accounts,
+    mark_learning_summary_sent,
 )
 from .reward_store import get_reward_store
 from .runtime import is_30_day_study_plan_enabled
@@ -51,9 +61,82 @@ class XpDigestRequest(BaseModel):
     parent_password: SecretStr
 
 
+class LearningSummaryPreferencesRequest(BaseModel):
+    enabled: bool = True
+    frequency: str = Field(default="weekly", pattern="^(custom|weekly|monthly|yearly)$")
+    interval_days: int = Field(default=7, ge=1, le=365)
+
+
 class GiftRequestDecision(BaseModel):
     parent_password: SecretStr
     xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
+
+
+def build_learning_summary_digest(account_id: str, since: datetime | None = None) -> dict:
+    """Build exactly the four columns shown in the parent Learning summary."""
+    store = get_reward_store()
+    digest = store.get_xp_digest_for_account(account_id=account_id, since=since)
+    students = list_students(account_id)
+    name_map = {s["id"]: s["name"] for s in students}
+    kid_ids = [k["student_id"] for k in digest.get("kids", [])]
+    subject_breakdown = get_students_subject_breakdown(student_ids=kid_ids, since=since) if kid_ids else {}
+    if kid_ids and not any(subject_breakdown.values()):
+        subject_breakdown = get_students_subject_breakdown(
+            student_ids=kid_ids, since=_utcnow() - timedelta(days=7)
+        )
+    for kid in digest.get("kids", []):
+        sid = kid["student_id"]
+        kid["name"] = name_map.get(sid, "Unknown")
+        kid["subjects"] = subject_breakdown.get(sid, [])
+    return digest
+
+
+def send_target_learning_summary_if_reached(account_id: str, student_id: str) -> None:
+    """Send one Learning summary when a child first meets today's daily goal."""
+    preferences = get_learning_summary_preferences(account_id)
+    if not preferences.get("enabled"):
+        return
+    target = get_learning_target(student_id)
+    daily_goal = max(1, int(target.get("daily_goal") or 1))
+    local_day = datetime.now(ZoneInfo(os.getenv("REWARD_TIMEZONE") or "Europe/London")).date().isoformat()
+    today_count = get_reward_store().get_daily_activity_count(
+        student_id=student_id, local_day=local_day
+    )
+    if today_count < daily_goal:
+        return
+    if not claim_learning_summary_target_notification(account_id, student_id, local_day):
+        return
+    digest = build_learning_summary_digest(account_id)
+    if not digest.get("kids"):
+        return
+    from .email_service import send_xp_digest_email
+    status, error = send_xp_digest_email(to_email=get_account(account_id).get("email", ""), digest=digest)
+    if status != "sent":
+        release_learning_summary_target_notification(account_id, student_id, local_day)
+        logger.warning("Target learning summary email was not sent: %s", error or status)
+
+
+def send_due_learning_summaries() -> dict:
+    """Send scheduled summaries; intended to be called by Cloud Scheduler."""
+    sent = skipped = failed = 0
+    from .email_service import send_xp_digest_email
+    now = _utcnow()
+    for preference in list_due_learning_summary_accounts(now):
+        account_id = preference["account_id"]
+        last_sent = preference.get("last_sent_at")
+        since = last_sent if isinstance(last_sent, datetime) else now - timedelta(days=max(1, int(preference.get("interval_days") or 7)))
+        digest = build_learning_summary_digest(account_id, since=since)
+        if not digest.get("kids"):
+            mark_learning_summary_sent(account_id, now)
+            skipped += 1
+            continue
+        status, _error = send_xp_digest_email(to_email=preference["email"], digest=digest)
+        if status == "sent":
+            mark_learning_summary_sent(account_id, now)
+            sent += 1
+        else:
+            failed += 1
+    return {"sent": sent, "skipped": skipped, "failed": failed}
 
 
 def build_parent_dashboard_router(resolve_username, has_subscription=None) -> APIRouter:
@@ -225,84 +308,56 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
 
     @router.get("/api/parent/xp-digest")
     async def get_xp_digest(request: Request):
-        """获取家庭过去 24 小时的 XP 收益摘要。"""
         account = await account_context(request)
-        digest = await asyncio.to_thread(
-            get_reward_store().get_xp_digest_for_account,
-            account_id=account["id"],
-        )
-        # 获取科目准确率 - 从 homework_sessions 查询真实数据
-        kid_ids = [k["student_id"] for k in digest.get("kids", [])]
-        subject_breakdown = await asyncio.to_thread(
-            get_students_subject_breakdown,
-            student_ids=kid_ids,
-        )
-        
-        # 如果过去24小时没有科目数据，尝试获取最近7天的数据
-        if kid_ids and not any(subject_breakdown.values()):
-            subject_breakdown = await asyncio.to_thread(
-                get_students_subject_breakdown,
-                student_ids=kid_ids,
-                since=_utcnow() - timedelta(days=7),
-            )
-        
-        # 附加孩子名字和科目数据
-        students = await asyncio.to_thread(
-            list_students, account["id"]
-        )
-        name_map = {s["id"]: s["name"] for s in students}
-        for kid in digest.get("kids", []):
-            sid = kid["student_id"]
-            kid["name"] = name_map.get(sid, "Unknown")
-            kid["subjects"] = subject_breakdown.get(sid, [])
+        digest = await asyncio.to_thread(build_learning_summary_digest, account["id"])
         return {"success": True, "digest": digest}
 
     @router.post("/api/parent/xp-digest/send")
-    async def send_xp_digest_email(request: Request, body: XpDigestRequest):
-        """家长手动触发发送 XP 摘要邮件。"""
+    async def send_xp_digest_email_route(request: Request, body: XpDigestRequest):
         account = await account_context(request)
         await confirm_parent(account, body.parent_password.get_secret_value())
-        digest = await asyncio.to_thread(
-            get_reward_store().get_xp_digest_for_account,
-            account_id=account["id"],
-        )
-        # 附加孩子名字
-        students = await asyncio.to_thread(
-            list_students, account["id"]
-        )
-        name_map = {s["id"]: s["name"] for s in students}
-        for kid in digest.get("kids", []):
-            kid["name"] = name_map.get(kid["student_id"], "Unknown")
-        # 发送邮件
+        digest = await asyncio.to_thread(build_learning_summary_digest, account["id"])
+        if not digest.get("kids"):
+            raise HTTPException(status_code=409, detail="There is no recent learning activity to email yet.")
         from .email_service import send_xp_digest_email
-        try:
-            await asyncio.to_thread(
-                send_xp_digest_email,
-                to_email=account["email"],
-                digest=digest,
-            )
-        except Exception:
-            logger.exception("Failed to send XP digest email")
-            raise HTTPException(
-                status_code=503,
-                detail="Could not send the email just now. Please try again.",
-            )
+        status, error = await asyncio.to_thread(send_xp_digest_email, to_email=account["email"], digest=digest)
+        if status != "sent":
+            raise HTTPException(status_code=503, detail=error or "Could not send the email just now. Please try again.")
         return {"success": True, "message": "Digest email sent"}
+
+    @router.get("/api/parent/learning-summary/preferences")
+    async def learning_summary_preferences(request: Request):
+        account = await account_context(request)
+        preferences = await asyncio.to_thread(get_learning_summary_preferences, account["id"])
+        return {"success": True, "preferences": preferences}
+
+    @router.put("/api/parent/learning-summary/preferences")
+    async def update_learning_summary_preferences(request: Request, body: LearningSummaryPreferencesRequest):
+        account = await account_context(request)
+        preferences = await asyncio.to_thread(
+            set_learning_summary_preferences, account["id"], enabled=body.enabled,
+            frequency=body.frequency, interval_days=body.interval_days
+        )
+        return {"success": True, "preferences": preferences}
+
+    @router.post("/api/internal/learning-summary/send-due")
+    async def send_due_learning_summary_endpoint(request: Request):
+        configured = (os.getenv("LEARNING_SUMMARY_CRON_TOKEN") or "").strip()
+        supplied = (request.headers.get("X-Learning-Summary-Token") or "").strip()
+        if not configured or not supplied or not secrets.compare_digest(configured, supplied):
+            raise HTTPException(status_code=403, detail="Not authorised")
+        result = await asyncio.to_thread(send_due_learning_summaries)
+        return {"success": True, **result}
 
     @router.get("/api/parent/gift-requests")
     async def list_gift_requests(request: Request):
-        """获取家庭所有待审批的礼物请求。"""
+        """家长查看待审批的礼物请求列表。"""
         account = await account_context(request)
-        students = await asyncio.to_thread(list_students, account["id"])
-        name_map = {s["id"]: s["name"] for s in students}
-        redemptions = await asyncio.to_thread(
+        requests = await asyncio.to_thread(
             get_reward_store().get_pending_redemptions_for_account,
             account_id=account["id"],
         )
-        # 附加孩子名字
-        for item in redemptions:
-            item["student_name"] = name_map.get(item.get("student_id"), "Unknown")
-        return {"success": True, "requests": redemptions}
+        return {"success": True, "requests": requests}
 
     @router.post("/api/parent/gift-requests/{redemption_id}/approve")
     async def approve_gift_request(
