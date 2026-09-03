@@ -46,6 +46,8 @@
         th { text-align: left; padding: 12px 20px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; background: #fafafa; border-bottom: 1px solid #f0f0f0; cursor: pointer; user-select: none; white-space: nowrap; }
         th:hover { color: #667eea; }
         th .sort-arrow { margin-left: 4px; font-size: 10px; }
+        th.admin-sortable { cursor: pointer; }
+        th.admin-sortable:focus { outline: 2px solid #667eea; outline-offset: -2px; }
         th.sort-asc { color: #667eea; }
         th.sort-desc { color: #667eea; }
         td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid #f5f5f5; }
@@ -124,7 +126,71 @@
         .health-dot.bad { background:#d64545; }
         .ops-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .mini-note { font-size:12px; color:#888; margin-top:8px; }
-        @media (max-width: 760px) { .tabs { overflow-x:auto; padding:0 12px; } .tab { padding:12px 14px; white-space:nowrap; } .content { padding:16px; } .header { padding:16px; } }
+        @media (max-width: 760px) {
+            .tabs { overflow-x:auto; padding:0 12px; -webkit-overflow-scrolling:touch; }
+            .tab { padding:12px 14px; white-space:nowrap; flex:0 0 auto; }
+            .content { padding:12px; width:100%; max-width:none; overflow-x:hidden; }
+            .header { padding:14px 12px; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+            .header h1 { font-size:18px; line-height:1.25; }
+            .header .status { font-size:11px; margin-top:3px; }
+            .header-actions { width:100%; justify-content:flex-start; }
+            .header-actions .btn { flex:1 1 auto; min-width:0; text-align:center; }
+            .stats-grid, .cache-grid, .ops-grid { grid-template-columns:1fr; }
+            .charts-row { flex-direction:column; gap:16px; }
+            .chart-container { padding:16px; }
+            .table-container { width:100%; overflow:visible; margin-bottom:16px; border-radius:10px; }
+            .table-header { padding:13px 14px; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+            .table-header > * { max-width:100%; }
+            .table-header > div:last-child { width:100%; }
+            .table-header input.search-box, .table-header select.search-box, .table-header .search-box { width:100% !important; max-width:100%; }
+            .table-header .btn { max-width:100%; }
+            .search-box { width:100%; max-width:100%; }
+            .table-container > div[style*="overflow-x:auto"] { overflow-x:visible !important; }
+
+            /* Data tables become readable cards instead of tiny, clipped columns. */
+            table.admin-mobile-table { display:block; width:100%; }
+            table.admin-mobile-table thead {
+                position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+                clip:rect(0,0,0,0); white-space:nowrap; border:0;
+            }
+            table.admin-mobile-table tbody { display:block; width:100%; }
+            table.admin-mobile-table tr {
+                display:block; margin:0 0 10px; padding:4px 0; background:#fff;
+                border:1px solid #eceef3; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.04);
+            }
+            table.admin-mobile-table tr:last-child { margin-bottom:0; }
+            table.admin-mobile-table td {
+                display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+                width:100%; min-width:0; padding:9px 12px; font-size:13px; line-height:1.35;
+                border-bottom:1px solid #f2f2f4; overflow-wrap:anywhere; word-break:break-word;
+            }
+            table.admin-mobile-table td:last-child { border-bottom:0; }
+            table.admin-mobile-table td::before {
+                content:attr(data-label); flex:0 0 38%; max-width:38%;
+                color:#777; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.35px;
+            }
+            table.admin-mobile-table td[data-label=""]::before { content:""; flex-basis:0; max-width:0; }
+            table.admin-mobile-table td > * { max-width:100%; }
+            table.admin-mobile-table .badge { white-space:normal; text-align:right; }
+            table.admin-mobile-table .btn { flex:0 0 auto; }
+            table.admin-mobile-table td:has(input[type="checkbox"]) { justify-content:flex-start; }
+            table.admin-mobile-table td:has(input[type="checkbox"])::before { flex:0 0 auto; max-width:none; }
+
+            /* Keep compact metric tables usable while still fitting the phone. */
+            .bar-chart { overflow-x:auto; min-width:0; }
+            .modal { width:calc(100% - 24px); padding:18px; max-height:88vh; }
+            .modal .actions { flex-wrap:wrap; }
+            .modal .actions .btn { flex:1 1 120px; }
+        }
+
+        @media (max-width: 390px) {
+            .content { padding:10px; }
+            .header-actions .btn { font-size:12px; padding:7px 9px; }
+            .stat-card { padding:16px; }
+            .people-stat-number { font-size:22px; }
+            table.admin-mobile-table td { padding:8px 10px; font-size:12.5px; }
+            table.admin-mobile-table td::before { font-size:10px; }
+        }
     </style>
 </head>
 <body>
@@ -150,12 +216,12 @@
     <div class="tabs">
         <div class="tab active" onclick="switchTab('overview')">Overview</div>
         <div class="tab" onclick="switchTab('users')">Students</div>
+        <div class="tab" onclick="switchTab('mock-stats')">11+ Mock</div>
         <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
         <div class="tab" onclick="switchTab('explanations')">Saved Explanations</div>
         <div class="tab" onclick="switchTab('schools')">School Finder</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
-        <div class="tab" onclick="switchTab('ai-eval')">AI Evaluation</div>
         <div class="tab" onclick="switchTab('operations')">Operations</div>
         <a class="tab" href="/admin/messages" style="text-decoration:none;">User Messages</a>
     </div>
@@ -215,6 +281,37 @@
                     </thead>
                     <tbody id="usersTable"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- 11+ Mock Statistics Panel -->
+        <div class="panel" id="panel-mock-stats">
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>11+ Mock Exam Statistics</h3>
+                        <div style="font-size:12px;color:#888;margin-top:4px;">Students who have submitted a mock are counted once per exam. Accuracy is calculated from all submitted questions.</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadMockStats()">Refresh</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-mock-sort="mock_name" onclick="sortMockStats('mock_name')">Mock name <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="school_or_area" onclick="sortMockStats('school_or_area')">School / area <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="minutes" onclick="sortMockStats('minutes')">Minutes <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="number_of_questions" onclick="sortMockStats('number_of_questions')">Questions <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="student" onclick="sortMockStats('student')">Student <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="attempts" onclick="sortMockStats('attempts')">Attempts <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="overall_accuracy" onclick="sortMockStats('overall_accuracy')">Overall accuracy <span class="sort-arrow"></span></th>
+                                <th>Subject breakdown</th>
+                                <th data-mock-sort="last_taken_at" onclick="sortMockStats('last_taken_at')">Last taken <span class="sort-arrow"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="mockStatsTable"><tr><td colspan="9"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -327,11 +424,12 @@
         <!-- AI Monitor Panel -->
         <div class="panel" id="panel-ai-monitor">
             <!-- Sub-tabs for AI Monitor -->
-            <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #e0e0e0;padding-bottom:12px;">
+            <div class="ai-monitor-tabs" style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #e0e0e0;padding-bottom:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
                 <button class="btn btn-primary" onclick="switchAIMonitorTab('overview')" id="ai-tab-overview">Overview</button>
                 <button class="btn" onclick="switchAIMonitorTab('requests')" id="ai-tab-requests">Live Requests</button>
                 <button class="btn" onclick="switchAIMonitorTab('models')" id="ai-tab-models">Models</button>
                 <button class="btn" onclick="switchAIMonitorTab('conversations')" id="ai-tab-conversations">Conversations</button>
+                <button class="btn" onclick="switchAIMonitorTab('evaluation')" id="ai-tab-evaluation">AI Evaluation</button>
             </div>
 
             <!-- Overview Sub-panel -->
@@ -436,31 +534,31 @@
                     </table>
                 </div>
             </div>
-        </div>
 
-        <!-- AI Evaluation Panel -->
-        <div class="panel" id="panel-ai-eval">
-            <div class="stats-grid" id="evalStats">
-                <div class="loading"><div class="spinner"></div></div>
-            </div>
-            <div class="chart-container">
-                <h3>Score Distribution</h3>
-                <div class="bar-chart" id="scoreDistChart"></div>
-            </div>
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>Performance by Subject</h3>
+            <!-- AI Evaluation Sub-panel -->
+            <div id="ai-subpanel-evaluation" style="display:none;">
+                <div class="stats-grid" id="evalStats">
+                    <div class="loading"><div class="spinner"></div></div>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Subject</th>
-                            <th>Reviews</th>
-                            <th>Avg Score</th>
-                        </tr>
-                    </thead>
-                    <tbody id="evalSubjectsTable"></tbody>
-                </table>
+                <div class="chart-container">
+                    <h3>Score Distribution</h3>
+                    <div class="bar-chart" id="scoreDistChart"></div>
+                </div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Performance by Subject</h3>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Reviews</th>
+                                <th>Avg Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evalSubjectsTable"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -714,6 +812,9 @@
         let editingUserId = null;
         let sortColumn = null;
         let sortDir = 1; // 1 = asc, -1 = desc
+        let mockStats = [];
+        let mockStatsSortColumn = null;
+        let mockStatsSortDir = 1;
 
         // Tab switching
         function switchTab(name) {
@@ -729,12 +830,12 @@
             switch(name) {
                 case 'overview': loadOverview(); break;
                 case 'users': loadUsers(); break;
+                case 'mock-stats': loadMockStats(); break;
                 case 'auth-users': loadAuthUsers(); break;
                 case 'subscriptions': loadSubscriptions(); break;
                 case 'explanations': loadExplanations(); break;
                 case 'schools': loadExcludedSchools(); loadSchoolReports(); break;
                 case 'ai-monitor': loadAIMonitor(); break;
-                case 'ai-eval': loadAIEval(); break;
                 case 'operations': loadOperations(); break;
             }
         }
@@ -746,11 +847,11 @@
                 const labels = {
                     'Overview': 'overview',
                     'Students': 'users',
+                    '11+ Mock': 'mock-stats',
                     'Auth Users': 'auth-users',
                     'Subscriptions': 'subscriptions',
                     'School Finder': 'schools',
                     'AI Monitor': 'ai-monitor',
-                    'AI Evaluation': 'ai-eval',
                     'Operations': 'operations'
                 };
                 loadTabData(labels[active.textContent.trim()] || 'overview');
@@ -989,6 +1090,197 @@
                 loadUsers();
             } catch(e) { alert('Error: ' + e.message); }
         }
+
+        // 11+ Mock statistics
+        async function loadMockStats() {
+            try {
+                const data = await api('/mock-exam-statistics?limit=2000');
+                mockStats = data.statistics || [];
+                renderMockStats();
+            } catch(e) {
+                document.getElementById('mockStatsTable').innerHTML = `<tr><td colspan="9" style="color:#c53030">Error: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        function renderMockStats() {
+            const rows = mockStats.slice().sort((a, b) => {
+                if (!mockStatsSortColumn) return 0;
+                let va = a[mockStatsSortColumn], vb = b[mockStatsSortColumn];
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (mockStatsSortColumn === 'mock_name' || mockStatsSortColumn === 'school_or_area' || mockStatsSortColumn === 'student') {
+                    return mockStatsSortDir * String(va).localeCompare(String(vb));
+                }
+                if (mockStatsSortColumn === 'last_taken_at') {
+                    return mockStatsSortDir * ((new Date(va).getTime() || 0) - (new Date(vb).getTime() || 0));
+                }
+                return mockStatsSortDir * ((Number(va) > Number(vb) ? 1 : 0) - (Number(va) < Number(vb) ? 1 : 0));
+            });
+            const body = document.getElementById('mockStatsTable');
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:30px;">No submitted mock exams yet.</td></tr>';
+                updateMockStatsSortIndicator();
+                return;
+            }
+            body.innerHTML = rows.map(row => {
+                const breakdown = (row.subject_breakdown || []).map(item =>
+                    `<span class="badge badge-blue" style="margin:2px 4px 2px 0;">${escapeHtml(item.subject)} ${Number(item.percent || 0)}% (${Number(item.correct || 0)}/${Number(item.total || 0)})</span>`
+                ).join('');
+                return `<tr>
+                    <td><strong>${escapeHtml(row.mock_name)}</strong></td>
+                    <td>${escapeHtml(row.school_or_area)}</td>
+                    <td>${Number(row.minutes || 0)}</td>
+                    <td>${Number(row.number_of_questions || 0)}</td>
+                    <td style="min-width:220px;line-height:1.6;">${(row.student || []).map(name => `<div>${escapeHtml(name)}</div>`).join('') || '-'}</td>
+                    <td>${Number(row.attempts || 0)}</td>
+                    <td><strong>${Number(row.overall_accuracy || 0).toFixed(1)}%</strong></td>
+                    <td style="min-width:260px;line-height:1.8;">${breakdown || '-'}</td>
+                    <td>${formatAdminDateTime(row.last_taken_at)}</td>
+                </tr>`;
+            }).join('');
+            updateMockStatsSortIndicator();
+        }
+
+        function sortMockStats(column) {
+            if (mockStatsSortColumn === column) mockStatsSortDir = -mockStatsSortDir;
+            else { mockStatsSortColumn = column; mockStatsSortDir = 1; }
+            renderMockStats();
+        }
+
+        function updateMockStatsSortIndicator() {
+            document.querySelectorAll('#panel-mock-stats th[data-mock-sort]').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                const arrow = th.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = '';
+            });
+            if (!mockStatsSortColumn) return;
+            const active = document.querySelector(`#panel-mock-stats th[data-mock-sort="${mockStatsSortColumn}"]`);
+            if (active) {
+                active.classList.add(mockStatsSortDir === 1 ? 'sort-asc' : 'sort-desc');
+                const arrow = active.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = mockStatsSortDir === 1 ? '\u25B2' : '\u25BC';
+            }
+        }
+
+        // Make every admin table sortable. Existing Users and 11+ Mock tables
+        // keep their specialised sort handlers; this generic handler covers all other
+        // current and dynamically-rendered admin tables without duplicating sorting logic.
+        const adminTableSortState = new WeakMap();
+
+        function sortAdminTable(th) {
+            const table = th.closest('table');
+            const tbody = table && table.tBodies && table.tBodies[0];
+            if (!table || !tbody) return;
+
+            const headers = Array.from(th.parentElement.children);
+            const columnIndex = headers.indexOf(th);
+            if (columnIndex < 0) return;
+            const rows = Array.from(tbody.rows).filter(row => row.cells.length > columnIndex);
+            if (!rows.length) return;
+
+            const state = adminTableSortState.get(table) || {column: -1, dir: 1};
+            const dir = state.column === columnIndex ? -state.dir : 1;
+            adminTableSortState.set(table, {column: columnIndex, dir});
+
+            const values = rows.map((row, index) => ({
+                row,
+                index,
+                value: (row.cells[columnIndex].textContent || '').replace(/\s+/g, ' ').trim()
+            }));
+            const parseValue = value => {
+                const trimmed = value.trim();
+                if (!trimmed) return {type: 'empty', value: ''};
+                const numeric = trimmed.replace(/[£$€,]/g, '').replace(/%$/, '');
+                if (/^-?\d+(?:\.\d+)?$/.test(numeric)) return {type: 'number', value: Number(numeric)};
+                const timestamp = Date.parse(trimmed);
+                if (!Number.isNaN(timestamp) && /\d{1,4}[-/ ]\d|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(trimmed)) {
+                    return {type: 'date', value: timestamp};
+                }
+                return {type: 'text', value: trimmed.toLocaleLowerCase()};
+            };
+            values.sort((a, b) => {
+                const av = parseValue(a.value), bv = parseValue(b.value);
+                if (av.type === 'empty' && bv.type !== 'empty') return 1;
+                if (bv.type === 'empty' && av.type !== 'empty') return -1;
+                if (av.type === bv.type && av.value < bv.value) return -dir;
+                if (av.type === bv.type && av.value > bv.value) return dir;
+                const textCompare = String(a.value).localeCompare(String(b.value), undefined, {numeric: true, sensitivity: 'base'});
+                return textCompare * dir || a.index - b.index;
+            });
+            values.forEach(item => tbody.appendChild(item.row));
+
+            table.querySelectorAll('th.admin-sortable').forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+                const arrow = header.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = '';
+            });
+            th.classList.add(dir === 1 ? 'sort-asc' : 'sort-desc');
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) arrow.textContent = dir === 1 ? '\u25B2' : '\u25BC';
+        }
+
+        function initAdminMobileTables() {
+            const isMobile = window.matchMedia('(max-width: 760px)').matches;
+            document.querySelectorAll('table').forEach(table => {
+                const thead = table.tHead;
+                const tbody = table.tBodies && table.tBodies[0];
+                if (!thead || !tbody) return;
+                table.classList.toggle('admin-mobile-table', isMobile);
+                const headers = Array.from(thead.rows[0]?.cells || []).map(cell =>
+                    (cell.textContent || '').replace(/\s+/g, ' ').trim()
+                );
+                Array.from(tbody.rows).forEach(row => {
+                    Array.from(row.cells).forEach((cell, index) => {
+                        // Colspan rows (loading/empty states) should span normally.
+                        if (cell.colSpan > 1) {
+                            cell.removeAttribute('data-label');
+                            return;
+                        }
+                        cell.setAttribute('data-label', headers[index] || '');
+                    });
+                });
+            });
+        }
+
+        function initAdminTableSorting() {
+            document.querySelectorAll('table').forEach(table => {
+                table.querySelectorAll('th').forEach(th => {
+                    // Existing specialised sort handlers remain authoritative.
+                    if (th.hasAttribute('onclick') || th.hasAttribute('data-sort') || th.hasAttribute('data-mock-sort')) return;
+                    const label = (th.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    if (!label || /^(action|actions)$/.test(label) || th.querySelector('input[type="checkbox"]')) return;
+                    th.classList.add('admin-sortable');
+                    th.setAttribute('tabindex', '0');
+                    th.setAttribute('role', 'button');
+                    if (!th.querySelector('.sort-arrow')) {
+                        const arrow = document.createElement('span');
+                        arrow.className = 'sort-arrow';
+                        th.appendChild(arrow);
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('click', event => {
+            const th = event.target.closest('th.admin-sortable');
+            if (th) sortAdminTable(th);
+        });
+        document.addEventListener('keydown', event => {
+            const th = event.target.closest('th.admin-sortable');
+            if (th && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault();
+                sortAdminTable(th);
+            }
+        });
+        initAdminTableSorting();
+        initAdminMobileTables();
+
+        // Re-scan after async/dynamic table rendering.
+        new MutationObserver(() => {
+            initAdminTableSorting();
+            initAdminMobileTables();
+        }).observe(document.body, {childList: true, subtree: true});
+        window.addEventListener('resize', initAdminMobileTables);
 
         // Subscriptions
         let selectedExplanations = new Set();
@@ -1246,7 +1538,7 @@
         function switchAIMonitorTab(tab) {
             currentAISubTab = tab;
             // Update button styles
-            ['overview', 'requests', 'models', 'conversations'].forEach(t => {
+            ['overview', 'requests', 'models', 'conversations', 'evaluation'].forEach(t => {
                 const btn = document.getElementById('ai-tab-' + t);
                 if (t === tab) {
                     btn.className = 'btn btn-primary';
@@ -1255,7 +1547,7 @@
                 }
             });
             // Show/hide sub-panels
-            ['overview', 'requests', 'models', 'conversations'].forEach(t => {
+            ['overview', 'requests', 'models', 'conversations', 'evaluation'].forEach(t => {
                 const panel = document.getElementById('ai-subpanel-' + t);
                 panel.style.display = t === tab ? 'block' : 'none';
             });
@@ -1264,6 +1556,7 @@
             else if (tab === 'requests') loadAIRequests();
             else if (tab === 'models') loadAIModels();
             else if (tab === 'conversations') loadConversations();
+            else if (tab === 'evaluation') loadAIEval();
         }
 
         async function loadAIMonitor() {

@@ -212,6 +212,17 @@ mock_study_plans = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
+mock_exam_attempts = Table(
+    "mock_exam_attempts", metadata,
+    Column("id", String(120), primary_key=True),
+    Column("exam_id", String(120), nullable=False, index=True),
+    Column("student_id", String(80), nullable=False, index=True),
+    Column("correct_count", Integer, nullable=False, default=0),
+    Column("question_count", Integer, nullable=False, default=0),
+    Column("subject_breakdown_json", Text, nullable=False, default="{}"),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("submitted_at", DateTime(timezone=True), nullable=False, index=True),
+)
 
 metadata.create_all(_engine)
 
@@ -321,6 +332,155 @@ def save_mock_study_plan(student_id: str, plan: Dict[str, Any]) -> None:
                     student_id=str(student_id), plan_json=payload, created_at=now, updated_at=now
                 )
             )
+
+
+def save_mock_exam_attempt(
+    attempt_id: str,
+    exam_id: str,
+    student_id: str,
+    correct_count: int,
+    question_count: int,
+    subject_breakdown: List[Dict[str, Any]],
+    started_at: datetime,
+    submitted_at: datetime,
+    *,
+    allow_anonymous: bool = False,
+) -> bool:
+    """Persist one scored mock attempt for administrator statistics.
+
+    Only aggregate scoring metadata is retained; submitted answers are not stored.
+    The signed attempt nonce is used as the id so repeated submissions of the same
+    mock cannot inflate the admin statistics.
+    """
+    clean_attempt = str(attempt_id or '').strip()
+    clean_exam = str(exam_id or '').strip()
+    clean_student = str(student_id or '').strip()
+    if not clean_attempt or not clean_exam or not clean_student:
+        return False
+    if clean_student.startswith('anon_') and not allow_anonymous:
+        return False
+    payload = json.dumps(subject_breakdown or [], ensure_ascii=False, separators=(',', ':'))
+    with _engine.begin() as conn:
+        existing = conn.execute(
+            select(mock_exam_attempts.c.id).where(mock_exam_attempts.c.id == clean_attempt)
+        ).first()
+        if existing:
+            return False
+        conn.execute(insert(mock_exam_attempts).values(
+            id=clean_attempt[:120],
+            exam_id=clean_exam[:120],
+            student_id=clean_student[:80],
+            correct_count=max(0, int(correct_count or 0)),
+            question_count=max(0, int(question_count or 0)),
+            subject_breakdown_json=payload[:12000],
+            started_at=started_at,
+            submitted_at=submitted_at,
+        ))
+    return True
+
+
+def get_admin_mock_exam_statistics(*, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Return aggregate 11+ mock-exam statistics for the administrator dashboard."""
+    safe_limit = max(1, min(int(limit), 2000))
+    with _engine.connect() as conn:
+        rows = conn.execute(
+            select(
+                mock_exam_attempts.c.exam_id,
+                func.count().label('attempts'),
+                func.count(func.distinct(mock_exam_attempts.c.student_id)).label('students'),
+                func.sum(mock_exam_attempts.c.correct_count).label('correct_count'),
+                func.sum(mock_exam_attempts.c.question_count).label('question_count'),
+                func.max(mock_exam_attempts.c.submitted_at).label('last_taken_at'),
+            )
+            .group_by(mock_exam_attempts.c.exam_id)
+            .order_by(func.max(mock_exam_attempts.c.submitted_at).desc())
+            .limit(safe_limit)
+        ).all()
+        detail_rows = conn.execute(
+            select(
+                mock_exam_attempts.c.exam_id,
+                mock_exam_attempts.c.student_id,
+                mock_exam_attempts.c.subject_breakdown_json,
+            )
+        ).all()
+        student_rows = conn.execute(
+            select(
+                mock_exam_attempts.c.exam_id,
+                mock_exam_attempts.c.student_id,
+                progress_students.c.parent_username,
+                progress_students.c.name,
+            )
+            .select_from(
+                mock_exam_attempts.outerjoin(
+                    progress_students,
+                    mock_exam_attempts.c.student_id == progress_students.c.student_id,
+                )
+            )
+        ).all()
+
+    breakdowns: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(lambda: defaultdict(lambda: {'correct': 0, 'total': 0}))
+    exam_students: Dict[str, Dict[str, str]] = defaultdict(dict)
+    for row in student_rows:
+        mapping = row._mapping
+        exam_id = str(mapping['exam_id'])
+        student_id = str(mapping['student_id'])
+        parent_id = str(mapping.get('parent_username') or '').strip()
+        nickname = str(mapping.get('name') or '').strip()
+        if parent_id and nickname:
+            display = f"{parent_id} + {nickname}"
+        elif nickname:
+            display = nickname
+        elif parent_id:
+            display = parent_id
+        elif student_id.startswith('anon_'):
+            display = 'Anonymous'
+        else:
+            display = student_id
+        exam_students[exam_id][student_id] = display[:180]
+
+    for row in detail_rows:
+        try:
+            items = json.loads(row._mapping['subject_breakdown_json'] or '[]')
+        except (TypeError, json.JSONDecodeError):
+            items = []
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            subject = str(item.get('subject') or '').strip()[:80]
+            if not subject:
+                continue
+            bucket = breakdowns[str(row._mapping['exam_id'])][subject]
+            bucket['correct'] += max(0, int(item.get('correct') or 0))
+            bucket['total'] += max(0, int(item.get('total') or 0))
+
+    result = []
+    for row in rows:
+        data = dict(row._mapping)
+        total = int(data.get('question_count') or 0)
+        correct = int(data.get('correct_count') or 0)
+        subjects = []
+        for subject, values in breakdowns[str(data['exam_id'])].items():
+            subject_total = values['total']
+            subjects.append({
+                'subject': subject,
+                'correct': values['correct'],
+                'total': subject_total,
+                'percent': round(values['correct'] / subject_total * 100) if subject_total else 0,
+            })
+        exam_id = str(data['exam_id'])
+        result.append({
+            'exam_id': exam_id,
+            'attempts': int(data.get('attempts') or 0),
+            'student': sorted(exam_students.get(exam_id, {}).values(), key=str.casefold),
+            'correct_count': correct,
+            'question_count': total,
+            'overall_accuracy': round(correct / total * 100, 1) if total else 0,
+            'subject_breakdown': subjects,
+            'last_taken_at': data.get('last_taken_at'),
+        })
+    return result
 
 
 def get_mock_study_plan(student_id: str) -> Optional[Dict[str, Any]]:

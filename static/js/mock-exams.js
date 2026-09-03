@@ -628,7 +628,25 @@
     topics.replaceChildren();
     if (data.recommended_topics && data.recommended_topics.length) {
       data.recommended_topics.forEach(function (topic) {
-        topics.appendChild(element('span', 'topic-chip', topic));
+        // The result data contains the topic name; find the matching question so
+        // we can carry the correct 11+ subject into Topic Mastery as well.
+        let subject = '';
+        for (const questionResult of (data.questions || [])) {
+          const question = state.questionById.get(questionResult.id);
+          if (question && question.topic === topic) {
+            subject = question.subject || '';
+            break;
+          }
+        }
+        const link = element('a', 'topic-chip', topic);
+        const params = new URLSearchParams();
+        if (subject) params.set('subject', subject);
+        params.set('topic', topic);
+        link.href = '/elevenplus-topic-mastery?' + params.toString();
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.title = 'Practise ' + topic + ' in 11+ Topic Mastery';
+        topics.appendChild(link);
       });
     } else {
       topics.appendChild(element('span', 'topic-chip', 'Keep up your steady practice'));

@@ -1,6 +1,8 @@
 """Public and paid-access API tests for 11+ mock exams."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from src.webapp.account_store import create_subscription
@@ -233,3 +235,50 @@ def test_elevenplus_premium_unlocks_every_paid_mock(authenticated_client) -> Non
         payload = started.json()
         assert len(payload["questions"]) == exam["question_count"]
         assert not _contains_private_key(payload)
+
+
+def test_admin_mock_exam_statistics_are_aggregated_and_sortable(admin_client) -> None:
+    assert set_user_test_flag('admin@example.com', True)
+    started = admin_client.post('/api/elevenplus/mock-exams/common-full-1/start')
+    assert started.status_code == 200
+    payload = started.json()
+    answers = {question['id']: 'A' for question in payload['questions']}
+    submitted = admin_client.post(
+        '/api/elevenplus/mock-exams/common-full-1/submit',
+        json={'attempt_token': payload['attempt']['token'], 'answers': answers},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    response = admin_client.get('/api/admin/mock-exam-statistics')
+    assert response.status_code == 200, response.text
+    data = response.json()
+    row = next(item for item in data['statistics'] if item['exam_id'] == 'common-full-1')
+    assert row['mock_name'] == 'Common Four-Subject Mock A'
+    assert row['school_or_area'] == 'General / National'
+    assert row['minutes'] == 45
+    assert row['number_of_questions'] == 32
+    assert row['student'] == ['admin@example.com + Learner']
+    assert row['attempts'] == 1
+    assert 0 <= row['overall_accuracy'] <= 100
+    assert row['subject_breakdown']
+
+
+def test_free_common_diagnostic_is_in_admin_mock_stats(monkeypatch, client, admin_client):
+    from src import progress_db
+
+    # This verifies the aggregate persistence path used by the free diagnostic,
+    # including anonymous beta-style sessions that do not collect personal data.
+    assert progress_db.save_mock_exam_attempt(
+        "diagnostic-regression-attempt",
+        "common-diagnostic-1",
+        "anon_regression_student",
+        8,
+        10,
+        [{"subject": "Maths", "correct": 4, "total": 5, "percent": 80}],
+        datetime.fromtimestamp(1000, tz=timezone.utc),
+        datetime.fromtimestamp(1100, tz=timezone.utc),
+        allow_anonymous=True,
+    ) is True
+    stats = progress_db.get_admin_mock_exam_statistics(limit=2000)
+    row = next(item for item in stats if item["exam_id"] == "common-diagnostic-1")
+    assert row["attempts"] >= 1

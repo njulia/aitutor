@@ -15,6 +15,7 @@ import os
 import secrets
 import time
 from collections import Counter
+from datetime import UTC, datetime
 from typing import Any, Dict, Iterable, Mapping
 
 from src.elevenplus_mock_exam_expansion import (
@@ -929,6 +930,22 @@ def score_mock_exam(
             "total": subject_total,
             "percent": round((subject_score / subject_total) * 100),
         })
+    try:
+        from src.progress_db import save_mock_exam_attempt
+        save_mock_exam_attempt(
+            str(payload.get("nonce") or ""),
+            exam["id"],
+            str(identity),
+            correct_count,
+            total,
+            breakdown,
+            datetime.fromtimestamp(int(payload["issued_at"]), tz=UTC),
+            datetime.fromtimestamp(checked_at, tz=UTC),
+            allow_anonymous=(exam["id"] == FREE_MOCK_EXAM_ID),
+        )
+    except Exception:
+        # Statistics must never prevent a pupil from receiving their result.
+        pass
     return {
         "success": True,
         "exam": {

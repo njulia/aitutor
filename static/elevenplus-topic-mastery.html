@@ -353,6 +353,34 @@
             if (Number(saved.masteryLevel)) state.masteryLevel = Math.min(5, Math.max(1, Number(saved.masteryLevel)));
         } catch (_error) {}
     }
+    function applyUrlTopicSelection() {
+        const params = new URLSearchParams(window.location.search);
+        const requestedSubject = (params.get('subject') || '').trim();
+        const requestedTopic = (params.get('topic') || '').trim();
+        if (!requestedSubject && !requestedTopic) return;
+
+        const subjects = state.catalogue.subjects || [];
+        let subject = subjects.find(function (item) {
+            return item.key.toLowerCase() === requestedSubject.toLowerCase() ||
+                item.label.toLowerCase() === requestedSubject.toLowerCase();
+        });
+        if (!subject && requestedTopic) {
+            subject = subjects.find(function (item) {
+                return (item.topics || []).some(function (topic) {
+                    return topic.toLowerCase() === requestedTopic.toLowerCase();
+                });
+            });
+        }
+        if (!subject) return;
+
+        state.subjectKey = subject.key;
+        if (requestedTopic) {
+            const topicIndex = (subject.topics || []).findIndex(function (topic) {
+                return topic.toLowerCase() === requestedTopic.toLowerCase();
+            });
+            if (topicIndex >= 0) state.topicIndex = topicIndex + 1;
+        }
+    }
     function currentSubject() {
         return state.catalogue.subjects.find(function (item) { return item.key === state.subjectKey; }) || state.catalogue.subjects[0];
     }
@@ -576,6 +604,7 @@
             const response = await fetch('/api/elevenplus/topic-mastery/catalog', {credentials:'same-origin'});
             if (!response.ok) throw new Error('The topic list could not be loaded.');
             state.catalogue = await response.json();
+            applyUrlTopicSelection();
             renderControls();
         } catch (error) { showStatus(error.message || 'Please refresh the page.'); document.getElementById('open-set-button').disabled = true; }
     }

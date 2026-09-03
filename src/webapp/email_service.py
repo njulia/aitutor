@@ -364,7 +364,7 @@ def send_xp_digest_email(
     # Learning summaries always use the dedicated branded sender, independent of
     # SMTP_FROM, while the SMTP credentials remain operator-configured.
     return _deliver_transactional_email(
-        email, "Learning summary", sender_override="info@homeworkmagic.co.uk"
+        email, "Learning summary", sender_override="Homework Magic Tutor <info@homeworkmagic.co.uk>"
     )
 
 

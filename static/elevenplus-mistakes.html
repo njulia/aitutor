@@ -47,8 +47,8 @@
 </section>
 
 <section class="card topic-section" aria-labelledby="topic-heading">
-<h2 id="topic-heading">Choose your 11+ topic</h2>
-<p>Each button shows how many saved mistakes you have in that topic.</p>
+<h2 id="topic-heading">Choose a topic</h2>
+<p>Each button shows how many saved mistakes you have in that topic. Mistakes from 11+ practice, Topic Mastery, Year-Round Plan and mock exams are grouped together by topic.</p>
 <div class="topic-grid" id="topic-grid"></div>
 </section>
 
@@ -62,27 +62,23 @@
 <script>
 (function(){
 'use strict';
-const TOPICS=[
- {key:'Maths',label:'Maths'},
- {key:'English',label:'English'},
- {key:'Verbal Reasoning',label:'Verbal Reasoning'},
- {key:'Non-Verbal Reasoning',label:'Non-Verbal Reasoning'}
-];
+let topics=[];
 const PAGE_SIZE=10;
 const topicGrid=document.getElementById('topic-grid'),status=document.getElementById('status'),root=document.getElementById('practice'),title=document.getElementById('practice-title'),pageInfo=document.getElementById('page-info');
-let subjectCounts={},selectedTopic='',allQuestions=[],page=0,marked=false;
+let selectedTopic='',selectedSubject='',allQuestions=[],page=0,marked=false;
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function setStatus(text){status.textContent=text;}
-function normaliseSubject(s){const raw=String(s||'').trim();const found=TOPICS.find(t=>t.key.toLowerCase()===raw.toLowerCase());return found?found.key:raw;}
 function stripQuestionNumber(text){return String(text||'').replace(/^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:question\s*)?\(?\d+\)?\s*(?:[\).:\-])\s*/i,'');}
 function renderTopics(){
- topicGrid.innerHTML=TOPICS.map(t=>{
-  const count=Number(subjectCounts[t.key]||0);
-  const active=selectedTopic===t.key;
-  return `<button type="button" class="topic-btn${active?' active':''}" data-topic="${esc(t.key)}" ${count?'':'disabled'}><span class="topic-name">${esc(t.label)}</span><span class="topic-count">${count} mistake${count===1?'':'s'}</span></button>`;
+ topicGrid.innerHTML=topics.map(t=>{
+  const count=Number(t.count||0);
+  const key=`${t.subject}|||${t.topic}`;
+  const active=selectedTopic===key;
+  return `<button type="button" class="topic-btn${active?' active':''}" data-topic-key="${esc(key)}" ${count?'':'disabled'}><span class="topic-name">${esc(t.topic)}</span><span class="topic-count">${esc(t.subject)} · ${count} mistake${count===1?'':'s'}</span></button>`;
  }).join('');
- topicGrid.querySelectorAll('[data-topic]').forEach(btn=>btn.addEventListener('click',()=>selectTopic(btn.dataset.topic)));
+ topicGrid.querySelectorAll('[data-topic-key]').forEach(btn=>btn.addEventListener('click',()=>selectTopic(btn.dataset.topicKey)));
 }
+
 function questionMarkup(q,number){
  const opts=Array.isArray(q.options)?q.options.filter(Boolean):[];
  let body='';
@@ -96,7 +92,7 @@ function questionMarkup(q,number){
 function renderPage(){
  const totalPages=Math.max(1,Math.ceil(allQuestions.length/PAGE_SIZE));
  const start=page*PAGE_SIZE,end=Math.min(start+PAGE_SIZE,allQuestions.length),items=allQuestions.slice(start,end);marked=false;
- title.textContent=selectedTopic+' practice';
+ title.textContent=(selectedSubject?selectedSubject+' — ':'')+String(selectedTopic).split('|||').pop()+' practice';
  pageInfo.textContent=allQuestions.length?`Questions ${start+1}–${end} of ${allQuestions.length}`:'';
  if(!items.length){root.innerHTML='<section class="card empty"><h2>No mistakes in this topic yet.</h2><p>When you miss an 11+ question, it can appear here for future practice.</p></section>';return;}
  root.innerHTML=`<div>${items.map((q,i)=>questionMarkup(q,start+i+1)).join('')}<div class="actions"><button class="btn btn-quiet" id="prev-btn" type="button" ${page<=0?'disabled':''}>Previous</button><button class="btn btn-primary" id="mark-btn" type="button">Mark</button><button class="btn btn-secondary" id="again-btn" type="button">Do it again</button><button class="btn btn-quiet" id="next-btn" type="button" ${page>=totalPages-1?'disabled':''}>Next</button></div></div>`;
@@ -128,10 +124,16 @@ async function markPage(){
  }));
  marked=true;btn.disabled=false;setStatus(answered?`You got ${correct} of ${answered} answered question${answered===1?'':'s'} correct.`:'Choose an answer for each question you want to mark.');
 }
-async function selectTopic(topic){
- selectedTopic=topic;page=0;allQuestions=[];renderTopics();setStatus(`Loading ${topic} mistakes…`);root.innerHTML='';
+async function selectTopic(topicKey){
+ const separator='|||';
+ const separatorIndex=String(topicKey||'').indexOf(separator);
+ selectedSubject=separatorIndex>=0?String(topicKey).slice(0,separatorIndex):'';
+ const topic=separatorIndex>=0?String(topicKey).slice(separatorIndex+separator.length):String(topicKey||'');
+ selectedTopic=topicKey;page=0;allQuestions=[];renderTopics();setStatus(`Loading ${topic} mistakes…`);root.innerHTML='';
  try{
-  const r=await fetch(`/api/elevenplus/mistake-practice?subject=${encodeURIComponent(topic)}&limit=300`,{credentials:'same-origin'});
+  const params=new URLSearchParams({topic,limit:'300'});
+  if(selectedSubject)params.set('subject',selectedSubject);
+  const r=await fetch(`/api/elevenplus/mistake-practice?${params.toString()}`,{credentials:'same-origin'});
   const data=await r.json().catch(()=>({}));
   if(r.status===401){location.href='/login';return;}
   if(r.status===402){status.innerHTML='11+ Premium is required for saved mistake practice. <a href="/pricing">See plans</a>';return;}
@@ -148,12 +150,13 @@ async function loadSummary(){
   if(r.status===401){location.href='/login';return;}
   if(r.status===402){status.innerHTML='11+ Premium is required for saved mistake practice. <a href="/pricing">See plans</a>';return;}
   if(!r.ok||!data.success)throw new Error(data.error||'Could not load your mistakes.');
-  subjectCounts={};Object.entries(data.subject_counts||{}).forEach(([key,value])=>{subjectCounts[normaliseSubject(key)]=Number(value||0);});
+  topics=Array.isArray(data.topic_counts)?data.topic_counts:[];
   renderTopics();
-  const first=TOPICS.find(t=>Number(subjectCounts[t.key]||0)>0);
-  if(first)await selectTopic(first.key);else{title.textContent='11+ mistake practice';setStatus('No saved 11+ mistakes yet. Complete some 11+ practice, topic-mastery work, a year-round session, or a mock exam and any questions you miss will appear here.');}
+  const first=topics.find(t=>Number(t.count||0)>0);
+  if(first)await selectTopic(`${first.subject}|||${first.topic}`);else{title.textContent='11+ mistake practice';setStatus('No saved 11+ mistakes yet. Complete some 11+ practice, topic-mastery work, a year-round session, or a mock exam and any questions you miss will appear here.');}
  }catch(e){setStatus(e.message||'Could not load your saved mistakes.');renderTopics();}
 }
+
 loadSummary();
 })();
 </script>

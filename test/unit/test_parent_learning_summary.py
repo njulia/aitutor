@@ -80,7 +80,7 @@ def test_learning_summary_email_uses_branded_sender_and_all_four_columns(monkeyp
     )
     assert (status, error) == ("sent", None)
     message = FakeSMTP.messages[-1]
-    assert message["From"] == "info@homeworkmagic.co.uk"
+    assert message["From"] == "Homework Magic Tutor <info@homeworkmagic.co.uk>"
     assert "Child | XP earned | Activities | Subjects" in message.get_body(preferencelist=("plain",)).get_content()
     html = message.get_body(preferencelist=("html",)).get_content()
     assert "Subjects" in html

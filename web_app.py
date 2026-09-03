@@ -3964,6 +3964,34 @@ async def admin_toggle_test(req: Request, username: str, enable: bool = True):
     return {"success": ok, "is_test": bool(enable)}
 
 
+@app.get("/api/admin/mock-exam-statistics")
+async def admin_mock_exam_statistics(req: Request, limit: int = 1000):
+    """Return aggregate 11+ mock-exam usage and score statistics."""
+    _require_admin(req)
+    from src.progress_db import get_admin_mock_exam_statistics
+    from src.elevenplus_mock_exams import EXAMS
+
+    stats = await run_blocking(
+        get_admin_mock_exam_statistics,
+        limit=max(1, min(int(limit), 2000)),
+        timeout=10,
+        limit_concurrency=False,
+    )
+    result = []
+    for row in stats:
+        exam = EXAMS.get(row.get("exam_id")) or {}
+        result.append({
+            **row,
+            "mock_name": exam.get("title") or row.get("exam_id"),
+            "school_or_area": exam.get("school") or "General / National",
+            "minutes": int(exam.get("duration_minutes") or 0),
+            "number_of_questions": int(exam.get("question_count") or len(exam.get("question_ids") or ())),
+            "category": exam.get("category") or "",
+            "stage": exam.get("stage") or "",
+        })
+    return {"success": True, "statistics": result}
+
+
 @app.get("/api/admin/ai-metrics")
 async def admin_ai_metrics():
     """获取 AI 系统运行指标"""
