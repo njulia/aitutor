@@ -90,51 +90,62 @@ RUN_E2E=1 pytest test/e2e --browser chromium
 See [doc/TESTING.md](doc/TESTING.md) and
 [doc/END_TO_END_TESTING.md](doc/END_TO_END_TESTING.md).
 
-## Google Cloud Run
-
-The production defaults target:
-
-- Project: `aitutor-502921`
-- Region: `europe-west2`
-- Service: `aitutor-prod`
-- Service account: `aitutor-run`
-- Cloud SQL instance: `aitutor-prod-pg`
-- Artifact Registry repository: `aitutor-repo`
-
-Prepare the non-secret settings:
-
-```bash
-cp deploy/cloud-run.env.yaml.example deploy/cloud-run.env.yaml
-```
-
-Replace every `REPLACE_` value. Create the Secret Manager entries named by
-`deploy/deploy_gcp.sh`, grant the Cloud Run service account access to them, and
-then run:
-
-```bash
-bash deploy/deploy_gcp.sh
-```
-
-The deploy script refuses placeholder configuration, creates the Artifact
-Registry repository if needed, builds with Cloud Build, attaches Cloud SQL and
-deploys a bounded-concurrency Cloud Run revision. Database and API credentials
-are injected from Secret Manager rather than stored in the source archive.
-
-The mock catalogue uses the existing `STRIPE_PRICE_ELEVENPLUS_MONTHLY` plan;
-there is no separate mock-exam product. See
-[`deploy/SETUP_11PLUS_MOCK_TIER.md`](deploy/SETUP_11PLUS_MOCK_TIER.md).
-
-After the first database is available:
-
-```bash
-python scripts/gcp_utils.py
-```
-
-Run that command from an environment with the same Cloud SQL connection and
-secret configuration. It creates the relational and pgvector schema without
-printing the connection string.
-
 ## Project layout
+
+```
+ai_tutor/
+├── web_app.py                    # FastAPI 应用（主服务器）
+├── launch.py                     # 统一启动器（生成 SEO 页面，启动 web_app.py）
+├── generate_landing_pages.py     # 生成 SEO 优化的静态着陆页
+├── requirements.txt              # Python 依赖
+├── run.sh / run.bat              # 启动脚本
+│
+├── src/
+│   ├── models.py                 # 数据模型、学生档案、LangChain 工具
+│   ├── prompts.py                # 所有 LLM 提示模板
+│   ├── agent_workflow.py         # LangGraph 混合智能体工作流
+│   ├── homework_generator.py     # 作业生成逻辑
+│   ├── homework_manager.py       # 作业保存/加载/批改/CSV 管理
+│   ├── homework_rag.py           # RAG 系统（ChromaDB）用于作业存储和搜索
+│   ├── elevenplus_rag.py         # 11+ 知识库 RAG 系统
+│   ├── file_utils.py             # 文件读取工具（图片 OCR、PDF、DOCX、文本）
+│   │
+│   ├── ui/
+│   │   ├── shared.py             # 共享 UI 工具（档案解析、作业显示）
+│   │   └── tui.py                # 终端 UI（CLI 模式）
+│   │
+│   │── scripts/                  # 批量生成脚本
+│   │   └── elevenplus/           # 11+ 作业生成器 
+│   │
+├── templates/
+│   ├── app.html                  # 主 AI 辅导 Web 应用（SPA）
+│   ├── homework.html             # 作业显示模板
+│   └── elevenplus-practice.html  # 11+ 练习页面模板
+│
+── static/
+│   ├── index.html                # SEO 首页
+│   ├── ks1-homework.html         # KS1 SEO 着陆页
+│   ├── ks2-homework.html         # KS2 SEO 着陆页
+│   ├── check-my-homework.html    # 作业检查 SEO 页面
+│   ├── elevenplus-practice.html  # 11+ 练习页面
+│   ├── styles.css                # 共享 CSS 样式表
+│   └── elevenplus/               # 11+ 专用静态内容
+│       ├── articles.html         # 11+ 文章中心
+│       ├── uk_grammar_guide.html # 英国语法指南
+│       └── uk_11plus_vocabulary_list.html  # 11+ 词汇表
+│
+├── data/
+│   ├── homework.csv              # 示例作业数据
+│   ├── chroma_homework_db/       # ChromaDB 向量存储
+│   ├── chinese/                  # 中文教材 PDF
+│   └── elevenplus/               # 11+ 知识库数据
+│
+└── homework_output/              # 生成的作业输出文件
+```
+
+## API Endpoints
+
+### Web pages
 
 - `web_app.py` — FastAPI routes and browser response contracts
 - `src/homework_generator.py` — RAG-first assignment and miss generation
