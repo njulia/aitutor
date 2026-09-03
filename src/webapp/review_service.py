@@ -96,6 +96,17 @@ def _normalise_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         )
     if source.get("plan_phase"):
         cleaned["plan_phase"] = compact_text(source.get("plan_phase"), 40)
+    # Keep 11+ activity metadata needed by the mistake bank. These markers are
+    # not learner-identifying data, but dropping them here would make Topic
+    # Mastery mistakes look like ordinary 11+ practice and lose their topic.
+    if source.get("topic"):
+        cleaned["topic"] = compact_text(source.get("topic"), 160)
+    if source.get("topic_mastery"):
+        cleaned["topic_mastery"] = True
+    if source.get("mastery_level") is not None:
+        cleaned["mastery_level"] = _bounded_int(
+            source.get("mastery_level"), default=1, minimum=1, maximum=10
+        )
     if source.get("english_level"):
         cleaned["english_level"] = compact_text(source.get("english_level"), 60)
     goals = source.get("learning_goals")
@@ -707,30 +718,15 @@ def _mistake_topic(profile: Dict[str, Any], subject: str) -> str:
     return compact_text(subject_display_name(subject), 160) or "General"
 
 
-def _progress_topic(profile: Dict[str, Any], subject: str, homework_content: str = "") -> str:
-    """Return a topic label for the Progress page without conflating it with subject."""
-    explicit = str(profile.get("topic") or "").strip()
-    if explicit:
-        return compact_text(explicit, 80)
-
-    text = f"{subject} {homework_content}".casefold()
-    topic_rules = [
-        (("fraction", "numerator", "denominator"), "Fractions"),
-        (("decimal",), "Decimals"),
-        (("percentage", "percent"), "Percentages"),
-        (("multiply", "multiplication", "times table", "×"), "Multiplication"),
-        (("divide", "division", "÷"), "Division"),
-        (("addition", " add ", "+"), "Addition"),
-        (("subtract", "subtraction", "−"), "Subtraction"),
-        (("shape", "angle", "perimeter", "area"), "Geometry and measures"),
-        (("grammar", "punctuation", "sentence"), "Grammar and punctuation"),
-        (("spelling",), "Spelling"),
-        (("comprehension", "passage", "read the"), "Reading comprehension"),
-    ]
-    for needles, topic in topic_rules:
-        if any(needle in text for needle in needles):
-            return topic
-    return compact_text(subject_display_name(subject), 80) + " general practice"
+def _mistake_source_type(profile: Dict[str, Any], is_eleven_plus: bool) -> str:
+    """Classify the 11+ source so all 11+ learning paths share one mistake bank."""
+    if not is_eleven_plus:
+        return ""
+    if profile.get("topic_mastery"):
+        return "topic_mastery"
+    if profile.get("plan_week"):
+        return "year_round"
+    return "11plus_practice"
 
 
 def _save_11plus_mistakes(
@@ -884,18 +880,18 @@ def review_homework(
         except Exception:
             logger.exception("RAG answer lookup failed for %s", homework_doc_id)
 
-    # A cached review is safe to reuse, but Year-Round Plan mistakes must still
-    # be persisted for the current student. Re-run the deterministic RAG marking
-    # above before returning the cached result so a previous cache hit cannot
-    # bypass the 11+ mistake-bank save.
-    if cached and is_year_round:
+    # A cached review is safe to reuse, but every 11+ learning path must still
+    # persist the child's current mistakes. Review results are cached independently
+    # of the student, so a cache hit cannot be allowed to bypass mistake capture.
+    # This covers normal 11+ practice, Topic Mastery, and Year-Round Plan.
+    if cached and is_eleven_plus:
         _save_11plus_mistakes(
             rows,
             student_id=str(student_id),
             subject=subject,
             profile=profile,
             homework_doc_id=homework_doc_id,
-            source_type="year_round",
+            source_type=_mistake_source_type(profile, is_eleven_plus),
         )
         if isinstance(cached, dict):
             return {**cached, "from_cache": True}
@@ -961,7 +957,6 @@ def review_homework(
                     score=float(correct_count),
                     review_text=display_review,
                     max_score=attempted,
-                    topic=_progress_topic(profile, subject, budget.get("homework_content", "")),
                 )
             except Exception:
                 logger.exception("Could not save homework progress")
@@ -1190,7 +1185,6 @@ def review_homework(
                 score=score,
                 review_text=review,
                 max_score=max_score or 10,
-                topic=_progress_topic(profile, subject, budget.get("homework_content", "")),
             )
         except Exception:
             logger.exception("Could not save homework progress")

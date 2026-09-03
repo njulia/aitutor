@@ -31,9 +31,33 @@ function node(tag, className, text) {
 }
 
 function setStatus(message, isError = false) {
+  const text = String(message || '').trim();
   const status = byId('page-status');
-  status.textContent = message || '';
-  status.className = isError ? 'error' : '';
+  if (status) {
+    status.textContent = '';
+    status.className = '';
+  }
+  if (!text) return;
+
+  const modal = byId('notification-modal');
+  const title = byId('notification-modal-title');
+  const body = byId('notification-modal-body');
+  if (!modal || !title || !body) {
+    // Keep a safe fallback if the notification markup is unavailable.
+    console.warn(text);
+    return;
+  }
+
+  title.textContent = isError ? 'Something went wrong' : 'Message';
+  body.textContent = text;
+  modal.dataset.error = isError ? 'true' : 'false';
+  modal.classList.add('show');
+  byId('close-notification').focus();
+}
+
+function closeNotificationModal() {
+  const modal = byId('notification-modal');
+  if (modal) modal.classList.remove('show');
 }
 
 async function api(url, options = {}) {
@@ -589,6 +613,10 @@ byId('send-digest-button').addEventListener('click', () => requestPassword(async
   setStatus('Learning summary email sent.');
 }));
 byId('cancel-password').addEventListener('click', closePasswordModal);
+byId('close-notification').addEventListener('click', closeNotificationModal);
+byId('notification-modal').addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) closeNotificationModal();
+});
 byId('close-study-plan').addEventListener('click', () => byId('study-plan-modal').classList.remove('show'));
 byId('password-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -609,5 +637,8 @@ byId('parent-logout').addEventListener('click', async (event) => {
 });
 
 window.addEventListener('resize', scheduleScoreTrendResize, {passive: true});
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeNotificationModal();
+});
 
 initialise();

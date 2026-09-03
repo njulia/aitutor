@@ -60,3 +60,20 @@ def test_11plus_mistake_source_classification_covers_all_learning_paths():
     assert _mistake_source_type({"topic_mastery": True}, True) == "topic_mastery"
     assert _mistake_source_type({"plan_week": 12}, True) == "year_round"
     assert _mistake_source_type({}, True) == "11plus_practice"
+
+
+
+def test_11plus_review_profile_keeps_topic_mastery_and_topic_metadata():
+    from src.webapp import review_service
+
+    profile = review_service._normalise_profile({
+        "year_group": 6,
+        "age": 11,
+        "topic_mastery": True,
+        "topic": "Fractions",
+        "mastery_level": 3,
+    })
+
+    assert profile["topic_mastery"] is True
+    assert profile["topic"] == "Fractions"
+    assert profile["mastery_level"] == 3

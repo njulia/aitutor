@@ -101,6 +101,10 @@ def test_every_exam_is_unique_and_uses_only_declared_public_sources() -> None:
                 "putneyhigh.gdst.net",
                 "brightoncollege.org.uk",
                 "habsgirls.org.uk",
+                "newsteadwood.co.uk",
+                "11plus.gl-assessment.co.uk",
+                "newsteadwood.co.uk",
+                "11plus.gl-assessment.co.uk",
             )
         )
 
@@ -117,15 +121,16 @@ def test_expanded_catalogue_preserves_initial_mocks_and_question_bank() -> None:
         "west-midlands-grammar-1",
         "csse-essex-1",
         "lancaster-royal-grammar-1",
+        "newstead-wood-11plus-1",
     }
 
-    assert len(mocks.EXAMS) == 43
+    assert len(mocks.EXAMS) == 44
     assert len(mocks._QUESTIONS) == 278
     assert expected_new_exams <= set(mocks.EXAMS)
     assert all(not mocks.EXAMS[exam_id]["is_free"] for exam_id in expected_new_exams)
     assert {
         mocks.EXAMS[exam_id]["last_verified"] for exam_id in expected_new_exams
-    } == {"2026-08-06"}
+    } == {"2026-08-06", "2026-09-02"}
 
     for prefix in ("m", "e", "v", "n"):
         assert {
@@ -272,7 +277,7 @@ def test_catalogue_adds_supported_top_50_a_level_school_targets() -> None:
 
     assert sum(
         exam["category"] == "school_target" for exam in mocks.EXAMS.values()
-    ) == 34
+    ) == 35
     for exam_id, (school, source_id) in expected_new_targets.items():
         exam = mocks.EXAMS[exam_id]
         assert exam["school"] == school

@@ -774,21 +774,28 @@ def _raw_storage_enabled() -> bool:
     return os.getenv("STORE_RAW_LEARNER_CONTENT", "false").lower() in {"1", "true", "yes", "on"}
 
 
-def _upsert_topic_progress(
-    conn,
-    student_id: str,
-    subject: str,
-    score: float,
-    max_score: float,
-    now: datetime,
-    topic: str = None,
-) -> None:
-    """Insert/update cumulative progress for a real topic within a subject."""
+def _extract_topic_from_activity_title(title: str, subject: str = "") -> str:
+    """Extract a topic from generated homework/practice titles."""
+    text = str(title or "").strip()
+    if not text:
+        return ""
+    import re
+    first_line = text.splitlines()[0].strip()
+    match = re.search(
+        r"^.*?\s+(?:Homework|Practice)\s*-\s*Year\s*\d+\s*-\s*(.+?)(?:\s*\(Set\s*\d+\))?\s*$",
+        first_line, flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    topic = re.sub(r"\s*\(Set\s*\d+\)\s*$", "", match.group(1), flags=re.IGNORECASE)
+    topic = re.sub(r"\s+", " ", topic).strip(" -")
+    return topic[:80] if topic else ""
+
+
+def _upsert_topic_progress(conn, student_id: str, subject: str, score: float, max_score: float, now: datetime, topic: str = None) -> None:
+    """Insert/update topic progress while keeping topic distinct from subject."""
     clean_subject = subject[:80]
-    clean_topic = str(topic or "").strip()[:80]
-    # Keep the subject and topic separate. Older code used the subject itself as
-    # the topic, which made every row in "Topic Progress" show identical values.
-    topic = clean_topic or f"{clean_subject} general practice"
+    topic = str(topic or "").strip()[:80] or clean_subject
     attempted = int(max_score or 0)
     correct = int(score or 0)
     if attempted <= 0:
@@ -848,7 +855,6 @@ def save_homework_session(
     score: float = None,
     review_text: str = None,
     max_score: float = 10,
-    topic: str = None,
 ) -> str:
     now = _now()
     session_id = f"hw_{uuid.uuid4().hex}"
@@ -863,7 +869,8 @@ def save_homework_session(
             created_at=now,
         ))
         # 同步更新 topic_progress 表，供进度页面的 "Topic Progress" 使用
-        _upsert_topic_progress(conn, student_id, subject[:80], score, max_score, now, topic=topic)
+        activity_topic = _extract_topic_from_activity_title(homework_content, subject)
+        _upsert_topic_progress(conn, student_id, subject[:80], score, max_score, now, topic=activity_topic)
     return session_id
 
 
@@ -929,16 +936,7 @@ def get_topic_progress(student_id: str, subject: str = None) -> List[Dict]:
         q = q.where(topic_progress.c.subject == subject)
     with _engine.begin() as conn:
         rows = conn.execute(q.order_by(topic_progress.c.accuracy.asc())).all()
-    result = []
-    for row in rows:
-        item = _dict(row)
-        # Legacy records used the subject itself as the topic. Keep them usable
-        # without displaying the same value in both columns. New records store a
-        # real topic at write time.
-        if str(item.get("topic") or "").strip() == str(item.get("subject") or "").strip():
-            item["topic"] = "General practice"
-        result.append(item)
-    return result
+    return [_dict(r) for r in rows]
 
 
 def get_daily_goal_stats(student_id: str, daily_goal: int = 1) -> Dict[str, Any]:

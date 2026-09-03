@@ -217,10 +217,40 @@
     return card;
   }
 
-  function renderCatalogue(data) {
+  function mockArea(exam) {
+    const text = [exam.school, exam.title, exam.description].filter(Boolean).join(' ').toLowerCase();
+    if (/essex|csse|colchester|southend|westcliff|chelmsford|cchs/.test(text)) return 'essex';
+    if (/london|barnet|bexley|sutton|tiffin|wilson|st olave|newstead|henrietta barnett|north london|city of london|highgate|wimbledon|putney|habs/.test(text)) return 'london';
+    if (/kent|medway|reading|berkshire|buckinghamshire|oxfordshire|surrey|sussex|brighton/.test(text)) return 'south-east';
+    if (/bristol|devon|cornwall|somerset|gloucester/.test(text)) return 'south-west';
+    if (/birmingham|warwick|warwickshire|nottingham|derby|leicester|lincoln|stafford/.test(text)) return 'midlands';
+    if (/manchester|cheshire|lancashire|liverpool|cumbria|altrincham/.test(text)) return 'north-west';
+    if (/york|yorkshire|newcastle|durham|sunderland|tees/.test(text)) return 'north-east';
+    return 'other';
+  }
+
+  function mockMatches(exam, search, region, type) {
+    if (type !== 'all' && exam.category !== type) return false;
+    if (region !== 'all' && mockArea(exam) !== region) return false;
+    if (!search) return true;
+    const haystack = [exam.title, exam.school, exam.description, exam.stage, exam.format_note]
+      .filter(Boolean).join(' ').toLowerCase();
+    return search.split(/\s+/).every(function (term) { return haystack.indexOf(term) !== -1; });
+  }
+
+  function applyMockFilters() {
+    if (!state.catalogue) return;
+    const searchInput = document.getElementById('mock-search');
+    const regionInput = document.getElementById('mock-region');
+    const typeInput = document.getElementById('mock-type');
+    const search = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+    const region = regionInput ? regionInput.value : 'all';
+    const type = typeInput ? typeInput.value : 'all';
     commonGrid.replaceChildren();
     schoolGrid.replaceChildren();
-    const exams = (data.exams || []).slice();
+    const exams = (state.catalogue.exams || []).filter(function (exam) {
+      return mockMatches(exam, search, region, type);
+    });
     exams.sort(function (a, b) {
       if (a.category === 'school_target' && b.category === 'school_target') {
         const nameA = String(a.school || a.title || '').toLowerCase();
@@ -233,6 +263,19 @@
       const target = exam.category === 'school_target' ? schoolGrid : commonGrid;
       target.appendChild(renderMockCard(exam));
     });
+    const status = document.getElementById('mock-filter-status');
+    if (status) {
+      status.textContent = search || region !== 'all' || type !== 'all'
+        ? exams.length + ' mock' + (exams.length === 1 ? '' : 's') + ' found.'
+        : '';
+    }
+    document.getElementById('common-mocks').hidden = !exams.some(function (exam) { return exam.category === 'common'; });
+    document.getElementById('school-mocks').hidden = !exams.some(function (exam) { return exam.category === 'school_target'; });
+  }
+
+  function renderCatalogue(data) {
+    state.catalogue = data;
+    applyMockFilters();
     setStatus(
       catalogueStatus,
       'Common 11+ Diagnostic is free. Every other mock requires 11+ Premium.',
@@ -658,6 +701,29 @@
     document.title = '11+ Mock Exams | Homework Magic';
     loadCatalogue();
     window.scrollTo({top: 0, behavior: 'smooth'});
+  });
+
+  ['mock-search', 'mock-region', 'mock-type'].forEach(function (id) {
+    const control = document.getElementById(id);
+    if (!control) return;
+    control.addEventListener(id === 'mock-search' ? 'input' : 'change', applyMockFilters);
+  });
+
+  document.querySelectorAll('[data-mock-chip]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      const value = chip.getAttribute('data-mock-chip') || '';
+      const search = document.getElementById('mock-search');
+      const region = document.getElementById('mock-region');
+      if (value === 'essex' || value === 'london') {
+        if (search) search.value = '';
+        if (region) region.value = value;
+      } else {
+        if (search) search.value = value;
+        if (region) region.value = 'all';
+      }
+      applyMockFilters();
+      document.getElementById('finder-title').scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
   });
 
   window.addEventListener('beforeunload', function (event) {

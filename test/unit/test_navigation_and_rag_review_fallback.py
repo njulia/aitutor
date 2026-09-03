@@ -119,3 +119,41 @@ def test_header_brand_links_home_without_duplicate_home_menu(
 
     assert brand_markup in header
     assert 'href="/">Home</a>' not in header
+
+
+def test_cached_review_still_records_progress_for_current_student(monkeypatch) -> None:
+    """A cache hit must not make a newly completed session disappear from Progress."""
+    from src.cache import review_cache
+
+    review_cache.clear()
+    monkeypatch.setattr(
+        review_service,
+        "_save_homework_progress_session",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    calls = []
+    monkeypatch.setattr(
+        review_cache,
+        "get",
+        lambda _key: {
+            "success": True,
+            "review": "## Review Summary\n**Score: 8/10**",
+            "score": 8.0,
+            "max_score": 10,
+        },
+    )
+
+    result = review_service.review_homework(
+        homework_content="Maths Homework - Year 3 - Number Bonds (Set 999)",
+        student_answers="1. 10\n2. 8",
+        subject="Maths",
+        profile={"student_id": "student-cache-test", "year_group": 3, "age": 8},
+        quick_review=True,
+    )
+
+    assert result["from_cache"] is True
+    assert len(calls) == 1
+    assert calls[0]["student_id"] == "student-cache-test"
+    assert calls[0]["score"] == 8.0
+    assert calls[0]["max_score"] == 10
+

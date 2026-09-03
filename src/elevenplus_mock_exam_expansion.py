@@ -179,6 +179,14 @@ ADDITIONAL_PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
             "admission-to-year-7-september-2027/"
         ),
     },
+    "newstead-wood-2027": {
+        "title": "Newstead Wood School: Year 7 admissions and selection test",
+        "url": "https://www.newsteadwood.co.uk/admissions/year-7-admissions/about-the-selection-test",
+    },
+    "gl-11plus-free-materials": {
+        "title": "GL Assessment: free 11+ familiarisation materials",
+        "url": "https://11plus.gl-assessment.co.uk/pages/free-materials",
+    },
 }
 
 
@@ -1604,6 +1612,20 @@ ADDITIONAL_QUESTIONS.extend(SCHOOL_TARGET_QUESTIONS)
 
 
 ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
+    "newstead-wood-11plus-1": {
+        "id": "newstead-wood-11plus-1",
+        "category": "school_target",
+        "title": "Newstead Wood School 11+ Target Mock",
+        "description": "Original Verbal and Non-Verbal Reasoning practice aligned with Newstead Wood School's publicly published Year 7 selection-test format.",
+        "school": "Newstead Wood School",
+        "stage": "Year 7 Selection Test",
+        "duration_minutes": 90,
+        "is_free": False,
+        "question_ids": tuple([f"v{i:02d}" for i in range(33, 57)] + [f"n{i:02d}" for i in range(33, 57)]),
+        "source_ids": ("dfe-primary", "newstead-wood-2027", "gl-11plus-free-materials"),
+        "format_note": "Two-part multiple-choice practice: 45 minutes of Verbal Reasoning followed by 45 minutes of Non-Verbal Reasoning. Newstead Wood states that its selection test assesses only Verbal and Non-Verbal Reasoning; this is an original independent practice simulation, not an official school paper.",
+        "last_verified": "2026-09-02",
+    },
     "nlcs-11plus-1": {
         "id": "nlcs-11plus-1",
         "category": "school_target",
