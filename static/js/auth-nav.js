@@ -212,15 +212,18 @@
       '/rewards', '🎁', 'My rewards', 'Check XP, levels and rewards'
     ));
     actions.appendChild(createAvatarAction(
-      '/playtime', '🦫', 'Pet playtime', 'Care for your little friend'
+      '/playtime', '🦦ྀི', 'Pet playtime', 'Care for your little friend'
     ));
+    actions.appendChild(createAvatarAction(
+      '/study-buddies', '👥', 'Study Buddies', 'Challenge friends and share kind emojis'
+    ));
+    const customiseLink = createAvatarAction(
+      '/character-customise', '🎨', 'Customise my character', 'Make your character look like you'
+    );
+    // Keep the familiar short spoken label while using the same card style.
+    customiseLink.setAttribute('aria-label', '🎨 Customise my character');
+    actions.appendChild(customiseLink);
     menu.appendChild(actions);
-
-    const customiseLink = document.createElement('a');
-    customiseLink.className = 'hm-kid-avatar-customise-toggle';
-    customiseLink.href = '/character-customise';
-    customiseLink.textContent = '🎨 Customise my character';
-    menu.appendChild(customiseLink);
 
     const logoutButton = appendTextElement(
       menu, 'button', 'hm-kid-avatar-logout', '↪ Log out of my space'

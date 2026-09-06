@@ -110,7 +110,7 @@ def migrate() -> dict:
             # 使用原始 student_id 保持跨表一致性
             now = _now()
             with _account_engine_func().begin() as conn:
-                from src.webapp.account_store import students, _generate_code, _validate_student
+                from src.webapp.account_store import students, _generate_buddy_code, _generate_code, _validate_student
                 nickname, yg, ag = _validate_student(name, year_group, age)
                 conn.execute(
                     students.insert().values(
@@ -118,6 +118,7 @@ def migrate() -> dict:
                         year_group=yg, age=ag, is_active=is_active,
                         is_default=False, default_for_account=None,
                         kid_code=_generate_code(),
+                        buddy_code=_generate_buddy_code(nickname),
                         created_at=now, updated_at=now,
                     )
                 )

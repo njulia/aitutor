@@ -34,7 +34,7 @@
   }
   </script>
   <script src="/static/js/marked-lite.js" defer></script>
-    <script src="/static/js/safe_markdown.js" defer></script>
+    <script src="/static/js/safe_markdown.js?v=20260906-friendly-maths" defer></script>
     <style>
         :root {
             --ink: #243047;
@@ -566,6 +566,18 @@
         .detail-question-body h1, .detail-question-body h2, .detail-question-body h3 { margin: 0.75em 0 0.35em; }
         .detail-question-body p, .detail-question-body li { margin: 0.6em 0; }
         .detail-question-body small { color: var(--muted); }
+        .year-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 32%); gap: 28px; align-items: start; }
+        .year-detail-solution h4, .year-detail-callout h4 { margin: 0 0 14px; color: #26364f; font-size: 1.18rem; }
+        .year-detail-solution h4 { font-size: 1.45rem; }
+        .year-detail-body, .year-detail-callout-body { color: #2d3b55; line-height: 1.75; }
+        .year-detail-body > :first-child, .year-detail-callout-body > :first-child { margin-top: 0; }
+        .year-detail-body > :last-child, .year-detail-callout-body > :last-child { margin-bottom: 0; }
+        .year-detail-aside { display: grid; gap: 18px; }
+        .year-detail-callout { padding: 18px 20px; border-radius: 13px; line-height: 1.65; }
+        .year-detail-callout.why { border: 1px solid #f1c76a; background: #fffaf0; }
+        .year-detail-callout.tip { border: 1px solid #a8c8ff; background: #f1f7ff; }
+        .year-detail-callout.why h4 { color: #7a5712; }
+        .year-detail-callout.tip h4 { color: #24466f; }
         .hidden { display: none !important; }
         footer {
             padding: 28px 22px 42px;
@@ -592,6 +604,8 @@
             .week-grid { grid-template-columns: repeat(6, minmax(40px, 1fr)); }
             .phase-list { grid-template-columns: 1fr; }
             .section-heading { flex-direction: column; }
+            .year-detail-layout { grid-template-columns: 1fr; gap: 18px; }
+            .year-detail-solution h4 { font-size: 1.3rem; }
         }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -1382,6 +1396,47 @@
         return lines.join('\n');
     }
 
+    function splitYearDetailExplanationParts(explanation) {
+        const text = String(explanation || '').trim();
+        const headings = [...text.matchAll(/^\s*##\s+(How to solve it|Why it works|Helpful tip)\s*$/gim)];
+        const parts = { solve: '', why: '', tip: '' };
+        if (!headings.length) {
+            parts.solve = text;
+            return parts;
+        }
+        headings.forEach(function (heading, index) {
+            const end = index + 1 < headings.length ? headings[index + 1].index : text.length;
+            const content = text.slice(heading.index + heading[0].length, end).trim();
+            const key = heading[1].toLowerCase() === 'how to solve it'
+                ? 'solve'
+                : heading[1].toLowerCase() === 'why it works' ? 'why' : 'tip';
+            parts[key] = content;
+        });
+        return parts;
+    }
+
+    function renderYearRoundDetailExplanation(label, questionText, explanation) {
+        const parts = splitYearDetailExplanationParts(explanation);
+        const solve = parts.solve || String(explanation || '');
+        const render = function (value) {
+            return markdownToSafeHtml(normaliseExplanationList(value));
+        };
+        const callouts = [
+            parts.why
+                ? '<section class="year-detail-callout why"><h4>💡 Why it works</h4><div class="year-detail-callout-body">' + render(parts.why) + '</div></section>'
+                : '',
+            parts.tip
+                ? '<section class="year-detail-callout tip"><h4>⭐ Helpful tip</h4><div class="year-detail-callout-body">' + render(parts.tip) + '</div></section>'
+                : ''
+        ].join('');
+        return '<h4>' + escapeHtml(label) + '</h4>' +
+            '<div class="detail-question-text">' + render(questionText) + '</div>' +
+            '<div class="year-detail-layout">' +
+                '<section class="year-detail-solution"><h4>How to solve it</h4><div class="year-detail-body">' + render(solve) + '</div></section>' +
+                (callouts ? '<aside class="year-detail-aside">' + callouts + '</aside>' : '') +
+            '</div>';
+    }
+
     function buildFullQuestionText(question) {
         const lines = [String(question.question || '').trim()];
         (question.options || []).forEach(function (option) {
@@ -1456,7 +1511,11 @@
                             body.textContent = data.error || 'This explanation could not be created. You can try again.';
                             continue;
                         }
-                        body.innerHTML = markdownToSafeHtml(normaliseExplanationList(data.explanation || ''));
+                        card.innerHTML = renderYearRoundDetailExplanation(
+                            item.subject_label || displaySubjectName(item.subject) || '11+ Practice',
+                            questionText,
+                            data.explanation || ''
+                        );
                     } catch (error) {
                         body.textContent = 'This explanation could not be created. You can try again.';
                     }

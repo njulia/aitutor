@@ -55,7 +55,12 @@ def test_kid_avatar_is_role_safe_personalised_and_useful() -> None:
     assert "'/app', '🚀', 'Start a quest'" in script
     assert "'/progress', '📈', 'My progress'" in script
     assert "'/rewards', '🎁', 'My rewards'" in script
+    assert "'/playtime', '🦦ྀི', 'Pet playtime'" in script
+    assert "'/study-buddies', '👥', 'Study Buddies'" in script
+    assert script.index("Pet playtime") < script.index("Study Buddies")
     assert "Customise my character" in script
+    assert "hm-kid-avatar-customise-toggle" not in script
+    assert "createAvatarAction(\n      '/character-customise'" in script
     assert "homeworkmagic:xp-updated" in script
     assert "Little Learner" in script
     assert "HomeworkMagicAvatar" in script

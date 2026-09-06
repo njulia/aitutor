@@ -14,8 +14,32 @@
     });
     return root.innerHTML;
   }
+  function plainTextMath(expression) {
+    return String(expression || '')
+      .replace(/\\times\b/g, '*')
+      .replace(/\\cdot\b/g, '*')
+      .replace(/\\div\b/g, '÷')
+      .replace(/\\leq?\b/g, '≤')
+      .replace(/\\geq?\b/g, '≥')
+      .replace(/\\neq\b/g, '≠')
+      .replace(/\\%/g, '%')
+      .replace(/\\([#$&_{}])/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function makeInlineMathFriendly(markdown) {
+    // Primary pupils should see familiar operators rather than raw TeX.
+    return String(markdown || '')
+      .replace(/\\\(([\s\S]*?)\\\)/g, function (_whole, expression) {
+        return `(${plainTextMath(expression)})`;
+      })
+      .replace(/\\\[([\s\S]*?)\\\]/g, function (_whole, expression) {
+        return `(${plainTextMath(expression)})`;
+      });
+  }
   window.renderSafeMarkdown = function renderSafeMarkdown(markdown) {
-    const raw = window.marked ? window.marked.parse(String(markdown || '')) : String(markdown || '');
+    const friendlyMarkdown = makeInlineMathFriendly(markdown);
+    const raw = window.marked ? window.marked.parse(friendlyMarkdown) : friendlyMarkdown;
     if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
       return window.DOMPurify.sanitize(raw, {USE_PROFILES: {html: true}});
     }

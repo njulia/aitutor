@@ -4,6 +4,13 @@ This directory contains a production-oriented Cloud Run configuration for
 Homework Magic. The deployment uses Cloud Build, Artifact Registry, Cloud Run,
 Cloud SQL for PostgreSQL/pgvector, Secret Manager, Vertex AI and DeepSeek.
 
+For normal application releases, run `./deploy/deploy_code_gcp.sh`. It deploys
+a zero-traffic revision first, checks the staging URL (including `/app` and
+`/study-buddies`), then asks for confirmation before moving production traffic.
+Study Buddy database updates, including changing old dashed codes such as
+`ALEX-5470` to `ALEX5470`, run safely when the new revision starts; no manual
+database command is required.
+
 ## 1. Prepare Google Cloud
 
 Create the `aitutor-run@aitutor-502921.iam.gserviceaccount.com` service account
@@ -225,20 +232,21 @@ free-text fields.
 Authenticate `gcloud`, select a deployer identity with permission to build and
 deploy. The 11+ mock catalogue is included in the existing £9.99 11+ Premium
 plan; verify that plan by following
-[`SETUP_11PLUS_MOCK_TIER.md`](SETUP_11PLUS_MOCK_TIER.md), then run:
+[`SETUP_11PLUS_MOCK_TIER.md`](SETUP_11PLUS_MOCK_TIER.md).
+
+For routine releases, run the staged release script:
 
 ```bash
-./deploy/deploy_gcp.sh
+./deploy/deploy_code_gcp.sh
 ```
 
-The script creates the Artifact Registry repository if necessary, builds an
-immutable timestamped image, and deploys it to Cloud Run in `europe-west2`.
-Override any `GCP_*`, `DEPLOY_ENV_FILE`, or `SECRET_BINDINGS` environment
-variable when deploying to a different project or topology. The environment
-file is authoritative because Cloud Run replaces existing ordinary environment
-variables when `--env-vars-file` is used. The deploy script therefore validates
-the Stripe values before building and retains existing secret mappings with
-`--update-secrets`.
+It builds an immutable image, sends a zero-traffic revision to Cloud Run in
+`europe-west2`, verifies the staging URL, then asks before it promotes traffic.
+The checks include the app's Study Buddies shortcut and the `/study-buddies`
+page. For the very first rollout only, use `./deploy/deploy_gcp.sh` to apply
+the private `DEPLOY_ENV_FILE` settings; later releases should use the staged
+script above. The environment file is authoritative because Cloud Run replaces
+existing ordinary environment variables when `--env-vars-file` is used.
 
 ## Repair checkout after an earlier deployment
 

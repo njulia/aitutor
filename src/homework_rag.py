@@ -615,17 +615,60 @@ def detail_explanation_key(
     return "explain_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def detail_explanation_storage_key(
+    question: Any, subject: Any, year_group: Any, *, is_eleven_plus: bool = False
+) -> str:
+    """Return the 64-character key used by the relational explanation store.
+
+    The vector-store ID keeps the ``explain_`` prefix for compatibility with
+    explanations already saved there.  The relational store intentionally
+    uses a fixed 64-character hash, so it can be indexed reliably on both
+    SQLite and PostgreSQL.
+    """
+    return detail_explanation_key(
+        question, subject, year_group, is_eleven_plus=is_eleven_plus
+    ).removeprefix("explain_")
+
+
 def load_detail_explanation(
     question: Any, subject: str, year_group: int, *, is_eleven_plus: bool = False
 ) -> Optional[str]:
-    """Load the saved detailed explanation for one question, if present."""
+    """Load a saved detailed explanation without making cache failures fatal.
+
+    A compact relational copy is checked first because it is an indexed
+    question lookup and does not need vector infrastructure.  The older
+    vector collection remains a backwards-compatible fallback for previously
+    saved explanations.  Both stores contain generic teaching text only; no
+    learner answers or identifiers are involved.
+    """
     key = detail_explanation_key(
         question, subject, year_group, is_eleven_plus=is_eleven_plus
     )
-    for row in _get_detail_explanation_store().get_by_ids([key]):
-        content = str(row.get("content") or "").strip()
+
+    try:
+        from .webapp.explanation_store import get_explanation
+
+        row = get_explanation(
+            detail_explanation_storage_key(
+                question, subject, year_group, is_eleven_plus=is_eleven_plus
+            )
+        )
+        content = str((row or {}).get("explanation") or "").strip()
         if content:
             return content
+    except Exception:
+        # A read cache must never make the Explain in Detail action fail.  The
+        # vector store can still serve older entries, and a fresh explanation
+        # can be created if neither storage layer is available.
+        logger.exception("Could not load relational detail explanation")
+
+    try:
+        for row in _get_detail_explanation_store().get_by_ids([key]):
+            content = str(row.get("content") or "").strip()
+            if content:
+                return content
+    except Exception:
+        logger.exception("Could not load legacy vector detail explanation")
     return None
 
 
@@ -635,8 +678,15 @@ def save_detail_explanation(
     year_group: int,
     *,
     is_eleven_plus: bool = False,
+    model_used: Optional[str] = None,
 ) -> Dict[str, str]:
-    """Persist reusable explanations once so later pupils reuse them."""
+    """Persist reusable explanations once so later pupils reuse them.
+
+    The relational store is the durable, low-latency lookup path.  We also
+    keep writing to the vector collection for existing admin tooling and
+    legacy records.  A temporary failure in either store does not discard a
+    successful explanation or turn a child's request into an error.
+    """
     materialised = list(records or [])
     clean_records = []
     for record in materialised:
@@ -656,21 +706,68 @@ def save_detail_explanation(
     if not clean_records:
         return {}
 
-    store = _get_detail_explanation_store()
-    embedding_dimension = int(getattr(store, "embedding_dimension", 384))
-    fixed_embedding = [1.0] + [0.0] * (embedding_dimension - 1)
-    store.add_documents_if_absent(
-        texts=[explanation for _, _, explanation in clean_records],
-        metadatas=[
-            {"kind": "detail_explanation", "schema_version": 1}
-            for _ in clean_records
-        ],
-        ids=[key for key, _, _ in clean_records],
-        embeddings=[list(fixed_embedding) for _ in clean_records],
-    )
-    saved: Dict[str, str] = {}
+    # Insert-once relational storage makes concurrent first requests stable:
+    # if another worker saved a response first, use that original text rather
+    # than overwriting it with a second LLM response.
+    selected_records = []
+    relational_saved_keys = set()
+    try:
+        from .webapp.explanation_store import save_explanation
+    except Exception:
+        logger.exception("Could not persist relational detail explanation")
+        save_explanation = None
+
     for key, question, explanation in clean_records:
-        saved[key] = explanation
+        selected = explanation
+        if save_explanation is not None:
+            try:
+                row = save_explanation(
+                    detail_explanation_storage_key(
+                        question, subject, year_group, is_eleven_plus=is_eleven_plus
+                    ),
+                    subject=subject,
+                    year_group=year_group,
+                    is_eleven_plus=is_eleven_plus,
+                    explanation=explanation,
+                    model_used=model_used,
+                )
+                stored = str((row or {}).get("explanation") or "").strip()
+                if stored:
+                    selected = stored
+                relational_saved_keys.add(key)
+            except Exception:
+                # Keep this one record available to the vector-store fallback
+                # while allowing the rest of a multi-question response to be
+                # saved normally.
+                logger.exception("Could not persist relational detail explanation")
+        selected_records.append((key, question, selected))
+
+    vector_saved = False
+    try:
+        store = _get_detail_explanation_store()
+        embedding_dimension = int(getattr(store, "embedding_dimension", 384))
+        fixed_embedding = [1.0] + [0.0] * (embedding_dimension - 1)
+        store.add_documents_if_absent(
+            texts=[explanation for _, _, explanation in selected_records],
+            metadatas=[
+                {
+                    "kind": "detail_explanation",
+                    "schema_version": 1,
+                    "model_used": str(model_used or "")[:160],
+                }
+                for _ in selected_records
+            ],
+            ids=[key for key, _, _ in selected_records],
+            embeddings=[list(fixed_embedding) for _ in selected_records],
+        )
+        vector_saved = True
+    except Exception:
+        logger.exception("Could not persist legacy vector detail explanation")
+
+    saved: Dict[str, str] = {}
+    for key, _question, explanation in selected_records:
+        if key in relational_saved_keys or vector_saved:
+            saved[key] = explanation
     return saved
 
 

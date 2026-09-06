@@ -176,3 +176,61 @@ def test_kid_avatar_grows_with_age_and_plays_safely(
     )).to_be_visible()
     expect(page.locator("#logout-link")).to_be_hidden()
     assert len(session_requests) - requests_before_app == 1
+
+
+def test_character_customiser_can_find_and_request_a_study_buddy(
+    page: Page,
+    e2e_base_url: str,
+    fulfil_json,
+) -> None:
+    avatar = {
+        "profile": {
+            "character": "girl",
+            "clothes": "pink_dress",
+            "bottoms": "pink_dress",
+            "shoes": "trainers",
+            "skin_tone": "warm",
+            "hair_colour": "red",
+            "hair_length": "long",
+            "hair_style": "ponytail",
+            "eye_shape": "round",
+            "eye_colour": "green",
+            "nose": "button",
+            "mouth": "smile",
+            "eyebrows": "soft",
+            "customised": True,
+        },
+        "growth": {"lifetime_xp": 120},
+        "badges": {"all": []},
+    }
+
+    page.route(
+        "**/api/rewards/avatar",
+        lambda route: fulfil_json(
+            route,
+            {"success": True, "learner": {"age": 8, "year_group": 3}, "avatar": avatar},
+        ),
+    )
+    page.route(
+        "**/api/study-buddies/search",
+        lambda route: fulfil_json(
+            route,
+            {"students": [{"student_id": "friend_1", "nickname": "Rory", "year_group": 3}]},
+        ),
+    )
+    page.route(
+        "**/api/study-buddies/request",
+        lambda route: fulfil_json(route, {"id": "request_1", "status": "pending"}),
+    )
+
+    page.goto(f"{e2e_base_url}/character-customise", wait_until="domcontentloaded")
+    search = page.get_by_label("Your friend's Buddy Code")
+    expect(search).to_be_visible()
+    search.fill("RORY4821")
+    page.get_by_role("button", name="Find my friend", exact=True).click()
+    expect(page.get_by_text("Rory", exact=True)).to_be_visible()
+
+    page.get_by_role("button", name="Send buddy request", exact=True).click()
+    expect(page.locator("#study-buddy-search-status")).to_have_text(
+        "Buddy request sent! Both families need to say yes."
+    )

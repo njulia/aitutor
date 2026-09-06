@@ -16,25 +16,25 @@ def test_reward_page_is_age_appropriate_and_parent_controlled() -> None:
     assert 'id="gift-access-plan-link"' not in page
     assert "free beta access do not include physical gifts" in page
     assert "Parent account password" in page
-    assert "Homework Magic sticker pack, pen or notebook" in page
-    assert "Adult recipient's name" in page
-    assert "adult recipient's UK" in page
+    assert "Choose a reward your grown-up has set." in page
+    assert "Gift Points are used only when a grown-up says yes." in page
     # 自定义礼物请求表单已添加（孩子可以向家长请求礼物）
     assert "custom-request-form" in page
+    assert "My family rewards" in page
+    assert 'id="catalog-grid"' in page
     assert "/api/rewards" in script
     assert "delivery_address" in script
     assert "wallet.gift_points" in script
     assert "gift_access.eligible" in script
     assert "button.textContent = 'Ask a grown-up'" in script
     assert "A grown-up manages Gift Points, gifts and plans" in script
-    assert "/static/js/rewards.js?v=20260729-reward-dom-sync" in page
+    assert "/static/js/rewards.js?v=20260904-family-rewards-1" in page
     assert "if (legacyPlanLink) legacyPlanLink.remove();" in script
     assert "planLink.hidden" not in script
     assert "wallet.spendable_xp" not in script
     assert "textContent" in script
     assert "https://" not in script
-    assert "Earn Gift Points and claim branded gifts" in pricing
-    assert "Gift Points are not included" in pricing
+    assert 'href="/rewards"' in pricing
 
 
 def test_admin_has_a_protected_gift_fulfilment_page() -> None:

@@ -28,8 +28,13 @@ from .account_store import (
     get_account,
     get_account_by_stripe_customer_id,
     get_active_subscription,
+    get_plan_settings,
+    historical_plan_for_price,
     get_subscription_by_stripe_id,
+    list_plan_settings,
+    remember_plan_price,
     redeem_beta_access,
+    save_plan_settings,
     set_stripe_customer,
     upsert_stripe_subscription,
 )
@@ -132,7 +137,56 @@ def _stripe():
 
 def _plans() -> Dict[str, str]:
     candidates = {name: os.getenv(env_name, "") for name, env_name in PLAN_ENV_VARS.items()}
+    for setting in list_plan_settings():
+        if setting.get("stripe_price_id"):
+            candidates[setting["plan"]] = setting["stripe_price_id"]
     return {name: price for name, price in candidates.items() if price}
+
+
+def _plan_expectation(plan: str) -> Dict[str, Any]:
+    """Return the amount and cadence Checkout must verify for a plan."""
+    if plan == TRIAL_PLAN:
+        return PLAN_EXPECTATIONS[TRIAL_PLAN]
+    setting = get_plan_settings(plan)
+    return {
+        "currency": "gbp",
+        "unit_amount": setting["price_pence"],
+        "interval": "month",
+    }
+
+
+def public_plan_catalog() -> list[Dict[str, Any]]:
+    """Public, non-personal pricing details for the parent pricing page."""
+    feature_copy = {
+        "homework_monthly": [
+            "Everyday primary homework support",
+            "Quick Review with simple feedback",
+            "Up to {max_children} child profiles",
+        ],
+        "elevenplus_monthly": [
+            "Everything in Homework Premium",
+            "11+ topic practice and mock exams",
+            "Up to {max_children} child profiles",
+        ],
+        "school_homework_monthly": [
+            "Homework support for larger groups",
+            "Parent-managed learning profiles",
+            "Up to {max_children} child profiles",
+        ],
+    }
+    return [
+        {
+            "plan": setting["plan"],
+            "name": setting["name"],
+            "price_pence": setting["price_pence"],
+            "max_children": setting["max_students"],
+            "features": [
+                item.format(max_children=setting["max_students"])
+                for item in feature_copy[setting["plan"]]
+            ],
+        }
+        for setting in list_plan_settings()
+    ]
 
 
 def _pricing_table_id() -> str:
@@ -292,9 +346,14 @@ def _configured_plan_for_price(price_id: Optional[str], declared_plan: Optional[
         for name, configured_id in _plans().items()
         if configured_id == clean_price_id
     ]
-    if len(matches) != 1:
-        raise ValueError("Stripe subscription uses an unknown or ambiguous Price ID")
-    resolved = matches[0]
+    if len(matches) == 1:
+        resolved = matches[0]
+    elif not matches:
+        resolved = historical_plan_for_price(clean_price_id)
+        if not resolved:
+            raise ValueError("Stripe subscription uses an unknown Price ID")
+    else:
+        raise ValueError("Stripe subscription uses an ambiguous Price ID")
     if declared_plan and declared_plan != resolved:
         raise ValueError("Stripe subscription plan metadata does not match its Price ID")
     return resolved
@@ -502,17 +561,96 @@ def _validate_stripe_price(stripe: Any, plan: str, price_id: str) -> None:
             raise RuntimeError(f"Stripe Price for {plan} is inactive")
         if bool(_object_value(price, "livemode", False)) != _expected_livemode():
             raise RuntimeError(f"Stripe Price for {plan} is in the wrong mode")
-        expected = PLAN_EXPECTATIONS.get(plan)
-        if expected:
-            recurring = _object_value(price, "recurring")
-            interval = _object_value(recurring, "interval") if recurring else None
-            if str(_object_value(price, "currency", "")).lower() != expected["currency"]:
-                raise RuntimeError(f"Stripe Price for {plan} must use GBP")
-            if _object_value(price, "unit_amount") != expected["unit_amount"]:
-                raise RuntimeError(f"Stripe Price for {plan} does not match the advertised amount")
-            if interval != expected["interval"]:
-                raise RuntimeError(f"Stripe Price for {plan} has the wrong billing interval")
+        expected = _plan_expectation(plan)
+        recurring = _object_value(price, "recurring")
+        interval = _object_value(recurring, "interval") if recurring else None
+        if str(_object_value(price, "currency", "")).lower() != expected["currency"]:
+            raise RuntimeError(f"Stripe Price for {plan} must use GBP")
+        if _object_value(price, "unit_amount") != expected["unit_amount"]:
+            raise RuntimeError(f"Stripe Price for {plan} does not match the advertised amount")
+        if interval != expected["interval"]:
+            raise RuntimeError(f"Stripe Price for {plan} has the wrong billing interval")
         _validated_prices.add(cache_key)
+
+
+def update_paid_plan_settings(
+    plan: str,
+    *,
+    price_pence: int,
+    max_students: int,
+) -> Dict[str, Any]:
+    """Save plan settings and replace Stripe's immutable Price when needed."""
+    current = get_plan_settings(plan)
+    next_price = int(price_pence)
+    next_max_students = int(max_students)
+    if next_price == current["price_pence"]:
+        return save_plan_settings(
+            plan,
+            price_pence=next_price,
+            max_students=next_max_students,
+        )
+    if not _billing_enabled():
+        raise RuntimeError("Stripe billing must be enabled before changing a plan price")
+
+    old_price_id = str(current.get("stripe_price_id") or _plans().get(plan) or "").strip()
+    if not old_price_id.startswith("price_"):
+        raise RuntimeError("This plan does not have a configured Stripe Price")
+    stripe = _stripe()
+    old_price = stripe.Price.retrieve(old_price_id)
+    recurring = _object_value(old_price, "recurring", {}) or {}
+    if str(_object_value(old_price, "currency", "")).lower() != "gbp":
+        raise RuntimeError("The current Stripe Price must use GBP")
+    if str(_object_value(recurring, "interval", "")) != "month":
+        raise RuntimeError("The current Stripe Price must renew monthly")
+    product = _object_value(old_price, "product")
+    product_id = str(_object_value(product, "id", product) or "")
+    if not product_id.startswith("prod_"):
+        raise RuntimeError("The current Stripe Price has no valid product")
+
+    metadata = dict(_object_value(old_price, "metadata", {}) or {})
+    metadata.update({"homework_magic_plan": plan, "plan": plan})
+    create_args: Dict[str, Any] = {
+        "product": product_id,
+        "currency": "gbp",
+        "unit_amount": next_price,
+        "recurring": {"interval": "month"},
+        "metadata": metadata,
+        "nickname": f"{current['name']} £{next_price / 100:.2f} monthly",
+        "idempotency_key": f"admin-plan-price-{plan}-{old_price_id}-{next_price}",
+    }
+    interval_count = _object_value(recurring, "interval_count")
+    if isinstance(interval_count, int) and interval_count > 1:
+        create_args["recurring"]["interval_count"] = interval_count
+    tax_behavior = str(_object_value(old_price, "tax_behavior", "") or "")
+    if tax_behavior in {"inclusive", "exclusive", "unspecified"}:
+        create_args["tax_behavior"] = tax_behavior
+    new_price = stripe.Price.create(**create_args)
+    new_price_id = str(_object_value(new_price, "id", ""))
+    if not new_price_id.startswith("price_"):
+        raise RuntimeError("Stripe did not return a valid replacement Price")
+    try:
+        remember_plan_price(plan, old_price_id)
+        saved = save_plan_settings(
+            plan,
+            price_pence=next_price,
+            max_students=next_max_students,
+            stripe_price_id=new_price_id,
+        )
+    except Exception:
+        try:
+            stripe.Price.modify(new_price_id, active=False)
+        except Exception:
+            logger.exception("Could not archive an unused replacement Stripe Price")
+        raise
+
+    _validated_prices.clear()
+    archived_previous_price = True
+    try:
+        stripe.Price.modify(old_price_id, active=False)
+    except Exception:
+        archived_previous_price = False
+        logger.exception("Plan price was updated but the previous Stripe Price could not be archived")
+    return {**saved, "archived_previous_price": archived_previous_price}
 
 
 def create_checkout(account: Dict[str, Any], plan: str) -> Dict[str, str]:
@@ -1250,7 +1388,10 @@ def build_billing_router(resolve_username):
 
     @router.get("/plans")
     async def plans():
-        return {"success": True, **public_billing_status()}
+        return JSONResponse(
+            {"success": True, "plans": public_plan_catalog()},
+            headers={"Cache-Control": "no-store, public"},
+        )
 
     @router.get("/status")
     async def status(request: Request, refresh: bool = False):

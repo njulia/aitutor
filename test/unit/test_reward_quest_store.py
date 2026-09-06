@@ -4,7 +4,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.webapp.reward_store import RewardStore, review_fingerprint
+from src.webapp.reward_store import (
+    BADGES,
+    CERTIFICATES,
+    RewardStore,
+    review_fingerprint,
+)
 
 DELIVERY_ADDRESS = {
     "recipient_name": "Alex Parent",
@@ -287,6 +292,172 @@ def test_character_avatar_customisation_persists_and_grows_with_xp(tmp_path) -> 
     with store.engine.begin() as conn:
         assert conn.execute(store.character_profiles.select()).first() is None
         assert conn.execute(store.character_bottom_profiles.select()).first() is None
+
+
+def test_avatar_certificates_match_the_rewards_dashboard_and_are_safe_without_wallet(
+    tmp_path,
+) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'avatar-certificates.db'}")
+    account_id = "acct_avatar_certificates"
+    student_id = "stu_avatar_certificates"
+
+    # A learner can open their character page before doing an activity. It
+    # should show the full locked certificate set, without needing a wallet.
+    before_learning = store.avatar_summary(
+        account_id=account_id,
+        student_id=student_id,
+        include_certificates=True,
+        include_badges=True,
+    )
+    assert [item["code"] for item in before_learning["certificates"]] == [
+        item["code"] for item in CERTIFICATES
+    ]
+    assert not any(item["unlocked"] for item in before_learning["certificates"])
+    assert len({item["title"] for item in before_learning["certificates"]}) == len(
+        before_learning["certificates"]
+    )
+    assert "badges" in before_learning
+    assert any(item["code"] == "challenge_legend" for item in before_learning["badges"]["all"])
+
+    # Set a known total directly so this test exercises the same threshold
+    # rule as Rewards without relying on unrelated activity/quest bonuses.
+    with store.engine.begin() as conn:
+        store._ensure_wallet(conn, account_id, student_id, lock=False)
+        conn.execute(
+            store.wallets.update()
+            .where(store.wallets.c.account_id == account_id)
+            .where(store.wallets.c.student_id == student_id)
+            .values(lifetime_xp=1_000)
+        )
+
+    avatar_certificates = store.avatar_summary(
+        account_id=account_id,
+        student_id=student_id,
+        include_certificates=True,
+    )["certificates"]
+    rewards_certificates = store.dashboard(
+        account_id=account_id,
+        student_id=student_id,
+    )["certificates"]
+    assert "print_url" not in avatar_certificates[0]
+    assert avatar_certificates == [
+        {key: value for key, value in item.items() if key != "print_url"}
+        for item in rewards_certificates
+    ]
+    homework_hero = next(
+        item for item in avatar_certificates if item["code"] == "homework_hero"
+    )
+    assert homework_hero["title"] == "Homework Hero"
+    assert homework_hero["threshold"] == 1_000
+    assert homework_hero["icon"] == "🦸"
+    assert homework_hero["unlocked"] is True
+
+
+def test_badge_records_are_removed_with_a_learner_or_account(tmp_path) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'badge-deletion.db'}")
+    awarded = store.award_checked_activity(
+        account_id="acct_badge_delete",
+        student_id="stu_badge_delete",
+        fingerprint=_fingerprint("badge-delete"),
+        subject="Maths",
+    )
+    assert any(item["code"] == "first_steps" for item in awarded["new_badges"])
+
+    learner_deleted = store.delete_learner(
+        account_id="acct_badge_delete",
+        student_id="stu_badge_delete",
+    )
+    assert learner_deleted["badges"] == 1
+
+    account_awarded = store.award_checked_activity(
+        account_id="acct_badge_account_delete",
+        student_id="stu_badge_account_delete",
+        fingerprint=_fingerprint("badge-account-delete"),
+        subject="Maths",
+    )
+    assert any(item["code"] == "first_steps" for item in account_awarded["new_badges"])
+    account_deleted = store.delete_account("acct_badge_account_delete")
+    assert account_deleted["badges"] == 1
+
+
+def test_badge_names_and_codes_do_not_collide_with_certificates(tmp_path) -> None:
+    del tmp_path
+    assert {item["code"] for item in BADGES}.isdisjoint(
+        item["code"] for item in CERTIFICATES
+    )
+    assert {item["title"].casefold() for item in BADGES}.isdisjoint(
+        item["title"].casefold() for item in CERTIFICATES
+    )
+
+
+def test_buddy_badges_reward_ten_challenges_and_ten_helping_turns(tmp_path) -> None:
+    del tmp_path
+    by_code = {item["code"]: item for item in BADGES}
+    assert by_code["challenge_legend"]["target"] == 10
+    assert by_code["challenge_legend"]["kind"] == "challenges_completed"
+    assert by_code["buddy_booster"]["target"] == 10
+    assert by_code["buddy_booster"]["kind"] == "buddy_helped"
+    assert by_code["learning_trailblazer"]["target"] == 25
+    assert by_code["habit_hero"]["target"] == 10
+    assert by_code["subject_superstar"]["target"] == 10
+
+
+def test_legacy_badge_codes_keep_their_achievement_visible(tmp_path) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'legacy-badge.db'}")
+    with store.engine.begin() as conn:
+        conn.execute(
+            store.badges.insert().values(
+                id="badge_legacy_homework_hero",
+                account_id="acct_legacy_badge",
+                student_id="stu_legacy_badge",
+                badge_code="homework_hero",
+                earned_at=datetime.now(UTC),
+            )
+        )
+
+    badges = store.get_badges(student_id="stu_legacy_badge")["all"]
+    practice_pal = next(item for item in badges if item["code"] == "practice_pal")
+    assert practice_pal["title"] == "Practice Pal"
+    assert practice_pal["earned"] is True
+
+
+def test_study_buddy_bonus_creates_a_wallet_and_unlocks_certificates(
+    monkeypatch, tmp_path
+) -> None:
+    store = RewardStore(f"sqlite+pysqlite:///{tmp_path / 'buddy-bonus.db'}")
+    account_id = "acct_buddy_bonus"
+    student_id = "stu_buddy_bonus"
+    monkeypatch.setattr(
+        "src.webapp.account_store.get_student",
+        lambda value: {"id": value, "account_id": account_id}
+        if value == student_id
+        else None,
+    )
+
+    update = store.award_custom_event(
+        student_id=student_id,
+        xp=1_000,
+        gift_points=0,
+        source_key="study-buddy:challenge-1:target",
+        label="A kind challenge",
+    )
+    assert update["awarded"] is True
+    assert update["lifetime_xp"] == 1_000
+    assert {item["code"] for item in update["new_certificates"]} >= {
+        "brilliant_beginner",
+        "curious_explorer",
+        "homework_hero",
+    }
+
+    repeated = store.award_custom_event(
+        student_id=student_id,
+        xp=1_000,
+        gift_points=0,
+        source_key="study-buddy:challenge-1:target",
+        label="A kind challenge",
+    )
+    assert repeated["awarded"] is False
+    assert repeated["lifetime_xp"] == 1_000
 
 
 def test_parent_approval_spends_gift_points_but_never_deducts_xp(tmp_path) -> None:

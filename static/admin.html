@@ -69,6 +69,10 @@
         .btn-sm { padding: 4px 12px; font-size: 12px; }
         .btn-outline { background: transparent; border: 1px solid #667eea; color: #667eea; }
         .btn-outline:hover { background: #667eea; color: white; }
+        .plan-setting-input { width: 118px; padding: 7px 9px; border: 1px solid #d6dbe8; border-radius: 7px; font: inherit; }
+        .plan-settings-note { color: #6b7280; font-size: 12px; line-height: 1.5; margin-top: 5px; }
+        .buddy-limit-control { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 12px; }
+        .buddy-limit-control label { color: #374151; font-size: 13px; font-weight: 600; }
 
         /* Chart placeholder */
         .chart-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
@@ -216,9 +220,9 @@
     <div class="tabs">
         <div class="tab active" onclick="switchTab('overview')">Overview</div>
         <div class="tab" onclick="switchTab('users')">Students</div>
-        <div class="tab" onclick="switchTab('mock-stats')">11+ Mock</div>
         <div class="tab" onclick="switchTab('auth-users')">Auth Users</div>
         <div class="tab" onclick="switchTab('subscriptions')">Subscriptions</div>
+        <div class="tab" onclick="switchTab('mock-stats')">11+ Mock</div>
         <div class="tab" onclick="switchTab('explanations')">Saved Explanations</div>
         <div class="tab" onclick="switchTab('schools')">School Finder</div>
         <div class="tab" onclick="switchTab('ai-monitor')">AI Monitor</div>
@@ -270,7 +274,7 @@
                             <th data-sort="parent_username" onclick="sortUsers('parent_username')">Parent <span class="sort-arrow"></span></th>
                             <th data-sort="name" onclick="sortUsers('name')">Nickname <span class="sort-arrow"></span></th>
                             <th data-sort="year_group" onclick="sortUsers('year_group')">Year <span class="sort-arrow"></span></th>
-                            <th data-sort="last_login_at" onclick="sortUsers('last_login_at')">Last LogIn <span class="sort-arrow"></span></th>
+                            <th data-sort="last_login_at" onclick="sortUsers('last_login_at')">Last Login (local time) <span class="sort-arrow"></span></th>
                             <th data-sort="total_sessions" onclick="sortUsers('total_sessions')">Sessions <span class="sort-arrow"></span></th>
                             <th data-sort="avg_score" onclick="sortUsers('avg_score')">Avg Score <span class="sort-arrow"></span></th>
                             <th data-sort="xp" onclick="sortUsers('xp')">XP <span class="sort-arrow"></span></th>
@@ -302,7 +306,7 @@
                                 <th data-mock-sort="school_or_area" onclick="sortMockStats('school_or_area')">School / area <span class="sort-arrow"></span></th>
                                 <th data-mock-sort="minutes" onclick="sortMockStats('minutes')">Minutes <span class="sort-arrow"></span></th>
                                 <th data-mock-sort="number_of_questions" onclick="sortMockStats('number_of_questions')">Questions <span class="sort-arrow"></span></th>
-                                <th data-mock-sort="student" onclick="sortMockStats('student')">Student <span class="sort-arrow"></span></th>
+                                <th data-mock-sort="students" onclick="sortMockStats('students')">Students <span class="sort-arrow"></span></th>
                                 <th data-mock-sort="attempts" onclick="sortMockStats('attempts')">Attempts <span class="sort-arrow"></span></th>
                                 <th data-mock-sort="overall_accuracy" onclick="sortMockStats('overall_accuracy')">Overall accuracy <span class="sort-arrow"></span></th>
                                 <th>Subject breakdown</th>
@@ -319,6 +323,36 @@
         <div class="panel" id="panel-subscriptions">
             <div class="stats-grid" id="subStats">
                 <div class="loading"><div class="spinner"></div></div>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>Plan settings</h3>
+                        <p class="plan-settings-note">Prices apply to new subscriptions only. Existing Stripe subscriptions keep their current agreed price. Reducing a child limit does not remove existing child profiles.</p>
+                    </div>
+                </div>
+                <table class="admin-mobile-table">
+                    <thead><tr><th>Plan</th><th>Monthly price (GBP)</th><th>Maximum children</th><th>Action</th></tr></thead>
+                    <tbody id="planSettingsTable"><tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+                </table>
+                <p id="planSettingsStatus" class="plan-settings-note" role="status" aria-live="polite"></p>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <div>
+                        <h3>Study Buddy safety limit</h3>
+                        <p class="plan-settings-note">Set the maximum number of approved Study Buddies each child can have. The default is 40. Lowering the limit does not remove existing buddies; it only stops new connections once a child is at the limit.</p>
+                    </div>
+                </div>
+                <div class="buddy-limit-control">
+                    <label for="maxBuddiesPerLearner">Maximum buddies per child</label>
+                    <input id="maxBuddiesPerLearner" class="plan-setting-input" type="number" min="1" max="100" step="1" inputmode="numeric" aria-describedby="studyBuddySettingsStatus">
+                    <button class="btn btn-primary btn-sm" id="saveMaxBuddiesPerLearner" type="button">Save buddy limit</button>
+                    <label for="maxEmojisPerLearner">Maximum kind emojis per child each day</label>
+                    <input id="maxEmojisPerLearner" class="plan-setting-input" type="number" min="1" max="100" step="1" inputmode="numeric" aria-describedby="studyBuddySettingsStatus">
+                    <button class="btn btn-primary btn-sm" id="saveMaxEmojisPerLearner" type="button">Save emoji limit</button>
+                </div>
+                <p id="studyBuddySettingsStatus" class="plan-settings-note" role="status" aria-live="polite"></p>
             </div>
             <div class="table-container">
                 <div class="table-header">
@@ -600,6 +634,20 @@
             </div>
 
             <div class="ops-card" style="margin-bottom:24px;">
+                <h3>Learning Behaviour</h3>
+                <p>Set how long a child should have to pause and think before submitting an answer for checking. This is an encouragement, not a score or behaviour tracker.</p>
+                <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                    <div style="min-width:180px;">
+                        <label for="thinkingPauseSeconds" style="display:block;font-size:13px;color:#666;margin-bottom:5px;">Thinking pause (seconds)</label>
+                        <input id="thinkingPauseSeconds" type="number" min="0" max="30" step="0.5" style="width:180px;padding:9px 12px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveThinkingPause()">Save</button>
+                </div>
+                <div class="mini-note">0 seconds turns the pause off. Maximum: 30 seconds.</div>
+                <div class="mini-note" id="thinkingPauseStatus"></div>
+            </div>
+
+            <div class="ops-card" style="margin-bottom:24px;">
                 <h3>Maintenance</h3>
                 <div class="ops-actions">
                     <button class="btn btn-outline" onclick="clearAppCache()">Clear App Cache</button>
@@ -775,7 +823,7 @@
                         <th style="width:40px"><input type="checkbox" id="selectAllAuthUsers" onchange="toggleSelectAll()" title="Select all"></th>
                         <th>Username</th>
                         <th>Created</th>
-                        <th>Last LogIn</th>
+                        <th>Last Login (local time)</th>
                         <th>Test Account</th>
                         <th>Actions</th>
                     </tr>
@@ -847,9 +895,9 @@
                 const labels = {
                     'Overview': 'overview',
                     'Students': 'users',
-                    '11+ Mock': 'mock-stats',
                     'Auth Users': 'auth-users',
                     'Subscriptions': 'subscriptions',
+                    '11+ Mock': 'mock-stats',
                     'School Finder': 'schools',
                     'AI Monitor': 'ai-monitor',
                     'Operations': 'operations'
@@ -888,6 +936,13 @@
             if (!value) return emptyLabel;
             const date = new Date(value);
             return Number.isNaN(date.getTime()) ? emptyLabel : date.toLocaleString('en-GB', { timeZone: 'Europe/London', dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        // Last-login times match the administrator's own device time zone.
+        function formatAdminLocalDateTime(value, emptyLabel = '-') {
+            if (!value) return emptyLabel;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? emptyLabel : date.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
         }
 
         // Overview
@@ -939,7 +994,7 @@
                     <td>${u.parent_username || '-'}</td>
                     <td>${u.name || 'Student'}</td>
                     <td>Year ${u.year_group}</td>
-                    <td>${formatAdminDateTime(u.last_login_at, 'Never')}</td>
+                    <td>${formatAdminLocalDateTime(u.last_login_at, 'Never')}</td>
                     <td>${u.total_sessions || 0}</td>
                     <td>${u.avg_score ? u.avg_score.toFixed(1) : '-'}</td>
                     <td>${u.xp || 0}</td>
@@ -1108,7 +1163,7 @@
                 let va = a[mockStatsSortColumn], vb = b[mockStatsSortColumn];
                 if (va == null) va = '';
                 if (vb == null) vb = '';
-                if (mockStatsSortColumn === 'mock_name' || mockStatsSortColumn === 'school_or_area' || mockStatsSortColumn === 'student') {
+                if (mockStatsSortColumn === 'mock_name' || mockStatsSortColumn === 'school_or_area') {
                     return mockStatsSortDir * String(va).localeCompare(String(vb));
                 }
                 if (mockStatsSortColumn === 'last_taken_at') {
@@ -1131,7 +1186,7 @@
                     <td>${escapeHtml(row.school_or_area)}</td>
                     <td>${Number(row.minutes || 0)}</td>
                     <td>${Number(row.number_of_questions || 0)}</td>
-                    <td style="min-width:220px;line-height:1.6;">${(row.student || []).map(name => `<div>${escapeHtml(name)}</div>`).join('') || '-'}</td>
+                    <td>${Number(row.students || 0)}</td>
                     <td>${Number(row.attempts || 0)}</td>
                     <td><strong>${Number(row.overall_accuracy || 0).toFixed(1)}%</strong></td>
                     <td style="min-width:260px;line-height:1.8;">${breakdown || '-'}</td>
@@ -1383,7 +1438,191 @@
             } catch (err) { console.error(err); alert(err.message || 'Could not delete explanation.'); }
         }
 
+        function setPlanSettingsStatus(message, isError = false) {
+            const status = document.getElementById('planSettingsStatus');
+            if (!status) return;
+            status.textContent = message;
+            status.style.color = isError ? '#c53030' : '#26754f';
+        }
+
+        function moneyToPence(value) {
+            const amount = Number(value);
+            if (!Number.isFinite(amount)) return null;
+            const pence = Math.round(amount * 100);
+            return Math.abs(amount * 100 - pence) < 0.000001 ? pence : null;
+        }
+
+        function renderPlanSettings(plans) {
+            const tbody = document.getElementById('planSettingsTable');
+            if (!tbody) return;
+            tbody.replaceChildren();
+            plans.forEach((plan) => {
+                const row = document.createElement('tr');
+                const planCell = document.createElement('td');
+                planCell.dataset.label = 'Plan';
+                const title = document.createElement('strong');
+                title.textContent = plan.name || plan.plan;
+                planCell.appendChild(title);
+
+                const priceCell = document.createElement('td');
+                priceCell.dataset.label = 'Monthly price';
+                const priceInput = document.createElement('input');
+                priceInput.className = 'plan-setting-input';
+                priceInput.type = 'number';
+                priceInput.min = '0.50';
+                priceInput.max = '9999.99';
+                priceInput.step = '0.01';
+                priceInput.value = (Number(plan.price_pence) / 100).toFixed(2);
+                priceInput.setAttribute('aria-label', `${plan.name} monthly price in pounds`);
+                priceCell.appendChild(priceInput);
+
+                const childrenCell = document.createElement('td');
+                childrenCell.dataset.label = 'Maximum children';
+                const childrenInput = document.createElement('input');
+                childrenInput.className = 'plan-setting-input';
+                childrenInput.type = 'number';
+                childrenInput.min = '1';
+                childrenInput.max = '1000';
+                childrenInput.step = '1';
+                childrenInput.value = String(plan.max_students);
+                childrenInput.setAttribute('aria-label', `${plan.name} maximum children`);
+                childrenCell.appendChild(childrenInput);
+
+                const actionCell = document.createElement('td');
+                actionCell.dataset.label = '';
+                const save = document.createElement('button');
+                save.type = 'button';
+                save.className = 'btn btn-primary btn-sm';
+                save.textContent = 'Save';
+                save.addEventListener('click', () => savePlanSettings(plan.plan, priceInput, childrenInput, save));
+                actionCell.appendChild(save);
+                row.append(planCell, priceCell, childrenCell, actionCell);
+                tbody.appendChild(row);
+            });
+        }
+
+        async function loadPlanSettings() {
+            try {
+                const data = await api('/plan-settings');
+                renderPlanSettings(Array.isArray(data.plans) ? data.plans : []);
+            } catch (error) {
+                const tbody = document.getElementById('planSettingsTable');
+                if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="color:#c53030">${escapeHtml(error.message || 'Could not load plan settings.')}</td></tr>`;
+            }
+        }
+
+        function setStudyBuddySettingsStatus(message, isError = false) {
+            const status = document.getElementById('studyBuddySettingsStatus');
+            if (!status) return;
+            status.textContent = message;
+            status.style.color = isError ? '#c53030' : '#26754f';
+        }
+
+        async function loadStudyBuddySettings() {
+            const buddyInput = document.getElementById('maxBuddiesPerLearner');
+            const emojiInput = document.getElementById('maxEmojisPerLearner');
+            if (!buddyInput || !emojiInput) return;
+            try {
+                const data = await api('/study-buddy-settings');
+                const buddyLimit = Number(data?.settings?.max_buddies_per_learner);
+                const emojiLimit = Number(data?.settings?.max_emojis_per_learner);
+                buddyInput.value = Number.isInteger(buddyLimit) ? String(buddyLimit) : '40';
+                emojiInput.value = Number.isInteger(emojiLimit) ? String(emojiLimit) : '40';
+            } catch (error) {
+                setStudyBuddySettingsStatus(error.message || 'Could not load the Study Buddy limits.', true);
+            }
+        }
+
+        async function saveStudyBuddySettings(settingName) {
+            const isEmojiLimit = settingName === 'max_emojis_per_learner';
+            const input = document.getElementById(
+                isEmojiLimit ? 'maxEmojisPerLearner' : 'maxBuddiesPerLearner'
+            );
+            const button = document.getElementById(
+                isEmojiLimit ? 'saveMaxEmojisPerLearner' : 'saveMaxBuddiesPerLearner'
+            );
+            if (!input || !button) return;
+            const limit = Number(input.value);
+            if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+                setStudyBuddySettingsStatus('Enter a whole number from 1 to 100.', true);
+                input.focus();
+                return;
+            }
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Saving…';
+            setStudyBuddySettingsStatus(`Saving ${isEmojiLimit ? 'kind emoji' : 'Study Buddy'} limit…`);
+            try {
+                const response = await fetch(`${API}/study-buddy-settings`, {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+                    body: JSON.stringify({[settingName]: limit}),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.detail || 'Could not save the Study Buddy limit.');
+                document.getElementById('maxBuddiesPerLearner').value = String(data.settings.max_buddies_per_learner);
+                document.getElementById('maxEmojisPerLearner').value = String(data.settings.max_emojis_per_learner);
+                setStudyBuddySettingsStatus(isEmojiLimit
+                    ? 'Saved. This is the number of kind emojis each child can send each day.'
+                    : 'Saved. This applies to new buddy requests and approvals.');
+            } catch (error) {
+                setStudyBuddySettingsStatus(error.message || 'Could not save that Study Buddy limit.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+            }
+        }
+
+        document.getElementById('saveMaxBuddiesPerLearner')?.addEventListener(
+            'click', () => saveStudyBuddySettings('max_buddies_per_learner')
+        );
+        document.getElementById('saveMaxEmojisPerLearner')?.addEventListener(
+            'click', () => saveStudyBuddySettings('max_emojis_per_learner')
+        );
+
+        async function savePlanSettings(plan, priceInput, childrenInput, button) {
+            const pricePence = moneyToPence(priceInput.value);
+            const maxStudents = Number(childrenInput.value);
+            if (!Number.isInteger(pricePence) || pricePence < 50 || pricePence > 999999) {
+                setPlanSettingsStatus('Enter a price from £0.50 to £9,999.99.', true);
+                priceInput.focus();
+                return;
+            }
+            if (!Number.isInteger(maxStudents) || maxStudents < 1 || maxStudents > 1000) {
+                setPlanSettingsStatus('Enter a whole number from 1 to 1,000 children.', true);
+                childrenInput.focus();
+                return;
+            }
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Saving…';
+            setPlanSettingsStatus('Saving plan settings…');
+            try {
+                const response = await fetch(`${API}/plan-settings/${encodeURIComponent(plan)}`, {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+                    body: JSON.stringify({price_pence: pricePence, max_students: maxStudents})
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.detail || 'Could not save plan settings.');
+                const suffix = data.plan.archived_previous_price === false
+                    ? ' The previous Stripe price could not be archived automatically.'
+                    : '';
+                setPlanSettingsStatus('Plan saved. New price applies to new subscriptions only.' + suffix, data.plan.archived_previous_price === false);
+                await loadSubscriptions(false);
+            } catch (error) {
+                setPlanSettingsStatus(error.message || 'Could not save plan settings.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+            }
+        }
+
         async function loadSubscriptions(refreshStripe = true) {
+            loadPlanSettings();
+            loadStudyBuddySettings();
             try {
                 const data = await api(`/subscriptions?refresh=${refreshStripe ? 'true' : 'false'}`);
                 const stripeSync = data.stripe_sync || {};
@@ -1682,7 +1921,7 @@
                     <td><input type="checkbox" class="auth-user-checkbox" value="${escapeHtml(u.username)}" onchange="updateBroadcastButton()"></td>
                     <td><code>${escapeHtml(u.username)}</code></td>
                     <td>${formatAdminDateTime(u.created_at)}</td>
-                    <td>${formatAdminDateTime(u.last_login_at, 'Never')}</td>
+                    <td>${formatAdminLocalDateTime(u.last_login_at, 'Never')}</td>
                     <td>${u.is_test ? '<span class="badge badge-blue">Test</span>' : '<span class="badge">Regular</span>'}</td>
                     <td>
                         <button class="btn btn-sm" onclick="toggleTest('${escapeHtml(u.username)}', ${u.is_test ? 'false' : 'true'})">${u.is_test ? 'Unmark Test' : 'Mark Test'}</button>
@@ -2507,7 +2746,8 @@
                     api('/embedding-cache/stats'),
                     api('/voice-usage-stats'),
                     api('/dev-mode-status'),
-                    api('/marketing-summary?days=30')
+                    api('/marketing-summary?days=30'),
+                    api('/thinking-pause')
                 ]);
                 const get = i => results[i].status === 'fulfilled' ? results[i].value : null;
                 const overview = get(0) || {};
@@ -2516,6 +2756,9 @@
                 const voice = get(3) || {};
                 const dev = get(4) || {};
                 const marketing = get(5) || {};
+                const thinkingPause = get(6) || {};
+                const thinkingPauseInput = document.getElementById('thinkingPauseSeconds');
+                if (thinkingPauseInput && thinkingPause.seconds !== undefined) thinkingPauseInput.value = thinkingPause.seconds;
                 const sessions = overview.sessions || {};
                 const aiRequests = Number(ai.request_count ?? ai.requests ?? 0);
                 const aiErrors = Number(ai.error_count ?? ai.errors ?? 0);
@@ -2552,6 +2795,30 @@
             } catch(e) {
                 stats.innerHTML = `<div class="stat-card"><div class="label">Operations</div><div class="value" style="font-size:14px;color:#c53030">${escapeHtml(e.message)}</div></div>`;
                 health.innerHTML = `<div style="color:#c53030;font-size:13px">${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        async function saveThinkingPause(){
+            const input = document.getElementById('thinkingPauseSeconds');
+            const status = document.getElementById('thinkingPauseStatus');
+            const value = Number(input && input.value);
+            if (!Number.isFinite(value) || value < 0 || value > 30) {
+                status.textContent = 'Please enter a value from 0 to 30 seconds.';
+                status.style.color = '#c53030';
+                return;
+            }
+            try {
+                const data = await api('/thinking-pause', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({seconds: value})
+                });
+                input.value = data.seconds;
+                status.textContent = `Saved. Children will use a ${data.seconds}-second thinking pause.`;
+                status.style.color = '#1a8a4a';
+            } catch (e) {
+                status.textContent = 'Could not save the thinking pause. Please try again.';
+                status.style.color = '#c53030';
             }
         }
 

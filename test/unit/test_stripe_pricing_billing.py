@@ -247,7 +247,7 @@ def test_pricing_page_uses_server_created_checkout_without_remote_stripe_script(
     page_path = project_page if project_page.is_file() else Path(__file__).with_name("pricing.html")
     page = page_path.read_text(encoding="utf-8")
 
-    assert "£9.99 GBP / month" in page
+    assert 'id="pricing-plans"' in page
     assert "/static/js/pricing.js" in page
     assert "js.stripe.com" not in page
     assert "pricing-table-id" not in page

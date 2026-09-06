@@ -484,6 +484,28 @@ body.hm-app {
 .app-welcome p { margin: 5px 0 0; color: #665117; }
 .app-welcome-tip { padding: 9px 12px; border-radius: 13px; color: #216157; background: #fff; font-size: .88rem; font-weight: 850; white-space: nowrap; }
 
+.parent-child-login-guide {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 2px solid var(--hm-ink);
+  border-radius: 21px;
+  color: var(--hm-ink);
+  background: #edf8ff;
+  box-shadow: 0 5px 0 #b5dcf4;
+}
+.parent-child-login-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: #fff; font-size: 1.7rem; }
+.parent-child-login-guide h2 { margin: 0; font-size: 1.05rem; }
+.parent-child-login-guide p { margin: 4px 0 0; color: #36536b; font-size: .91rem; line-height: 1.45; }
+.parent-child-login-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.parent-child-login-link { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 11px; border: 1.5px solid var(--hm-ink); border-radius: 12px; color: var(--hm-ink); background: #fff; font-size: .84rem; font-weight: 850; text-align: center; text-decoration: none; }
+.parent-child-login-link:hover { color: var(--hm-ink); background: var(--hm-sun-soft); }
+.parent-child-login-link-primary { color: #fff; background: var(--hm-purple); box-shadow: 0 3px 0 var(--hm-purple-dark); }
+.parent-child-login-link-primary:hover { color: #fff; background: var(--hm-purple-dark); }
+
 .hm-app .tabs {
   margin-bottom: 22px;
   padding: 9px;
@@ -797,6 +819,8 @@ body.hm-eleven { background: #f8f7ff; }
   .hm-footer-grid { grid-template-columns: 1fr; }
   .app-welcome { grid-template-columns: auto 1fr; }
   .app-welcome-tip { grid-column: 1 / -1; width: fit-content; }
+  .parent-child-login-guide { grid-template-columns: auto minmax(0, 1fr); }
+  .parent-child-login-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .hm-app .tabs { flex-wrap: nowrap; overflow-x: auto; }
   .hm-app .tab { flex: 0 0 auto; }
   .hm-app .homework-grid,
@@ -831,6 +855,8 @@ body.hm-eleven { background: #f8f7ff; }
   .hm-float-pencil { display: none; }
   .app-welcome { padding: 18px; }
   .app-welcome-icon { width: 48px; height: 48px; }
+  .parent-child-login-guide { gap: 12px; padding: 16px; }
+  .parent-child-login-icon { width: 46px; height: 46px; font-size: 1.5rem; }
   .hm-app .container { padding-inline: 12px; }
   .hm-app .card { padding: 20px 16px; }
   .hm-register .register-container { padding: 26px 20px; }

@@ -797,8 +797,16 @@ def get_mistake_questions(
     student_id: str,
     *,
     subject: Optional[str] = None,
+    topic: Optional[str] = None,
     limit: int = 12,
 ) -> List[Dict[str, Any]]:
+    """Return saved 11+ questions, optionally narrowed to one topic.
+
+    All 11+ learning routes write to the same ``mistake_questions`` bank, so
+    this deliberately does not filter by ``source_type``.  A child can revise
+    every question they found tricky in a topic, whether it came from regular
+    practice, Topic Mastery, the Year-Round Plan, or a mock exam.
+    """
     clean_student = str(student_id or "").strip()
     if not clean_student or clean_student.startswith("anon_"):
         return []
@@ -807,6 +815,8 @@ def get_mistake_questions(
         query = select(mistake_questions).where(mistake_questions.c.student_id == clean_student)
         if subject:
             query = query.where(mistake_questions.c.subject == str(subject)[:80])
+        if topic:
+            query = query.where(mistake_questions.c.topic == str(topic)[:160])
         rows = conn.execute(
             query.order_by(
                 mistake_questions.c.next_review_at.asc(),
@@ -828,6 +838,36 @@ def get_mistake_questions(
         item.pop("explanation", None)
         result.append(item)
     return result
+
+
+def get_mistake_topic_counts(student_id: str) -> List[Dict[str, Any]]:
+    """Count a child's complete 11+ mistake bank by subject and topic.
+
+    The response intentionally aggregates every source type.  It gives the
+    11+ Mistakes page a stable topic picker without exposing answer keys.
+    """
+    clean_student = str(student_id or "").strip()
+    if not clean_student or clean_student.startswith("anon_"):
+        return []
+    with _engine.connect() as conn:
+        rows = conn.execute(
+            select(
+                mistake_questions.c.subject,
+                mistake_questions.c.topic,
+                func.count().label("count"),
+            )
+            .where(mistake_questions.c.student_id == clean_student)
+            .group_by(mistake_questions.c.subject, mistake_questions.c.topic)
+            .order_by(mistake_questions.c.subject.asc(), mistake_questions.c.topic.asc())
+        ).all()
+    return [
+        {
+            "subject": str(row._mapping["subject"] or "11+"),
+            "topic": str(row._mapping["topic"] or "General"),
+            "count": int(row._mapping["count"] or 0),
+        }
+        for row in rows
+    ]
 
 
 def get_mistake_subject_counts(student_id: str) -> Dict[str, int]:

@@ -413,6 +413,147 @@
   text-align: center;
 }
 
+.hm-char-study-buddy {
+  margin-top: 28px;
+  padding: 20px;
+  border: 2px solid #cce7de;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #f5fffb, #f7f6ff);
+  box-shadow: 0 8px 24px rgba(57, 117, 100, .09);
+}
+
+.hm-char-study-buddy-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.hm-char-study-buddy-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #d9f7ed;
+  font-size: 1.35rem;
+}
+
+.hm-char-study-buddy h2 {
+  margin: 0;
+  color: #264c46;
+  font-size: 1.1rem;
+}
+
+.hm-char-study-buddy-heading p,
+.hm-char-study-buddy-help {
+  margin: 4px 0 0;
+  color: #526b66;
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.hm-char-study-buddy-form {
+  margin-top: 16px;
+}
+
+.hm-char-study-buddy-form label {
+  display: block;
+  margin-bottom: 5px;
+  color: #264c46;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.hm-char-study-buddy-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.hm-char-study-buddy-search-row input {
+  min-width: 0;
+  flex: 1 1 220px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 2px solid #b8d9cf;
+  border-radius: 11px;
+  color: var(--hm-ink);
+  background: #fff;
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.hm-char-study-buddy-search-row input:focus-visible {
+  outline: 3px solid #79c9b3;
+  outline-offset: 2px;
+}
+
+.hm-char-study-buddy-search-row .hm-char-customise-btn {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.hm-char-study-buddy-status {
+  min-height: 20px;
+  margin-top: 10px;
+  color: #355f55;
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+.hm-char-study-buddy-status[data-state="error"] {
+  color: var(--hm-danger);
+}
+
+.hm-char-study-buddy-results {
+  display: grid;
+  gap: 8px;
+}
+
+.hm-char-study-buddy-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1.5px solid #cce7de;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.hm-char-study-buddy-result strong,
+.hm-char-study-buddy-result span {
+  display: block;
+}
+
+.hm-char-study-buddy-result strong {
+  color: #264c46;
+  font-size: .9rem;
+}
+
+.hm-char-study-buddy-result span {
+  margin-top: 2px;
+  color: #637570;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.hm-char-study-buddy-request {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.hm-char-study-buddy-link {
+  display: inline-block;
+  margin-top: 14px;
+  color: #3f38a5;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
 /* Responsive */
 @media (max-width: 680px) {
   .hm-char-customise-layout {
@@ -434,9 +575,49 @@
   .hm-char-preview-orbit-one { top: 40px; width: 220px; }
   .hm-char-preview-orbit-two { top: 84px; width: 190px; }
   .hm-char-reaction-buttons { max-width: 280px; }
+  .hm-char-study-buddy { padding: 16px; }
+  .hm-char-study-buddy-search-row { flex-direction: column; }
+  .hm-char-study-buddy-search-row .hm-char-customise-btn { width: 100%; }
+  .hm-char-study-buddy-result { align-items: stretch; flex-direction: column; }
+  .hm-char-study-buddy-request { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hm-char-preview-orbit { display: none; }
   .hm-char-reaction-buttons button { transform: none !important; }
 }
+
+
+.hm-character-badges {
+  width: min(100%, 420px);
+  margin: 8px auto 0;
+  padding: 10px;
+  border: 1px solid rgba(80, 70, 180, .12);
+  border-radius: 14px;
+  background: rgba(255,255,255,.72);
+  text-align: left;
+}
+.hm-character-badges h2 { margin: 0; font-size: .95rem; }
+.hm-character-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+.hm-character-badge {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 4px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e6ef;
+  text-align: center;
+}
+.hm-character-badge span { font-size: 1.35rem; }
+.hm-character-badge strong { font-size: .67rem; line-height: 1.1; }
+.hm-character-badge small { font-size: .6rem; color: #667085; }
+.hm-character-badge.locked { opacity: .48; filter: grayscale(.4); }
+@media (max-width: 420px) { .hm-character-badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

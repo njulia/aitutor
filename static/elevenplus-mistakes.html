@@ -15,7 +15,7 @@
 .card{background:#fff;border-radius:18px;padding:26px;box-shadow:0 4px 18px rgba(40,20,70,.08);margin-bottom:18px}.hero{background:linear-gradient(135deg,#645bd4,#7d55b7);color:#fff;border-radius:22px;padding:32px;box-shadow:0 14px 38px rgba(36,48,71,.14);margin-bottom:18px}.hero h1{margin:0 0 10px;font-size:clamp(2rem,4vw,3rem);color:#fff}.hero p{margin:7px 0;color:rgba(255,255,255,.92);font-size:1.06rem}.muted{color:var(--muted)}
 .topic-section h2{margin:0 0 5px}.topic-section p{margin:0 0 18px;color:var(--muted)}.topic-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.topic-btn{min-height:82px;border:2px solid var(--line);border-radius:16px;background:#fff;color:#4c347a;text-align:left;padding:13px 15px;cursor:pointer;font-weight:800;transition:.16s ease}.topic-btn:hover:not(:disabled){border-color:#8b6bc3;background:#faf7ff;transform:translateY(-1px)}.topic-btn.active{border-color:#6a43b5;background:#eee8f7;box-shadow:0 0 0 3px rgba(106,67,181,.1)}.topic-btn:disabled{cursor:not-allowed;opacity:.45}.topic-name{display:block;font-size:1rem}.topic-count{display:block;margin-top:5px;font-size:.86rem;color:var(--muted);font-weight:700}
 .practice-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.practice-header h2{margin:0}.page-info{color:var(--muted);font-weight:700}.question-page{display:grid;gap:22px}.question-card{background:#fff;border-radius:18px;padding:4px;box-shadow:0 4px 18px rgba(40,20,70,.06)}.question-card .multiple-choice-question{margin:0}.free-answer{width:100%;min-height:58px;padding:12px 14px;border:2px solid #d9ddea;border-radius:13px;background:#fff;color:#333642}.free-answer:focus{outline:3px solid rgba(102,126,234,.2);border-color:#667eea}
-.result{margin:14px 22px 20px;padding:13px;border-radius:12px}.result.correct{background:var(--green);color:#176044}.result.wrong{background:var(--red);color:#963943}.result.pending{background:#f5f3fa;color:#5b536b}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.btn{border:0;border-radius:12px;padding:12px 20px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.btn-primary{background:#6a43b5;color:#fff}.btn-secondary{background:#eee8f7;color:#4c347a}.btn-quiet{background:#fff;color:#5d536d;border:1px solid var(--line)}.empty{text-align:center;padding:30px}.status{margin-top:10px}
+.result{margin:14px 22px 20px;padding:13px;border-radius:12px}.result.correct{background:var(--green);color:#176044}.result.wrong{background:var(--red);color:#963943}.result.pending{background:#f5f3fa;color:#5b536b}.question-source{margin:0 22px 12px;color:var(--muted);font-size:.9rem;font-weight:700}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.btn{border:0;border-radius:12px;padding:12px 20px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.btn-primary{background:#6a43b5;color:#fff}.btn-secondary{background:#eee8f7;color:#4c347a}.btn-quiet{background:#fff;color:#5d536d;border:1px solid var(--line)}.empty{text-align:center;padding:30px}.status{margin-top:10px}
 @media(max-width:760px){.wrap{padding:18px 12px 50px}.hm-nav-wrap{align-items:flex-start}.hm-main-nav{gap:10px}.hm-main-nav a{font-size:1rem}.topic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero,.card{padding:20px}.multiple-choice-question{padding:17px}}
 @media(max-width:430px){.topic-grid{grid-template-columns:1fr}.hm-brand{font-size:1.55rem}}
 </style>
@@ -42,7 +42,7 @@
 
 <section class="hero">
 <h1>🎯 My 11+ Mistake Practice</h1>
-<p>Questions you found tricky in 11+ practice are saved here so you can practise them again.</p>
+<p>Questions you found tricky in 11+ Practice, Topic Mastery, the Year-Round Plan and Mock Exams are saved here so you can practise them again.</p>
 <p>Choose a topic area below, then work through <strong>10 questions at a time</strong>.</p>
 </section>
 
@@ -69,6 +69,7 @@ let selectedTopic='',selectedSubject='',allQuestions=[],page=0,marked=false;
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function setStatus(text){status.textContent=text;}
 function stripQuestionNumber(text){return String(text||'').replace(/^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:question\s*)?\(?\d+\)?\s*(?:[\).:\-])\s*/i,'');}
+function sourceLabel(source){return ({'11plus_practice':'11+ Practice','topic_mastery':'Topic Mastery','year_round':'Year-Round Plan','mock_exam':'Mock Exam'})[String(source||'')]||'11+ Practice';}
 function renderTopics(){
  topicGrid.innerHTML=topics.map(t=>{
   const count=Number(t.count||0);
@@ -87,7 +88,7 @@ function questionMarkup(q,number){
  }else{
   body='<input class="free-answer" type="text" aria-label="Your answer" placeholder="Type your answer">';
  }
- return `<article class="question-card" data-qid="${esc(q.id)}"><fieldset class="multiple-choice-question"><legend><span class="multiple-choice-question-number">QUESTION ${number} . ${esc(selectedTopic)}</span><span class="multiple-choice-question-text">${esc(stripQuestionNumber(q.question))}</span></legend>${body}</fieldset><div class="result pending" hidden></div></article>`;
+ return `<article class="question-card" data-qid="${esc(q.id)}"><fieldset class="multiple-choice-question"><legend><span class="multiple-choice-question-number">QUESTION ${number} . ${esc(String(selectedTopic).split('|||').pop())}</span><span class="multiple-choice-question-text">${esc(stripQuestionNumber(q.question))}</span></legend>${body}</fieldset><p class="question-source">Saved from: ${esc(sourceLabel(q.source_type))}</p><div class="result pending" hidden></div></article>`;
 }
 function renderPage(){
  const totalPages=Math.max(1,Math.ceil(allQuestions.length/PAGE_SIZE));

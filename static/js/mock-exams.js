@@ -579,23 +579,125 @@
     return payload.explanation || '';
   }
 
+  function explanationSectionKey(label) {
+    const normalised = String(label || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (normalised === 'how to solve it') return 'solve';
+    if (normalised === 'why it works' || normalised === 'why') return 'why';
+    if (normalised === 'helpful tip' || normalised === 'remember' || normalised === 'remember this') return 'tip';
+    return '';
+  }
+
+  function splitDetailedExplanationParts(explanation) {
+    // Saved explanations made before the structured prompt may use plain text,
+    // Markdown headings, or a final "Remember" line. Keep all of them useful
+    // while displaying new explanations in the same calm layout as Topic Mastery.
+    const text = String(explanation || '')
+      .replace(/^\s*(?:#{1,6}\s*)?Question\s+\d+\s*:?\s*$/gim, '')
+      .trim();
+    const headingPattern = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(How to solve it|Why it works|Helpful tip|Why|Remember(?: this)?)(?:\*\*)?\s*:?\s*$/gim;
+    const headings = [];
+    let match;
+    while ((match = headingPattern.exec(text)) !== null) {
+      headings.push({ index: match.index, end: headingPattern.lastIndex, key: explanationSectionKey(match[1]) });
+    }
+
+    const parts = { solve: '', why: '', tip: '' };
+    if (!headings.length) {
+      parts.solve = text;
+      return parts;
+    }
+
+    // Preserve any short introduction before the first labelled section.
+    parts.solve = text.slice(0, headings[0].index).trim();
+    headings.forEach(function (heading, index) {
+      const end = index + 1 < headings.length ? headings[index + 1].index : text.length;
+      const content = text.slice(heading.end, end).trim();
+      if (!heading.key || !content) return;
+      parts[heading.key] = [parts[heading.key], content].filter(Boolean).join('\n\n');
+    });
+    return parts;
+  }
+
+  function appendFormattedMarkdown(target, text) {
+    // formatMarkdown builds its result from text nodes, so this keeps saved and
+    // generated explanations out of the DOM as executable HTML.
+    target.innerHTML = formatMarkdown(text || '');
+  }
+
+  function createExplanationCallout(kind, title, text) {
+    const callout = element('section', 'mock-detailed-explanation-callout ' + kind);
+    callout.appendChild(element('h4', '', title));
+    const body = element('div', 'mock-detailed-explanation-callout-body');
+    appendFormattedMarkdown(body, text);
+    callout.appendChild(body);
+    return callout;
+  }
+
+  function createDetailedExplanation(text) {
+    const parts = splitDetailedExplanationParts(text);
+    const card = element('article', 'mock-detailed-explanation-card');
+    const layout = element('div', 'mock-detailed-explanation-layout');
+    const solution = element('section', 'mock-detailed-explanation-solution');
+    solution.appendChild(element('h4', '', 'How to solve it'));
+    const solutionBody = element('div', 'mock-detailed-explanation-body');
+    appendFormattedMarkdown(solutionBody, parts.solve || text || 'This explanation is not ready yet.');
+    solution.appendChild(solutionBody);
+    layout.appendChild(solution);
+
+    const aside = element('aside', 'mock-detailed-explanation-aside');
+    if (parts.why) {
+      aside.appendChild(createExplanationCallout('why', '💡 Why it works', parts.why));
+    }
+    if (parts.tip) {
+      aside.appendChild(createExplanationCallout('tip', '⭐ Helpful tip', parts.tip));
+    }
+    if (aside.childNodes.length) layout.appendChild(aside);
+
+    card.appendChild(layout);
+    return card;
+  }
+
+  function createExplanationLoadingCard() {
+    const card = element('article', 'mock-detailed-explanation-card');
+    const layout = element('div', 'mock-detailed-explanation-layout');
+    const solution = element('section', 'mock-detailed-explanation-solution');
+    solution.appendChild(element('h4', '', 'How to solve it'));
+    solution.appendChild(element(
+      'p',
+      'mock-detailed-explanation-body mock-detailed-explanation-loading',
+      'Getting your step-by-step explanation ready…'
+    ));
+    layout.appendChild(solution);
+    card.appendChild(layout);
+    return card;
+  }
+
   function attachDetailedExplanation(details, examId, questionId, target) {
     let loaded = false;
     let loading = false;
-    details.addEventListener('toggle', function () {
-      if (!details.open || loaded || loading) return;
+
+    function load() {
+      if (loaded || loading) return;
       loading = true;
-      target.replaceChildren(element('p', '', 'Working through this question…'));
+      target.replaceChildren(createExplanationLoadingCard());
       fetchExplanation(examId, questionId).then(function (text) {
         loaded = true;
-        target.replaceChildren();
-        const content = element('div', 'mock-detail-content');
-        content.innerHTML = formatMarkdown(text || '');
-        target.appendChild(content);
-      }).catch(function (error) {
+        target.replaceChildren(createDetailedExplanation(text));
+      }).catch(function () {
         loading = false;
-        target.replaceChildren(element('p', '', error.message || 'Please try again.'));
+        target.replaceChildren();
+        const message = element('p', 'mock-detailed-explanation-error', 'We could not load the explanation just now.');
+        const retry = element('button', 'mock-detailed-explanation-retry', 'Try again');
+        retry.type = 'button';
+        retry.addEventListener('click', load);
+        target.appendChild(message);
+        target.appendChild(retry);
       });
+    }
+
+    details.addEventListener('toggle', function () {
+      if (!details.open || loaded || loading) return;
+      load();
     });
   }
 

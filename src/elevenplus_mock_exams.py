@@ -907,7 +907,10 @@ def score_mock_exam(
             "number": number,
             "subject": question["subject"],
             "topic": question["topic"],
-            "question": question.get("question", ""),
+            # Mock content uses ``prompt`` as its canonical question field.
+            # Retain the old key as a compatibility fallback so incorrect
+            # answers are saved with usable question text for later practice.
+            "question": question.get("prompt") or question.get("question", ""),
             "options": question.get("options", []),
             "selected_answer": selected,
             "correct": is_correct,

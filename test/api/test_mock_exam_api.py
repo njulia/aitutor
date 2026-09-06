@@ -59,6 +59,106 @@ def test_free_mock_can_be_started_and_scored_without_exposing_key(client) -> Non
     assert all(item["correct_answer"] for item in result["questions"])
 
 
+def test_mock_question_explanation_is_structured_and_reused_from_cache(client) -> None:
+    """A second click should use the saved detailed explanation, not another LLM call."""
+    exam_id = "common-diagnostic-1"
+    question_id = "n07"
+
+    first = client.post(
+        f"/api/elevenplus/mock-exams/{exam_id}/questions/{question_id}/explanation"
+    )
+
+    assert first.status_code == 200, first.text
+    first_payload = first.json()
+    assert first_payload["success"] is True
+    assert first_payload["from_saved"] is False
+    assert "## How to solve it" in first_payload["explanation"]
+    assert "## Why it works" in first_payload["explanation"]
+    assert "## Helpful tip" in first_payload["explanation"]
+
+    second = client.post(
+        f"/api/elevenplus/mock-exams/{exam_id}/questions/{question_id}/explanation"
+    )
+
+    assert second.status_code == 200, second.text
+    assert second.json()["from_saved"] is True
+    assert second.json()["explanation"] == first_payload["explanation"]
+
+
+def test_mock_question_explanation_falls_back_when_detail_llm_fails(client, monkeypatch) -> None:
+    """An optional tutor outage must not leave a completed mock without help."""
+    from src.webapp import review_service
+    from src.elevenplus_mock_exams import _QUESTION_BY_ID
+    from src.progress_db import list_mock_exam_explanations
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("temporary provider outage")
+
+    monkeypatch.setattr(review_service, "_complete_review", unavailable)
+    exam_id = "common-diagnostic-1"
+    question_id = "n02"
+    expected_working = _QUESTION_BY_ID[question_id]["explanation"]
+
+    first = client.post(
+        f"/api/elevenplus/mock-exams/{exam_id}/questions/{question_id}/explanation"
+    )
+
+    assert first.status_code == 200, first.text
+    payload = first.json()
+    assert payload["success"] is True
+    assert payload["from_saved"] is False
+    assert expected_working in payload["explanation"]
+    assert "## How to solve it" in payload["explanation"]
+    assert "## Why it works" in payload["explanation"]
+    assert "## Helpful tip" in payload["explanation"]
+
+    # It is saved even when the optional LLM was unavailable, so the next
+    # click opens straight away and does not attempt another provider call.
+    second = client.post(
+        f"/api/elevenplus/mock-exams/{exam_id}/questions/{question_id}/explanation"
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["from_saved"] is True
+    assert second.json()["explanation"] == payload["explanation"]
+    saved = next(
+        row for row in list_mock_exam_explanations()
+        if row["question_id"] == question_id
+    )
+    assert saved["model_used"] == "trusted_mock_fallback"
+
+
+def test_mock_question_explanation_sends_the_actual_question_prompt_to_the_llm(
+    client,
+    app_module,
+) -> None:
+    """Mock question records use ``prompt``; never send an empty question to the tutor."""
+    from src.elevenplus_mock_exams import _QUESTION_BY_ID
+
+    class RecordingLLM:
+        def __init__(self) -> None:
+            self.requests = []
+
+        def complete(self, messages, **_kwargs):
+            self.requests.append(messages)
+            return (
+                "## How to solve it\nUse the information in the question.\n\n"
+                "## Why it works\nIt checks every step.\n\n"
+                "## Helpful tip\nRemember to check your working."
+            )
+
+    recorder = RecordingLLM()
+    app_module.llm = recorder
+    question_id = "m01"
+    response = client.post(
+        f"/api/elevenplus/mock-exams/common-diagnostic-1/questions/{question_id}/explanation"
+    )
+
+    assert response.status_code == 200, response.text
+    assert recorder.requests
+    prompt = recorder.requests[0][-1]["content"]
+    assert _QUESTION_BY_ID[question_id]["prompt"] in prompt
+
+
 def test_free_mock_stays_public_when_entitlement_lookup_is_unavailable(
     client,
     monkeypatch,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from src.webapp.account_store import create_subscription
 from src.webapp.reward_store import get_reward_store, review_fingerprint
 
 DELIVERY_ADDRESS = {
@@ -119,6 +120,88 @@ def test_reward_request_parent_approval_and_certificate(
     assert learner["name"] in certificate.text
     assert certificate.headers["cache-control"] == "no-store, private"
     assert "noindex" in certificate.headers["x-robots-tag"]
+
+
+def test_kid_can_request_a_reward_set_by_their_parent(
+    authenticated_client,
+) -> None:
+    account_body = authenticated_client.get("/api/account").json()
+    account = account_body["account"]
+    learner = account_body["students"][0]
+    create_subscription(
+        account_id=account["id"],
+        plan="elevenplus_monthly",
+        status="active",
+        duration_days=30,
+    )
+    _award_sticker_points(account["id"], learner["id"])
+
+    created = authenticated_client.post(
+        "/api/rewards/catalog",
+        json={
+            "name": "Choose Friday dinner",
+            "icon": "🍕",
+            "xp_cost": 120,
+        },
+    )
+    assert created.status_code == 200, created.text
+    reward = created.json()["item"]
+
+    login_code = (
+        f"{str(account['family_code']).replace('FAM-', '')}-"
+        f"{str(learner['kid_code']).replace('KID-', '')}"
+    )
+    logged_in = authenticated_client.post(
+        "/api/kid-login", json={"login_code": login_code}
+    )
+    assert logged_in.status_code == 200, logged_in.text
+
+    kid_dashboard = authenticated_client.get("/api/rewards")
+    assert kid_dashboard.status_code == 200, kid_dashboard.text
+    dashboard = kid_dashboard.json()
+    family_reward = next(
+        item for item in dashboard["catalog"] if item["code"] == reward["id"]
+    )
+    assert family_reward["name"] == "Choose Friday dinner"
+    assert family_reward["points_cost"] == 120
+    gift_points_before = dashboard["wallet"]["gift_points"]
+
+    requested = authenticated_client.post(
+        "/api/rewards/redemptions",
+        json={"student_id": learner["id"], "reward_code": reward["id"]},
+    )
+    assert requested.status_code == 200, requested.text
+    request_id = requested.json()["redemption"]["id"]
+
+    logged_out = authenticated_client.post("/api/kid-logout")
+    assert logged_out.status_code == 200, logged_out.text
+    parent_login = authenticated_client.post(
+        "/api/login",
+        json={"email": account["email"], "password": "StrongPass123!"},
+    )
+    assert parent_login.status_code == 200, parent_login.text
+    approved = authenticated_client.post(
+        f"/api/parent/gift-requests/{request_id}/approve",
+        json={},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["redemption"]["status"] == "approved"
+    assert approved.json()["wallet"]["gift_points"] == gift_points_before - 120
+
+
+def test_parent_can_add_and_delete_a_family_reward_without_reentering_password(
+    authenticated_client,
+) -> None:
+    created = authenticated_client.post(
+        "/api/rewards/catalog",
+        json={"name": "Pick a family film", "icon": "🎬", "xp_cost": 150},
+    )
+    assert created.status_code == 200, created.text
+
+    deleted = authenticated_client.delete(
+        f"/api/rewards/catalog/{created.json()['item']['id']}"
+    )
+    assert deleted.status_code == 200, deleted.text
 
 
 def test_admin_can_dispatch_without_exposing_address_to_child(

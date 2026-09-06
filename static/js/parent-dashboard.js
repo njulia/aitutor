@@ -265,32 +265,49 @@ function renderKids() {
     const codeValue = combinedLoginCode(kid.kid_code);
     const code = node('div', 'kid-code');
     const codeText = node('span', 'kid-code-value');
-    codeText.append(node('span', '', 'Login code: '), node('strong', '', codeValue || 'Not assigned'));
+    codeText.append(node('span', '', 'Child login code: '), node('strong', '', codeValue || 'Not assigned'));
     code.append(codeText);
-    if (codeValue) {
-      const copy = node('button', 'btn btn-secondary copy-code-button', 'Copy');
-      copy.type = 'button';
-      copy.setAttribute('aria-label', `Copy login code for ${kid.name || 'Child'}`);
-      copy.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(codeValue);
-          copy.textContent = 'Copied';
-          window.setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
-        } catch (error) {
-          window.prompt('Copy this kid login code:', codeValue);
-        }
-      });
-      code.append(copy);
-    }
-    const loginBtn = node('button', 'btn btn-primary copy-code-button', 'Child Login');
+    const codeActions = node('div', 'child-login-actions');
+//    if (codeValue) {
+//      const copy = node('button', 'btn btn-secondary copy-code-button', 'Copy');
+//      copy.type = 'button';
+//      copy.setAttribute('aria-label', `Copy Child login code for ${kid.name || 'Child'}`);
+//      copy.addEventListener('click', async () => {
+//        try {
+//          await navigator.clipboard.writeText(codeValue);
+//          copy.textContent = 'Copied';
+//          window.setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+//        } catch (error) {
+//          window.prompt('Copy this Child login code:', codeValue);
+//        }
+//      });
+//      codeActions.append(copy);
+//    }
+    const loginBtn = node('button', 'btn copy-code-button child-sign-in-button', 'Open child sign-in');
     loginBtn.type = 'button';
-    loginBtn.setAttribute('aria-label', `Login as ${kid.name || 'Child'}`);
+    loginBtn.setAttribute('aria-label', `Open Child sign-in for ${kid.name || 'Child'}`);
     loginBtn.addEventListener('click', () => {
-      const loginUrl = `/kid-login${codeValue ? `?code=${encodeURIComponent(codeValue)}` : ''}`;
-      window.open(loginUrl, '_blank');
+      if (codeValue) {
+        try {
+          sessionStorage.setItem('homeworkmagic_pending_kid_login_code', codeValue);
+        } catch (_) {
+          // Child sign-in still works if this browser does not allow session storage.
+        }
+      }
+      window.location.assign('/kid-login?next=/app');
     });
-    code.append(loginBtn);
-    card.append(code);
+    codeActions.append(loginBtn);
+    code.append(codeActions);
+    card.append(
+      code,
+      node('p', 'kid-code-help', 'Open child sign-in to take this code safely to the next page, so your child can tap Start Learning instead of typing it. Child sign-in then switches this browser to their space.'),
+    );
+
+    if (kid.buddy_code) {
+      const buddyCode = node('div', 'kid-code');
+      buddyCode.append(node('span', 'kid-code-value', `Study Buddy Code: ${kid.buddy_code}`));
+      card.append(buddyCode);
+    }
 
     const target = kid.learning_target || {};
     const targetBox = node('div', 'target-form');
@@ -473,12 +490,13 @@ async function loadCatalog() {
     remove.type = 'button';
     remove.addEventListener('click', () => {
       if (!window.confirm(`Delete “${item.name}”?`)) return;
-      requestPassword(async (password) => {
-        await api(`/api/rewards/catalog/${encodeURIComponent(item.id)}`, {
-          method: 'DELETE', body: JSON.stringify({parent_password: password}),
-        });
+      api(`/api/rewards/catalog/${encodeURIComponent(item.id)}`, {
+        method: 'DELETE',
+      }).then(async () => {
         setStatus('Reward deleted.');
         await loadCatalog();
+      }).catch((error) => {
+        setStatus(error.message || 'We could not delete that reward.', true);
       });
     });
     entry.append(main, remove); list.append(entry);
@@ -510,12 +528,13 @@ async function loadGiftRequests() {
 
 function decideGift(request, decision) {
   if (decision === 'decline' && !window.confirm(`Decline ${request.student_name}'s gift request?`)) return;
-  requestPassword(async (password) => {
-    await api(`/api/parent/gift-requests/${encodeURIComponent(request.id)}/${decision}`, {
-      method: 'POST', body: JSON.stringify({parent_password: password}),
-    });
+  api(`/api/parent/gift-requests/${encodeURIComponent(request.id)}/${decision}`, {
+    method: 'POST', body: JSON.stringify({}),
+  }).then(async () => {
     setStatus(decision === 'approve' ? 'Gift request approved.' : 'Gift request declined.');
     await Promise.all([loadGiftRequests(), loadOverview()]);
+  }).catch((error) => {
+    setStatus(error.message || 'We could not update that gift request.', true);
   });
 }
 
@@ -599,19 +618,23 @@ byId('catalog-form').addEventListener('submit', (event) => {
     name: byId('reward-name').value.trim(), icon: byId('reward-icon').value.trim() || '🎁',
     xp_cost: Number(byId('reward-cost').value),
   };
-  requestPassword(async (password) => {
-    await api('/api/rewards/catalog', {method: 'POST', body: JSON.stringify({...reward, parent_password: password})});
+  api('/api/rewards/catalog', {method: 'POST', body: JSON.stringify(reward)}).then(async () => {
     byId('catalog-form').reset(); byId('reward-cost').value = '100'; setStatus('Reward added.'); await loadCatalog();
+  }).catch((error) => {
+    setStatus(error.message || 'We could not add that reward.', true);
   });
 });
 byId('summary-frequency').addEventListener('change', toggleSummaryInterval);
 byId('summary-email-form').addEventListener('submit', (event) => {
   saveSummaryPreferences(event).catch((error) => setStatus(error.message, true));
 });
-byId('send-digest-button').addEventListener('click', () => requestPassword(async (password) => {
-  await api('/api/parent/xp-digest/send', {method: 'POST', body: JSON.stringify({parent_password: password})});
-  setStatus('Learning summary email sent.');
-}));
+byId('send-digest-button').addEventListener('click', () => {
+  api('/api/parent/xp-digest/send', {method: 'POST'}).then(() => {
+    setStatus('Learning summary email sent.');
+  }).catch((error) => {
+    setStatus(error.message || 'We could not send the learning summary.', true);
+  });
+});
 byId('cancel-password').addEventListener('click', closePasswordModal);
 byId('close-notification').addEventListener('click', closeNotificationModal);
 byId('notification-modal').addEventListener('click', (event) => {

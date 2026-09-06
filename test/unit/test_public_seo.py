@@ -126,6 +126,22 @@ def test_sitemap_contains_only_the_public_canonical_urls() -> None:
     assert not any("www.homeworkmagic.co.uk" in location for location in locations)
 
 
+def test_homepage_has_clear_search_content_for_primary_homework_families() -> None:
+    homepage = (STATIC / "index.html").read_text(encoding="utf-8").casefold()
+
+    for phrase in (
+        "homework for kids",
+        "primary homework help",
+        "kids homework",
+        "primary school homework",
+        "ks1 homework",
+        "ks2 homework",
+    ):
+        assert phrase in homepage
+    assert '<meta name="description"' in homepage
+    assert '"@type": "faqpage"' in homepage
+
+
 def test_mock_exam_page_has_matching_faq_schema_and_current_plan_price() -> None:
     source = (STATIC / "elevenplus-mock-exams.html").read_text(encoding="utf-8")
     match = re.search(

@@ -87,13 +87,26 @@
       width: auto;
     }
     .account-remove:hover { color: #e53e3e; background: #fff5f5; }
+    .grown-up-help {
+      background: #f0f4ff; border: 1px solid #c8d5ff; border-radius: 10px;
+      color: #40527d; font-size: 13px; line-height: 1.45; margin: 18px 0 0;
+      padding: 12px 14px;
+    }
+    .grown-up-help strong { color: #30426f; }
+    .code-ready {
+      background: #ecfdf5; border: 1px solid #9be4bf; border-radius: 10px;
+      color: #216141; font-size: 13px; line-height: 1.45; margin: 0 0 16px;
+      padding: 11px 13px; text-align: center;
+    }
+    .code-ready[hidden] { display: none; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Welcome back!</h1>
-    <p class="subtitle">Choose your name to start learning</p>
+    <h1>Let’s start learning!</h1>
+    <p class="subtitle">Choose your name below, or type your Child login code.</p>
     <div class="error" id="error"></div>
+    <div class="code-ready" id="codeReady" role="status" hidden></div>
 
     <!-- 已保存的账户列表 -->
     <div class="saved-accounts" id="savedAccounts">
@@ -102,21 +115,23 @@
 
     <!-- 手动输入区域 -->
     <div id="manualLoginSection">
-      <div class="divider">or type your login code</div>
+      <div class="divider">or type your Child login code</div>
       <form id="kidLoginForm">
         <div class="field">
-          <label for="loginCode">Your Login Code</label>
-          <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXXXXX" required autocomplete="off" maxlength="17" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
-          <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your code.</p>
+          <label for="loginCode">Your Child login code</label>
+          <input type="text" id="loginCode" name="loginCode" placeholder="XXXXXX-XXXXXX" required autocomplete="one-time-code" maxlength="17" style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-size: 18px;">
+          <p style="margin: 8px 0 0; font-size: 12px; color: #718096; text-align: center;">Ask a grown-up for your code, then type it here.</p>
           <label style="font-weight:400; margin-top:12px;"><input id="rememberKid" type="checkbox" style="width:auto; margin-right:6px;"> Remember me on this device</label>
         </div>
         <button type="submit" id="submitBtn">Start Learning</button>
       </form>
     </div>
+    <p class="grown-up-help"><strong>Grown-up helping?</strong> Find the Child login code in the Parent Dashboard, next to your child’s name. It is different from your email and parent password.</p>
     <a href="/login" class="back-link">Parent login</a>
   </div>
   <script>
     const SAVED_ACCOUNTS_KEY = 'kid_saved_accounts';
+    const PENDING_KID_LOGIN_CODE_KEY = 'homeworkmagic_pending_kid_login_code';
 
     function getSavedAccounts() {
       try {
@@ -233,6 +248,23 @@
       document.querySelectorAll('button').forEach(b => b.disabled = false);
     }
 
+    function usePendingChildLoginCode() {
+      let pendingCode = '';
+      try {
+        pendingCode = sessionStorage.getItem(PENDING_KID_LOGIN_CODE_KEY) || '';
+        sessionStorage.removeItem(PENDING_KID_LOGIN_CODE_KEY);
+      } catch (_) {
+        return;
+      }
+      if (!pendingCode) return;
+      const input = document.getElementById('loginCode');
+      const notice = document.getElementById('codeReady');
+      input.value = pendingCode.trim().toUpperCase();
+      notice.textContent = 'Your Child login code is ready. Tap Start Learning!';
+      notice.hidden = false;
+      document.getElementById('submitBtn').focus();
+    }
+
     // 手动输入表单
     const form = document.getElementById('kidLoginForm');
     const errorEl = document.getElementById('error');
@@ -252,19 +284,9 @@
       }
     });
 
-    // 从 URL 参数自动填充 login code
-    (function() {
-      const params = new URLSearchParams(window.location.search);
-      const codeFromUrl = params.get('code');
-      if (codeFromUrl) {
-        const input = document.getElementById('loginCode');
-        input.value = codeFromUrl.toUpperCase();
-        input.focus();
-      }
-    })();
-
     // 初始化
     renderSavedAccounts();
+    usePendingChildLoginCode();
   </script>
 </body>
 </html>

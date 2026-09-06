@@ -111,6 +111,32 @@ CERTIFICATES: tuple[dict[str, Any], ...] = (
     },
 )
 
+
+# Badges are gentle, effort-based milestones. They never remove XP, never expire,
+# and do not require public child profiles.
+BADGES: tuple[dict[str, Any], ...] = (
+    {"code": "first_steps", "title": "First Steps", "icon": "👣", "description": "Completed your first learning activity.", "kind": "activities", "target": 1},
+    {"code": "practice_pal", "title": "Practice Pal", "icon": "📚", "description": "Completed 10 learning activities.", "kind": "activities", "target": 10},
+    {"code": "learning_trailblazer", "title": "Learning Trailblazer", "icon": "🗺️", "description": "Completed 25 learning activities.", "kind": "activities", "target": 25},
+    {"code": "steady_star", "title": "Steady Star", "icon": "⭐", "description": "Learned on 5 different days.", "kind": "active_days", "target": 5},
+    {"code": "habit_hero", "title": "Habit Hero", "icon": "🔥", "description": "Learned on 10 different days.", "kind": "active_days", "target": 10},
+    {"code": "curiosity_compass", "title": "Curiosity Compass", "icon": "🧭", "description": "Explored 5 different subjects.", "kind": "subjects", "target": 5},
+    {"code": "subject_superstar", "title": "Subject Superstar", "icon": "🌈", "description": "Explored 10 different subjects.", "kind": "subjects", "target": 10},
+    {"code": "challenge_starter", "title": "Challenge Starter", "icon": "🎯", "description": "Completed your first buddy challenge.", "kind": "challenges_completed", "target": 1},
+    {"code": "challenge_champion", "title": "Challenge Champion", "icon": "🏆", "description": "Completed 5 buddy challenges.", "kind": "challenges_completed", "target": 5},
+    {"code": "challenge_legend", "title": "Challenge Legend", "icon": "🌟", "description": "Completed 10 buddy challenges.", "kind": "challenges_completed", "target": 10},
+    {"code": "helpful_buddy", "title": "Helpful Buddy", "icon": "🤝", "description": "Helped a buddy complete 3 challenges.", "kind": "buddy_helped", "target": 3},
+    {"code": "buddy_booster", "title": "Buddy Booster", "icon": "🌟", "description": "Helped buddies complete 10 challenges.", "kind": "buddy_helped", "target": 10},
+)
+
+# Old activity badges used the same names and codes as XP certificates.  Keep
+# existing achievements visible under their clearer names without retaining
+# duplicate public achievement identities.
+LEGACY_BADGE_CODE_ALIASES: dict[str, str] = {
+    "homework_hero": "practice_pal",
+    "curious_explorer": "curiosity_compass",
+}
+
 LEVELS: tuple[dict[str, Any], ...] = (
     {"number": 1, "name": "Spark", "threshold": 0, "icon": "✨"},
     {"number": 2, "name": "Explorer", "threshold": 100, "icon": "🧭"},
@@ -640,6 +666,17 @@ class RewardStore:
                 name="uq_reward_certificate_student_code",
             ),
         )
+        self.badges = Table(
+            "reward_badges", self.metadata,
+            Column("id", String(80), primary_key=True),
+            Column("account_id", String(80), nullable=False, index=True),
+            Column("student_id", String(80), nullable=False, index=True),
+            Column("badge_code", String(60), nullable=False),
+            Column("earned_at", DateTime(timezone=True), nullable=False),
+            UniqueConstraint(
+                "student_id", "badge_code", name="uq_reward_badge_student_code"
+            ),
+        )
         self.catalog = Table(
             "reward_catalog_items",
             self.metadata,
@@ -801,6 +838,15 @@ class RewardStore:
             )
         return row
 
+    def get_wallet(self, student_id: str) -> dict[str, int]:
+        from src.webapp.account_store import get_student
+        learner = get_student(student_id)
+        if not learner:
+            return {"lifetime_xp": 0, "gift_points": 0}
+        with self.engine.begin() as conn:
+            row = self._ensure_wallet(conn, str(learner["account_id"]), str(student_id), lock=False)
+        return _public_wallet(row)
+
     def _event_exists(self, conn: Connection, student_id: str, source_key: str) -> bool:
         return conn.execute(
             select(self.events.c.id).where(
@@ -871,6 +917,69 @@ class RewardStore:
             "gift_points": int(spendable_delta),
         }
 
+    def award_custom_event(
+        self,
+        *,
+        student_id: str,
+        xp: int,
+        gift_points: int,
+        source_key: str,
+        label: str,
+    ) -> dict[str, Any]:
+        """Award a small idempotent bonus for structured features such as Study Buddies."""
+        from src.webapp.account_store import get_student
+
+        learner = get_student(student_id)
+        if not learner:
+            raise ValueError("Unknown learner")
+        account_id = str(learner["account_id"])
+        now = _utcnow() if "_utcnow" in globals() else datetime.now(UTC)
+        local_day, week_start = _local_day_and_week(now)
+        with self.engine.begin() as conn:
+            # A child can complete their first ever activity through a buddy
+            # challenge, so make their wallet before adding the XP event.
+            self._ensure_wallet(conn, account_id, student_id, lock=True)
+            event = self._add_event(
+                conn,
+                account_id=account_id,
+                student_id=student_id,
+                source_key=source_key,
+                event_type="study_buddy",
+                label=label,
+                lifetime_delta=max(0, int(xp)),
+                spendable_delta=max(0, int(gift_points)),
+                subject=None,
+                local_day=local_day,
+                week_start=week_start,
+                created_at=now,
+            )
+            new_certificates = (
+                self._unlock_certificates(
+                    conn,
+                    account_id=account_id,
+                    student_id=student_id,
+                    unlocked_at=now,
+                )
+                if event
+                else []
+            )
+            new_badges = (
+                self._award_badges(
+                    conn, account_id=account_id, student_id=student_id, now=now
+                )
+                if event
+                else []
+            )
+            wallet = self._ensure_wallet(conn, account_id, student_id, lock=False)
+        return {
+            "awarded": bool(event),
+            "xp": int(xp) if event else 0,
+            "gift_points": int(gift_points) if event else 0,
+            "new_certificates": new_certificates,
+            "new_badges": new_badges,
+            **_public_wallet(wallet),
+        }
+
     def _unlock_certificates(
         self,
         conn: Connection,
@@ -916,6 +1025,47 @@ class RewardStore:
             unlocked.append(dict(certificate))
             existing.add(code)
         return unlocked
+
+    def _certificate_cards(
+        self,
+        conn: Connection,
+        *,
+        student_id: str,
+        include_print_url: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Build the one public certificate view used across learner pages.
+
+        Keeping this in the store prevents a certificate from looking unlocked
+        on Rewards but locked (or differently named) on the character page.
+        Only the child-safe certificate definition and unlock state are
+        included; no activity answers or other learner data are exposed.
+        """
+        unlocked_rows = conn.execute(
+            select(
+                self.certificates.c.certificate_code,
+                self.certificates.c.unlocked_at,
+            ).where(self.certificates.c.student_id == student_id)
+        ).all()
+        unlocked = {
+            row._mapping["certificate_code"]: row._mapping["unlocked_at"]
+            for row in unlocked_rows
+        }
+        cards: list[dict[str, Any]] = []
+        for item in CERTIFICATES:
+            unlocked_at = unlocked.get(item["code"])
+            card = {
+                **dict(item),
+                "unlocked": unlocked_at is not None,
+                "unlocked_at": unlocked_at.isoformat() if unlocked_at else None,
+            }
+            if include_print_url:
+                card["print_url"] = (
+                    f"/rewards/certificate/{item['code']}?student_id={student_id}"
+                    if unlocked_at
+                    else None
+                )
+            cards.append(card)
+        return cards
 
     def _quest_progress(
         self,
@@ -1145,6 +1295,9 @@ class RewardStore:
                 student_id=learner,
                 unlocked_at=now,
             )
+            new_badges = self._award_badges(
+                conn, account_id=account, student_id=learner, now=now
+            ) if awarded_events else []
             wallet_row = self._ensure_wallet(conn, account, learner, lock=False)
             wallet = _public_wallet(wallet_row)
 
@@ -1174,6 +1327,7 @@ class RewardStore:
             "level": _level_status(int(wallet.get("lifetime_xp") or 0)),
             "quest_completions": quest_completions,
             "new_certificates": new_certificates,
+            "new_badges": new_badges,
             # These booleans let the application increment aggregate-only
             # funnel counters without creating a separate user-level tracker.
             "is_first_family_activity": bool(
@@ -1240,16 +1394,109 @@ class RewardStore:
     def _catalog_items(
         self, conn: Connection, account_id: str
     ) -> list[dict[str, Any]]:
-        del conn, account_id
+        account = _clean_id(account_id, maximum=80)
+        rows = conn.execute(
+            select(self.catalog)
+            .where(
+                and_(
+                    self.catalog.c.account_id == account,
+                    self.catalog.c.is_active.is_(True),
+                )
+            )
+            .order_by(self.catalog.c.created_at.desc())
+        ).all()
         return [
             {
-                **dict(item),
-                "is_branded": True,
-                "requires_delivery": True,
+                "code": row._mapping["id"],
+                "name": row._mapping["name"],
+                "icon": row._mapping["icon"],
+                "description": "A reward your grown-up has chosen for your family.",
+                "points_cost": int(row._mapping["xp_cost"]),
+                "is_branded": False,
+                "requires_delivery": False,
                 "is_active": True,
             }
-            for item in DEFAULT_REWARDS
+            for row in rows
         ]
+
+    def _badge_progress(self, conn: Connection, student_id: str) -> dict[str, int]:
+        activity_count = int(conn.execute(
+            select(func.count()).select_from(self.events).where(
+                and_(self.events.c.student_id == student_id, self.events.c.event_type == "checked_activity")
+            )
+        ).scalar() or 0)
+        active_days = int(conn.execute(
+            select(func.count(func.distinct(self.events.c.local_day))).where(
+                and_(self.events.c.student_id == student_id, self.events.c.event_type == "checked_activity")
+            )
+        ).scalar() or 0)
+        subjects = int(conn.execute(
+            select(func.count(func.distinct(self.events.c.subject))).where(
+                and_(self.events.c.student_id == student_id, self.events.c.event_type == "checked_activity", self.events.c.subject.is_not(None))
+            )
+        ).scalar() or 0)
+        challenge_events = conn.execute(
+            select(self.events.c.source_key).where(
+                and_(self.events.c.student_id == student_id, self.events.c.event_type == "study_buddy")
+            )
+        ).scalars().all()
+        completed = sum(1 for key in challenge_events if str(key).endswith(":target"))
+        helped = sum(1 for key in challenge_events if str(key).endswith(":requester"))
+        return {"activities": activity_count, "active_days": active_days, "subjects": subjects, "challenges_completed": completed, "buddy_helped": helped}
+
+    def _award_badges(self, conn: Connection, *, account_id: str, student_id: str, now: datetime) -> list[dict[str, Any]]:
+        progress = self._badge_progress(conn, student_id)
+        earned = set(conn.execute(
+            select(self.badges.c.badge_code).where(self.badges.c.student_id == student_id)
+        ).scalars())
+        new_badges: list[dict[str, Any]] = []
+        for badge in BADGES:
+            legacy_codes = {
+                old_code
+                for old_code, new_code in LEGACY_BADGE_CODE_ALIASES.items()
+                if new_code == badge["code"]
+            }
+            if (
+                badge["code"] in earned
+                or earned.intersection(legacy_codes)
+                or progress.get(badge["kind"], 0) < int(badge["target"])
+            ):
+                continue
+            try:
+                with conn.begin_nested():
+                    conn.execute(insert(self.badges).values(
+                        id=f"badge_{uuid.uuid4().hex}", account_id=account_id, student_id=student_id,
+                        badge_code=badge["code"], earned_at=now,
+                    ))
+            except IntegrityError:
+                continue
+            new_badges.append({**badge, "earned": True, "earned_at": now.isoformat()})
+        return new_badges
+
+    def get_badges(self, *, student_id: str) -> dict[str, Any]:
+        with self.engine.begin() as conn:
+            progress = self._badge_progress(conn, student_id)
+            earned_rows = conn.execute(select(self.badges.c.badge_code, self.badges.c.earned_at).where(self.badges.c.student_id == student_id)).all()
+        earned = {row._mapping["badge_code"]: row._mapping["earned_at"] for row in earned_rows}
+        items = []
+        for badge in BADGES:
+            legacy_codes = (
+                old_code
+                for old_code, new_code in LEGACY_BADGE_CODE_ALIASES.items()
+                if new_code == badge["code"]
+            )
+            earned_at = earned.get(badge["code"])
+            if earned_at is None:
+                earned_at = next(
+                    (earned[old_code] for old_code in legacy_codes if old_code in earned),
+                    None,
+                )
+            items.append({
+                **badge, "earned": earned_at is not None,
+                "earned_at": earned_at.isoformat() if earned_at else None,
+                "progress": min(progress.get(badge["kind"], 0), int(badge["target"])),
+            })
+        return {"earned": [item for item in items if item["earned"]], "all": items}
 
     def learner_summary(self, *, account_id: str, student_id: str) -> dict[str, Any]:
         """Return the compact reward data needed by the family overview."""
@@ -1278,8 +1525,20 @@ class RewardStore:
             "pending_rewards": int(pending),
         }
 
-    def avatar_summary(self, *, account_id: str, student_id: str) -> dict[str, Any]:
-        """Return the small avatar payload used by role-aware navigation."""
+    def avatar_summary(
+        self,
+        *,
+        account_id: str,
+        student_id: str,
+        include_certificates: bool = False,
+        include_badges: bool = False,
+    ) -> dict[str, Any]:
+        """Return a small avatar payload, with certificates only when requested.
+
+        The role-aware header calls this frequently, so it only needs a visual
+        avatar and XP growth.  The character page opts into the certificate
+        cards explicitly.
+        """
         account = _clean_id(account_id, maximum=80)
         learner = _clean_id(student_id, maximum=80)
         character_fields = tuple(
@@ -1321,11 +1580,37 @@ class RewardStore:
                     )
                 )
             ).first()
+            certificates: list[dict[str, Any]] | None = None
+            if include_certificates:
+                # Match Rewards exactly: a learner who has crossed an XP
+                # threshold gets the same persistent certificate before either
+                # page is shown.
+                if row is not None:
+                    self._unlock_certificates(
+                        conn,
+                        account_id=account,
+                        student_id=learner,
+                        unlocked_at=_now(),
+                    )
+                # The compact avatar response deliberately does not include
+                # print URLs because they contain a learner identifier and the
+                # character page only needs safe visual certificate fields.
+                certificates = self._certificate_cards(
+                    conn, student_id=learner, include_print_url=False
+                )
+        # Badge progress needs a handful of aggregate queries.  It is only
+        # loaded for the Character page, never for the fast shared header.
+        badges = self.get_badges(student_id=learner) if include_badges else None
         if row is None:
-            return _avatar_payload(0)
+            payload = _avatar_payload(0)
+            if certificates is not None:
+                payload["certificates"] = certificates
+            if badges is not None:
+                payload["badges"] = badges
+            return payload
         data = row._mapping
         customised = bool(data.get("character"))
-        return _avatar_payload(
+        payload = _avatar_payload(
             int(data.get("lifetime_xp") or 0),
             profile={
                 key: data.get(key) or AVATAR_PROFILE_DEFAULTS[key]
@@ -1333,6 +1618,11 @@ class RewardStore:
             },
             customised=customised,
         )
+        if certificates is not None:
+            payload["certificates"] = certificates
+        if badges is not None:
+            payload["badges"] = badges
+        return payload
 
     def update_avatar(
         self,
@@ -1495,31 +1785,7 @@ class RewardStore:
                 local_day=local_day,
                 week_start=week_start,
             )
-            unlocked_rows = conn.execute(
-                select(
-                    self.certificates.c.certificate_code,
-                    self.certificates.c.unlocked_at,
-                ).where(self.certificates.c.student_id == learner)
-            ).all()
-            unlocked = {
-                row._mapping["certificate_code"]: row._mapping["unlocked_at"]
-                for row in unlocked_rows
-            }
-            certificates = []
-            for item in CERTIFICATES:
-                unlocked_at = unlocked.get(item["code"])
-                certificates.append(
-                    {
-                        **dict(item),
-                        "unlocked": unlocked_at is not None,
-                        "unlocked_at": unlocked_at.isoformat() if unlocked_at else None,
-                        "print_url": (
-                            f"/rewards/certificate/{item['code']}?student_id={learner}"
-                            if unlocked_at
-                            else None
-                        ),
-                    }
-                )
+            certificates = self._certificate_cards(conn, student_id=learner)
             catalog = self._catalog_items(conn, account)
             redemption_rows = conn.execute(
                 select(self.redemptions)
@@ -1596,6 +1862,7 @@ class RewardStore:
             },
             "quests": quests,
             "certificates": certificates,
+            "badges": self.get_badges(student_id=learner),
             "catalog": catalog,
             "redemptions": redemptions,
             "recent_activity": recent_activity,
@@ -1625,8 +1892,26 @@ class RewardStore:
     def _reward_item(
         self, conn: Connection, account_id: str, reward_code: str
     ) -> dict[str, Any] | None:
-        del conn, account_id
+        account = _clean_id(account_id, maximum=80)
         code = _clean_id(reward_code, maximum=100)
+        row = conn.execute(
+            select(self.catalog).where(
+                and_(
+                    self.catalog.c.id == code,
+                    self.catalog.c.account_id == account,
+                    self.catalog.c.is_active.is_(True),
+                )
+            )
+        ).first()
+        if row is not None:
+            return {
+                "code": row._mapping["id"],
+                "name": row._mapping["name"],
+                "icon": row._mapping["icon"],
+                "points_cost": int(row._mapping["xp_cost"]),
+                "is_branded": False,
+                "requires_delivery": False,
+            }
         default = next((item for item in DEFAULT_REWARDS if item["code"] == code), None)
         if default:
             return {**default, "is_branded": True}
@@ -2098,6 +2383,7 @@ class RewardStore:
                 ("delivery_addresses", self.delivery_addresses),
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
+                ("badges", self.badges),
                 ("xp_events", self.events),
                 ("character_bottom_profiles", self.character_bottom_profiles),
                 ("character_profiles", self.character_profiles),
@@ -2128,6 +2414,7 @@ class RewardStore:
                 ("delivery_addresses", self.delivery_addresses),
                 ("redemptions", self.redemptions),
                 ("certificates", self.certificates),
+                ("badges", self.badges),
                 ("xp_events", self.events),
                 ("character_bottom_profiles", self.character_bottom_profiles),
                 ("character_profiles", self.character_profiles),

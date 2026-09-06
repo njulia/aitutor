@@ -213,6 +213,10 @@ function renderCatalog(data) {
   const grid = document.getElementById('catalog-grid');
   if (!grid) return;
   clearNode(grid);
+  if (!data.catalog.length) {
+    grid.append(element('p', 'empty-state', 'Your grown-up has not set a family reward yet.'));
+    return;
+  }
   const pendingCodes = pendingRewardCodes(data.redemptions);
   const giftAccessEligible = Boolean(data.gift_access && data.gift_access.eligible);
   data.catalog.forEach((item) => {
@@ -223,8 +227,8 @@ function renderCatalog(data) {
     const icon = element('span', 'catalog-icon', item.icon);
     icon.setAttribute('aria-hidden', 'true');
     card.append(icon, element('h3', '', item.name));
+    if (item.is_branded) card.append(element('span', 'branded-tag', 'Homework Magic logo'));
     card.append(
-      element('span', 'branded-tag', 'Homework Magic logo'),
       element('p', 'catalog-description', item.description),
       element('p', 'catalog-cost', `${item.points_cost} Gift Points`),
     );

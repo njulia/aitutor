@@ -408,6 +408,15 @@ PY
     app)
       grep -Eiq '<html([[:space:]>])' "${body_file}"
       ;;
+    app_home)
+      grep -Eiq '<html([[:space:]>])' "${body_file}" &&
+        grep -Fq 'href="/study-buddies"' "${body_file}"
+      ;;
+    study_buddies)
+      grep -Eiq '<html([[:space:]>])' "${body_file}" &&
+        grep -Fq 'Study Buddies' "${body_file}" &&
+        grep -Fq 'study-buddies-v2.js' "${body_file}"
+      ;;
     legal)
       grep -Eiq '<html([[:space:]>])' "${body_file}" &&
         ! grep -Eq '\{\{|REPLACE_|configure before public deployment|50% off' "${body_file}"
@@ -461,7 +470,8 @@ check_application() {
     check_get "${base_url}" "/api/ready" ready &&
     check_get "${base_url}" "/robots.txt" robots &&
     check_get "${base_url}" "/sitemap.xml" sitemap &&
-    check_get "${base_url}" "/app" app &&
+    check_get "${base_url}" "/app" app_home &&
+    check_get "${base_url}" "/study-buddies" study_buddies &&
     check_get "${base_url}" "/pricing" legal &&
     check_get "${base_url}" "/terms" legal &&
     check_get "${base_url}" "/privacy" legal &&
@@ -552,7 +562,7 @@ print(",".join(sorted(required - configured)))
 '
 )"
 if [ -n "${MISSING_PUBLIC_SETTINGS}" ]; then
-  die "The Cloud Run service is missing required public business settings: ${MISSING_PUBLIC_SETTINGS}. Configure deploy/cloud-run.env.yaml and run deploy/deploy_gcp.sh first."
+  die "The Cloud Run service is missing required public business settings: ${MISSING_PUBLIC_SETTINGS}. Configure deploy/cloud-run.env.yaml and use deploy/deploy_gcp.sh for the first rollout."
 fi
 
 run_gcloud_check   "Cloud SQL instance ${SQL_INSTANCE}"   sql instances describe "${SQL_INSTANCE}"   --project="${PROJECT_ID}"   --format="value(name)"

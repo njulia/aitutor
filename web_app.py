@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, HTMLResponse
+from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from src.file_utils import read_text_file, read_pdf_file, extract_text_from_image
@@ -43,6 +44,7 @@ from src.webapp.password_reset_routes import create_password_reset_router
 from src.webapp.billing import build_billing_router
 from src.webapp.reward_routes import build_reward_router
 from src.webapp.parent_dashboard_routes import build_parent_dashboard_router, send_target_learning_summary_if_reached
+from src.webapp.study_buddy_routes import build_study_buddy_router
 from src.webapp.school_finder_routes import (
     build_school_finder_router,
     build_school_finder_admin_router,
@@ -213,6 +215,10 @@ async def lifespan(_app: FastAPI):
         )
     except Exception:
         logger.exception("Account database initialization failed")
+    try:
+        await asyncio.to_thread(init_thinking_pause_settings)
+    except Exception:
+        logger.exception("Thinking pause settings initialization failed")
     try:
         from src.auth_tokens import purge_expired as purge_auth_sessions
         from src.progress_db import purge_old_learning_records
@@ -764,6 +770,7 @@ app.include_router(
 )
 app.include_router(build_parent_dashboard_router(_resolve_username))
 app.include_router(build_school_finder_router(_resolve_request_identity))
+app.include_router(build_study_buddy_router(project_root))
 app.include_router(build_school_finder_admin_router(_require_admin))
 
 
@@ -1055,6 +1062,66 @@ class YearRoundExplainRequest(BaseModel):
     plan_week: int = Field(..., ge=1, le=52)
 
 
+THINKING_PAUSE_DEFAULT_MS = 6000
+THINKING_PAUSE_MIN_MS = 0
+THINKING_PAUSE_MAX_MS = 30000
+
+
+def _thinking_pause_connection():
+    from src.progress_db import _engine as progress_engine
+    return progress_engine
+
+
+def init_thinking_pause_settings() -> None:
+    """Create the small admin-configurable thinking-pause table if needed."""
+    engine = _thinking_pause_connection()
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS app_settings (setting_key VARCHAR(120) PRIMARY KEY, setting_value VARCHAR(500) NOT NULL, updated_at TIMESTAMP NOT NULL)"
+        )
+        row = conn.execute(
+            text("SELECT setting_value FROM app_settings WHERE setting_key = :key"),
+            {"key": "thinking_pause_ms"},
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                text("INSERT INTO app_settings (setting_key, setting_value, updated_at) VALUES (:key, :value, CURRENT_TIMESTAMP)"),
+                {"key": "thinking_pause_ms", "value": str(THINKING_PAUSE_DEFAULT_MS)},
+            )
+
+
+def get_thinking_pause_ms() -> int:
+    try:
+        init_thinking_pause_settings()
+        engine = _thinking_pause_connection()
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT setting_value FROM app_settings WHERE setting_key = :key"),
+                {"key": "thinking_pause_ms"},
+            ).fetchone()
+        value = int(row[0]) if row else THINKING_PAUSE_DEFAULT_MS
+        return max(THINKING_PAUSE_MIN_MS, min(THINKING_PAUSE_MAX_MS, value))
+    except Exception:
+        logger.exception("Unable to read thinking pause setting; using default")
+        return THINKING_PAUSE_DEFAULT_MS
+
+
+def set_thinking_pause_ms(value: int) -> int:
+    value = max(THINKING_PAUSE_MIN_MS, min(THINKING_PAUSE_MAX_MS, int(value)))
+    init_thinking_pause_settings()
+    engine = _thinking_pause_connection()
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE app_settings SET setting_value = :value, updated_at = CURRENT_TIMESTAMP WHERE setting_key = :key"),
+            {"key": "thinking_pause_ms", "value": str(value)},
+        )
+    return value
+
+
+class ThinkingPauseSettingsRequest(BaseModel):
+    seconds: float = Field(..., ge=0, le=30)
+
+
 class ReviewRequest(BaseModel):
     homework: str = Field(min_length=1, max_length=20_000)
     answers: str = Field(min_length=1, max_length=12_000)
@@ -1067,8 +1134,16 @@ class ReviewRequest(BaseModel):
     from_rag: Optional[bool] = False  # Whether the question came from RAG (free)
     homework_doc_id: Optional[str] = None  # RAG document id if available
     reward_activity_id: Optional[str] = Field(default=None, max_length=100)
+    # Present only when a learner opened one specific Study Buddy challenge.
+    # It is verified server-side against the child's own open challenge before
+    # it can award any bonus.
+    study_buddy_challenge_id: Optional[str] = Field(default=None, max_length=80)
     question_index: Optional[int] = Field(default=None, ge=0, le=500)
     is_eleven_plus: bool = False
+    # Gentle child-side thinking checkpoint. This is used only to discourage
+    # accidental rapid clicking; it is not stored as a behavioural profile.
+    thinking_time_ms: Optional[int] = Field(default=0, ge=0, le=86_400_000)
+    thinking_checkpoint: bool = False
 
 
 class ExplainDeepRequest(BaseModel):
@@ -1131,6 +1206,18 @@ class AdminSubscriptionCreateRequest(BaseModel):
     plan: str = HOMEWORK_PREMIUM_PLAN
     duration: str  # "5_days", "1_month", or "months"
     months: Optional[int] = None
+
+
+class AdminPlanSettingsUpdateRequest(BaseModel):
+    """Protected updates for a paid plan's future price and child allowance."""
+    price_pence: int = Field(ge=50, le=999_999)
+    max_students: int = Field(ge=1, le=1_000)
+
+
+class AdminStudyBuddySettingsUpdateRequest(BaseModel):
+    """Safe, global caps for a child's Study Buddy activity."""
+    max_buddies_per_learner: Optional[int] = Field(default=None, ge=1, le=100)
+    max_emojis_per_learner: Optional[int] = Field(default=None, ge=1, le=100)
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -1891,11 +1978,11 @@ def save_topic_mastery_explanation(
     question_index: int,
     explanation: str,
     model_used: Optional[str] = None,
-) -> None:
+) -> dict:
     """持久化单题讲解，供后续学生复用（不含任何学生答案）。"""
     from src.webapp.topic_mastery_explanation_store import save_explanation
 
-    save_explanation(
+    return save_explanation(
         key=key,
         doc_id=doc_id,
         subject=subject,
@@ -1917,11 +2004,11 @@ def save_year_round_explanation(
     question_index: int,
     explanation: str,
     model_used: Optional[str] = None,
-) -> None:
+) -> dict:
     """持久化 52 周计划的单题讲解，供后续学生复用（不含任何学生答案）。"""
     from src.webapp.topic_mastery_explanation_store import save_explanation
 
-    save_explanation(
+    return save_explanation(
         key=key,
         doc_id=doc_id,
         subject=subject,
@@ -1932,6 +2019,104 @@ def save_year_round_explanation(
         explanation=explanation,
         model_used=model_used,
     )
+
+
+def _elevenplus_explanation_cache_key(scope: str, question_key: str) -> str:
+    """Keep generic 11+ explanations separate from other short-lived caches."""
+    return f"elevenplus_explanation:{str(scope or 'general')}:{str(question_key or '')}"
+
+
+def _elevenplus_explanation_fallback() -> str:
+    """Return a useful, answer-free explanation if the provider is unavailable."""
+    return (
+        "## How to solve it\n"
+        "Read the question slowly and pick out the important clues. Choose the "
+        "rule, pattern or method that fits, then work through it one small step "
+        "at a time. Check that your final choice answers every part of the question.\n\n"
+        "## Why it works\n"
+        "Small, careful steps make it easier to use the right method and spot a "
+        "mistake before you finish.\n\n"
+        "## Helpful tip\n"
+        "If you feel stuck, circle the key words first, then say the method you "
+        "will try before you start."
+    )
+
+
+async def _load_cached_elevenplus_explanation(
+    scope: str, question_key: str,
+) -> Optional[str]:
+    """Load a generic saved 11+ explanation without blocking the event loop.
+
+    The in-memory/Redis layer removes repeat database reads. The database is
+    still the durable source of truth, and a temporary read failure must not
+    stop a new explanation from being generated.
+    """
+    from src.cache import explain_cache
+
+    cache_key = _elevenplus_explanation_cache_key(scope, question_key)
+    cached = explain_cache.get(cache_key)
+    if isinstance(cached, dict):
+        text = str(cached.get("explanation") or "").strip()
+        if text:
+            return text
+
+    try:
+        saved = await run_blocking(
+            load_elevenplus_explanation,
+            question_key,
+            timeout=5,
+            limit_concurrency=False,
+        )
+    except Exception:
+        logger.exception("Could not load saved 11+ %s explanation", scope)
+        return None
+
+    text = str(saved or "").strip()
+    if text:
+        explain_cache.set(cache_key, {"success": True, "explanation": text})
+        return text
+    return None
+
+
+async def _persist_elevenplus_explanation(
+    scope: str,
+    question_key: str,
+    saver,
+    *,
+    explanation: str,
+    **save_kwargs,
+) -> tuple[str, bool]:
+    """Save the first usable explanation and always leave a fast cache entry.
+
+    A concurrent Cloud Run worker may have saved the same question first. In
+    that case the store returns its original explanation, which is what every
+    child should see thereafter. Storage trouble is non-fatal: the generated
+    explanation is still safe to return and is held in the short-lived cache.
+    """
+    from src.cache import explain_cache
+
+    text = str(explanation or "").strip()
+    persisted = False
+    try:
+        row = await run_blocking(
+            saver,
+            explanation=text,
+            timeout=8,
+            limit_concurrency=False,
+            **save_kwargs,
+        )
+        stored = str((row or {}).get("explanation") or "").strip()
+        if stored:
+            text = stored
+            persisted = True
+    except Exception:
+        logger.exception("Could not persist 11+ %s explanation", scope)
+
+    explain_cache.set(
+        _elevenplus_explanation_cache_key(scope, question_key),
+        {"success": True, "explanation": text},
+    )
+    return text, persisted
 
 
 def _generate_elevenplus_explanation(question: str, subject: str) -> str:
@@ -1954,7 +2139,9 @@ def _generate_elevenplus_explanation(question: str, subject: str) -> str:
         build_messages(prompt),
         model=DETAIL_REVIEW_MODEL,
         temperature=0.2,
-        max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 2000, maximum=4000),
+        max_tokens=_token_limit(
+            "ELEVENPLUS_DETAIL_EXPLANATION_MAX_TOKENS", 1_400, maximum=2_400
+        ),
         operation="elevenplus_explain",
     )
 
@@ -1995,27 +2182,53 @@ async def get_topic_mastery_explanation(req: Request, request: TopicMasteryExpla
             question=request.question,
         )
 
-        saved = load_elevenplus_explanation(key)
+        saved = await _load_cached_elevenplus_explanation("topic-mastery", key)
         if saved:
-            response = JSONResponse({"success": True, "explanation": saved})
+            response = JSONResponse({
+                "success": True,
+                "explanation": saved,
+                "from_saved": True,
+                "saved": True,
+            })
             _set_anon_cookie(response, new_anon_session_id, req)
             return response
 
-        explanation = await run_blocking(
-            _generate_elevenplus_explanation,
-            request.question,
-            request.subject,
-            timeout=120,
-            limit_concurrency=False,
-        )
+        try:
+            explanation = await run_blocking(
+                _generate_elevenplus_explanation,
+                request.question,
+                request.subject,
+                timeout=120,
+            )
+        except Exception:
+            logger.exception("Topic Mastery explanation generation failed")
+            explanation = ""
         explanation = str(explanation or "").strip()
         if not explanation:
-            return JSONResponse(
-                status_code=502,
-                content={"success": False, "error": "This explanation could not be created. You can try again."},
+            # Do not permanently save a generic fallback. A later request can
+            # still receive the full explanation after a temporary provider
+            # outage, while a short cache prevents rapid repeat requests.
+            explanation = _elevenplus_explanation_fallback()
+            from src.cache import explain_cache
+            explain_cache.set(
+                _elevenplus_explanation_cache_key("topic-mastery", key),
+                {"success": True, "explanation": explanation},
+                ttl=300,
             )
+            response = JSONResponse({
+                "success": True,
+                "explanation": explanation,
+                "from_saved": False,
+                "saved": False,
+                "llm_fallback": True,
+            })
+            _set_anon_cookie(response, new_anon_session_id, req)
+            return response
 
-        save_topic_mastery_explanation(
+        explanation, persisted = await _persist_elevenplus_explanation(
+            "topic-mastery",
+            key,
+            save_topic_mastery_explanation,
             key=key,
             doc_id=request.doc_id or "",
             subject=request.subject,
@@ -2025,7 +2238,12 @@ async def get_topic_mastery_explanation(req: Request, request: TopicMasteryExpla
             explanation=explanation,
             model_used=DETAIL_REVIEW_MODEL,
         )
-        response = JSONResponse({"success": True, "explanation": explanation})
+        response = JSONResponse({
+            "success": True,
+            "explanation": explanation,
+            "from_saved": False,
+            "saved": persisted,
+        })
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
     except HTTPException:
@@ -2075,27 +2293,50 @@ async def get_year_round_explanation(req: Request, request: YearRoundExplainRequ
             question=request.question,
         )
 
-        saved = load_elevenplus_explanation(key)
+        saved = await _load_cached_elevenplus_explanation("year-round", key)
         if saved:
-            response = JSONResponse({"success": True, "explanation": saved})
+            response = JSONResponse({
+                "success": True,
+                "explanation": saved,
+                "from_saved": True,
+                "saved": True,
+            })
             _set_anon_cookie(response, new_anon_session_id, req)
             return response
 
-        explanation = await run_blocking(
-            _generate_elevenplus_explanation,
-            request.question,
-            request.subject,
-            timeout=120,
-            limit_concurrency=False,
-        )
+        try:
+            explanation = await run_blocking(
+                _generate_elevenplus_explanation,
+                request.question,
+                request.subject,
+                timeout=120,
+            )
+        except Exception:
+            logger.exception("11+ year-round explanation generation failed")
+            explanation = ""
         explanation = str(explanation or "").strip()
         if not explanation:
-            return JSONResponse(
-                status_code=502,
-                content={"success": False, "error": "This explanation could not be created. You can try again."},
+            explanation = _elevenplus_explanation_fallback()
+            from src.cache import explain_cache
+            explain_cache.set(
+                _elevenplus_explanation_cache_key("year-round", key),
+                {"success": True, "explanation": explanation},
+                ttl=300,
             )
+            response = JSONResponse({
+                "success": True,
+                "explanation": explanation,
+                "from_saved": False,
+                "saved": False,
+                "llm_fallback": True,
+            })
+            _set_anon_cookie(response, new_anon_session_id, req)
+            return response
 
-        save_year_round_explanation(
+        explanation, persisted = await _persist_elevenplus_explanation(
+            "year-round",
+            key,
+            save_year_round_explanation,
             key=key,
             doc_id=request.doc_id or "",
             subject=request.subject,
@@ -2105,7 +2346,12 @@ async def get_year_round_explanation(req: Request, request: YearRoundExplainRequ
             explanation=explanation,
             model_used=DETAIL_REVIEW_MODEL,
         )
-        response = JSONResponse({"success": True, "explanation": explanation})
+        response = JSONResponse({
+            "success": True,
+            "explanation": explanation,
+            "from_saved": False,
+            "saved": persisted,
+        })
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
     except HTTPException:
@@ -2173,10 +2419,16 @@ async def check_homework_mistake_practice(req: Request):
 async def get_11plus_mistake_practice(
     req: Request,
     subject: Optional[str] = None,
+    topic: Optional[str] = None,
     limit: int = 12,
     summary: bool = False,
 ):
-    """Return saved 11+ mistakes without exposing answer keys to the browser."""
+    """Return a child's complete saved 11+ mistake bank safely.
+
+    Regular 11+ Practice, Topic Mastery, the Year-Round Plan, and mock exams
+    all use this one bank.  The browser receives questions and options only;
+    the answer key stays server-side until the child marks their own attempt.
+    """
     try:
         resolved_student_id, logged_in_username, new_anon_session_id = await _resolve_request_identity(req)
         await _require_registered_identity(
@@ -2196,28 +2448,43 @@ async def get_11plus_mistake_practice(
             return _subscription_required_response(
                 "My Mistake Practice", ELEVENPLUS_PREMIUM_PLAN, logged_in_username, resolved_student_id
             )
-        from src.progress_db import get_mistake_questions, get_mistake_subject_counts
+        from src.progress_db import (
+            get_mistake_questions,
+            get_mistake_subject_counts,
+            get_mistake_topic_counts,
+        )
         items = await run_blocking(
             get_mistake_questions,
             str(resolved_student_id),
             subject=subject,
+            topic=topic,
             limit=max(1, min(int(limit or 12), 300)),
             timeout=8,
             limit_concurrency=False,
         )
         subject_counts = {}
+        topic_counts = []
         if summary:
-            subject_counts = await run_blocking(
-                get_mistake_subject_counts,
-                str(resolved_student_id),
-                timeout=8,
-                limit_concurrency=False,
+            subject_counts, topic_counts = await asyncio.gather(
+                run_blocking(
+                    get_mistake_subject_counts,
+                    str(resolved_student_id),
+                    timeout=8,
+                    limit_concurrency=False,
+                ),
+                run_blocking(
+                    get_mistake_topic_counts,
+                    str(resolved_student_id),
+                    timeout=8,
+                    limit_concurrency=False,
+                ),
             )
         response = JSONResponse({
             "success": True,
             "questions": items,
             "count": len(items),
             "subject_counts": subject_counts,
+            "topic_counts": topic_counts,
         })
         _set_anon_cookie(response, new_anon_session_id, req)
         return response
@@ -2530,6 +2797,21 @@ async def api_review(
         profile = dict(request_body.profile or {})
         profile["student_id"] = resolved_student_id
 
+        # Server-side backstop for child sessions. Parents are not blocked.
+        if (
+            not logged_in_username
+            and not str(resolved_student_id).startswith("anon_")
+            and request_body.thinking_checkpoint
+            and int(request_body.thinking_time_ms or 0) < get_thinking_pause_ms()
+        ):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "error": "Take a little thinking time first. Read the question carefully, check your answer, then try again."
+                },
+            )
+
         if request_body.session_id:
             session_owner = owner_key(logged_in_username or resolved_student_id)
             session = await run_blocking(
@@ -2693,6 +2975,91 @@ async def api_review(
                         timeout=10,
                         limit_concurrency=False,
                     )
+                    if (
+                        reward_update.get("activity_xp", 0) > 0
+                        and request_body.study_buddy_challenge_id
+                    ):
+                        try:
+                            from src.webapp.study_buddy_store import (
+                                complete_challenge_for_verified_activity,
+                            )
+
+                            completed_challenge = await run_blocking(
+                                complete_challenge_for_verified_activity,
+                                challenge_id=request_body.study_buddy_challenge_id,
+                                student_id=resolved_student_id,
+                                subject=request_body.subject,
+                                timeout=10,
+                                limit_concurrency=False,
+                            )
+                            if completed_challenge:
+                                challenge_reward = dict(
+                                    completed_challenge.get("reward") or {}
+                                )
+                                new_badges = list(reward_update.get("new_badges") or [])
+                                seen_badges = {
+                                    str(badge.get("code") or badge.get("title") or "")
+                                    for badge in new_badges
+                                    if isinstance(badge, dict)
+                                }
+                                for badge in challenge_reward.get("new_badges") or []:
+                                    if not isinstance(badge, dict):
+                                        continue
+                                    badge_key = str(
+                                        badge.get("code") or badge.get("title") or ""
+                                    )
+                                    if badge_key and badge_key not in seen_badges:
+                                        new_badges.append(badge)
+                                        seen_badges.add(badge_key)
+                                reward_update = {
+                                    **reward_update,
+                                    "awarded_xp": int(
+                                        reward_update.get("awarded_xp") or 0
+                                    ) + int(challenge_reward.get("awarded_xp") or 0),
+                                    "awarded_gift_points": int(
+                                        reward_update.get("awarded_gift_points") or 0
+                                    ) + int(
+                                        challenge_reward.get("awarded_gift_points") or 0
+                                    ),
+                                    "lifetime_xp": int(
+                                        challenge_reward.get("lifetime_xp")
+                                        or reward_update.get("lifetime_xp")
+                                        or 0
+                                    ),
+                                    "gift_points": int(
+                                        challenge_reward.get("gift_points")
+                                        or reward_update.get("gift_points")
+                                        or 0
+                                    ),
+                                    "level": challenge_reward.get("level")
+                                    or reward_update.get("level"),
+                                    "new_badges": new_badges,
+                                    "buddy_challenge_completions": [
+                                        {
+                                            "id": str(completed_challenge["id"]),
+                                            "title": str(completed_challenge["title"]),
+                                            "challenge_type": str(
+                                                completed_challenge["challenge_type"]
+                                            ),
+                                            "awarded_xp": int(
+                                                challenge_reward.get("awarded_xp") or 0
+                                            ),
+                                            "awarded_gift_points": int(
+                                                challenge_reward.get(
+                                                    "awarded_gift_points"
+                                                )
+                                                or 0
+                                            ),
+                                        }
+                                    ],
+                                }
+                        except Exception:
+                            # The normal learning reward has already been
+                            # saved.  Do not hide the child's feedback if the
+                            # optional Study Buddy bonus needs a retry.
+                            logger.exception(
+                                "Could not auto-complete Study Buddy challenge"
+                            )
                     result = {**result, "reward_update": reward_update}
                     if reward_update.get("activity_xp", 0) > 0:
                         background_tasks.add_task(
@@ -3586,6 +3953,26 @@ async def admin_access_status(req: Request):
     return {"success": True, "is_admin": True, "username": username}
 
 
+@app.get("/api/thinking-pause-config")
+async def thinking_pause_config():
+    """Return the current learning pause used by the child review flow."""
+    return {"success": True, "seconds": get_thinking_pause_ms() / 1000}
+
+
+@app.get("/api/admin/thinking-pause")
+async def admin_get_thinking_pause(req: Request):
+    _require_admin(req)
+    return {"success": True, "seconds": get_thinking_pause_ms() / 1000}
+
+
+@app.put("/api/admin/thinking-pause")
+async def admin_set_thinking_pause(req: Request, body: ThinkingPauseSettingsRequest):
+    _require_admin(req)
+    milliseconds = round(body.seconds * 1000)
+    value = set_thinking_pause_ms(milliseconds)
+    return {"success": True, "seconds": value / 1000}
+
+
 @app.get("/api/admin/overview")
 async def admin_overview():
     """管理后台概览数据"""
@@ -3918,6 +4305,90 @@ async def admin_create_subscription(req: Request, request: AdminSubscriptionCrea
         raise HTTPException(status_code=500, detail="The administrator action failed.")
 
 
+@app.get("/api/admin/plan-settings")
+async def admin_plan_settings(req: Request):
+    """Return paid-plan settings for the subscription dashboard."""
+    _require_admin(req)
+    from src.webapp.account_store import list_plan_settings
+    return {"success": True, "plans": list_plan_settings()}
+
+
+@app.put("/api/admin/plan-settings/{plan}")
+async def admin_update_plan_settings(
+    plan: str,
+    req: Request,
+    request: AdminPlanSettingsUpdateRequest,
+):
+    """Apply a plan capacity change and, when needed, a new Stripe price."""
+    admin_username = _require_admin(req)
+    if plan not in PREMIUM_PLAN_NAMES:
+        raise HTTPException(status_code=400, detail="Unknown subscription plan")
+    from src.webapp.billing import update_paid_plan_settings
+    try:
+        saved = await run_blocking(
+            update_paid_plan_settings,
+            plan,
+            price_pence=request.price_pence,
+            max_students=request.max_students,
+            timeout=20,
+            limit_concurrency=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    logger.info(
+        "Admin %s updated plan settings for %s (price_pence=%s, max_students=%s)",
+        admin_username,
+        plan,
+        saved["price_pence"],
+        saved["max_students"],
+    )
+    return {"success": True, "plan": saved}
+
+
+@app.get("/api/admin/study-buddy-settings")
+async def admin_study_buddy_settings(req: Request):
+    """Return the current global Study Buddy connection cap."""
+    _require_admin(req)
+    from src.webapp.study_buddy_store import get_study_buddy_settings, init_study_buddy_db
+    init_study_buddy_db()
+    return {"success": True, "settings": get_study_buddy_settings()}
+
+
+@app.put("/api/admin/study-buddy-settings")
+async def admin_update_study_buddy_settings(
+    req: Request,
+    request: AdminStudyBuddySettingsUpdateRequest,
+):
+    """Change the caps for Study Buddy connections and kind emoji sending."""
+    admin_username = _require_admin(req)
+    from src.webapp.study_buddy_store import (
+        get_study_buddy_settings,
+        init_study_buddy_db,
+        set_max_buddies_per_learner,
+        set_max_emojis_per_learner,
+    )
+    init_study_buddy_db()
+    try:
+        if request.max_buddies_per_learner is None and request.max_emojis_per_learner is None:
+            raise ValueError("Choose a Study Buddy limit to save.")
+        if request.max_buddies_per_learner is not None:
+            set_max_buddies_per_learner(request.max_buddies_per_learner)
+        if request.max_emojis_per_learner is not None:
+            set_max_emojis_per_learner(request.max_emojis_per_learner)
+        settings = get_study_buddy_settings()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info(
+        "Admin %s updated Study Buddy limits (buddies=%s, emojis=%s)",
+        admin_username,
+        settings["max_buddies_per_learner"],
+        settings["max_emojis_per_learner"],
+    )
+    return {"success": True, "settings": settings}
+
+
 # --- Test account management for admins ---
 
 @app.post("/api/admin/test-account")
@@ -3962,34 +4433,6 @@ async def admin_toggle_test(req: Request, username: str, enable: bool = True):
         raise HTTPException(status_code=404, detail="User not found")
     ok = set_user_test_flag(username, bool(enable))
     return {"success": ok, "is_test": bool(enable)}
-
-
-@app.get("/api/admin/mock-exam-statistics")
-async def admin_mock_exam_statistics(req: Request, limit: int = 1000):
-    """Return aggregate 11+ mock-exam usage and score statistics."""
-    _require_admin(req)
-    from src.progress_db import get_admin_mock_exam_statistics
-    from src.elevenplus_mock_exams import EXAMS
-
-    stats = await run_blocking(
-        get_admin_mock_exam_statistics,
-        limit=max(1, min(int(limit), 2000)),
-        timeout=10,
-        limit_concurrency=False,
-    )
-    result = []
-    for row in stats:
-        exam = EXAMS.get(row.get("exam_id")) or {}
-        result.append({
-            **row,
-            "mock_name": exam.get("title") or row.get("exam_id"),
-            "school_or_area": exam.get("school") or "General / National",
-            "minutes": int(exam.get("duration_minutes") or 0),
-            "number_of_questions": int(exam.get("question_count") or len(exam.get("question_ids") or ())),
-            "category": exam.get("category") or "",
-            "stage": exam.get("stage") or "",
-        })
-    return {"success": True, "statistics": result}
 
 
 @app.get("/api/admin/ai-metrics")

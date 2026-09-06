@@ -13,7 +13,7 @@
     
     <!-- Local, allow-listed rendering for learner-facing AI output -->
     <script src="/static/js/marked-lite.js" defer></script>
-    <script src="/static/js/safe_markdown.js" defer></script>
+    <script src="/static/js/safe_markdown.js?v=20260906-friendly-maths" defer></script>
     <link rel="stylesheet" href="/static/css/multiple-choice.css">
     
     <style>
@@ -1109,6 +1109,7 @@
 <style>
 </style>
 <link rel="stylesheet" href="/static/css/site-consistency.css?v=20260817-1">
+<link rel="stylesheet" href="/static/css/study-buddies.css?v=20260905-parent-login-emoji-flight">
 </head>
 <body class="hm-app hm-page">
     <a class="hm-skip-link" href="#homework">Skip to learning choices</a>
@@ -1143,6 +1144,25 @@
             </div>
             <div class="app-welcome-tip">Tip: one short session is enough</div>
         </section>
+
+        <section id="parent-child-login-guide" class="parent-child-login-guide" aria-labelledby="parent-child-login-guide-title" hidden>
+<!--            <span class="parent-child-login-icon" aria-hidden="true">🧒</span>-->
+            <div>
+                <h2 id="parent-child-login-guide-title">🧒 Is your child ready to learn?</h2>
+                <p>They can use their own private learning space with a Child login code. It is different from your parent email and password. Choose child sign-in next to their code in Parent Dashboard to have it ready for them.</p>
+            </div>
+            <div class="parent-child-login-actions">
+<!--                <a class="parent-child-login-link" href="/parent-dashboard#family-title">Find a child’s code</a>-->
+                <a class="parent-child-login-link parent-child-login-link-primary" href="/parent-dashboard#family-title">Find code</a>
+            </div>
+        </section>
+
+        <a class="study-buddies-quick-access" href="/study-buddies" data-study-buddies-page-link aria-label="Open the Study Buddies page">
+            <span class="study-buddies-quick-sparkles" aria-hidden="true"><span>✨</span><span>⭐</span></span>
+            <span class="study-buddies-quick-icon" aria-hidden="true">🤝</span>
+            <span class="study-buddies-quick-copy"><small>Play &amp; learn</small><strong>Study Buddies</strong></span>
+            <span class="study-buddies-quick-arrow" aria-hidden="true">→</span>
+        </a>
 
         <!-- Tabs -->
         <div class="tabs">
@@ -1575,9 +1595,9 @@
     <script src="/static/js/avatar-data.js?v=20260811-avatar-pet-1" defer></script>
     <script src="/static/js/avatar-character.js?v=20260811-avatar-pet-1" defer></script>
     <script src="/static/js/avatar-pet.js?v=20260811-avatar-pet-1" defer></script>
-    <script src="/static/js/auth-nav.js?v=20260809-avatar-polish-1" defer></script>
+    <script src="/static/js/auth-nav.js?v=20260905-study-buddies-menu-1" defer></script>
     <script src="/static/js/text-to-speech.js?v=20260806" defer></script>
-    <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp-20260806-family-tts-mocks-make-homework-render-fix-11plus-saved-plan-kid-avatar-review-stable-cute-character-avatar-detail-review-stable-uploaded-review-isolation-free-account-gate-explain-all-questions-20260820" defer></script>
+    <script src="/static/js/app.js?v=20260728-old-ipad-fix-20260729-rag-review-fallback-beta-xp-20260806-family-tts-mocks-make-homework-render-fix-11plus-saved-plan-kid-avatar-review-stable-cute-character-avatar-detail-review-stable-uploaded-review-isolation-free-account-gate-explain-all-questions-20260820-child-login-guide-20260905-11plus-mistakes-route" defer></script>
     <script src="/static/js/multiple-choice.js" defer></script>
     <script>
     (function () {

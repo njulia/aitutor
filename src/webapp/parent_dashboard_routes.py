@@ -57,10 +57,6 @@ class LearningTargetRequest(BaseModel):
     parent_password: SecretStr
 
 
-class XpDigestRequest(BaseModel):
-    parent_password: SecretStr
-
-
 class LearningSummaryPreferencesRequest(BaseModel):
     enabled: bool = True
     frequency: str = Field(default="weekly", pattern="^(custom|weekly|monthly|yearly)$")
@@ -68,7 +64,6 @@ class LearningSummaryPreferencesRequest(BaseModel):
 
 
 class GiftRequestDecision(BaseModel):
-    parent_password: SecretStr
     xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
 
 
@@ -202,6 +197,7 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
                 "age": adjusted["age"],
                 "is_default": bool(adjusted.get("is_default")),
                 "kid_code": adjusted.get("kid_code"),
+                "buddy_code": adjusted.get("buddy_code"),
                 "learning_target": target,
                 "wallet": wallet,
                 "progress": {
@@ -313,9 +309,8 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
         return {"success": True, "digest": digest}
 
     @router.post("/api/parent/xp-digest/send")
-    async def send_xp_digest_email_route(request: Request, body: XpDigestRequest):
+    async def send_xp_digest_email_route(request: Request):
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         digest = await asyncio.to_thread(build_learning_summary_digest, account["id"])
         if not digest.get("kids"):
             raise HTTPException(status_code=409, detail="There is no recent learning activity to email yet.")
@@ -367,7 +362,6 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
     ):
         """家长同意礼物请求，扣除 Gift Points。"""
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         try:
             result = await asyncio.to_thread(
                 get_reward_store().decide_redemption_with_custom_xp,
@@ -390,7 +384,6 @@ def build_parent_dashboard_router(resolve_username, has_subscription=None) -> AP
     ):
         """家长拒绝礼物请求，不扣除点数。"""
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         try:
             result = await asyncio.to_thread(
                 get_reward_store().decide_redemption_with_custom_xp,

@@ -67,6 +67,14 @@ MAX_STUDENTS_BY_PLAN = {
 }
 DEFAULT_MAX_STUDENTS = 2  # 无订阅或未知计划时的默认限制
 
+# These are the live defaults used until an administrator saves an override.
+# Amounts are stored in pence so billing never relies on floating point values.
+PLAN_SETTINGS_DEFAULTS = {
+    HOMEWORK_PREMIUM_PLAN: {"price_pence": 499, "max_students": 2},
+    ELEVENPLUS_PREMIUM_PLAN: {"price_pence": 999, "max_students": 4},
+    SCHOOL_HOMEWORK_PREMIUM_PLAN: {"price_pence": 1999, "max_students": 40},
+}
+
 accounts = Table(
     "accounts",
     _metadata,
@@ -95,6 +103,9 @@ students = Table(
     Column("default_for_account", String(80), nullable=True, unique=True),
     # 永久孩子登录码，与家庭码配对使用，不包含任何个人数据
     Column("kid_code", String(20), nullable=True, unique=True, index=True),
+    # A separate shareable code for the parent-approved Study Buddy feature.
+    # This must never double as a child's sign-in credential.
+    Column("buddy_code", String(20), nullable=True, unique=True, index=True),
     # --- ADD THE FOLLOWING LINE HERE ---
     Column("last_login_at", DateTime(timezone=True), nullable=True),
     # The last date on which a parent explicitly selected the year group.
@@ -152,6 +163,24 @@ subscriptions = Table(
     Column("stripe_subscription_id", String(100), nullable=True, unique=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+plan_settings = Table(
+    "subscription_plan_settings", _metadata,
+    Column("plan", String(80), primary_key=True),
+    Column("price_pence", Integer, nullable=False),
+    Column("max_students", Integer, nullable=False),
+    # A price is immutable in Stripe. When an administrator changes the price,
+    # this records the replacement Price used for all new Checkout sessions.
+    Column("stripe_price_id", String(100), nullable=True),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+plan_price_history = Table(
+    "subscription_plan_price_history", _metadata,
+    Column("stripe_price_id", String(100), primary_key=True),
+    Column("plan", String(80), nullable=False, index=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 beta_access_grants = Table(
@@ -215,12 +244,36 @@ def init_account_db() -> None:
 # 孩子登录码使用的字符表，去除了容易混淆的 I O 0 1
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 KID_CODE_LENGTH = 6
+BUDDY_CODE_NUMBER_DIGITS = 4
 _CODE_CREATE_ATTEMPTS = 10
+_CURRENT_BUDDY_CODE_RE = re.compile(r"^[A-Z0-9]{1,10}\d{4}$")
+_LEGACY_BUDDY_CODE_RE = re.compile(r"^([A-Z0-9]{1,10})-(\d{4})$")
 
 
 def _generate_code(length: int = 6) -> str:
     """生成人类可读、可输入的永久登录码，避免混淆字符。"""
     return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
+
+
+def _generate_buddy_code(nickname: str) -> str:
+    """Create an easy-to-say Buddy Code, such as ``ALEX4821``."""
+    # The nickname was already checked when the learner was created. Keep a
+    # short letters/numbers version for typing, with a four-digit random part
+    # so common names remain unique at a much larger scale.
+    prefix = "".join(re.findall(r"[A-Z0-9]+", str(nickname).upper()))[:10]
+    prefix = prefix or "BUDDY"
+    number = secrets.randbelow(9_000) + 1_000
+    return f"{prefix}{number:0{BUDDY_CODE_NUMBER_DIGITS}d}"
+
+
+def _is_current_buddy_code(value: Any) -> bool:
+    return bool(_CURRENT_BUDDY_CODE_RE.fullmatch(str(value or "").upper()))
+
+
+def _normalise_legacy_buddy_code(value: Any) -> Optional[str]:
+    """Remove the retired dash without accepting it as a live code format."""
+    match = _LEGACY_BUDDY_CODE_RE.fullmatch(str(value or "").upper())
+    return f"{match.group(1)}{match.group(2)}" if match else None
 
 
 def _ensure_legacy_columns() -> None:
@@ -232,6 +285,7 @@ def _ensure_legacy_columns() -> None:
     additions = [
         ("accounts", "family_code", "VARCHAR(16)"),
         ("students", "kid_code", "VARCHAR(20)"),
+        ("students", "buddy_code", "VARCHAR(20)"),
         ("students", "last_login_at", "TIMESTAMP NULL"),
         ("students", "year_group_set_at", "TIMESTAMP NULL"),
     ]
@@ -246,6 +300,7 @@ def _ensure_legacy_columns() -> None:
             pass
     # 迁移旧格式: 移除 FAM- 和 KID- 前缀
     _migrate_code_prefixes()
+    _backfill_buddy_codes()
 
 
 def _migrate_code_prefixes() -> None:
@@ -264,6 +319,29 @@ def _migrate_code_prefixes() -> None:
                 "WHERE kid_code LIKE 'KID-%'"
             )
     except Exception:
+        pass
+
+
+def _backfill_buddy_codes() -> None:
+    """Ensure stored Buddy Codes use the current no-dash format."""
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_students_buddy_code "
+                "ON students (buddy_code)"
+            )
+            missing_ids = conn.execute(select(students.c.id).where(
+                (students.c.buddy_code.is_(None)) | (students.c.buddy_code == "")
+            )).scalars().all()
+            legacy_ids = conn.execute(select(students.c.id).where(
+                students.c.buddy_code.like("%-%")
+            )).scalars().all()
+        for student_id in {*missing_ids, *legacy_ids}:
+            _ensure_student_buddy_code(str(student_id))
+    except Exception:
+        # The normal profile-read path retries a missing code. Do not stop a
+        # production start if a legacy database is temporarily unavailable.
         pass
 
 
@@ -501,7 +579,10 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
             students.c.default_for_account == account_id,
         ))).first()
         if row:
-            return _dict(row) or {}
+            result = _dict(row) or {}
+            if not _is_current_buddy_code(result.get("buddy_code")):
+                result = _ensure_student_buddy_code(result["id"]) or result
+            return result
         account_exists = conn.execute(select(accounts.c.id).where(accounts.c.id == account_id)).first()
         existing = conn.execute(select(students).where(and_(
             students.c.account_id == account_id,
@@ -527,6 +608,7 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
                         id=f"stu_{uuid.uuid4().hex}", account_id=account_id, name=nickname,
                         year_group=year_group, age=age, year_group_set_at=now, is_active=True, is_default=True,
                         default_for_account=account_id, kid_code=_generate_code(KID_CODE_LENGTH),
+                        buddy_code=_generate_buddy_code(nickname),
                         created_at=now, updated_at=now,
                     ))
             except IntegrityError:
@@ -549,6 +631,8 @@ def ensure_default_student(account_id: str, name: str = "Learner", year_group: i
     # 既有孩子档案补发永久孩子登录码
     if not result.get("kid_code"):
         result = _ensure_student_kid_code(result["id"]) or result
+    if not _is_current_buddy_code(result.get("buddy_code")):
+        result = _ensure_student_buddy_code(result["id"]) or result
     return result
 
 
@@ -569,13 +653,148 @@ def _ensure_student_kid_code(student_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _ensure_student_buddy_code(student_id: str) -> Optional[Dict[str, Any]]:
+    """Issue a friendly sharing code without exposing sign-in data."""
+    for attempt in range(_CODE_CREATE_ATTEMPTS):
+        try:
+            with _engine().begin() as conn:
+                row = conn.execute(select(students).where(
+                    students.c.id == student_id
+                )).first()
+                current = _dict(row)
+                if not current:
+                    return None
+                if _is_current_buddy_code(current.get("buddy_code")):
+                    return current
+                legacy_code = _normalise_legacy_buddy_code(current.get("buddy_code"))
+                # Keep the familiar digits when possible.  If another learner
+                # already has that no-dash code, fall back to a fresh number.
+                code = legacy_code if legacy_code and attempt == 0 else _generate_buddy_code(
+                    str(current.get("name") or "Buddy")
+                )
+                conn.execute(
+                    update(students)
+                    .where(students.c.id == student_id)
+                    .values(
+                        buddy_code=code,
+                        updated_at=_now(),
+                    )
+                )
+                return _dict(conn.execute(
+                    select(students).where(students.c.id == student_id)
+                ).first())
+        except IntegrityError:
+            continue
+    return None
+
+
+def _plan_setting(plan: str, row: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if plan not in PLAN_SETTINGS_DEFAULTS:
+        raise ValueError("Unknown subscription plan")
+    defaults = PLAN_SETTINGS_DEFAULTS[plan]
+    saved = row or {}
+    return {
+        "plan": plan,
+        "name": PREMIUM_PLAN_NAMES[plan],
+        "price_pence": int(saved.get("price_pence") or defaults["price_pence"]),
+        "max_students": int(saved.get("max_students") or defaults["max_students"]),
+        "stripe_price_id": saved.get("stripe_price_id") or None,
+        "updated_at": saved.get("updated_at"),
+    }
+
+
+def get_plan_settings(plan: str) -> Dict[str, Any]:
+    """Return one paid plan's live pricing and learner-capacity settings."""
+    if plan not in PLAN_SETTINGS_DEFAULTS:
+        raise ValueError("Unknown subscription plan")
+    with _engine().begin() as conn:
+        row = _dict(conn.execute(
+            select(plan_settings).where(plan_settings.c.plan == plan)
+        ).first())
+    return _plan_setting(plan, row)
+
+
+def list_plan_settings() -> List[Dict[str, Any]]:
+    """Return the paid plans in the same stable order as the customer UI."""
+    with _engine().begin() as conn:
+        rows = {
+            str(row._mapping["plan"]): _dict(row)
+            for row in conn.execute(select(plan_settings)).all()
+        }
+    return [_plan_setting(plan, rows.get(plan)) for plan in PLAN_SETTINGS_DEFAULTS]
+
+
+def save_plan_settings(
+    plan: str,
+    *,
+    price_pence: int,
+    max_students: int,
+    stripe_price_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Persist one plan's customer price, capacity and optional Stripe Price ID."""
+    if plan not in PLAN_SETTINGS_DEFAULTS:
+        raise ValueError("Unknown subscription plan")
+    if not 50 <= int(price_pence) <= 999_999:
+        raise ValueError("Plan prices must be between 50p and £9,999.99")
+    if not 1 <= int(max_students) <= 1_000:
+        raise ValueError("A plan must allow between 1 and 1,000 children")
+
+    now = _now()
+    with _engine().begin() as conn:
+        existing = conn.execute(
+            select(plan_settings.c.plan).where(plan_settings.c.plan == plan)
+        ).first()
+        values = {
+            "price_pence": int(price_pence),
+            "max_students": int(max_students),
+            "updated_at": now,
+        }
+        if stripe_price_id is not None:
+            values["stripe_price_id"] = str(stripe_price_id)[:100]
+        if existing:
+            conn.execute(update(plan_settings).where(
+                plan_settings.c.plan == plan
+            ).values(**values))
+        else:
+            conn.execute(insert(plan_settings).values(plan=plan, **values))
+    return get_plan_settings(plan)
+
+
+def remember_plan_price(plan: str, stripe_price_id: str) -> None:
+    """Keep a safe plan mapping for subscriptions on a retired Stripe Price."""
+    if plan not in PLAN_SETTINGS_DEFAULTS:
+        raise ValueError("Unknown subscription plan")
+    price_id = str(stripe_price_id or "").strip()
+    if not price_id.startswith("price_"):
+        raise ValueError("Invalid Stripe Price ID")
+    with _engine().begin() as conn:
+        existing = conn.execute(select(plan_price_history.c.stripe_price_id).where(
+            plan_price_history.c.stripe_price_id == price_id
+        )).first()
+        if not existing:
+            conn.execute(insert(plan_price_history).values(
+                stripe_price_id=price_id,
+                plan=plan,
+                created_at=_now(),
+            ))
+
+
+def historical_plan_for_price(stripe_price_id: str) -> Optional[str]:
+    """Resolve one previously advertised price without exposing it publicly."""
+    with _engine().begin() as conn:
+        value = conn.execute(select(plan_price_history.c.plan).where(
+            plan_price_history.c.stripe_price_id == str(stripe_price_id or "").strip()
+        )).scalar()
+    return str(value) if value in PLAN_SETTINGS_DEFAULTS else None
+
+
 def _get_max_students_for_account(account_id: str) -> int:
     """根据账户的订阅计划获取允许的最大孩子数量。"""
     sub = get_active_subscription(account_id)
     if sub:
         plan = sub.get("plan", "")
-        if plan in MAX_STUDENTS_BY_PLAN:
-            return MAX_STUDENTS_BY_PLAN[plan]
+        if plan in PLAN_SETTINGS_DEFAULTS:
+            return get_plan_settings(plan)["max_students"]
     return DEFAULT_MAX_STUDENTS
 
 
@@ -617,6 +836,7 @@ def create_student(account_id: str, name: str, year_group: int, age: int) -> Dic
                         id=learner_id, account_id=account_id, name=nickname,
                         year_group=year_group, age=age, year_group_set_at=now, is_active=True, is_default=False,
                         default_for_account=None, kid_code=_generate_code(KID_CODE_LENGTH),
+                        buddy_code=_generate_buddy_code(nickname),
                         created_at=now, updated_at=now,
                     )
                 )
@@ -692,6 +912,8 @@ def get_student(student_id: str) -> Optional[Dict[str, Any]]:
     if result and not result.get("kid_code"):
         # 既有档案补发孩子登录码，保证家长仪表盘能展示可分享的码
         result = _ensure_student_kid_code(student_id) or result
+    if result and not _is_current_buddy_code(result.get("buddy_code")):
+        result = _ensure_student_buddy_code(student_id) or result
     return result
 
 
@@ -1461,8 +1683,8 @@ def get_subscription_stats() -> Dict[str, Any]:
     """Return entitlement counts from PostgreSQL, not a live Stripe list call."""
     now = _now()
     monthly_prices = {
-        "homework_monthly": 4.99,
-        "elevenplus_monthly": 9.99,
+        setting["plan"]: setting["price_pence"] / 100
+        for setting in list_plan_settings()
     }
     with _engine().begin() as conn:
         active_filter = and_(

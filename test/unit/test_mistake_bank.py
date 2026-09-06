@@ -88,12 +88,16 @@ def test_mistake_bank_groups_and_filters_by_topic(monkeypatch):
         {"question": "Q1", "subject": "Maths", "topic": "Fractions", "correct_answer": "A", "source_type": "mock_exam"},
         {"question": "Q2", "subject": "English", "topic": "Comprehension", "correct_answer": "B", "source_type": "topic_mastery"},
         {"question": "Q3", "subject": "Maths", "topic": "Fractions", "correct_answer": "C", "source_type": "year_round"},
+        {"question": "Q4", "subject": "English", "topic": "Comprehension", "correct_answer": "D", "source_type": "11plus_practice"},
     ])
 
     counts = progress_db.get_mistake_topic_counts("student-2")
     assert counts == [
-        {"subject": "English", "topic": "Comprehension", "count": 1},
+        {"subject": "English", "topic": "Comprehension", "count": 2},
         {"subject": "Maths", "topic": "Fractions", "count": 2},
     ]
     maths = progress_db.get_mistake_questions("student-2", subject="Maths", topic="Fractions")
     assert {item["question"] for item in maths} == {"Q1", "Q3"}
+
+    english = progress_db.get_mistake_questions("student-2", subject="English", topic="Comprehension")
+    assert {item["source_type"] for item in english} == {"topic_mastery", "11plus_practice"}

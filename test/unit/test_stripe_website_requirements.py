@@ -26,9 +26,8 @@ def test_pricing_discloses_currency_renewal_delivery_and_policies() -> None:
     pricing = _page("pricing.html")
 
     assert "pounds sterling (GBP)" in pricing
-    assert "£4.99 GBP is charged each month until cancelled" in pricing
-    assert "£9.99 GBP is charged each month until cancelled" in pricing
-    assert "does not renew automatically" in pricing
+    assert 'id="pricing-plans"' in pricing
+    assert "Loading current plans" in pricing
     assert "There is nothing to ship" in pricing
     assert 'href="/terms"' in pricing
     assert 'href="/refund-policy"' in pricing
@@ -41,6 +40,10 @@ def test_pricing_discloses_currency_renewal_delivery_and_policies() -> None:
     assert "/api/billing/status?refresh=true" in pricing
     assert 'id="pricing-nav-login"' in pricing
     assert 'id="pricing-nav-logout"' in pricing
+
+    pricing_script = _page("js/pricing.js")
+    assert "/api/billing/plans" in pricing_script
+    assert "/api/billing/checkout" in pricing_script
 
 
 def test_homepage_and_contact_page_expose_direct_support_and_legal_links() -> None:

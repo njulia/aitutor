@@ -32,9 +32,18 @@
     .kid-title { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
     .kid-title h3 { margin: 0; }
     .default-badge { background: #e7e5ff; border-radius: 999px; color: #4e46b9; font-size: .72rem; padding: 3px 8px; }
-    .kid-code { align-items: center; background: #fff; border: 1px dashed #adb8cd; border-radius: 8px; color: #413aa9; display: flex; font-family: ui-monospace, monospace; gap: 7px; justify-content: space-between; margin: 10px 0; padding: 7px 8px; word-break: normal; }
+    .kid-code { align-items: center; background: #fff; border: 1px dashed #adb8cd; border-radius: 8px; color: #413aa9; display: flex; font-family: ui-monospace, monospace; gap: 7px; justify-content: space-between; margin: 10px 0 5px; padding: 7px 8px; word-break: normal; }
     .kid-code-value { min-width: 0; white-space: nowrap; }
     .copy-code-button { flex: 0 0 auto; font-size: .7rem; line-height: 1; min-height: 0; padding: 5px 8px; }
+    .child-sign-in-button { background: linear-gradient(135deg, #ff8a3d, #e9507b); box-shadow: 0 3px 0 #b93f61; color: #fff; font-size: .76rem; }
+    .child-sign-in-button:hover { background: linear-gradient(135deg, #ff9d49, #f2608a); transform: translateY(-1px); }
+    .child-sign-in-button:focus-visible { outline: 3px solid #ffcb6b; outline-offset: 3px; }
+    .child-login-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 6px; }
+    .kid-code-help { color: #68758d; font-size: .79rem; line-height: 1.4; margin: 0 0 12px; }
+    .child-signin-guide { align-items: center; background: linear-gradient(135deg, #f0efff, #eef8ff); border: 1px solid #cfcdfc; border-radius: 12px; display: grid; gap: 14px; grid-template-columns: auto minmax(0, 1fr) auto; margin: 18px 0 20px; padding: 15px 16px; }
+    .child-signin-guide-icon { align-items: center; background: #fff; border-radius: 12px; display: flex; font-size: 1.75rem; height: 48px; justify-content: center; width: 48px; }
+    .child-signin-guide h2 { font-size: 1rem; margin: 0 0 3px; }
+    .child-signin-guide p { color: #53617c; font-size: .88rem; line-height: 1.45; margin: 0; }
     .metrics { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); margin: 14px 0; }
     .metric { background: #fff; border-radius: 8px; padding: 9px 5px; text-align: center; }
     .metric strong { color: #5149c4; display: block; font-size: 1.15rem; }
@@ -188,6 +197,8 @@
     .item-icon { font-size: 1.6rem; }
     .item-title { font-weight: 700; }
     .item-meta { color: #6f7c92; font-size: .82rem; margin-top: 3px; }
+    .study-buddy-request-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .study-buddy-request-actions .btn { font-size: .85rem; padding: 8px 12px; }
     .empty { color: #718096; padding: 22px; text-align: center; }
     .score-trend-figure { margin: 4px 0 0; }
     .score-trend-plot { background: #f8f9ff; border: 1px solid #e1e5f1; border-radius: 12px; height: 320px; height: clamp(250px, 40vw, 340px); overflow: hidden; position: relative; }
@@ -219,6 +230,10 @@
       .section { padding: 18px; }
       .metrics { grid-template-columns: repeat(2, 1fr); }
       .list-item { align-items: flex-start; flex-direction: column; }
+      .child-signin-guide { grid-template-columns: auto minmax(0, 1fr); }
+      .child-signin-guide .btn { grid-column: 1 / -1; justify-self: start; }
+      .kid-code { align-items: flex-start; flex-direction: column; }
+      .child-login-actions { width: 100%; }
     }
   </style>
 <link rel="stylesheet" href="/static/css/site-consistency.css?v=20260817-1">
@@ -245,12 +260,22 @@
     <section class="section" aria-labelledby="family-title">
       <div class="section-heading">
         <div>
+          <p id="parent-study-buddies-link">Manage <a href="/parent-dashboard#study-buddies">👥 Study Buddies</a> requests</p>
           <h1 id="family-title">Set up child profile to track each child's progress</h1>
-          <p class="muted">Each child has their own private progress, XP, Gift Points and login code.</p>
+<!--          <p class="muted">Each child has their own private progress, XP, Gift Points and login code.</p>-->
           <p class="muted" id="family-limit-note"></p>
         </div>
         <button class="btn btn-primary" id="add-child-button" type="button">+ Add child</button>
       </div>
+
+      <aside class="child-signin-guide" aria-labelledby="child-signin-guide-title">
+        <span class="child-signin-guide-icon" aria-hidden="true">🧒</span>
+        <div>
+          <h2 id="child-signin-guide-title">Help your child sign in to their own space</h2>
+          <p>They use the Child login code shown on their card below, not your email or parent password. Choose <strong>“Open child sign-in”</strong> next to the right code to take it safely to the child’s sign-in page.</p>
+        </div>
+        <a class="btn btn-primary" href="#kids-grid">See child login codes</a>
+      </aside>
 
       <form id="profile-form" class="profile-form">
         <h2 id="profile-form-title">Add a child</h2>
@@ -322,7 +347,7 @@
           </div>
           <button class="btn btn-primary" type="submit">Save email settings</button>
         </div>
-        <p class="muted" style="margin:10px 0 0">Manual “Email summary” is always available and is sent from <strong>Homework Magic Tutor</strong> (info@homeworkmagic.co.uk).</p>
+        <p class="muted" style="margin:10px 0 0">Manual “Email summary” is always available and uses <strong>info@homeworkmagic.co.uk</strong> as the sender.</p>
       </form>
     </section>
 
@@ -344,6 +369,12 @@
           <button class="btn btn-primary" type="submit">Add reward</button>
         </div>
       </form>
+    </section>
+
+    <section id="study-buddy-parent-panel" class="section" aria-labelledby="study-buddies">
+      <h2 id="study-buddies" tabindex="-1">👥 Study Buddy Requests</h2>
+      <p class="muted">Approve or decline requests for your child. Both families need to approve before children become study buddies.</p>
+      <div id="study-buddy-parent-list" class="list" role="status" aria-live="polite"><div class="empty">Loading requests…</div></div>
     </section>
   </main>
 
@@ -374,7 +405,7 @@
 
   <script src="/static/js/chart-lite.js?v=20260807" defer></script>
   <script src="/static/js/session-context.js?v=20260806" defer></script>
-  <script src="/static/js/parent-dashboard.js?v=20260807" defer></script>
+  <script src="/static/js/parent-dashboard.js?v=20260906-parent-buddy-actions" defer></script>
 
   <script>
   /*
@@ -593,5 +624,139 @@
   })();
   </script>
 
+<script>
+  (() => {
+    'use strict';
+
+    const list = document.getElementById('study-buddy-parent-list');
+
+    function showMessage(message) {
+      const item = document.createElement('p');
+      item.className = 'empty';
+      item.textContent = message;
+      list.replaceChildren(item);
+    }
+
+    function requestCard(request) {
+      const pending = request.status === 'pending';
+      const currentParentApproved = request.is_requester_parent
+        ? Boolean(request.requester_parent_approved)
+        : Boolean(request.target_parent_approved);
+      const card = document.createElement('article');
+      card.className = 'list-item';
+
+      const details = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'item-title';
+      title.textContent = request.other_nickname || 'Learner';
+
+      const learner = document.createElement('div');
+      learner.className = 'item-meta';
+      learner.textContent = request.other_year_group ? `Year ${request.other_year_group}` : 'Buddy request';
+
+      const status = document.createElement('div');
+      status.className = 'item-meta';
+      if (request.status === 'active') {
+        status.textContent = 'Status: Buddies are connected.';
+      } else if (request.status === 'declined' && !currentParentApproved) {
+        status.textContent = 'Status: You declined this request. You can approve it again.';
+      } else if (request.status === 'declined') {
+        status.textContent = 'Status: The other parent declined this request.';
+      } else if (pending && currentParentApproved) {
+        status.textContent = 'Status: You approved — waiting for the other parent.';
+      } else if (pending) {
+        status.textContent = 'Status: Waiting for your decision.';
+      } else {
+        status.textContent = `Status: ${request.status || 'pending'}`;
+      }
+      details.append(title, learner, status);
+      card.append(details);
+
+      if (request.status === 'active') {
+        const actions = document.createElement('div');
+        actions.className = 'study-buddy-request-actions';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-danger';
+        remove.textContent = 'Delete buddy';
+        remove.addEventListener('click', () => removeBuddy(request));
+        actions.append(remove);
+        card.append(actions);
+      } else if ((pending || request.status === 'declined') && !currentParentApproved) {
+        const actions = document.createElement('div');
+        actions.className = 'study-buddy-request-actions';
+        const decisions = request.status === 'declined'
+          ? [['Approve again', true, 'btn-primary']]
+          : [['Approve', true, 'btn-primary'], ['Decline', false, 'btn-secondary']];
+        for (const [label, approve, className] of decisions) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `btn ${className}`;
+          button.textContent = label;
+          button.addEventListener('click', () => decideBuddy(request.id, approve));
+          actions.append(button);
+        }
+        card.append(actions);
+      }
+      return card;
+    }
+
+    async function decideBuddy(id, approve) {
+      try {
+        const response = await fetch(
+          `/api/parent/study-buddies/requests/${encodeURIComponent(id)}`,
+          {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({approve}),
+          },
+        );
+        if (!response.ok) throw new Error('We could not update that request.');
+        await loadStudyBuddyParent();
+      } catch (error) {
+        showMessage(error.message || 'We could not update that request.');
+      }
+    }
+
+    async function removeBuddy(request) {
+      const name = request.other_nickname || 'this buddy';
+      if (!window.confirm(`Delete ${name} as a buddy for both children?`)) return;
+      try {
+        const response = await fetch(
+          `/api/parent/study-buddies/remove/${encodeURIComponent(request.id)}`,
+          {method: 'POST', credentials: 'same-origin'},
+        );
+        if (!response.ok) throw new Error('We could not delete this buddy.');
+        await loadStudyBuddyParent();
+      } catch (error) {
+        showMessage(error.message || 'We could not delete this buddy.');
+      }
+    }
+
+    async function loadStudyBuddyParent() {
+      try {
+        const response = await fetch('/api/parent/study-buddies/requests', {
+          credentials: 'same-origin',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage('Sign in as a parent to manage requests.');
+          return;
+        }
+        const requests = Array.isArray(data.requests) ? data.requests : [];
+        if (!requests.length) {
+          showMessage('No study buddy requests.');
+          return;
+        }
+        list.replaceChildren(...requests.map(requestCard));
+      } catch (error) {
+        showMessage('Study buddy requests could not be loaded just now.');
+      }
+    }
+
+    loadStudyBuddyParent();
+  })();
+</script>
 </body>
 </html>

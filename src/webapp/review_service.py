@@ -1316,9 +1316,6 @@ def explain_deep(
     from src.llm_client import build_messages, format_prompt
     from src.prompts import EXPLAIN_SINGLE_QUESTION_PROMPT, EXPLAIN_ALL_QUESTIONS_PROMPT
 
-    if llm_client is None:
-        raise RuntimeError("LLM client is not configured")
-
     raw_profile = dict(profile or {})
     profile = _normalise_profile(raw_profile)
     year_group = int(profile.get("year_group", 3))
@@ -1342,27 +1339,48 @@ def explain_deep(
 
     results: List[str] = []
     missing: List[Dict[str, Any]] = []
+    cached_count = 0
 
     for idx, item in selected:
         question = _question_for_detail(item)
         if not question:
             continue
+        persistent_key = homework_rag.detail_explanation_key(
+            question, subject, year_group, is_eleven_plus=is_eleven_plus
+        )
+        cache_key = stable_cache_key(
+            "review_detail_question_v2",
+            persistent_key,
+        )
+        cached = explain_cache.get(cache_key)
+        if isinstance(cached, dict) and cached.get("explanation"):
+            results.append(f"## Question {idx + 1}\n\n{str(cached['explanation']).strip()}")
+            cached_count += 1
+            continue
+
+        # A durable explanation is immutable and safe to reuse for another
+        # child because it contains only generic teaching text.  Keep this
+        # lookup after the fast cache, so repeated clicks do not wait on a
+        # database round trip or an LLM call.
         saved = homework_rag.load_detail_explanation(
             question, subject, year_group, is_eleven_plus=is_eleven_plus
         )
         if saved:
             explanation = str(saved).strip()
+            explain_cache.set(cache_key, {"success": True, "explanation": explanation})
             results.append(f"## Question {idx + 1}\n\n{explanation}")
+            cached_count += 1
             continue
-        cache_key = stable_cache_key(
-            "review_detail_question_v2",
-            homework_rag.detail_explanation_key(question, subject, year_group, is_eleven_plus=is_eleven_plus),
-        )
-        cached = explain_cache.get(cache_key)
-        if isinstance(cached, dict) and cached.get("explanation"):
-            results.append(f"## Question {idx + 1}\n\n{str(cached['explanation']).strip()}")
-            continue
-        missing.append({"index": idx, "question": question, "cache_key": cache_key})
+        missing.append({
+            "index": idx,
+            "question": question,
+            "cache_key": cache_key,
+            "persistent_key": persistent_key,
+        })
+
+    created_count = 0
+    persisted_count = 0
+    llm_fallback = False
 
     # Generate all missing explanations in one model call. This avoids the
     # previous behaviour where a multi-question homework could appear to hang
@@ -1405,49 +1423,115 @@ def explain_deep(
         )
 
         explanation_text = ""
-        try:
-            explanation_text = _complete_review(
-                llm_client,
-                build_messages(prompt),
-                model=DETAIL_REVIEW_MODEL,
-                temperature=0.2,
-                max_tokens=_token_limit("DETAIL_REVIEW_MAX_TOKENS", 8000, maximum=12000),
-                operation="detail_explanation_all_questions",
-            )
-        except Exception:
-            logger.exception("[Review] detail_explanation_all_questions failed")
+        if llm_client is not None:
+            # A one-question request only needs a compact structured response.
+            # Keeping its token budget bounded noticeably reduces first-load
+            # latency while the durable cache removes later model calls.
+            if question_index is not None:
+                max_tokens = _token_limit(
+                    "DETAIL_REVIEW_MAX_TOKENS", 1_400, maximum=2_400
+                )
+                operation = "detail_explanation_single_question"
+            else:
+                max_tokens = _token_limit(
+                    "DETAIL_REVIEW_MAX_TOKENS",
+                    max(1_600, min(6_000, 1_000 * len(missing))),
+                    maximum=8_000,
+                )
+                operation = "detail_explanation_all_questions"
+            try:
+                explanation_text = _complete_review(
+                    llm_client,
+                    build_messages(prompt),
+                    model=DETAIL_REVIEW_MODEL,
+                    temperature=0.2,
+                    max_tokens=max_tokens,
+                    operation=operation,
+                )
+            except Exception:
+                logger.exception("[Review] %s failed", operation)
+        else:
+            # A provider outage must not prevent a child from reading a saved
+            # explanation.  For an uncached question, return the same safe,
+            # structured teaching fallback rather than a server error.
+            logger.warning("Detail explanation requested while the LLM is unavailable")
 
         # Parse the model's Question N sections. If the model misses a section,
         # keep a useful fallback rather than returning a blank page.
         parsed: Dict[int, str] = {}
         text = str(explanation_text or "").strip()
         if text:
-            matches = list(re.finditer(r"(?im)^\s*##\s*Question\s+(\d+)\s*$", text))
-            for pos, match in enumerate(matches):
-                number = int(match.group(1))
-                end_pos = matches[pos + 1].start() if pos + 1 < len(matches) else len(text)
-                body = text[match.end():end_pos].strip()
+            if question_index is not None:
+                # EXPLAIN_SINGLE_QUESTION_PROMPT deliberately asks for the
+                # three teaching sections only, without a Question N wrapper.
+                # Previously the all-question parser threw away this valid
+                # response and cached the generic fallback instead.
+                leading_question = re.match(
+                    r"(?is)^\s*#{1,6}\s*Question\s+\d+\b[^\n]*\n?", text
+                )
+                body = text[leading_question.end():].strip() if leading_question else text
                 if body:
-                    parsed[number] = body
+                    parsed[question_index + 1] = body
+            else:
+                matches = list(re.finditer(
+                    r"(?im)^\s*#{2,6}\s*Question\s+(\d+)\b[^\n]*$", text
+                ))
+                for pos, match in enumerate(matches):
+                    number = int(match.group(1))
+                    end_pos = matches[pos + 1].start() if pos + 1 < len(matches) else len(text)
+                    body = text[match.end():end_pos].strip()
+                    if body:
+                        parsed[number] = body
+                # Providers occasionally follow the single-question format
+                # even for a one-question set.  It is still a useful detailed
+                # response and should be saved, not replaced with a fallback.
+                if not matches and len(missing) == 1:
+                    parsed[missing[0]["index"] + 1] = text
 
         for entry in missing:
             idx = entry["index"]
-            body = parsed.get(idx + 1, _detail_explanation_fallback())
-            results.append(f"## Question {idx + 1}\n\n{body}")
-            try:
-                saved_values = homework_rag.save_detail_explanation(
-                    [{"question": entry["question"], "explanation": body}],
-                    subject,
-                    year_group,
-                    is_eleven_plus=is_eleven_plus,
-                )
-                if saved_values:
-                    explain_cache.set(
-                        entry["cache_key"],
-                        {"success": True, "explanation": body},
+            body = str(parsed.get(idx + 1) or "").strip()
+            has_llm_explanation = bool(body)
+            if not has_llm_explanation:
+                body = _detail_explanation_fallback()
+                llm_fallback = True
+            else:
+                created_count += 1
+
+            # Keep a successful response available in this process/Redis even
+            # if durable storage has a temporary outage.  Do this *before*
+            # persistence so a write failure can never cause another LLM call
+            # on the next click.
+            explain_cache.set(
+                entry["cache_key"],
+                {"success": True, "explanation": body},
+                # A generic fallback is intentionally short-lived: a later
+                # request may receive and persist the full LLM explanation.
+                ttl=300 if not has_llm_explanation else None,
+            )
+
+            if has_llm_explanation:
+                try:
+                    saved_values = homework_rag.save_detail_explanation(
+                        [{"question": entry["question"], "explanation": body}],
+                        subject,
+                        year_group,
+                        is_eleven_plus=is_eleven_plus,
+                        model_used=_resolved_model(llm_client, DETAIL_REVIEW_MODEL),
                     )
-            except Exception:
-                logger.exception("Could not persist detail explanation for question %s", idx + 1)
+                    saved_body = str(saved_values.get(entry["persistent_key"], "") or "").strip()
+                    if saved_body:
+                        # A concurrent worker may have saved first. Always
+                        # show and cache that immutable first explanation.
+                        body = saved_body
+                        explain_cache.set(
+                            entry["cache_key"],
+                            {"success": True, "explanation": body},
+                        )
+                        persisted_count += 1
+                except Exception:
+                    logger.exception("Could not persist detail explanation for question %s", idx + 1)
+            results.append(f"## Question {idx + 1}\n\n{body}")
 
     if not results:
         return {"success": False, "error": "No questions were found to explain."}
@@ -1469,9 +1553,12 @@ def explain_deep(
         "explained_questions": len(results),
         "has_more": last_index < len(items) - 1,
         "from_cache": not bool(missing),
-        "saved": True,
+        "saved": not bool(missing) or persisted_count == len(missing),
         "model_tier": "plus",
-        "model_used": None if not missing else _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
+        "model_used": None if not created_count else _resolved_model(llm_client, DETAIL_REVIEW_MODEL),
+        "created_count": created_count,
+        "cached_count": cached_count,
+        "llm_fallback": llm_fallback,
     }
 
 def improve_practice(

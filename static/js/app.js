@@ -211,6 +211,12 @@
                 certificate.textContent = ` New certificate: ${certificates.join(', ')}!`;
                 toast.appendChild(certificate);
             }
+            const badges = (update.new_badges || []).filter(item => item && item.title);
+            badges.forEach((badge) => {
+                const badgeLine = document.createElement('span');
+                badgeLine.textContent = ` 🏅 New badge: ${badge.icon || '🏅'} ${badge.title}!`;
+                toast.appendChild(badgeLine);
+            });
             const link = document.createElement('a');
             link.href = '/rewards';
             link.textContent = 'See my quests';
@@ -1175,7 +1181,7 @@
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
             </button>
-            <button class="btn btn-secondary" onclick="window.location.href='/homework-mistakes'">
+            <button class="btn btn-secondary" onclick="practiceMistakes()">
                 Practice My Mistakes
             </button>
         `;
@@ -1187,7 +1193,7 @@
             <button class="btn btn-secondary" onclick="TrackProgress()">
                 Track Progress
             </button>
-            <button class="btn btn-secondary" onclick="window.location.href='/homework-mistakes'">
+            <button class="btn btn-secondary" onclick="practiceMistakes()">
                 Practice My Mistakes
             </button>
         `;
@@ -1385,6 +1391,7 @@
             const appLoginLink = document.querySelector('nav.nav-links a[href="/login"]');
             const appRegisterLink = document.querySelector('nav.nav-links a[href="/register"]');
             const appParentLink = document.getElementById('parent-dashboard-link');
+            const parentChildLoginGuide = document.getElementById('parent-child-login-guide');
             const authenticated = Boolean(currentStudentId) || currentSessionRole === 'teacher';
             if (appLogoutLink) {
                 appLogoutLink.style.display = authenticated && currentSessionRole !== 'kid'
@@ -1393,6 +1400,7 @@
             if (appLoginLink) appLoginLink.style.display = authenticated ? 'none' : '';
             if (appRegisterLink) appRegisterLink.style.display = authenticated ? 'none' : '';
             if (appParentLink) appParentLink.style.display = currentSessionRole === 'parent' ? '' : 'none';
+            if (parentChildLoginGuide) parentChildLoginGuide.hidden = currentSessionRole !== 'parent';
 
             // Check for tab parameter in URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -2425,6 +2433,85 @@
                 .trim();
         }
 
+        // Gentle anti-rushing guard: encourage children to read and think before
+        // submitting an answer. The pause is configured by the administrator.
+        const DEFAULT_THINKING_PAUSE_MS = 6000;
+        let thinkingPauseMs = DEFAULT_THINKING_PAUSE_MS;
+        const thinkingStartedAt = new WeakMap();
+
+        async function loadThinkingPauseConfig() {
+            try {
+                const response = await fetch('/api/thinking-pause-config', { cache: 'no-store', credentials: 'same-origin' });
+                if (!response.ok) return;
+                const data = await response.json();
+                const seconds = Number(data.seconds);
+                if (Number.isFinite(seconds) && seconds >= 0 && seconds <= 30) {
+                    thinkingPauseMs = Math.round(seconds * 1000);
+                }
+            } catch (_) {
+                // Keep the safe default if configuration cannot be loaded.
+            }
+        }
+
+        function installThinkingPause(root) {
+            if (!root) return;
+            const controls = root.querySelectorAll(
+                '.question-answer-input, .question-response-input, .multiple-choice-input'
+            );
+            controls.forEach(function(control) {
+                const item = control.closest(
+                    '.single-question-card, .question-response-item, .question-response-block'
+                ) || root;
+                if (thinkingStartedAt.has(item)) return;
+                thinkingStartedAt.set(item, Date.now());
+            });
+        }
+
+        function thinkingPauseRemaining(root) {
+            if (!root || thinkingPauseMs <= 0) return 0;
+            let remaining = 0;
+            const items = root.querySelectorAll(
+                '.single-question-card, .question-response-item, .question-response-block'
+            );
+            items.forEach(function(item) {
+                const startedAt = thinkingStartedAt.get(item);
+                if (startedAt) {
+                    remaining = Math.max(remaining, thinkingPauseMs - (Date.now() - startedAt));
+                }
+            });
+            return Math.max(0, remaining);
+        }
+
+        function requireThinkingPause(root) {
+            installThinkingPause(root);
+            const remaining = thinkingPauseRemaining(root);
+            if (remaining <= 0) return true;
+            const seconds = Math.max(1, Math.ceil(remaining / 1000));
+            alert(`Take a little thinking time first. Read the question carefully and check your answer, then try again in ${seconds} second${seconds === 1 ? '' : 's'}.`);
+            return false;
+        }
+
+        function thinkingTimeElapsedMs(root) {
+            installThinkingPause(root);
+            if (!root) return 0;
+            const items = root.querySelectorAll(
+                '.single-question-card, .question-response-item, .question-response-block'
+            );
+            let earliest = null;
+            items.forEach(function(item) {
+                const startedAt = thinkingStartedAt.get(item);
+                if (startedAt && (earliest === null || startedAt < earliest)) earliest = startedAt;
+            });
+            return earliest === null ? 0 : Math.max(0, Date.now() - earliest);
+        }
+
+        function thinkingCheckpointPayload(root) {
+            return {
+                thinking_time_ms: Math.min(24 * 60 * 60 * 1000, Math.round(thinkingTimeElapsedMs(root))),
+                thinking_checkpoint: true
+            };
+        }
+
         function getAnswerInputSpec(questionText) {
             const text = normaliseQuestionText(questionText).toLowerCase();
             const longAnswer = /\b(explain|describe|compare|discuss|justify|give reasons?|show your working|show all working|write (?:a|an|the|your)|paragraph|story|letter|report|method|how do you know|why do you think)\b/.test(text);
@@ -2517,6 +2604,7 @@
             }).join('');
 
             if (renderer) renderer.bindAll(container);
+            installThinkingPause(container);
             removeVisibleAnswerLabels(container);
             showResults();
             resetHomeworkActionButtons();
@@ -2580,6 +2668,7 @@
                 `;
             }
 
+            installThinkingPause(container);
             removeVisibleAnswerLabels(container);
             showResults();
             document.getElementById('homework-buttons').style.display = 'none';
@@ -2595,6 +2684,8 @@
                 alert('Please select or enter your answer for this question!');
                 return;
             }
+
+            if (!requireThinkingPause(document.getElementById('homework-results'))) return;
 
             currentQuestionAnswers[currentQuestionIndex] = studentAnswer;
 
@@ -2624,7 +2715,8 @@
                         is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
-                            : currentQuestionIndex
+                            : currentQuestionIndex,
+                        ...thinkingCheckpointPayload(document.getElementById('homework-results'))
                     })
                 });
 
@@ -2762,6 +2854,8 @@
                 return;
             }
 
+            if (!requireThinkingPause(document.getElementById('homework-results'))) return;
+
             currentSubject = reviewItems[0].homeworkItem.subject || 'Maths';
             showReviewLoading('Checking all your answers…');
             try {
@@ -2775,6 +2869,7 @@
                             subject: homeworkItem.subject || 'Maths',
                             profile: getLearnerReviewProfile(),
                             quick_review: true,
+                            ...thinkingCheckpointPayload(document.getElementById('homework-results')),
                             from_rag: Boolean(homeworkItem.from_rag),
                             homework_doc_id: homeworkItem.doc_id || null,
                             reward_activity_id: homeworkItem.reward_activity_id || null,
@@ -2835,6 +2930,8 @@
             currentHomework = [];
             isPracticeMode = false;
             currentPracticeContent = '';
+            currentPracticeIsElevenPlus = false;
+            currentPracticeTopic = '';
             practiceReturnMode = 'generated';
             currentHomeworkMode = 'homework';
             currentQuestionIndex = 0;
@@ -2933,7 +3030,8 @@
                     answers: answers,
                     subject: subject,
                     profile: getLearnerReviewProfile(),
-                    uploaded_work: Boolean(submittedWork)
+                    uploaded_work: Boolean(submittedWork),
+                    ...thinkingCheckpointPayload(document.getElementById('homework-results'))
                 };
                 if (homeworkDocId) {
                     requestBody.homework_doc_id = homeworkDocId;
@@ -3460,7 +3558,8 @@
                     answers: answers,
                     subject: currentPracticeSubject,
                     profile: Object.assign({}, getLearnerReviewProfile(), {topic: currentPracticeTopic || null}),
-                    is_eleven_plus: currentPracticeIsElevenPlus
+                    is_eleven_plus: currentPracticeIsElevenPlus,
+                    ...thinkingCheckpointPayload(document.getElementById('homework-results'))
                 })
             })
             .then(response => response.json())
@@ -3534,8 +3633,14 @@
 
         // 根据当前练习类型跳转到对应的错题练习页面
         function practiceMistakes() {
-            const isElevenPlus = currentPracticeIsElevenPlus
-                || (Array.isArray(currentHomework) && currentHomework.some(item => item && item.is_eleven_plus));
+            // Keep the destination tied to the learning journey, including
+            // after a child has checked their 11+ answers and the action
+            // buttons have been redrawn.
+            const isElevenPlus = Boolean(
+                currentPracticeIsElevenPlus
+                || (activeReviewContext && activeReviewContext.is_eleven_plus)
+                || (Array.isArray(currentHomework) && currentHomework.some(item => item && item.is_eleven_plus))
+            );
             window.location.href = isElevenPlus ? '/elevenplus-mistakes' : '/homework-mistakes';
         }
 
@@ -3794,3 +3899,5 @@
 
             recognizer.start();
         }
+
+loadThinkingPauseConfig();

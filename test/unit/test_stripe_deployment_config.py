@@ -98,6 +98,15 @@ def test_code_deploy_is_valid_shell_and_uses_existing_elevenplus_plan() -> None:
     assert "STRIPE_PRICE_ELEVENPLUS_MOCK_MONTHLY" not in source
 
 
+def test_code_deploy_checks_the_study_buddy_route_and_app_shortcut() -> None:
+    source = Path("deploy/deploy_code_gcp.sh").read_text(encoding="utf-8")
+
+    assert '"/app" app_home' in source
+    assert '"/study-buddies" study_buddies' in source
+    assert "href=\"/study-buddies\"" in source
+    assert "study-buddies-v2.js" in source
+
+
 def test_repair_script_updates_only_stripe_configuration() -> None:
     source = Path("deploy/repair_stripe_checkout_gcp.sh").read_text(
         encoding="utf-8"

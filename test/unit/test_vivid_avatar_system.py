@@ -26,6 +26,10 @@ def test_character_customiser_uses_shared_vivid_renderer_and_age_context() -> No
     assert "data-character-action=\"celebrate\"" in page
     assert "Tap my character to cheer" in page
     assert "id=\"character-age-badge\"" in page
+    assert "My Character &amp; Certificates" in page
+    assert "My character &amp; certificates" in page
+    assert "My learning certificates" in page
+    assert "The same certificates you see in Rewards" in page
     assert "grows with your age" in page
     assert "Trousers or dress" in page
     assert 'data-choices="bottoms"' in page
@@ -35,6 +39,9 @@ def test_character_customiser_uses_shared_vivid_renderer_and_age_context() -> No
     assert "Avatar.play(previewFigure" in script
     assert "data.learner" in script
     assert "lifetime_xp" in script
+    assert "renderLearningCertificates(avatar.certificates" in script
+    assert "certificate.unlocked" in script
+    assert "seenTitles" in script
     assert "innerHTML" not in script
     assert "localStorage" not in script
     assert "camera" not in script.lower()
@@ -43,6 +50,25 @@ def test_character_customiser_uses_shared_vivid_renderer_and_age_context() -> No
     assert "perspective: 750px" in style
     assert "min-height: 44px" in style
     assert "@media (prefers-reduced-motion: reduce)" in style
+
+
+def test_character_customiser_has_a_safe_study_buddy_search() -> None:
+    page = (ROOT / "static/character-customise.html").read_text(encoding="utf-8")
+    script = (ROOT / "static/js/character-customise.js").read_text(encoding="utf-8")
+    style = (ROOT / "static/css/character-customise.css").read_text(encoding="utf-8")
+
+    assert 'id="study-buddy-title"' in page
+    assert 'id="study-buddy-search-form"' in page
+    assert 'id="study-buddy-search"' in page
+    assert "A grown-up in each family needs to say yes first." in page
+    assert "Do not type a name, email address or school." in page
+    assert "Your friend's Buddy Code" in page
+    assert 'href="/study-buddies"' in page
+    assert "'/api/study-buddies/search'" in script
+    assert "'/api/study-buddies/request'" in script
+    assert "requestStudyBuddy" in script
+    assert "replaceChildren" in script
+    assert ".hm-char-study-buddy" in style
 
 
 def test_avatar_renderer_has_bounded_age_growth_and_rich_safe_choices() -> None:

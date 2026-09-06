@@ -52,7 +52,6 @@ class CatalogItemRequest(BaseModel):
     name: str = Field(default="", max_length=40)
     icon: str = Field(default="gift", max_length=12)
     xp_cost: int = Field(default=100, ge=10, le=5000)
-    parent_password: SecretStr
 
 
 class CatalogItemUpdateRequest(BaseModel):
@@ -60,16 +59,11 @@ class CatalogItemUpdateRequest(BaseModel):
     icon: str | None = Field(default=None, max_length=12)
     xp_cost: int | None = Field(default=None, ge=10, le=5000)
     is_active: bool | None = None
-    parent_password: SecretStr
 
 
 class ParentRedemptionDecisionRequest(BaseModel):
     decision: str
     xp_to_deduct: int | None = Field(default=None, ge=0, le=5000)
-    parent_password: SecretStr
-
-
-class ParentPasswordRequest(BaseModel):
     parent_password: SecretStr
 
 
@@ -320,6 +314,8 @@ def build_reward_router(
             get_reward_store().avatar_summary,
             account_id=account["id"],
             student_id=learner["id"],
+            include_certificates=True,
+            include_badges=True,
         )
         return {
             "success": True,
@@ -569,7 +565,6 @@ def build_reward_router(
     ):
         """家长创建自定义奖励（如书本、电影票、足球等）。"""
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         try:
             item = await asyncio.to_thread(
                 get_reward_store().create_catalog_item,
@@ -588,7 +583,6 @@ def build_reward_router(
     ):
         """家长更新自定义奖励。"""
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         try:
             item = await asyncio.to_thread(
                 get_reward_store().update_catalog_item,
@@ -605,11 +599,10 @@ def build_reward_router(
 
     @router.delete("/api/rewards/catalog/{item_id}")
     async def delete_custom_catalog_item(
-        item_id: str, request: Request, body: ParentPasswordRequest
+        item_id: str, request: Request
     ):
         """家长删除自定义奖励。"""
         account = await account_context(request)
-        await confirm_parent(account, body.parent_password.get_secret_value())
         deleted = await asyncio.to_thread(
             get_reward_store().delete_catalog_item,
             account_id=account["id"],

@@ -707,11 +707,101 @@ body.mock-page {
 
 .mock-detail-explanation {
   margin-top: 0.75rem;
-  padding: 0.9rem 1rem;
-  border-radius: 0.75rem;
-  background: rgba(0, 0, 0, 0.035);
 }
 
-.mock-detail-content p:last-child {
+.mock-detailed-explanation-card {
+  padding: 22px 24px;
+  border: 1px solid #dfe5ff;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.mock-detailed-explanation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 32%);
+  gap: 28px;
+  align-items: start;
+}
+
+.mock-detailed-explanation-solution h4,
+.mock-detailed-explanation-callout h4 {
+  margin: 0 0 14px;
+  color: #26364f;
+  font-size: 1.18rem;
+}
+
+.mock-detailed-explanation-solution h4 {
+  font-size: 1.45rem;
+}
+
+.mock-detailed-explanation-body,
+.mock-detailed-explanation-callout-body {
+  color: #2d3b55;
+  line-height: 1.75;
+}
+
+.mock-detailed-explanation-body > :first-child,
+.mock-detailed-explanation-callout-body > :first-child {
+  margin-top: 0;
+}
+
+.mock-detailed-explanation-body > :last-child,
+.mock-detailed-explanation-callout-body > :last-child {
   margin-bottom: 0;
+}
+
+.mock-detailed-explanation-aside {
+  display: grid;
+  gap: 18px;
+}
+
+.mock-detailed-explanation-callout {
+  padding: 18px 20px;
+  border-radius: 13px;
+  line-height: 1.65;
+}
+
+.mock-detailed-explanation-callout.why {
+  border: 1px solid #f1c76a;
+  background: #fffaf0;
+}
+
+.mock-detailed-explanation-callout.tip {
+  border: 1px solid #a8c8ff;
+  background: #f1f7ff;
+}
+
+.mock-detailed-explanation-callout.why h4 { color: #7a5712; }
+.mock-detailed-explanation-callout.tip h4 { color: #24466f; }
+
+.mock-detailed-explanation-loading { color: #667085; }
+
+.mock-detailed-explanation-error {
+  margin: 0;
+  color: #9a3412;
+}
+
+.mock-detailed-explanation-retry {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid #a8c8ff;
+  border-radius: 9px;
+  color: #24466f;
+  background: #f1f7ff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mock-detailed-explanation-retry:hover,
+.mock-detailed-explanation-retry:focus-visible {
+  border-color: #5d8bcc;
+  background: #e3f0ff;
+}
+
+@media (max-width: 700px) {
+  .mock-detailed-explanation-card { padding: 18px; }
+  .mock-detailed-explanation-layout { grid-template-columns: 1fr; gap: 18px; }
+  .mock-detailed-explanation-solution h4 { font-size: 1.3rem; }
 }

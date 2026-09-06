@@ -40,15 +40,23 @@
       transform: scale(1.03);
       box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
     }
+    .kid-login-help {
+      margin: 10px 0 0 !important;
+      font-size: 0.8rem !important;
+      font-weight: 500 !important;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body class="hm-auth">
 <header class="auth-header"><a href="/">✨ Homework Magic</a></header>
 <main class="auth-shell">
   <section class="auth-card" aria-labelledby="login-title">
-<!--    <h1 id="login-title">Welcome back</h1>-->
+    <h1 id="login-title">Grown-up log in</h1>
     <div class="kid-login-bar">
-      <a class="kid-login-btn" href="/kid-login">Child log in here with login code</a>
+      <p>Ready to learn?</p>
+      <a class="kid-login-btn" href="/kid-login?next=/app">Child sign in with your code</a>
+      <p class="kid-login-help">Ask a grown-up for your Child login code. It is not their email or password.</p>
     </div>
     <div id="login-notice" class="notice" role="status" aria-live="polite"></div>
     <form id="login-form">
