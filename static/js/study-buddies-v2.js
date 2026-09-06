@@ -219,7 +219,7 @@
     const challengeQuery = challengeId ? `&buddy_challenge=${encodeURIComponent(challengeId)}` : '';
     return {
       href: `/app?tab=${encodeURIComponent(tab)}${subjectQuery}${yearQuery}${challengeQuery}`,
-      label: subject ? `Start ${validYear ? `Year ${requestedYear} ` : ''}${tab === 'eleven' ? '11+ ' : ''}${subject}` : 'Choose an activity',
+      label: subject ? `Start ${tab === 'eleven' ? '11+ ' : ''}${subject}` : 'Choose an activity',
       subject,
       yearGroup: validYear ? requestedYear : null,
     };
@@ -326,17 +326,18 @@
       card.append(
         element('strong', `🎯 ${challenge.title}`),
         element('span', direction, 'challenge-direction'),
-        element('span', `${challenge.target_count} activity · you both earn +${challenge.xp_reward} XP and +${challenge.gift_points_reward} Gift Points`, 'challenge-progress'),
+        element('span', challenge.status === 'completed'
+          ? `${challenge.target_count} activity · you both earned +${challenge.awarded_xp || challenge.xp_reward} XP and +${challenge.awarded_gift_points || challenge.gift_points_reward} Gift Points`
+          : `${challenge.target_count} activity · up to +${challenge.xp_reward * 2} XP and +${challenge.gift_points_reward * 2} Gift Points each for accurate answers`, 'challenge-progress'),
       );
       if (challenge.status === 'open' && challenge.target_student_id === state.student_id) {
         const actions = element('div', undefined, 'buddy-challenge-actions');
         actions.append(challengePracticeLink(challenge));
-        if (challenge.ready_to_complete) actions.append(actionButton('Claim reward', () => completeChallenge(challenge.id), 'btn primary'));
-        else actions.append(element('span', `Your turn — ${challenge.remaining_activity_count} more to go.`, 'challenge-status'));
+        actions.append(element('span', 'Finish this subject activity to earn both rewards automatically.', 'challenge-status'));
         card.append(actions);
       } else if (challenge.status === 'open') {
         card.append(element('span', `Waiting for ${challenge.target_nickname || 'your buddy'}.`, 'challenge-status'));
-      } else card.append(element('span', `Completed 🎉 You both earned +${challenge.xp_reward} XP and +${challenge.gift_points_reward} Gift Points.`, 'challenge-status'));
+      } else card.append(element('span', `Completed 🎉 You both earned +${challenge.awarded_xp || challenge.xp_reward} XP and +${challenge.awarded_gift_points || challenge.gift_points_reward} Gift Points.`, 'challenge-status'));
       container.append(card);
     });
   }
@@ -478,19 +479,6 @@
     backdrop.append(dialog);
     document.body.append(backdrop);
     close.focus();
-  }
-
-  async function completeChallenge(id) {
-    try {
-      const completed = await api(`/api/study-buddies/challenge/${encodeURIComponent(id)}/complete`, {method: 'POST'});
-      showCompletionDialog({
-        title: completed.title,
-        awarded_xp: completed.reward?.awarded_xp,
-        awarded_gift_points: completed.reward?.awarded_gift_points,
-      });
-      load();
-    }
-    catch (error) { window.alert(error.message); }
   }
 
   function renderSearchResult(student) {

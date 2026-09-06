@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 
 from .account_store import _engine
 
-MIGRATION_VERSION = 9
+MIGRATION_VERSION = 10
 
 
 def _migration_table(metadata: MetaData) -> Table:
@@ -192,3 +192,12 @@ def run_study_buddy_migrations() -> None:
                 "ON study_buddy_challenge_notifications (recipient_student_id, seen_at, created_at)"
             ))
             conn.execute(insert(migrations).values(version=9, applied_at=datetime.now(UTC)))
+
+    # v10: record the final shared bonus, which may be higher for a more
+    # accurate checked activity. Existing completed challenges fall back to
+    # their original reward fields until they are viewed.
+    if 10 not in applied:
+        _add_column(engine, "study_buddy_challenges", "awarded_xp", "INTEGER")
+        _add_column(engine, "study_buddy_challenges", "awarded_gift_points", "INTEGER")
+        with engine.begin() as conn:
+            conn.execute(insert(migrations).values(version=10, applied_at=datetime.now(UTC)))

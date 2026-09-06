@@ -31,6 +31,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -95,6 +96,37 @@ def test_buddy_lookup_is_an_exact_code_lookup_not_a_child_directory() -> None:
     assert "MAX_BUDDIES_PER_LEARNER = 40" in store
 
 
+def test_buddy_codes_are_unique_in_the_database_and_reissued_when_needed() -> None:
+    init_study_buddy_db()
+    suffix = uuid4().hex[:12]
+    account = ensure_account(f"buddy-code-unique-{suffix}@example.com")
+    first = create_student(account["id"], "Alex", 3, 7)
+    second = create_student(account["id"], "Alex", 4, 8)
+
+    assert first["buddy_code"] != second["buddy_code"]
+    with pytest.raises(IntegrityError):
+        with _engine().begin() as conn:
+            conn.execute(
+                update(students)
+                .where(students.c.id == second["id"])
+                .values(buddy_code=first["buddy_code"])
+            )
+
+    store = (ROOT / "src/webapp/account_store.py").read_text(encoding="utf-8")
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS ix_students_buddy_code" in store
+    assert "reissue_ids" in store
+
+
+def test_admin_student_table_shows_a_short_year_and_the_buddy_code() -> None:
+    dashboard = (ROOT / "static/admin.html").read_text(encoding="utf-8")
+    admin_api = (ROOT / "web_app.py").read_text(encoding="utf-8")
+
+    assert 'data-sort="buddy_code"' in dashboard
+    assert "<td>${u.year_group || '-'}</td>" in dashboard
+    assert "<td><code>${u.buddy_code || '-'}</code></td>" in dashboard
+    assert '"buddy_code": u.get("buddy_code")' in admin_api
+
+
 def test_siblings_under_one_parent_account_become_buddies_straight_away() -> None:
     init_study_buddy_db()
     suffix = uuid4().hex[:12]
@@ -142,6 +174,12 @@ def test_parent_removing_an_active_buddy_removes_the_shared_relationship() -> No
     removed = remove_buddy_for_parent(first_account["id"], request["id"])
     assert removed == {"removed": True}
     assert not is_buddy(first["id"], second["id"])
+
+    reopened = approve_request(request["id"], first_account["id"], True)
+    assert reopened["status"] == "pending"
+    restored = approve_request(request["id"], second_account["id"], True)
+    assert restored["status"] == "active"
+    assert is_buddy(first["id"], second["id"])
 
 
 def test_buddy_headers_use_the_same_child_navigation_as_progress() -> None:
@@ -213,7 +251,9 @@ def test_parent_dashboard_replaces_a_repeat_approval_with_waiting_status() -> No
     assert "Approve again" in dashboard
     assert "Delete buddy" in dashboard
     assert "function removeBuddy(request)" in dashboard
-    assert "title.textContent = request.other_nickname" in dashboard
+    assert "title.textContent = `${requesterName} ↔ ${targetName}`;" in dashboard
+    assert "Child: ${requesterName}" in dashboard
+    assert "Add buddy again" in dashboard
     assert "child-sign-in-button" in dashboard
     catalog_actions = script[script.index("async function loadCatalog"):script.index("async function loadGiftRequests")]
     assert "requestPassword" not in catalog_actions
@@ -287,6 +327,30 @@ def test_challenge_list_identifies_the_buddy_who_sent_and_receives_it() -> None:
     assert received["practice_subject"] == "Maths"
 
 
+def test_open_challenges_are_listed_before_completed_challenges() -> None:
+    init_study_buddy_db()
+    suffix = uuid4().hex[:12]
+    sender_account = ensure_account(f"buddy-challenge-order-sender-{suffix}@example.com")
+    receiver_account = ensure_account(f"buddy-challenge-order-receiver-{suffix}@example.com")
+    sender = create_student(sender_account["id"], "Robin", 3, 7)
+    receiver = create_student(receiver_account["id"], "Sky", 3, 7)
+    request = create_request(sender["id"], receiver["id"])
+    approve_request(request["id"], sender_account["id"], True)
+    approve_request(request["id"], receiver_account["id"], True)
+    completed = create_challenge(sender["id"], receiver["id"], "maths")
+    open_challenge = create_challenge(sender["id"], receiver["id"], "english")
+    with _engine().begin() as conn:
+        conn.execute(
+            update(buddy_challenges)
+            .where(buddy_challenges.c.id == completed["id"])
+            .values(status="completed")
+        )
+
+    challenges = challenges_for(receiver["id"])
+    assert challenges[0]["id"] == open_challenge["id"]
+    assert challenges[0]["status"] == "open"
+
+
 def test_buddy_completion_rewards_both_children_and_queues_one_celebration() -> None:
     from src.webapp.reward_store import get_reward_store
 
@@ -307,11 +371,13 @@ def test_buddy_completion_rewards_both_children_and_queues_one_celebration() -> 
     )
     completed = complete_challenge_for_verified_activity(
         challenge_id=challenge["id"], student_id=receiver["id"], subject="11+ Maths",
+        accuracy=1.0,
     )
 
     assert completed is not None
-    assert completed["reward"]["awarded_xp"] == challenge["xp_reward"]
-    assert completed["buddy_reward"]["awarded_gift_points"] == challenge["gift_points_reward"]
+    assert completed["reward"]["awarded_xp"] == challenge["xp_reward"] * 2
+    assert completed["buddy_reward"]["awarded_gift_points"] == challenge["gift_points_reward"] * 2
+    assert completed["awarded_xp"] == challenge["xp_reward"] * 2
     notices = challenge_completion_notifications_for(sender["id"])
     assert len(notices) == 1
     assert notices[0]["buddy_nickname"] == "Sky"

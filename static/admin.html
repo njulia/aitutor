@@ -274,7 +274,8 @@
                             <th data-sort="parent_username" onclick="sortUsers('parent_username')">Parent <span class="sort-arrow"></span></th>
                             <th data-sort="name" onclick="sortUsers('name')">Nickname <span class="sort-arrow"></span></th>
                             <th data-sort="year_group" onclick="sortUsers('year_group')">Year <span class="sort-arrow"></span></th>
-                            <th data-sort="last_login_at" onclick="sortUsers('last_login_at')">Last Login (local time) <span class="sort-arrow"></span></th>
+                            <th data-sort="buddy_code" onclick="sortUsers('buddy_code')">Buddy Code <span class="sort-arrow"></span></th>
+                            <th data-sort="last_login_at" onclick="sortUsers('last_login_at')">Last Login<span class="sort-arrow"></span></th>
                             <th data-sort="total_sessions" onclick="sortUsers('total_sessions')">Sessions <span class="sort-arrow"></span></th>
                             <th data-sort="avg_score" onclick="sortUsers('avg_score')">Avg Score <span class="sort-arrow"></span></th>
                             <th data-sort="xp" onclick="sortUsers('xp')">XP <span class="sort-arrow"></span></th>
@@ -823,7 +824,7 @@
                         <th style="width:40px"><input type="checkbox" id="selectAllAuthUsers" onchange="toggleSelectAll()" title="Select all"></th>
                         <th>Username</th>
                         <th>Created</th>
-                        <th>Last Login (local time)</th>
+                        <th>Last Login</th>
                         <th>Test Account</th>
                         <th>Actions</th>
                     </tr>
@@ -982,7 +983,7 @@
                 allUsers = data.users || [];
                 renderUsers(allUsers);
             } catch(e) {
-                document.getElementById('usersTable').innerHTML = `<tr><td colspan="10" style="color:#c53030">Error: ${e.message}</td></tr>`;
+                document.getElementById('usersTable').innerHTML = `<tr><td colspan="11" style="color:#c53030">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -993,7 +994,8 @@
                 <tr>
                     <td>${u.parent_username || '-'}</td>
                     <td>${u.name || 'Student'}</td>
-                    <td>Year ${u.year_group}</td>
+                    <td>${u.year_group || '-'}</td>
+                    <td><code>${u.buddy_code || '-'}</code></td>
                     <td>${formatAdminLocalDateTime(u.last_login_at, 'Never')}</td>
                     <td>${u.total_sessions || 0}</td>
                     <td>${u.avg_score ? u.avg_score.toFixed(1) : '-'}</td>
@@ -1014,7 +1016,7 @@
                 let va = a[sortColumn], vb = b[sortColumn];
                 if (va == null) va = '';
                 if (vb == null) vb = '';
-                if (sortColumn === 'student_id' || sortColumn === 'parent_username' || sortColumn === 'name') {
+                if (sortColumn === 'student_id' || sortColumn === 'parent_username' || sortColumn === 'name' || sortColumn === 'buddy_code') {
                     va = String(va).toLowerCase();
                     vb = String(vb).toLowerCase();
                     return sortDir * va.localeCompare(vb);
@@ -1058,6 +1060,7 @@
             const q = document.getElementById('userSearch').value.toLowerCase();
             renderUsers(allUsers.filter(u =>
                 (u.parent_username || '').toLowerCase().includes(q)
+                || (u.buddy_code || '').toLowerCase().includes(q)
             ));
         }
 

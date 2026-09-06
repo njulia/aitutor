@@ -325,7 +325,7 @@
 
     <section class="section" aria-labelledby="summary-email-title">
       <h2 id="summary-email-title">Learning summary emails</h2>
-      <p class="muted">Get the same four-column Learning summary by email. Target emails are sent when a child reaches their daily learning goal, unless you unsubscribe.</p>
+      <p class="muted">Get the Learning summary by email. Target emails are sent when a child reaches their daily learning goal, unless you unsubscribe.</p>
       <form id="summary-email-form" class="profile-form show">
         <div class="form-row">
           <label class="field" style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
@@ -648,11 +648,15 @@
       const details = document.createElement('div');
       const title = document.createElement('div');
       title.className = 'item-title';
-      title.textContent = request.other_nickname || 'Learner';
+      const requesterName = request.requester_nickname || 'Learner';
+      const targetName = request.target_nickname || 'Learner';
+      title.textContent = `${requesterName} ↔ ${targetName}`;
 
       const learner = document.createElement('div');
       learner.className = 'item-meta';
-      learner.textContent = request.other_year_group ? `Year ${request.other_year_group}` : 'Buddy request';
+      const requesterYear = request.requester_year_group ? `Year ${request.requester_year_group}` : 'Year not set';
+      const targetYear = request.target_year_group ? `Year ${request.target_year_group}` : 'Year not set';
+      learner.textContent = `Child: ${requesterName} (${requesterYear}) · Buddy: ${targetName} (${targetYear})`;
 
       const status = document.createElement('div');
       status.className = 'item-meta';
@@ -681,6 +685,17 @@
         remove.textContent = 'Delete buddy';
         remove.addEventListener('click', () => removeBuddy(request));
         actions.append(remove);
+        card.append(actions);
+      } else if (request.status === 'removed') {
+        status.textContent = 'Status: Buddy removed. You can ask to add this buddy again.';
+        const actions = document.createElement('div');
+        actions.className = 'study-buddy-request-actions';
+        const restore = document.createElement('button');
+        restore.type = 'button';
+        restore.className = 'btn btn-primary';
+        restore.textContent = 'Add buddy again';
+        restore.addEventListener('click', () => decideBuddy(request.id, true));
+        actions.append(restore);
         card.append(actions);
       } else if ((pending || request.status === 'declined') && !currentParentApproved) {
         const actions = document.createElement('div');

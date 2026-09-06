@@ -4,7 +4,7 @@ import secrets
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table, UniqueConstraint, and_, delete, func, insert, select, union_all, update
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table, UniqueConstraint, and_, case, delete, func, insert, select, union_all, update
 from sqlalchemy.exc import IntegrityError
 from .account_store import _engine, get_student, students
 from .study_buddy_challenge_catalog import (
@@ -43,6 +43,10 @@ buddy_challenges = Table(
     Column("completed_at", DateTime(timezone=True), nullable=True),
     Column("verified_activity_count", Integer, nullable=False, default=0),
     Column("completion_source", String(40), nullable=True),
+    # Stored completion amounts allow both children to see the same
+    # accuracy-based bonus after the challenge is finished.
+    Column("awarded_xp", Integer, nullable=True),
+    Column("awarded_gift_points", Integer, nullable=True),
 )
 buddy_emoji_reactions = Table(
     "study_buddy_emoji_reactions", _metadata,
@@ -265,6 +269,22 @@ def create_request(requester: str, target: str) -> dict[str, Any]:
         if existing:
             d=_row(existing)
             if d["status"] == "active": raise ValueError("You are already Study Buddies.")
+            if d["status"] == "removed":
+                # Removing a buddy is reversible. A child can send a fresh
+                # request using the same Buddy Code; families then approve it
+                # again just as they would a new connection.
+                values = {
+                    "requester_parent_approved": same_parent_account,
+                    "target_parent_approved": same_parent_account,
+                    "status": "active" if same_parent_account else "pending",
+                    "updated_at": now,
+                }
+                conn.execute(
+                    update(buddy_requests)
+                    .where(buddy_requests.c.id == d["id"])
+                    .values(**values)
+                )
+                return {**d, **values}
             if same_parent_account:
                 limit = max_buddies_per_learner()
                 if _active_buddy_count(conn, requester) >= limit:
@@ -305,16 +325,38 @@ def create_request(requester: str, target: str) -> dict[str, Any]:
 
 def parent_requests(account_id: str) -> list[dict[str,Any]]:
     with _engine().begin() as conn:
-        rows=conn.execute(select(buddy_requests, students.c.name.label('child_name'), students.c.account_id.label('child_account')).join(students, students.c.id==buddy_requests.c.target_student_id).where(
-            (buddy_requests.c.requester_student_id.in_(select(students.c.id).where(students.c.account_id==account_id))) |
-            (buddy_requests.c.target_student_id.in_(select(students.c.id).where(students.c.account_id==account_id)))
-        ).order_by(buddy_requests.c.created_at.desc())).all()
+        requester = students.alias("buddy_requester")
+        target = students.alias("buddy_target")
+        owned = set(conn.execute(
+            select(students.c.id).where(students.c.account_id == account_id)
+        ).scalars())
+        rows=conn.execute(
+            select(
+                buddy_requests,
+                requester.c.name.label("requester_nickname"),
+                requester.c.year_group.label("requester_year_group"),
+                target.c.name.label("target_nickname"),
+                target.c.year_group.label("target_year_group"),
+            )
+            .select_from(
+                buddy_requests
+                .join(requester, requester.c.id == buddy_requests.c.requester_student_id)
+                .join(target, target.c.id == buddy_requests.c.target_student_id)
+            )
+            .where(
+                (buddy_requests.c.requester_student_id.in_(owned))
+                | (buddy_requests.c.target_student_id.in_(owned))
+            )
+            .order_by(buddy_requests.c.updated_at.desc())
+        ).all()
         out=[]
         for r in rows:
-            d=_row(r); d["is_requester_parent"] = d["requester_student_id"] in [x[0] for x in conn.execute(select(students.c.id).where(students.c.account_id==account_id)).all()]
+            d=_row(r); d["is_requester_parent"] = d["requester_student_id"] in owned
             other_id=d["target_student_id"] if d["is_requester_parent"] else d["requester_student_id"]
-            other=conn.execute(select(students.c.name, students.c.year_group).where(students.c.id==other_id)).first()
-            d.update({"other_nickname": other.name if other else "Learner", "other_year_group": other.year_group if other else None})
+            if d["is_requester_parent"]:
+                d.update({"other_nickname": d["target_nickname"] or "Learner", "other_year_group": d["target_year_group"]})
+            else:
+                d.update({"other_nickname": d["requester_nickname"] or "Learner", "other_year_group": d["requester_year_group"]})
             out.append(d)
         return out
 
@@ -330,6 +372,26 @@ def approve_request(request_id: str, account_id: str, approve: bool) -> dict[str
             field=buddy_requests.c.target_parent_approved
         else: raise PermissionError("This request does not belong to your family.")
         now=_now()
+        if d["status"] == "removed" and approve:
+            # A parent can add a removed buddy back from their dashboard. A
+            # different family must approve again; siblings are immediately
+            # safe to reconnect because their parent owns both profiles.
+            same_family = d["requester_student_id"] in owned and d["target_student_id"] in owned
+            other_field = (
+                "target_parent_approved"
+                if field.key == "requester_parent_approved"
+                else "requester_parent_approved"
+            )
+            values = {
+                field.key: True,
+                other_field: bool(same_family),
+                "status": "active" if same_family else "pending",
+                "updated_at": now,
+            }
+            conn.execute(
+                update(buddy_requests).where(buddy_requests.c.id == request_id).values(**values)
+            )
+            return {**d, **values}
         values={field.key: bool(approve), "updated_at":now}
         if not approve:
             values["status"]="declined"
@@ -488,7 +550,20 @@ def create_challenge(requester:str,target:str,challenge_type:str)->dict[str,Any]
 
 def challenges_for(student_id:str)->list[dict[str,Any]]:
     with _engine().begin() as conn:
-        rows=conn.execute(select(buddy_challenges).where((buddy_challenges.c.target_student_id==student_id)|(buddy_challenges.c.requester_student_id==student_id)).order_by(buddy_challenges.c.created_at.desc()).limit(30)).all()
+        rows=conn.execute(
+            select(buddy_challenges)
+            .where(
+                (buddy_challenges.c.target_student_id == student_id)
+                | (buddy_challenges.c.requester_student_id == student_id)
+            )
+            # A child should see their next learning action before finished
+            # cards, while keeping newest cards first within each group.
+            .order_by(
+                case((buddy_challenges.c.status == "completed", 1), else_=0),
+                buddy_challenges.c.created_at.desc(),
+            )
+            .limit(30)
+        ).all()
         challenges=[_row(r) for r in rows]
         learner_ids = {
             str(challenge[student_key])
@@ -528,11 +603,6 @@ def challenges_for(student_id:str)->list[dict[str,Any]]:
         challenge["target_year_group"] = learners.get(
             str(challenge["target_student_id"]), {}
         ).get("year_group")
-        if challenge["status"] == "open":
-            count = _verified_activity_count(challenge["target_student_id"], challenge)
-            challenge["verified_activity_count"] = count
-            challenge["remaining_activity_count"] = max(0, int(challenge["target_count"]) - count)
-            challenge["ready_to_complete"] = count >= int(challenge["target_count"])
     return challenges
 
 def _subject_matches(challenge_type: str, subject: str | None) -> bool:
@@ -574,6 +644,7 @@ def complete_challenge(
     student_id: str,
     *,
     completion_source: str = "manual_claim",
+    accuracy: float | None = None,
 ) -> dict[str, Any]:
     from .reward_store import get_reward_store
 
@@ -587,15 +658,16 @@ def complete_challenge(
             remaining = int(d["target_count"]) - verified_count
             raise ValueError(f"Keep learning to finish this challenge. {remaining} more verified activities to go.")
         now=_now()
-        result=conn.execute(update(buddy_challenges).where(and_(buddy_challenges.c.id==challenge_id,buddy_challenges.c.status=="open")).values(status="completed",completed_by_student_id=student_id,completed_at=now,verified_activity_count=verified_count,completion_source=completion_source))
+        reward_xp, reward_gift_points = _challenge_completion_reward(d, accuracy)
+        result=conn.execute(update(buddy_challenges).where(and_(buddy_challenges.c.id==challenge_id,buddy_challenges.c.status=="open")).values(status="completed",completed_by_student_id=student_id,completed_at=now,verified_activity_count=verified_count,completion_source=completion_source,awarded_xp=reward_xp,awarded_gift_points=reward_gift_points))
         if result.rowcount != 1:
             raise ValueError("This challenge has already been completed.")
     target_reward = get_reward_store().award_custom_event(
-        student_id=student_id, xp=d["xp_reward"], gift_points=d["gift_points_reward"],
+        student_id=student_id, xp=reward_xp, gift_points=reward_gift_points,
         source_key=f"study-buddy:{challenge_id}:target", label=d["title"],
     )
     requester_reward = get_reward_store().award_custom_event(
-        student_id=d["requester_student_id"], xp=d["xp_reward"], gift_points=d["gift_points_reward"],
+        student_id=d["requester_student_id"], xp=reward_xp, gift_points=reward_gift_points,
         source_key=f"study-buddy:{challenge_id}:requester", label=f"Buddy completed: {d['title']}",
     )
     # Let the child who sent the challenge celebrate next time they open their
@@ -614,7 +686,7 @@ def complete_challenge(
     except IntegrityError:
         # A retry after a completed request must not create duplicate pop-ups.
         pass
-    d.update({"status":"completed","completed_by_student_id":student_id,"verified_activity_count":verified_count,"completion_source":completion_source,"completed_at":now})
+    d.update({"status":"completed","completed_by_student_id":student_id,"verified_activity_count":verified_count,"completion_source":completion_source,"completed_at":now,"awarded_xp":reward_xp,"awarded_gift_points":reward_gift_points})
     # Only return badges earned by the signed-in learner.  A buddy's badge
     # progress is private even though a small earned-badge summary is shown
     # in the buddy ranking.
@@ -637,6 +709,25 @@ def complete_challenge(
     return d
 
 
+def _challenge_completion_reward(challenge: dict[str, Any], accuracy: float | None) -> tuple[int, int]:
+    """Return the shared bonus for a verified challenge activity.
+
+    The base reward is still given for a completed activity. A higher checked
+    answer score adds up to the same amount again, so clear, careful work can
+    earn up to double XP and Gift Points without rewarding speed or creating a
+    competitive score board.
+    """
+    try:
+        score = max(0.0, min(1.0, float(accuracy))) if accuracy is not None else 0.0
+    except (TypeError, ValueError):
+        score = 0.0
+    multiplier = 1.0 + score
+    def scaled(value: object) -> int:
+        base = max(0, int(value or 0))
+        return int(base * multiplier + 0.5)
+    return scaled(challenge.get("xp_reward")), scaled(challenge.get("gift_points_reward"))
+
+
 def challenge_completion_notifications_for(student_id: str, limit: int = 3) -> list[dict[str, Any]]:
     """Return a small, one-time celebration queue for a challenge sender."""
     safe_limit = max(1, min(int(limit), 3))
@@ -646,8 +737,13 @@ def challenge_completion_notifications_for(student_id: str, limit: int = 3) -> l
                 buddy_challenge_notifications.c.id,
                 buddy_challenges.c.id.label("challenge_id"),
                 buddy_challenges.c.title,
-                buddy_challenges.c.xp_reward,
-                buddy_challenges.c.gift_points_reward,
+                func.coalesce(
+                    buddy_challenges.c.awarded_xp, buddy_challenges.c.xp_reward
+                ).label("awarded_xp"),
+                func.coalesce(
+                    buddy_challenges.c.awarded_gift_points,
+                    buddy_challenges.c.gift_points_reward,
+                ).label("awarded_gift_points"),
                 students.c.name.label("buddy_nickname"),
             )
             .join(
@@ -671,8 +767,8 @@ def challenge_completion_notifications_for(student_id: str, limit: int = 3) -> l
             "challenge_id": str(row.challenge_id),
             "title": str(row.title),
             "buddy_nickname": str(row.buddy_nickname or "Your buddy"),
-            "awarded_xp": int(row.xp_reward or 0),
-            "awarded_gift_points": int(row.gift_points_reward or 0),
+            "awarded_xp": int(row.awarded_xp or 0),
+            "awarded_gift_points": int(row.awarded_gift_points or 0),
         }
         for row in rows
     ]
@@ -701,6 +797,7 @@ def complete_challenge_for_verified_activity(
     challenge_id: str | None,
     student_id: str,
     subject: str,
+    accuracy: float | None = None,
 ) -> dict[str, Any] | None:
     """Complete one explicitly selected challenge after a verified activity.
 
@@ -733,6 +830,7 @@ def complete_challenge_for_verified_activity(
             requested_id,
             learner_id,
             completion_source="verified_activity",
+            accuracy=accuracy,
         )
     except (PermissionError, ValueError):
         # The activity is already safely recorded.  A concurrent request or a

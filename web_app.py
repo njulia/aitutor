@@ -2989,6 +2989,7 @@ async def api_review(
                                 challenge_id=request_body.study_buddy_challenge_id,
                                 student_id=resolved_student_id,
                                 subject=request_body.subject,
+                                accuracy=accuracy,
                                 timeout=10,
                                 limit_concurrency=False,
                             )
@@ -4085,6 +4086,7 @@ async def admin_list_users(limit: int = 100, offset: int = 0):
             "parent_username": u.get("parent_username"),
             "name": u.get("name", "Student"),
             "year_group": u.get("year_group"),
+            "buddy_code": u.get("buddy_code"),
             "age": u.get("age"),
             "xp": ws.get("xp", 0),
             "gift_points": ws.get("gift_points", 0),

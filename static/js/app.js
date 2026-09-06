@@ -91,6 +91,11 @@
         let primarySubjects = ['Maths', 'English', 'Science'];
         let elevenPlusSubjects = ['Maths', 'English', 'Verbal Reasoning', 'Non-Verbal Reasoning'];
 
+        function activeStudyBuddyChallengeId() {
+            const id = new URLSearchParams(window.location.search).get('buddy_challenge') || '';
+            return /^sbc_[A-Za-z0-9_-]{12,76}$/.test(id) ? id : null;
+        }
+
         // ===== Voice Feature Detection & State (Tier 0: Browser-native) =====
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
@@ -195,7 +200,10 @@
             }
             toast.textContent = '';
             const title = document.createElement('strong');
-            title.textContent = `✨ +${Number(update.awarded_xp)} XP for your effort!`;
+            const earnedGiftPoints = Number(update.awarded_gift_points || 0);
+            title.textContent = earnedGiftPoints > 0
+                ? `✨ +${Number(update.awarded_xp)} XP and +${earnedGiftPoints} Gift Points!`
+                : `✨ +${Number(update.awarded_xp)} XP for your effort!`;
             toast.appendChild(title);
             const questNames = (update.quest_completions || [])
                 .map(item => item.label).filter(Boolean);
@@ -216,6 +224,13 @@
                 const badgeLine = document.createElement('span');
                 badgeLine.textContent = ` 🏅 New badge: ${badge.icon || '🏅'} ${badge.title}!`;
                 toast.appendChild(badgeLine);
+            });
+            const completedBuddyChallenges = (update.buddy_challenge_completions || [])
+                .filter(item => item && item.title);
+            completedBuddyChallenges.forEach((challenge) => {
+                const challengeLine = document.createElement('span');
+                challengeLine.textContent = ` 🎯 Buddy challenge complete: ${challenge.title}. Your bonus is ready!`;
+                toast.appendChild(challengeLine);
             });
             const link = document.createElement('a');
             link.href = '/rewards';
@@ -2745,6 +2760,7 @@
                         from_rag: hw.from_rag,
                         homework_doc_id: hw.doc_id,
                         reward_activity_id: hw.reward_activity_id || null,
+                        study_buddy_challenge_id: activeStudyBuddyChallengeId(),
                         is_eleven_plus: !!hw.is_eleven_plus,
                         question_index: Number.isInteger(hw.question_index)
                             ? hw.question_index
@@ -2906,6 +2922,7 @@
                             from_rag: Boolean(homeworkItem.from_rag),
                             homework_doc_id: homeworkItem.doc_id || null,
                             reward_activity_id: homeworkItem.reward_activity_id || null,
+                            study_buddy_challenge_id: activeStudyBuddyChallengeId(),
                             is_eleven_plus: Boolean(homeworkItem.is_eleven_plus),
                             question_index: Number.isInteger(homeworkItem.question_index)
                                 ? homeworkItem.question_index : null
@@ -3592,6 +3609,7 @@
                     subject: currentPracticeSubject,
                     profile: Object.assign({}, getLearnerReviewProfile(), {topic: currentPracticeTopic || null}),
                     is_eleven_plus: currentPracticeIsElevenPlus,
+                    study_buddy_challenge_id: activeStudyBuddyChallengeId(),
                     ...thinkingCheckpointPayload(document.getElementById('homework-results'))
                 })
             })

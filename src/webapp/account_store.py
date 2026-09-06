@@ -267,7 +267,8 @@ def _generate_buddy_code(nickname: str) -> str:
 
 
 def _is_current_buddy_code(value: Any) -> bool:
-    return bool(_CURRENT_BUDDY_CODE_RE.fullmatch(str(value or "").upper()))
+    code = str(value or "").strip()
+    return bool(code == code.upper() and _CURRENT_BUDDY_CODE_RE.fullmatch(code))
 
 
 def _normalise_legacy_buddy_code(value: Any) -> Optional[str]:
@@ -323,21 +324,73 @@ def _migrate_code_prefixes() -> None:
 
 
 def _backfill_buddy_codes() -> None:
-    """Ensure stored Buddy Codes use the current no-dash format."""
+    """Ensure stored Buddy Codes use the current no-dash, unique format."""
     engine = _engine()
     try:
         with engine.begin() as conn:
+            # Older databases may have received the column before the unique
+            # index existed. Retire duplicate values first, then reissue only
+            # the later records below. This makes the database constraint the
+            # final protection, even if two code requests arrive together.
+            rows = conn.execute(
+                select(students.c.id, students.c.buddy_code)
+                .where(students.c.buddy_code.is_not(None))
+                .where(students.c.buddy_code != "")
+                .order_by(students.c.created_at.asc(), students.c.id.asc())
+            ).all()
+            seen_codes: set[str] = set()
+            reissue_ids: set[str] = set()
+            legacy_replacements: dict[str, str] = {}
+            for row in rows:
+                student_id = str(row.id)
+                code = str(row.buddy_code or "").strip().upper()
+                legacy_code = _normalise_legacy_buddy_code(row.buddy_code)
+                if legacy_code and legacy_code not in seen_codes:
+                    # Keep an existing friendly code's digits when it can be
+                    # safely converted from the retired dashed form.
+                    legacy_replacements[student_id] = legacy_code
+                    seen_codes.add(legacy_code)
+                    continue
+                if not _is_current_buddy_code(row.buddy_code) or code in seen_codes:
+                    reissue_ids.add(student_id)
+                    continue
+                seen_codes.add(code)
+            if reissue_ids:
+                conn.execute(
+                    update(students)
+                    .where(students.c.id.in_(tuple(reissue_ids)))
+                    .values(buddy_code=None)
+                )
             conn.exec_driver_sql(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ix_students_buddy_code "
                 "ON students (buddy_code)"
             )
+            for student_id, legacy_code in legacy_replacements.items():
+                try:
+                    # A savepoint keeps PostgreSQL usable if a concurrent
+                    # worker happened to issue the same code first.
+                    with conn.begin_nested():
+                        conn.execute(
+                            update(students)
+                            .where(students.c.id == student_id)
+                            .values(buddy_code=legacy_code, updated_at=_now())
+                        )
+                except IntegrityError:
+                    # A valid no-dash code may already exist in an old data
+                    # set. Clear only this later record and safely reissue it.
+                    conn.execute(
+                        update(students)
+                        .where(students.c.id == student_id)
+                        .values(buddy_code=None, updated_at=_now())
+                    )
+                    reissue_ids.add(student_id)
             missing_ids = conn.execute(select(students.c.id).where(
                 (students.c.buddy_code.is_(None)) | (students.c.buddy_code == "")
             )).scalars().all()
             legacy_ids = conn.execute(select(students.c.id).where(
                 students.c.buddy_code.like("%-%")
             )).scalars().all()
-        for student_id in {*missing_ids, *legacy_ids}:
+        for student_id in {*missing_ids, *legacy_ids, *reissue_ids}:
             _ensure_student_buddy_code(str(student_id))
     except Exception:
         # The normal profile-read path retries a missing code. Do not stop a
@@ -951,6 +1004,7 @@ def list_all_account_students(limit: int = 100, offset: int = 0) -> List[Dict[st
                 accounts.c.email.label("parent_username"),
                 students.c.name,
                 students.c.year_group,
+                students.c.buddy_code,
                 students.c.age,
                 students.c.is_active,
                 students.c.created_at,

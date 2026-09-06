@@ -19,6 +19,8 @@ def test_received_buddy_challenges_link_to_the_right_learning_area() -> None:
     assert "`/app?tab=${encodeURIComponent(tab)}${subjectQuery}${yearQuery}${challengeQuery}`" in script
     assert "challengePracticeLink(challenge)" in script
     assert "▶ ${destination.label}" in script
+    assert "label: subject ? `Start ${tab === 'eleven' ? '11+ ' : ''}${subject}`" in script
+    assert "Start ${validYear ? `Year ${requestedYear} `" not in script
     assert ".buddy-challenge-start" in stylesheet
 
 
@@ -43,3 +45,18 @@ def test_rankings_are_side_by_side_and_buddy_completions_have_a_safe_popup() -> 
     assert "challenge-notifications/${encodeURIComponent(notification.id)}/seen" in script
     assert ".buddy-ranking-columns" in style
     assert ".buddy-completion-dialog" in style
+    assert "Claim reward" not in script
+    assert "Finish this subject activity to earn both rewards automatically." in script
+    assert "up to +${challenge.xp_reward * 2} XP" in script
+
+
+def test_started_buddy_challenge_is_completed_automatically_after_answer_checking() -> None:
+    app_script = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+    server = (ROOT / "web_app.py").read_text(encoding="utf-8")
+    store = (ROOT / "src/webapp/study_buddy_store.py").read_text(encoding="utf-8")
+
+    assert "function activeStudyBuddyChallengeId()" in app_script
+    assert app_script.count("study_buddy_challenge_id: activeStudyBuddyChallengeId()") >= 3
+    assert "complete_challenge_for_verified_activity" in server
+    assert "accuracy=accuracy" in server
+    assert "multiplier = 1.0 + score" in store
