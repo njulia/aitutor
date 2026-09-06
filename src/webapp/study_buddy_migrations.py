@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 
 from .account_store import _engine
 
-MIGRATION_VERSION = 8
+MIGRATION_VERSION = 9
 
 
 def _migration_table(metadata: MetaData) -> Table:
@@ -177,3 +177,18 @@ def run_study_buddy_migrations() -> None:
                   )
             """))
             conn.execute(insert(migrations).values(version=8, applied_at=datetime.now(UTC)))
+
+    # v9: a bounded, one-time celebration queue tells the child who sent a
+    # challenge that their approved buddy completed it and that both rewards
+    # were added. It contains no free text or child directory data.
+    from .study_buddy_store import buddy_challenge_notifications
+    buddy_challenge_notifications.metadata.create_all(
+        engine, tables=[buddy_challenge_notifications]
+    )
+    if 9 not in applied:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_study_buddy_notice_recipient_seen_created "
+                "ON study_buddy_challenge_notifications (recipient_student_id, seen_at, created_at)"
+            ))
+            conn.execute(insert(migrations).values(version=9, applied_at=datetime.now(UTC)))

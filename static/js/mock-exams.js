@@ -52,6 +52,7 @@
   const examProgressText = document.getElementById('exam-progress-text');
   const examProgressBar = document.getElementById('exam-progress-bar');
   const examAnsweredText = document.getElementById('exam-answered-text');
+  const examSectionGuide = document.getElementById('exam-section-guide');
   const questionNumber = document.getElementById('question-number');
   const questionSubject = document.getElementById('question-subject');
   const questionContext = document.getElementById('question-context');
@@ -75,7 +76,8 @@
     timerId: null,
     active: false,
     submitting: false,
-    autoSubmitted: false
+    autoSubmitted: false,
+    schoolAudience: 'all'
   };
 
   function element(tag, className, text) {
@@ -143,6 +145,14 @@
     }).join(' · ');
   }
 
+  function sectionSummary(sections) {
+    return (sections || []).map(function (section) {
+      const count = Number(section.question_count) || 0;
+      const minutes = Number(section.duration_minutes) || 0;
+      return section.label + ' · ' + count + ' questions · ' + minutes + ' min';
+    }).join('  |  ');
+  }
+
   function renderMockCard(exam) {
     const card = element('article', 'mock-card');
     if (exam.is_free) card.classList.add('free');
@@ -170,15 +180,14 @@
     facts.appendChild(element('span', '', exam.question_count + ' questions'));
     card.appendChild(facts);
     card.appendChild(element('p', 'subject-list', subjectSummary(exam.subject_counts)));
+    if (Array.isArray(exam.sections) && exam.sections.length > 1) {
+      card.appendChild(element('p', 'section-list', sectionSummary(exam.sections)));
+    }
     card.appendChild(element('p', 'format-note', exam.format_note));
 
-    if (!exam.is_free) {
+    if (!exam.is_free && !exam.available) {
       card.appendChild(element(
-        'p',
-        'mock-access-note' + (exam.available ? ' available' : ''),
-        exam.available
-          ? 'Included with your active 11+ Premium subscription.'
-          : 'Requires an active 11+ Premium subscription.'
+        'p', 'mock-access-note', 'Requires an active 11+ Premium subscription.'
       ));
     }
 
@@ -229,11 +238,14 @@
     return 'other';
   }
 
-  function mockMatches(exam, search, region, type) {
-    if (type !== 'all' && exam.category !== type) return false;
+  function mockMatches(exam, search, region, schoolAudience) {
     if (region !== 'all' && mockArea(exam) !== region) return false;
+    if (schoolAudience !== 'all'
+      && (!Array.isArray(exam.school_audiences)
+        || exam.school_audiences.indexOf(schoolAudience) === -1)) return false;
     if (!search) return true;
     const haystack = [exam.title, exam.school, exam.description, exam.stage, exam.format_note]
+      .concat(Array.isArray(exam.school_aliases) ? exam.school_aliases : [])
       .filter(Boolean).join(' ').toLowerCase();
     return search.split(/\s+/).every(function (term) { return haystack.indexOf(term) !== -1; });
   }
@@ -242,14 +254,12 @@
     if (!state.catalogue) return;
     const searchInput = document.getElementById('mock-search');
     const regionInput = document.getElementById('mock-region');
-    const typeInput = document.getElementById('mock-type');
     const search = String(searchInput ? searchInput.value : '').trim().toLowerCase();
     const region = regionInput ? regionInput.value : 'all';
-    const type = typeInput ? typeInput.value : 'all';
     commonGrid.replaceChildren();
     schoolGrid.replaceChildren();
     const exams = (state.catalogue.exams || []).filter(function (exam) {
-      return mockMatches(exam, search, region, type);
+      return mockMatches(exam, search, region, state.schoolAudience);
     });
     exams.sort(function (a, b) {
       if (a.category === 'school_target' && b.category === 'school_target') {
@@ -265,8 +275,14 @@
     });
     const status = document.getElementById('mock-filter-status');
     if (status) {
-      status.textContent = search || region !== 'all' || type !== 'all'
-        ? exams.length + ' mock' + (exams.length === 1 ? '' : 's') + ' found.'
+      const audienceLabel = state.schoolAudience === 'girls'
+        ? " Girls' school formats selected."
+        : (state.schoolAudience === 'boys' ? " Boys' school formats selected." : '');
+      const isFiltered = search || region !== 'all' || state.schoolAudience !== 'all';
+      status.textContent = isFiltered
+        ? (exams.length
+          ? exams.length + ' mock' + (exams.length === 1 ? '' : 's') + ' found.' + audienceLabel
+          : 'No matching mocks yet. Try a different school, town or filter.')
         : '';
     }
     document.getElementById('common-mocks').hidden = !exams.some(function (exam) { return exam.category === 'common'; });
@@ -387,8 +403,20 @@
     const total = state.questions.length;
     const answered = selectedCount();
 
+    const sections = Array.isArray(state.exam && state.exam.sections) ? state.exam.sections : [];
+    let sectionIndex = sections.findIndex(function (section) {
+      return section.label === question.section;
+    });
+    if (sectionIndex < 0) sectionIndex = 0;
+    const section = sections[sectionIndex];
     questionNumber.textContent = 'Question ' + (state.currentIndex + 1) + ' of ' + total;
-    questionSubject.textContent = question.subject + ' · ' + question.topic;
+    questionSubject.textContent = (question.section || question.subject) + ' · ' + question.topic;
+    if (examSectionGuide) {
+      examSectionGuide.textContent = section
+        ? 'Section ' + (sectionIndex + 1) + ' of ' + sections.length + ': ' + section.label
+          + ' · ' + section.question_count + ' questions · plan ' + section.duration_minutes + ' minutes'
+        : '';
+    }
     questionPrompt.textContent = question.prompt;
     questionContext.textContent = question.context || '';
     questionContext.hidden = !question.context;
@@ -823,10 +851,16 @@
     window.scrollTo({top: 0, behavior: 'smooth'});
   });
 
-  ['mock-search', 'mock-region', 'mock-type'].forEach(function (id) {
+  ['mock-search', 'mock-region'].forEach(function (id) {
     const control = document.getElementById(id);
     if (!control) return;
-    control.addEventListener(id === 'mock-search' ? 'input' : 'change', applyMockFilters);
+    control.addEventListener(id === 'mock-search' ? 'input' : 'change', function () {
+      state.schoolAudience = 'all';
+      document.querySelectorAll('[data-mock-chip]').forEach(function (chip) {
+        chip.setAttribute('aria-pressed', 'false');
+      });
+      applyMockFilters();
+    });
   });
 
   document.querySelectorAll('[data-mock-chip]').forEach(function (chip) {
@@ -834,13 +868,31 @@
       const value = chip.getAttribute('data-mock-chip') || '';
       const search = document.getElementById('mock-search');
       const region = document.getElementById('mock-region');
+      const wasSelected = chip.getAttribute('aria-pressed') === 'true';
+      if (wasSelected) {
+        if (search) search.value = '';
+        if (region) region.value = 'all';
+        state.schoolAudience = 'all';
+        document.querySelectorAll('[data-mock-chip]').forEach(function (candidate) {
+          candidate.setAttribute('aria-pressed', 'false');
+        });
+        applyMockFilters();
+        return;
+      }
+      state.schoolAudience = value === 'girls' || value === 'boys' ? value : 'all';
       if (value === 'essex' || value === 'london') {
         if (search) search.value = '';
         if (region) region.value = value;
+      } else if (value === 'girls' || value === 'boys') {
+        if (search) search.value = '';
+        if (region) region.value = 'all';
       } else {
         if (search) search.value = value;
         if (region) region.value = 'all';
       }
+      document.querySelectorAll('[data-mock-chip]').forEach(function (candidate) {
+        candidate.setAttribute('aria-pressed', candidate === chip ? 'true' : 'false');
+      });
       applyMockFilters();
       document.getElementById('finder-title').scrollIntoView({behavior: 'smooth', block: 'start'});
     });

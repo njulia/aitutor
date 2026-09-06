@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from .account_store import ensure_account
 from .kid_session_store import resolve_kid_session
-from .study_buddy_store import EMOJI_OPTIONS, buddies, buddy_code_for, challenges_for, complete_challenge, create_challenge, create_request, emoji_reactions_for, find_students, get_study_buddy_settings, init_study_buddy_db, parent_requests, approve_request, ranking, remove_buddy, remove_buddy_for_parent, send_emoji_reaction
+from .study_buddy_store import EMOJI_OPTIONS, acknowledge_challenge_completion_notification, buddies, buddy_code_for, challenge_completion_notifications_for, challenges_for, complete_challenge, create_challenge, create_request, emoji_reactions_for, find_students, get_study_buddy_settings, init_study_buddy_db, parent_requests, approve_request, ranking, remove_buddy, remove_buddy_for_parent, send_emoji_reaction
 from .study_buddy_challenge_catalog import challenge_catalog_options
 from src.auth_tokens import verify_token
 
@@ -51,6 +51,7 @@ def build_study_buddy_router(project_root):
             'challenges': challenges_for(sid),
             'challenge_options': challenge_catalog_options(),
             'ranking': ranking(sid),
+            'buddy_completion_notifications': challenge_completion_notifications_for(sid),
             'emoji_reactions': emoji_reactions_for(sid),
             'emoji_options': [
                 {'key': key, **value}
@@ -79,6 +80,10 @@ def build_study_buddy_router(project_root):
     async def complete(challenge_id:str, req:Request):
         try: return complete_challenge(challenge_id,_kid(req))
         except (ValueError,PermissionError) as e: raise HTTPException(400,str(e))
+    @r.post('/api/study-buddies/challenge-notifications/{notification_id}/seen')
+    async def acknowledge_completion_notice(notification_id: str, req: Request):
+        try: return acknowledge_challenge_completion_notification(notification_id, _kid(req))
+        except ValueError as e: raise HTTPException(404, str(e))
     @r.get('/api/parent/study-buddies/requests')
     async def requests(req:Request): return {'requests':parent_requests(_parent(req))}
     @r.post('/api/parent/study-buddies/remove/{request_id}')

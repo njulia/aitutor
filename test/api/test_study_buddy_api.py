@@ -68,6 +68,14 @@ def test_approved_buddies_use_separate_share_codes_and_fixed_emojis(client) -> N
     assert mine.status_code == 200, mine.text
     assert mine.json()["buddy_code"] == second["buddy_code"]
     assert mine.json()["emoji_reactions"][0]["emoji"] == "❤️"
+    options = mine.json()["challenge_options"]
+    assert {option["subject"] for option in options if option["group"] == "primary"} >= {
+        "Maths", "English", "Science", "Geography",
+    }
+    eleven_options = [option for option in options if option["group"] == "eleven_plus"]
+    assert eleven_options and all("11+" in option["label"] for option in eleven_options)
+    assert all(option["practice_subject"] for option in eleven_options)
+    assert mine.json()["buddy_completion_notifications"] == []
     assert {
         (item["key"], item["emoji"], item["label"])
         for item in mine.json()["emoji_options"]

@@ -179,6 +179,14 @@ ADDITIONAL_PUBLIC_SOURCES: Dict[str, Dict[str, str]] = {
             "admission-to-year-7-september-2027/"
         ),
     },
+    "crgs-csse-2027": {
+        "title": "Colchester Royal Grammar School: Year 7 admissions and CSSE information",
+        "url": "https://www.crgs.co.uk/132/admissions-policy",
+    },
+    "kegs-csse-2027": {
+        "title": "King Edward VI Grammar School Chelmsford: Year 7 application information",
+        "url": "https://www.kegs.org.uk/admissions/how-to-apply/",
+    },
     "newstead-wood-2027": {
         "title": "Newstead Wood School: Year 7 admissions and selection test",
         "url": "https://www.newsteadwood.co.uk/admissions/year-7-admissions/about-the-selection-test",
@@ -1944,7 +1952,7 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
         "id": "essex-csse-11plus-2",
         "category": "school_target",
         "title": "Essex 11+ Mock Exam — CSSE Practice 2",
-        "description": "Original Essex 11 plus mock exam practice in the CSSE English and Mathematics format, with a fresh question mix for repeat practice.",
+        "description": "A short original Essex 11 plus CSSE English and Mathematics skills practice with a fresh question mix for repeat practice.",
         "school": "Consortium of Selective Schools in Essex",
         "stage": "CSSE 11+ Examination",
         "duration_minutes": 50,
@@ -1954,14 +1962,14 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
             + [f"e{i:02d}" for i in range(37, 49)]
         ),
         "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
-        "format_note": "Original English and Mathematics practice shaped around the current CSSE two-paper format; the official CSSE examination uses separate 60-minute English and Mathematics tests.",
+        "format_note": "Short original English and Mathematics skills practice. The official CSSE examination uses a 60-minute English paper after reading time and a separate 60-minute Mathematics paper.",
         "last_verified": "2026-08-20",
     },
     "essex-csse-11plus-3": {
         "id": "essex-csse-11plus-3",
         "category": "school_target",
         "title": "Essex 11+ Mock Exam — CSSE Practice 3",
-        "description": "Another original 11 plus mock exam for Essex CSSE preparation, focusing on English reading and writing skills plus non-calculator Mathematics.",
+        "description": "A short original 11 plus skills practice for Essex CSSE preparation, focusing on English reading and writing plus non-calculator Mathematics.",
         "school": "Consortium of Selective Schools in Essex",
         "stage": "CSSE 11+ Examination",
         "duration_minutes": 50,
@@ -1971,14 +1979,14 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
             + [f"e{i:02d}" for i in range(41, 53)]
         ),
         "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
-        "format_note": "Original English and Mathematics practice based on the published CSSE scope. It is an independent simulation, not an official CSSE paper.",
+        "format_note": "Short original English and Mathematics skills practice based on the published CSSE scope. It is independent practice, not a full official-style timed paper.",
         "last_verified": "2026-08-20",
     },
     "colchester-essex-11plus-1": {
         "id": "colchester-essex-11plus-1",
         "category": "school_target",
         "title": "Colchester Essex 11+ Mock Exam — CSSE Target",
-        "description": "Original 11 plus mock exam practice for families targeting Colchester Royal Grammar School or Colchester County High School for Girls through the CSSE test.",
+        "description": "A short original 11 plus CSSE skills practice for families targeting Colchester Royal Grammar School or Colchester County High School for Girls.",
         "school": "Colchester Royal Grammar School / Colchester County High School for Girls",
         "stage": "CSSE 11+ Examination",
         "duration_minutes": 50,
@@ -1988,14 +1996,56 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
             + [f"e{i:02d}" for i in range(53, 65)]
         ),
         "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
-        "format_note": "Colchester-targeted independent practice using the shared CSSE English and Mathematics entrance-test format. It is not an official school paper.",
+        "format_note": "Short Colchester-targeted CSSE skills practice using English and Mathematics. It is not an official school paper or a full-timing simulation.",
         "last_verified": "2026-08-20",
+    },
+    "colchester-royal-grammar-1": {
+        "id": "colchester-royal-grammar-1",
+        "category": "school_target",
+        "title": "Colchester Royal Grammar School 11+ Target Mock",
+        "description": "A full-timing original English and Mathematics practice simulation for Colchester Royal Grammar School applicants using the shared CSSE format.",
+        "school": "Colchester Royal Grammar School",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 130,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(1, 31)]
+            + [f"m{i:02d}" for i in range(1, 31)]
+        ),
+        "sections": (
+            {"label": "English", "question_ids": tuple(f"e{i:02d}" for i in range(1, 31)), "minutes": 70},
+            {"label": "Mathematics", "question_ids": tuple(f"m{i:02d}" for i in range(1, 31)), "minutes": 60},
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "crgs-csse-2027", "essex-grammar-2027"),
+        "format_note": "Full-timing CSSE-style practice: 60 minutes of English plus 10 minutes' reading time, followed by 60 minutes of Mathematics. The questions are original and this is not an official CRGS paper.",
+        "last_verified": "2026-09-06",
+    },
+    "kegs-chelmsford-1": {
+        "id": "kegs-chelmsford-1",
+        "category": "school_target",
+        "title": "King Edward VI Grammar School Chelmsford 11+ Target Mock",
+        "description": "A full-timing original English and Mathematics practice simulation for boys applying to KEGS through the shared CSSE examination.",
+        "school": "King Edward VI Grammar School Chelmsford",
+        "stage": "CSSE 11+ Examination",
+        "duration_minutes": 130,
+        "is_free": False,
+        "question_ids": tuple(
+            [f"e{i:02d}" for i in range(31, 61)]
+            + [f"m{i:02d}" for i in range(31, 61)]
+        ),
+        "sections": (
+            {"label": "English", "question_ids": tuple(f"e{i:02d}" for i in range(31, 61)), "minutes": 70},
+            {"label": "Mathematics", "question_ids": tuple(f"m{i:02d}" for i in range(31, 61)), "minutes": 60},
+        ),
+        "source_ids": ("dfe-primary", "csse-2027", "kegs-csse-2027", "essex-grammar-2027"),
+        "format_note": "Full-timing CSSE-style practice: 60 minutes of English plus 10 minutes' reading time, followed by 60 minutes of Mathematics. The questions are original and this is not an official KEGS paper.",
+        "last_verified": "2026-09-06",
     },
     "southend-westcliff-essex-11plus-1": {
         "id": "southend-westcliff-essex-11plus-1",
         "category": "school_target",
         "title": "Southend & Westcliff Essex 11+ Mock Exam — CSSE Target",
-        "description": "Original 11 plus mock exam practice for Southend and Westcliff selective schools using the common CSSE English and Mathematics format.",
+        "description": "A short original 11 plus CSSE skills practice for Southend and Westcliff selective schools using English and Mathematics.",
         "school": "Southend and Westcliff CSSE schools",
         "stage": "CSSE 11+ Examination",
         "duration_minutes": 50,
@@ -2005,7 +2055,7 @@ ADDITIONAL_EXAMS: Dict[str, Dict[str, Any]] = {
             + [f"e{i:02d}" for i in range(49, 61)]
         ),
         "source_ids": ("dfe-primary", "csse-2027", "essex-grammar-2027"),
-        "format_note": "Southend and Westcliff-targeted independent practice based on the shared CSSE English and Mathematics format used by member schools.",
+        "format_note": "Short Southend and Westcliff-targeted CSSE skills practice using English and Mathematics. It is not a full-timing simulation.",
         "last_verified": "2026-08-20",
     },
     "chelmsford-essex-11plus-2": {

@@ -62,12 +62,14 @@ def _entry(
     label: str,
     title: str,
     subject: str,
+    practice_subject: str | None = None,
     practice_tab: str,
     group: str,
     reward: Mapping[str, int],
     match_subjects: tuple[str, ...] = (),
     match_any_supported_subject: bool = False,
     match_any_eleven_plus_subject: bool = False,
+    requires_eleven_plus_context: bool = False,
 ) -> dict[str, Any]:
     """Build a serialisable immutable-looking catalogue record."""
     return {
@@ -76,6 +78,7 @@ def _entry(
         "label": f"{icon} {label}",
         "title": title,
         "subject": subject,
+        "practice_subject": practice_subject or subject,
         "practice_tab": practice_tab,
         "group": group,
         "target_count": int(reward["target_count"]),
@@ -84,6 +87,7 @@ def _entry(
         "match_subjects": tuple(match_subjects),
         "match_any_supported_subject": bool(match_any_supported_subject),
         "match_any_eleven_plus_subject": bool(match_any_eleven_plus_subject),
+        "requires_eleven_plus_context": bool(requires_eleven_plus_context),
     }
 
 
@@ -112,18 +116,21 @@ def _build_catalog() -> dict[str, dict[str, Any]]:
         )
 
     # Existing challenge keys remain valid so live rows and older browser
-    # versions continue to work.  The two specific reasoning options make the
-    # supported 11+ subjects discoverable without dropping the broader option.
+    # versions continue to work. All 11+ choices begin with “11+” so a child
+    # can tell at a glance that they open the 11+ learning area, not ordinary
+    # homework.
     catalog["reasoning"] = _entry(
         key="reasoning",
         icon="🧠",
-        label="Reasoning",
-        title="Reasoning Brain Boost",
-        subject="Reasoning",
+        label="11+ Reasoning",
+        title="11+ Reasoning Brain Boost",
+        subject="11+ Reasoning",
+        practice_subject="Verbal Reasoning",
         practice_tab="eleven",
         group="eleven_plus",
         reward=ADVANCED_CHALLENGE_REWARD,
         match_subjects=("Verbal Reasoning", "Non-Verbal Reasoning"),
+        requires_eleven_plus_context=True,
     )
     catalog["11plus"] = _entry(
         key="11plus",
@@ -131,6 +138,7 @@ def _build_catalog() -> dict[str, dict[str, Any]]:
         label="11+",
         title="11+ Brain Boost",
         subject="11+",
+        practice_subject="Maths",
         practice_tab="eleven",
         group="eleven_plus",
         reward=ADVANCED_CHALLENGE_REWARD,
@@ -139,24 +147,40 @@ def _build_catalog() -> dict[str, dict[str, Any]]:
     catalog["verbal_reasoning"] = _entry(
         key="verbal_reasoning",
         icon="🗣️",
-        label="Verbal Reasoning",
-        title="Verbal Reasoning Brain Boost",
-        subject="Verbal Reasoning",
+        label="11+ Verbal Reasoning",
+        title="11+ Verbal Reasoning Brain Boost",
+        subject="11+ Verbal Reasoning",
+        practice_subject="Verbal Reasoning",
         practice_tab="eleven",
         group="eleven_plus",
         reward=ADVANCED_CHALLENGE_REWARD,
         match_subjects=("Verbal Reasoning",),
+        requires_eleven_plus_context=True,
     )
     catalog["non_verbal_reasoning"] = _entry(
         key="non_verbal_reasoning",
         icon="🧩",
-        label="Non-Verbal Reasoning",
-        title="Pattern Power-Up",
-        subject="Non-Verbal Reasoning",
+        label="11+ Non-Verbal Reasoning",
+        title="11+ Pattern Power-Up",
+        subject="11+ Non-Verbal Reasoning",
+        practice_subject="Non-Verbal Reasoning",
         practice_tab="eleven",
         group="eleven_plus",
         reward=ADVANCED_CHALLENGE_REWARD,
         match_subjects=("Non-Verbal Reasoning",),
+        requires_eleven_plus_context=True,
+    )
+    catalog["eleven_plus_maths"] = _entry(
+        key="eleven_plus_maths", icon="➕", label="11+ Maths",
+        title="11+ Maths Brain Boost", subject="11+ Maths", practice_subject="Maths",
+        practice_tab="eleven", group="eleven_plus", reward=ADVANCED_CHALLENGE_REWARD,
+        match_subjects=("Maths",), requires_eleven_plus_context=True,
+    )
+    catalog["eleven_plus_english"] = _entry(
+        key="eleven_plus_english", icon="📚", label="11+ English",
+        title="11+ English Brain Boost", subject="11+ English", practice_subject="English",
+        practice_tab="eleven", group="eleven_plus", reward=ADVANCED_CHALLENGE_REWARD,
+        match_subjects=("English",), requires_eleven_plus_context=True,
     )
     catalog["mixed"] = _entry(
         key="mixed",
@@ -194,6 +218,7 @@ def challenge_catalog_options() -> list[dict[str, Any]]:
         "label",
         "title",
         "subject",
+        "practice_subject",
         "practice_tab",
         "group",
         "target_count",
@@ -274,6 +299,8 @@ def challenge_subject_matches(challenge_type: object, subject: object) -> bool:
         return canonical_subject in UK_PRIMARY_SUBJECTS or canonical_subject in ELEVEN_PLUS_SUBJECTS
     if option["match_any_eleven_plus_subject"]:
         return canonical_subject in ELEVEN_PLUS_SUBJECTS and is_eleven_plus_activity_subject(subject)
+    if option["requires_eleven_plus_context"] and not is_eleven_plus_activity_subject(subject):
+        return False
     return canonical_subject in option["match_subjects"]
 
 

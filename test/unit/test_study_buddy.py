@@ -1,9 +1,13 @@
 from src.webapp.study_buddy_store import (
     DAILY_EMOJI_SEND_LIMIT,
     buddy_challenges,
+    buddy_challenge_notifications,
     buddy_emoji_reactions,
     buddy_requests,
     challenges_for,
+    challenge_completion_notifications_for,
+    acknowledge_challenge_completion_notification,
+    complete_challenge_for_verified_activity,
     _subject_matches,
     CHALLENGE_CATALOG,
     DAILY_CHALLENGE_SEND_LIMIT,
@@ -45,10 +49,17 @@ def test_study_buddy_schema():
     assert buddy_emoji_reactions.c.sender_student_id is not None
     assert buddy_emoji_reactions.c.recipient_student_id is not None
     assert buddy_emoji_reactions.c.expires_at is not None
+    assert buddy_challenge_notifications.c.recipient_student_id is not None
+    assert buddy_challenge_notifications.c.challenge_id is not None
+    assert buddy_challenge_notifications.c.seen_at is not None
 
 
 def test_challenge_catalog_and_limits_are_fixed():
-    assert set(CHALLENGE_CATALOG) == {"maths", "english", "reasoning", "11plus", "mixed"}
+    assert {"maths", "english", "mixed"} <= set(CHALLENGE_CATALOG)
+    assert {
+        "reasoning", "11plus", "verbal_reasoning", "non_verbal_reasoning",
+        "eleven_plus_maths", "eleven_plus_english",
+    } <= set(CHALLENGE_CATALOG)
     assert DAILY_CHALLENGE_SEND_LIMIT == 3
     assert DAILY_CHALLENGE_RECEIVE_LIMIT == 5
     assert all(item["target_count"] > 0 and item["xp"] > 0 for item in CHALLENGE_CATALOG.values())
@@ -57,10 +68,14 @@ def test_challenge_catalog_and_limits_are_fixed():
 def test_challenge_verification_matches_real_learning_subjects():
     assert _subject_matches("maths", "Maths")
     assert _subject_matches("english", "English")
-    assert _subject_matches("reasoning", "Verbal Reasoning")
-    assert _subject_matches("reasoning", "Non-Verbal Reasoning")
+    assert _subject_matches("reasoning", "11+ Verbal Reasoning")
+    assert _subject_matches("reasoning", "11+ Non-Verbal Reasoning")
     assert _subject_matches("11plus", "11+ Maths")
-    assert _subject_matches("mixed", "Anything")
+    assert _subject_matches("eleven_plus_maths", "11+ Maths")
+    assert _subject_matches("eleven_plus_english", "11+ English")
+    assert not _subject_matches("eleven_plus_maths", "Maths")
+    assert _subject_matches("mixed", "Science")
+    assert not _subject_matches("mixed", "Anything")
     assert not _subject_matches("maths", "English")
     assert not _subject_matches("11plus", "Maths")
 
@@ -268,6 +283,40 @@ def test_challenge_list_identifies_the_buddy_who_sent_and_receives_it() -> None:
     assert received["target_nickname"] == "You"
     assert sent["requester_nickname"] == "You"
     assert sent["target_nickname"] == "Sky"
+    assert received["target_year_group"] == 3
+    assert received["practice_subject"] == "Maths"
+
+
+def test_buddy_completion_rewards_both_children_and_queues_one_celebration() -> None:
+    from src.webapp.reward_store import get_reward_store
+
+    init_study_buddy_db()
+    suffix = uuid4().hex[:12]
+    sender_account = ensure_account(f"buddy-reward-sender-{suffix}@example.com")
+    receiver_account = ensure_account(f"buddy-reward-receiver-{suffix}@example.com")
+    sender = create_student(sender_account["id"], "Robin", 4, 8)
+    receiver = create_student(receiver_account["id"], "Sky", 4, 8)
+    request = create_request(sender["id"], receiver["id"])
+    approve_request(request["id"], sender_account["id"], True)
+    approve_request(request["id"], receiver_account["id"], True)
+    challenge = create_challenge(sender["id"], receiver["id"], "eleven_plus_maths")
+
+    get_reward_store().award_checked_activity(
+        account_id=receiver_account["id"], student_id=receiver["id"],
+        fingerprint="a" * 64, subject="11+ Maths", accuracy=1,
+    )
+    completed = complete_challenge_for_verified_activity(
+        challenge_id=challenge["id"], student_id=receiver["id"], subject="11+ Maths",
+    )
+
+    assert completed is not None
+    assert completed["reward"]["awarded_xp"] == challenge["xp_reward"]
+    assert completed["buddy_reward"]["awarded_gift_points"] == challenge["gift_points_reward"]
+    notices = challenge_completion_notifications_for(sender["id"])
+    assert len(notices) == 1
+    assert notices[0]["buddy_nickname"] == "Sky"
+    assert acknowledge_challenge_completion_notification(notices[0]["id"], sender["id"]) == {"acknowledged": True}
+    assert challenge_completion_notifications_for(sender["id"]) == []
 
 
 def test_study_buddy_page_requires_a_kid_session_and_places_picker_by_the_button() -> None:

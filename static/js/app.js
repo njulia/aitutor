@@ -1042,8 +1042,41 @@
 
         function applyLandingPagePreset() {
             const params = new URLSearchParams(window.location.search);
+            const requestedTab = String(params.get('tab') || '').trim().toLowerCase();
             const requestedYear = Number(params.get('year'));
             const requestedSubject = String(params.get('subject') || '').trim();
+            const elevenPlusSubjects = ['Maths', 'English', 'Verbal Reasoning', 'Non-Verbal Reasoning'];
+            const isElevenPlusPreset = ['eleven', 'elevenplus', '11plus'].includes(requestedTab);
+            const hasElevenYear = [3, 4, 5, 6].includes(requestedYear);
+            const hasElevenSubject = elevenPlusSubjects.includes(requestedSubject);
+            if (isElevenPlusPreset && (hasElevenYear || hasElevenSubject)) {
+                const saved = loadLearningChoices();
+                if (hasElevenYear) {
+                    elevenGuideState.answers.year_group = requestedYear;
+                    saved.elevenYear = requestedYear;
+                    saved.elevenQuickYear = requestedYear;
+                    const quickYear = document.getElementById('eleven-year');
+                    if (quickYear) quickYear.value = String(requestedYear);
+                }
+                if (hasElevenSubject) {
+                    elevenGuideState.answers.subject = requestedSubject;
+                    saved.elevenSubject = requestedSubject;
+                }
+                elevenGuideState.answers.confidence ||= 'sometimes_tricky';
+                elevenGuideState.answers.session_minutes ||= 10;
+                elevenGuideState.answers.mode ||= 'homework';
+                saved.elevenConfidence = elevenGuideState.answers.confidence;
+                saved.elevenMinutes = elevenGuideState.answers.session_minutes;
+                saved.elevenMode = elevenGuideState.answers.mode;
+                saved.elevenQuickMode = elevenGuideState.answers.mode;
+                elevenGuideState.showQuickStart = isElevenGuideComplete();
+                try {
+                    localStorage.setItem(LEARNING_CHOICES_KEY, JSON.stringify(saved));
+                } catch (error) {
+                    console.warn('Could not save the 11+ landing-page practice choice:', error);
+                }
+                return;
+            }
             const safeSubjects = [
                 'Maths', 'English', 'Science', 'History', 'Geography',
                 'Design and Technology', 'Art and Design', 'Computing', 'Music',

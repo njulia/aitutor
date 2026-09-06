@@ -46,9 +46,12 @@ def test_catalogue_options_are_small_one_activity_rewards_and_api_safe() -> None
     assert all(option["target_count"] == 1 for option in options)
     assert all(option["xp"] > 0 and option["gift_points"] > 0 for option in options)
     assert all(option["icon"] and option["label"] and option["title"] for option in options)
+    assert all(option["practice_subject"] for option in options)
     assert {option["practice_tab"] for option in options} <= {"homework", "eleven"}
     assert all(option["xp"] == NORMAL_CHALLENGE_REWARD["xp"] for option in options if option["group"] == "primary")
     assert all(option["xp"] == ADVANCED_CHALLENGE_REWARD["xp"] for option in options if option["group"] == "eleven_plus")
+    eleven_options = [option for option in options if option["group"] == "eleven_plus"]
+    assert all("11+" in option["label"] for option in eleven_options)
     json.dumps(options)
 
 
@@ -65,11 +68,13 @@ def test_subject_matching_is_exact_for_supported_subjects_and_11_plus() -> None:
     assert challenge_subject_matches("science", "Science")
     assert challenge_subject_matches("french", "French")
     assert not challenge_subject_matches("science", "History")
-    assert challenge_subject_matches("verbal_reasoning", "Verbal Reasoning")
+    assert challenge_subject_matches("verbal_reasoning", "11+ Verbal Reasoning")
     assert not challenge_subject_matches("verbal_reasoning", "Non-Verbal Reasoning")
     assert challenge_subject_matches("11plus", "11+ Maths")
     assert challenge_subject_matches("11plus", "Verbal Reasoning")
     assert not challenge_subject_matches("11plus", "Maths")
+    assert challenge_subject_matches("eleven_plus_maths", "11+ Maths")
+    assert not challenge_subject_matches("eleven_plus_maths", "Maths")
     assert challenge_subject_matches("mixed", "Arabic")
     assert not challenge_subject_matches("mixed", "Anything")
     assert not challenge_subject_matches("not-a-real-subject", "Maths")

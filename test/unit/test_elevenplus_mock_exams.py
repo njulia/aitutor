@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 import re
 from urllib.parse import urlparse
 
@@ -92,6 +93,8 @@ def test_every_exam_is_unique_and_uses_only_declared_public_sources() -> None:
                 "bright-futures.co.uk",
                 "reading-school.co.uk",
                 "cchs.co.uk",
+                "crgs.co.uk",
+                "kegs.org.uk",
                 "topschoolguide.com",
                 "nlcs.org.uk",
                 "clsg.org.uk",
@@ -124,7 +127,7 @@ def test_expanded_catalogue_preserves_initial_mocks_and_question_bank() -> None:
         "newstead-wood-11plus-1",
     }
 
-    assert len(mocks.EXAMS) == 44
+    assert len(mocks.EXAMS) == 46
     assert len(mocks._QUESTIONS) == 278
     assert expected_new_exams <= set(mocks.EXAMS)
     assert all(not mocks.EXAMS[exam_id]["is_free"] for exam_id in expected_new_exams)
@@ -277,7 +280,7 @@ def test_catalogue_adds_supported_top_50_a_level_school_targets() -> None:
 
     assert sum(
         exam["category"] == "school_target" for exam in mocks.EXAMS.values()
-    ) == 35
+    ) == 37
     for exam_id, (school, source_id) in expected_new_targets.items():
         exam = mocks.EXAMS[exam_id]
         assert exam["school"] == school
@@ -359,21 +362,58 @@ def test_new_school_targets_match_published_subject_scopes() -> None:
     assert "other answer formats" in mocks.EXAMS["cchs-fsce-1"]["format_note"]
 
 
-def test_pates_and_kegs_are_not_duplicated_because_shared_tests_already_exist() -> None:
+def test_pates_uses_a_shared_test_and_kegs_has_a_dedicated_csse_mock() -> None:
     pates_coverage = mocks.EXAMS["gloucestershire-grammar-1"]
-    kegs_coverage = mocks.EXAMS["csse-essex-1"]
+    kegs_mock = mocks.EXAMS["kegs-chelmsford-1"]
 
     assert pates_coverage["school"] == "Gloucestershire grammar schools"
     assert "gloucestershire-test-2027" in pates_coverage["source_ids"]
-    assert kegs_coverage["school"] == "CSSE selective schools in Essex"
-    assert "csse-2027" in kegs_coverage["source_ids"]
-    assert not any(
-        exam["school"] in {
-            "Pate's Grammar School",
+    assert kegs_mock["school"] == "King Edward VI Grammar School Chelmsford"
+    assert {"csse-2027", "kegs-csse-2027"} <= set(kegs_mock["source_ids"])
+    assert not any(exam["school"] == "Pate's Grammar School" for exam in mocks.EXAMS.values())
+
+
+def test_crgs_and_kegs_mocks_follow_the_published_csse_paper_plan() -> None:
+    expected = {
+        "colchester-royal-grammar-1": ("Colchester Royal Grammar School", "boys", "crgs-csse-2027"),
+        "kegs-chelmsford-1": (
             "King Edward VI Grammar School Chelmsford",
-        }
-        for exam in mocks.EXAMS.values()
-    )
+            "boys",
+            "kegs-csse-2027",
+        ),
+    }
+    catalogue = {
+        item["id"]: item
+        for item in mocks.mock_exam_catalogue(has_mock_access=True)["exams"]
+    }
+
+    for exam_id, (school, audience, school_source) in expected.items():
+        exam = mocks.EXAMS[exam_id]
+        assert exam["school"] == school
+        assert exam["duration_minutes"] == 130
+        assert school_source in exam["source_ids"]
+        assert "csse-2027" in exam["source_ids"]
+        assert {
+            mocks._QUESTION_BY_ID[question_id]["subject"]
+            for question_id in exam["question_ids"]
+        } == {"English", "Maths"}
+        assert [(section["label"], section["minutes"]) for section in exam["sections"]] == [
+            ("English", 70),
+            ("Mathematics", 60),
+        ]
+        assert tuple(
+            question_id
+            for section in exam["sections"]
+            for question_id in section["question_ids"]
+        ) == exam["question_ids"]
+
+        public_exam = catalogue[exam_id]
+        assert public_exam["school_audiences"] == [audience]
+        assert public_exam["sections"] == [
+            {"label": "English", "question_count": 30, "duration_minutes": 70},
+            {"label": "Mathematics", "question_count": 30, "duration_minutes": 60},
+        ]
+        assert not _contains_private_key(public_exam)
 
 
 def test_new_school_targets_start_securely_and_score_locally(monkeypatch) -> None:
@@ -386,6 +426,8 @@ def test_new_school_targets_start_securely_and_score_locally(monkeypatch) -> Non
         "altrincham-girls-1",
         "reading-fsce-1",
         "cchs-fsce-1",
+        "colchester-royal-grammar-1",
+        "kegs-chelmsford-1",
     )
 
     for index, exam_id in enumerate(exam_ids):
@@ -534,6 +576,7 @@ def test_start_response_matches_frontend_contract(monkeypatch) -> None:
     assert isinstance(exam["title"], str) and len(exam["title"]) > 0
     assert isinstance(exam["duration_minutes"], int) and exam["duration_minutes"] > 0
     assert isinstance(exam["question_count"], int) and exam["question_count"] > 0
+    assert isinstance(exam["sections"], list) and len(exam["sections"]) > 0
 
     # data.questions --- JS: state.questions = data.questions || []
     questions = result["questions"]
@@ -541,6 +584,7 @@ def test_start_response_matches_frontend_contract(monkeypatch) -> None:
     first = questions[0]
     assert isinstance(first["id"], str) and len(first["id"]) > 0
     assert isinstance(first["subject"], str) and len(first["subject"]) > 0
+    assert isinstance(first["section"], str) and len(first["section"]) > 0
     assert isinstance(first["topic"], str) and len(first["topic"]) > 0
     assert isinstance(first["prompt"], str) and len(first["prompt"]) > 0
     # options: [{label, text}] --- JS: option.label, option.text
@@ -556,29 +600,59 @@ def test_start_response_matches_frontend_contract(monkeypatch) -> None:
     assert isinstance(attempt["started_at"], int)
 
 
-def test_mock_page_has_three_filter_controls_in_one_row_and_real_filter_logic() -> None:
+def test_mock_page_has_search_and_area_filters_with_real_filter_logic() -> None:
     page = Path("static/elevenplus-mock-exams.html").read_text(encoding="utf-8")
     script = Path("static/js/mock-exams.js").read_text(encoding="utf-8")
     css = Path("static/css/mock-exams.css").read_text(encoding="utf-8")
 
-    assert page.count('class="mock-filter-control"') == 3
+    assert page.count('class="mock-filter-control"') == 2
     assert 'id="mock-search"' in page
     assert 'id="mock-region"' in page
-    assert 'id="mock-type"' in page
-    assert 'mock-filter-controls { display: grid; grid-template-columns:' in css
-    assert 'const matches = all.filter(function (exam)' in script
-    assert "const regionOk = region === 'all' || mockRegionFor(exam) === region;" in script
-    assert "const typeOk = type === 'all' || examType === type;" in script
+    assert 'id="mock-type"' not in page
+    assert '.mock-finder-controls {' in css
+    assert 'grid-template-columns: minmax(0, 1.55fr)' in css
+    assert 'function mockMatches(exam, search, region, schoolAudience)' in script
+    assert "if (region !== 'all' && mockArea(exam) !== region) return false;" in script
+    assert "type !== 'all'" not in script
     assert 'commonGrid.replaceChildren();' in script
     assert 'schoolGrid.replaceChildren();' in script
 
 
-def test_mock_page_deduplicates_and_sorts_catalogue_before_filtering() -> None:
+def test_mock_page_has_school_eligibility_filters_and_section_guidance() -> None:
+    page = Path("static/elevenplus-mock-exams.html").read_text(encoding="utf-8")
     script = Path("static/js/mock-exams.js").read_text(encoding="utf-8")
 
-    assert 'function dedupeAndSortExams(exams)' in script
-    assert "const seen = new Set();" in script
-    assert "if (seen.has(key)) return;" in script
-    assert 'const exams = dedupeAndSortExams(data && data.exams);' in script
-    assert "const nameA = normalizeText(a.school || a.title);" in script
-    assert "const nameB = normalizeText(b.school || b.title);" in script
+    assert 'data-mock-chip="girls"' in page
+    assert 'data-mock-chip="boys"' in page
+    assert 'aria-pressed="false"' in page
+    assert "school_audiences" in script
+    assert "state.schoolAudience" in script
+    assert "school_aliases" in script
+    assert 'id="exam-section-guide"' in page
+    assert "examSectionGuide" in script
+    assert "section-list" in script
+    assert "const wasSelected = chip.getAttribute('aria-pressed') === 'true';" in script
+    assert "if (wasSelected)" in script
+    assert "Included with your active 11+ Premium subscription." not in script
+
+
+def test_eleven_plus_headers_use_the_same_content_edges_as_their_pages() -> None:
+    shared_style = Path("static/css/site-consistency.css").read_text(encoding="utf-8")
+    mock_style = Path("static/css/mock-exams.css").read_text(encoding="utf-8")
+    pages = (
+        "elevenplus-practice.html",
+        "elevenplus-mock-exams.html",
+        "elevenplus-topic-mastery.html",
+        "elevenplus-year-round-plan.html",
+        "elevenplus-study-plan.html",
+        "elevenplus-mistakes.html",
+    )
+
+    assert "body.hm-article .hm-nav-wrap { width: 100%; }" in shared_style
+    assert "body.hm-eleven .topic-header .hm-nav-wrap" in shared_style
+    assert "body.hm-eleven .mock-header .hm-nav-wrap" in shared_style
+    assert "width: min(1180px, calc(100% - 36px));" in mock_style
+    assert "width: min(100% - 24px, 1180px);" in mock_style
+    for page in pages:
+        html = Path("static", page).read_text(encoding="utf-8")
+        assert "site-consistency.css?v=20260906-header-alignment" in html

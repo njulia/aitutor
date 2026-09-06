@@ -89,14 +89,15 @@
     </div>
     <section class="card"><h2>🎯 Challenges</h2><p class="muted">Pick a ready-made learning challenge. When a buddy sends you one, tap Start challenge to begin.</p><div id="buddy-challenges">Loading…</div></section>
     <section class="card"><h2>💌 Kind emojis for you</h2><p class="muted">Little friendly signals from approved buddies. They disappear after a week.</p><div id="emoji-reactions">Loading…</div></section>
-    <section class="card"><h2>🏆 Buddy ranking</h2><p class="muted">Only you and approved buddies. This shows learning XP, not marks.</p><h3>This week</h3><div id="weekly-ranking">Loading…</div><h3>All time</h3><div id="ranking">Loading…</div></section>`;
+    <section class="card buddy-ranking-card"><h2>🏆 Buddy ranking</h2><p class="muted">Only you and approved buddies. This shows learning XP, not marks.</p><div class="buddy-ranking-columns"><section class="buddy-ranking-panel" aria-labelledby="weekly-ranking-title"><h3 id="weekly-ranking-title">This week</h3><div id="weekly-ranking">Loading…</div></section><section class="buddy-ranking-panel" aria-labelledby="all-time-ranking-title"><h3 id="all-time-ranking-title">All time</h3><div id="ranking">Loading…</div></section></div></section>`;
 
   const defaultChallengeTypes = [
-    {key: 'maths', label: '➗ Maths', subject: 'Maths', practice_tab: 'homework'},
-    {key: 'english', label: '📖 English', subject: 'English', practice_tab: 'homework'},
-    {key: 'reasoning', label: '🧠 Reasoning', subject: 'Verbal Reasoning', practice_tab: 'eleven'},
-    {key: '11plus', label: '⭐ 11+', subject: 'Maths', practice_tab: 'eleven'},
-    {key: 'mixed', label: '🌈 Mixed'},
+    {key: 'maths', label: '➗ Maths', subject: 'Maths', practice_tab: 'homework', group: 'primary'},
+    {key: 'english', label: '📖 English', subject: 'English', practice_tab: 'homework', group: 'primary'},
+    {key: 'eleven_plus_maths', label: '➕ 11+ Maths', subject: 'Maths', practice_tab: 'eleven', group: 'eleven_plus'},
+    {key: 'eleven_plus_english', label: '📚 11+ English', subject: 'English', practice_tab: 'eleven', group: 'eleven_plus'},
+    {key: 'verbal_reasoning', label: '🗣️ 11+ Verbal Reasoning', subject: 'Verbal Reasoning', practice_tab: 'eleven', group: 'eleven_plus'},
+    {key: 'non_verbal_reasoning', label: '🧩 11+ Non-Verbal Reasoning', subject: 'Non-Verbal Reasoning', practice_tab: 'eleven', group: 'eleven_plus'},
   ];
   const primarySubjectsByKey = Object.freeze({
     maths: 'Maths', math: 'Maths', mathematics: 'Maths',
@@ -110,7 +111,11 @@
   });
   const elevenPlusSubjectsByKey = Object.freeze({
     reasoning: 'Verbal Reasoning', verbalreasoning: 'Verbal Reasoning',
-    nonverbalreasoning: 'Non-Verbal Reasoning', elevenplus: 'Maths',
+    nonverbalreasoning: 'Non-Verbal Reasoning', elevenplus: 'Maths', '11plus': 'Maths',
+    elevenplusmaths: 'Maths', '11plusmaths': 'Maths',
+    elevenplusenglish: 'English', '11plusenglish': 'English',
+    elevenplusverbalreasoning: 'Verbal Reasoning', '11plusverbalreasoning': 'Verbal Reasoning',
+    elevenplusnonverbalreasoning: 'Non-Verbal Reasoning', '11plusnonverbalreasoning': 'Non-Verbal Reasoning',
   });
   let state = {buddies: [], emoji_options: [], student_id: ''};
   const byId = (id) => document.getElementById(id);
@@ -122,7 +127,7 @@
       ...options,
     });
     const data = await response.json().catch(() => ({}));
-//    if (!response.ok) throw new Error(data.detail || data.error || 'Something went wrong.');
+    if (!response.ok) throw new Error(data.detail || data.error || 'Something went wrong.');
     return data;
   }
 
@@ -159,11 +164,12 @@
       label: label || key,
       subject: String(value.practice_subject || value.subject || '').trim(),
       practice_tab: String(value.practice_tab || value.tab || '').trim(),
+      group: String(value.group || '').trim(),
     };
   }
 
   function availableChallengeTypes() {
-    const supplied = state.challenge_types || state.challenge_catalog;
+    const supplied = state.challenge_options || state.challenge_types || state.challenge_catalog;
     let options = [];
     if (Array.isArray(supplied)) {
       options = supplied.map((item) => normaliseChallengeOption(item)).filter(Boolean);
@@ -203,13 +209,19 @@
       // A mixed challenge can be completed in any supported primary subject.
       tab = 'homework';
     }
+    const requestedYear = Number(challenge.target_year_group || challenge.year_group);
+    const validYear = tab === 'eleven'
+      ? [3, 4, 5, 6].includes(requestedYear)
+      : [1, 2, 3, 4, 5, 6].includes(requestedYear);
     const subjectQuery = subject ? `&subject=${encodeURIComponent(subject)}` : '';
+    const yearQuery = validYear ? `&year=${encodeURIComponent(requestedYear)}` : '';
     const challengeId = String(challenge.id || '').trim();
     const challengeQuery = challengeId ? `&buddy_challenge=${encodeURIComponent(challengeId)}` : '';
     return {
-      href: `/app?tab=${encodeURIComponent(tab)}${subjectQuery}${challengeQuery}`,
-      label: subject ? `Start ${subject}` : 'Choose an activity',
+      href: `/app?tab=${encodeURIComponent(tab)}${subjectQuery}${yearQuery}${challengeQuery}`,
+      label: subject ? `Start ${validYear ? `Year ${requestedYear} ` : ''}${tab === 'eleven' ? '11+ ' : ''}${subject}` : 'Choose an activity',
       subject,
+      yearGroup: validYear ? requestedYear : null,
     };
   }
 
@@ -314,7 +326,7 @@
       card.append(
         element('strong', `🎯 ${challenge.title}`),
         element('span', direction, 'challenge-direction'),
-        element('span', `${challenge.target_count} activities · +${challenge.xp_reward} XP`, 'challenge-progress'),
+        element('span', `${challenge.target_count} activity · you both earn +${challenge.xp_reward} XP and +${challenge.gift_points_reward} Gift Points`, 'challenge-progress'),
       );
       if (challenge.status === 'open' && challenge.target_student_id === state.student_id) {
         const actions = element('div', undefined, 'buddy-challenge-actions');
@@ -324,7 +336,7 @@
         card.append(actions);
       } else if (challenge.status === 'open') {
         card.append(element('span', `Waiting for ${challenge.target_nickname || 'your buddy'}.`, 'challenge-status'));
-      } else card.append(element('span', 'Completed 🎉', 'challenge-status'));
+      } else card.append(element('span', `Completed 🎉 You both earned +${challenge.xp_reward} XP and +${challenge.gift_points_reward} Gift Points.`, 'challenge-status'));
       container.append(card);
     });
   }
@@ -410,10 +422,22 @@
     picker.setAttribute('role', 'group');
     picker.setAttribute('aria-label', 'Choose a challenge');
     picker.append(element('span', 'Choose a challenge', 'challenge-picker-label'));
-    availableChallengeTypes().forEach((challenge) => {
-      const button = actionButton(challenge.label, () => sendChallenge(studentId, challenge.key));
-      button.dataset.challengeType = challenge.key;
-      picker.append(button);
+    const options = availableChallengeTypes();
+    const groups = [
+      ['primary', 'Homework subjects'],
+      ['eleven_plus', '11+ subjects'],
+    ];
+    groups.forEach(([groupKey, heading]) => {
+      const groupOptions = options.filter((challenge) => (challenge.group || 'primary') === groupKey);
+      if (!groupOptions.length) return;
+      const group = element('div', undefined, 'challenge-picker-group');
+      group.append(element('strong', heading, 'challenge-picker-heading'));
+      groupOptions.forEach((challenge) => {
+        const button = actionButton(challenge.label, () => sendChallenge(studentId, challenge.key));
+        button.dataset.challengeType = challenge.key;
+        group.append(button);
+      });
+      picker.append(group);
     });
     actionArea.append(picker);
   }
@@ -423,8 +447,49 @@
     catch (error) { window.alert(error.message); }
   }
 
+  function showCompletionDialog(notification, {sentByBuddy = false} = {}) {
+    if (document.querySelector('.buddy-completion-dialog-backdrop')) return;
+    const backdrop = element('div', undefined, 'buddy-completion-dialog-backdrop');
+    const dialog = element('section', undefined, 'buddy-completion-dialog');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'buddy-completion-title');
+    const title = sentByBuddy
+      ? `🎉 ${notification.buddy_nickname || 'Your buddy'} finished a challenge!`
+      : '🎉 Challenge completed!';
+    dialog.append(
+      element('span', '🏆', 'buddy-completion-dialog-icon'),
+      element('h2', title),
+      element('p', sentByBuddy
+        ? `You both earned a reward for “${notification.title}”.`
+        : 'Amazing learning — your buddy gets the same reward too.'),
+      element('strong', `+${notification.awarded_xp || 0} XP and +${notification.awarded_gift_points || 0} Gift Points each`, 'buddy-completion-dialog-reward'),
+    );
+    const close = actionButton('Hooray!', async () => {
+      close.disabled = true;
+      if (sentByBuddy && notification.id) {
+        try { await api(`/api/study-buddies/challenge-notifications/${encodeURIComponent(notification.id)}/seen`, {method: 'POST'}); }
+        catch (_) { /* The celebration can still safely close. */ }
+      }
+      backdrop.remove();
+      if (sentByBuddy) load();
+    }, 'btn primary');
+    dialog.append(close);
+    backdrop.append(dialog);
+    document.body.append(backdrop);
+    close.focus();
+  }
+
   async function completeChallenge(id) {
-    try { await api(`/api/study-buddies/challenge/${encodeURIComponent(id)}/complete`, {method: 'POST'}); window.alert('Challenge complete! 🎉'); load(); }
+    try {
+      const completed = await api(`/api/study-buddies/challenge/${encodeURIComponent(id)}/complete`, {method: 'POST'});
+      showCompletionDialog({
+        title: completed.title,
+        awarded_xp: completed.reward?.awarded_xp,
+        awarded_gift_points: completed.reward?.awarded_gift_points,
+      });
+      load();
+    }
     catch (error) { window.alert(error.message); }
   }
 
@@ -462,6 +527,8 @@
       byId('my-buddy-code').textContent = data.buddy_code || 'Ask a grown-up for help.';
       renderBuddies(); renderReactions(data.emoji_reactions || []); renderChallenges(data.challenges || []);
       renderRanking(data.ranking?.weekly || [], 'weekly-ranking'); renderRanking(data.ranking?.all_time || [], 'ranking');
+      const [notice] = Array.isArray(data.buddy_completion_notifications) ? data.buddy_completion_notifications : [];
+      if (notice) showCompletionDialog(notice, {sentByBuddy: true});
     } catch (error) { showEmpty(byId('buddy-list'), error.message); }
   }
 

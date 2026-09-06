@@ -300,7 +300,7 @@ function renderKids() {
     code.append(codeActions);
     card.append(
       code,
-      node('p', 'kid-code-help', 'Open child sign-in to take this code safely to the next page, so your child can tap Start Learning instead of typing it. Child sign-in then switches this browser to their space.'),
+      node('p', 'kid-code-help', 'Open child sign-in to take this code safely to the next page, so your child can Start Learning in their space.'),
     );
 
     if (kid.buddy_code) {

@@ -11,10 +11,17 @@ body.hm-page, body.hm-eleven, body.hm-rewards { background:#fffdf8; }
 .nav-links a, .site-nav a, .hm-main-nav a { white-space:nowrap; text-decoration:none; font-weight:700; color:#344054; padding:9px 4px; }
 .nav-links a:hover, .site-nav a:hover, .hm-main-nav a:hover { color:#5d3ca8; }
 .container, .wrap, main { max-width:var(--hm-content-width); margin-left:auto; margin-right:auto; }
+/* Some long-form 11+ pages deliberately use a narrower reading column than
+   the rest of the site. Match the navigation's left and right edges to the
+   content children on those templates, so the header never appears to drift. */
+body.hm-article .hm-nav-wrap { width: 100%; }
+body.hm-eleven .topic-header .hm-nav-wrap { width:min(1080px, calc(100% - 40px)); }
+body.hm-eleven .mock-header .hm-nav-wrap { width:min(1136px, calc(100% - 44px)); }
 .card, .panel, .practice-card, .question-card { border-radius:20px; }
 button, .btn, a.button { min-height:44px; touch-action:manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:4px solid rgba(47,125,225,.28)!important; outline-offset:3px; }
-@media (max-width:760px){ .header-content,.hm-nav-wrap,.header-inner{width:min(var(--hm-content-width),calc(100% - 24px));min-height:68px;gap:12px;} .nav-links,.site-nav,.hm-main-nav{justify-content:flex-start;gap:8px 12px;} .nav-links a,.site-nav a,.hm-main-nav a{font-size:.95rem;padding:8px 3px;} }
+@media (max-width:760px){ .header-content,.hm-nav-wrap,.header-inner{width:min(var(--hm-content-width),calc(100% - 24px));min-height:68px;gap:12px;} body.hm-article .hm-nav-wrap{width:100%;} body.hm-eleven .topic-header .hm-nav-wrap{width:calc(100% - 40px);} body.hm-eleven .mock-header .hm-nav-wrap{width:calc(100% - 28px);} .nav-links,.site-nav,.hm-main-nav{justify-content:flex-start;gap:8px 12px;} .nav-links a,.site-nav a,.hm-main-nav a{font-size:.95rem;padding:8px 3px;} }
+@media (max-width:560px){ body.hm-eleven .topic-header .hm-nav-wrap{width:calc(100% - 26px);} }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
 
 

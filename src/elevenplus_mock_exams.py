@@ -649,6 +649,44 @@ EXAMS: Dict[str, Dict[str, Any]] = {
 EXAMS.update(ADDITIONAL_EXAMS)
 
 
+# This describes school eligibility, never a child's gender or personal data.
+# A shared admissions test can be useful to more than one audience, so this is
+# deliberately a list rather than an inferred single label.
+SCHOOL_FILTER_METADATA: Dict[str, Dict[str, tuple[str, ...]]] = {
+    "colchester-essex-11plus-1": {
+        "audiences": ("girls", "boys"),
+        "aliases": ("Colchester Royal Grammar School", "Colchester County High School for Girls", "CCHSG"),
+    },
+    "colchester-royal-grammar-1": {
+        "audiences": ("boys",),
+        "aliases": ("CRGS", "Colchester", "CSSE"),
+    },
+    "kegs-chelmsford-1": {
+        "audiences": ("boys",),
+        "aliases": ("KEGS", "Chelmsford", "CSSE"),
+    },
+    "cchs-fsce-1": {"audiences": ("girls",), "aliases": ("CCHS", "Chelmsford")},
+    "chelmsford-essex-11plus-2": {"audiences": ("girls",), "aliases": ("CCHS", "Chelmsford")},
+    "nlcs-11plus-1": {"audiences": ("girls",), "aliases": ("NLCS",)},
+    "clsg-11plus-1": {"audiences": ("girls",), "aliases": ("CLSG",)},
+    "kehs-11plus-1": {"audiences": ("girls",), "aliases": ("KEHS",)},
+    "wimbledon-high-11plus-1": {"audiences": ("girls",), "aliases": ("Wimbledon High",)},
+    "putney-high-11plus-1": {"audiences": ("girls",), "aliases": ("Putney High",)},
+    "habs-girls-11plus-1": {"audiences": ("girls",), "aliases": ("Habs Girls",)},
+    "tiffin-girls-stage-one-1": {"audiences": ("girls",), "aliases": ("Tiffin Girls",)},
+    "henrietta-barnett-first-round-1": {"audiences": ("girls",), "aliases": ("Henrietta Barnett",)},
+    "altrincham-girls-1": {"audiences": ("girls",), "aliases": ("AGGS",)},
+    "newstead-wood-11plus-1": {"audiences": ("girls",), "aliases": ("Newstead Wood",)},
+    "qe-barnet-stage-one-1": {"audiences": ("boys",), "aliases": ("QE Barnet",)},
+    "tiffin-stage-one-1": {"audiences": ("boys",), "aliases": ("Tiffin School",)},
+    "habs-boys-11plus-1": {"audiences": ("boys",), "aliases": ("Habs Boys",)},
+    "wilsons-second-stage-1": {"audiences": ("boys",), "aliases": ("Wilson's",)},
+    "st-olaves-stage-one-1": {"audiences": ("boys",), "aliases": ("St Olave's",)},
+    "lancaster-royal-grammar-1": {"audiences": ("boys",), "aliases": ("LRGS",)},
+    "reading-fsce-1": {"audiences": ("boys",), "aliases": ("Reading School",)},
+}
+
+
 def _exam(exam_id: str) -> Dict[str, Any]:
     exam = EXAMS.get(str(exam_id or "").strip())
     if exam is None:
@@ -656,20 +694,77 @@ def _exam(exam_id: str) -> Dict[str, Any]:
     return exam
 
 
+def _section_plan(exam: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return a child-safe section map for pacing through a mock.
+
+    Published school formats often use separate papers.  The map makes those
+    breaks visible in the online mock without pretending that Homework Magic
+    has reproduced an official paper.
+    """
+    raw_sections = exam.get("sections")
+    if raw_sections:
+        return [
+            {
+                "label": str(section["label"]),
+                "question_ids": tuple(section["question_ids"]),
+                "minutes": int(section["minutes"]),
+            }
+            for section in raw_sections
+        ]
+
+    question_ids = tuple(exam["question_ids"])
+    groups: list[dict[str, Any]] = []
+    for question_id in question_ids:
+        subject = str(_QUESTION_BY_ID[question_id]["subject"])
+        if not groups or groups[-1]["label"] != subject:
+            groups.append({"label": subject, "question_ids": [], "minutes": 0})
+        groups[-1]["question_ids"].append(question_id)
+
+    total_questions = max(1, len(question_ids))
+    remaining_minutes = int(exam["duration_minutes"])
+    for index, group in enumerate(groups):
+        if index == len(groups) - 1:
+            minutes = remaining_minutes
+        else:
+            minutes = max(
+                1,
+                round(int(exam["duration_minutes"]) * len(group["question_ids"]) / total_questions),
+            )
+            remaining_minutes -= minutes
+        group["minutes"] = minutes
+        group["question_ids"] = tuple(group["question_ids"])
+    return groups
+
+
+def _public_sections(exam: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "label": section["label"],
+            "question_count": len(section["question_ids"]),
+            "duration_minutes": section["minutes"],
+        }
+        for section in _section_plan(exam)
+    ]
+
+
 def _public_exam(exam: Mapping[str, Any], has_mock_access: bool) -> Dict[str, Any]:
     question_ids = tuple(exam["question_ids"])
     subject_counts = Counter(_QUESTION_BY_ID[item]["subject"] for item in question_ids)
     is_free = exam["id"] == FREE_MOCK_EXAM_ID
     is_available = bool(is_free or has_mock_access)
+    school_metadata = SCHOOL_FILTER_METADATA.get(str(exam["id"]), {})
     return {
         "id": exam["id"],
         "category": exam["category"],
         "title": exam["title"],
         "description": exam["description"],
         "school": exam["school"],
+        "school_audiences": list(school_metadata.get("audiences", ())),
+        "school_aliases": list(school_metadata.get("aliases", ())),
         "stage": exam["stage"],
         "duration_minutes": exam["duration_minutes"],
         "question_count": len(question_ids),
+        "sections": _public_sections(exam),
         "subject_counts": dict(subject_counts),
         "is_free": is_free,
         "available": is_available,
@@ -772,6 +867,11 @@ def start_mock_exam(exam_id: str, identity: str, *, now: int | None = None) -> D
         "submit_by": deadline + 15 * 60,
         "nonce": secrets.token_urlsafe(12),
     }
+    question_sections = {
+        question_id: section["label"]
+        for section in _section_plan(exam)
+        for question_id in section["question_ids"]
+    }
     questions = []
     for number, question_id in enumerate(exam["question_ids"], start=1):
         question = _QUESTION_BY_ID[question_id]
@@ -779,6 +879,7 @@ def start_mock_exam(exam_id: str, identity: str, *, now: int | None = None) -> D
             "id": question["id"],
             "number": number,
             "subject": question["subject"],
+            "section": question_sections.get(question_id, question["subject"]),
             "topic": question["topic"],
             "prompt": question["prompt"],
             "context": question["context"],
@@ -1014,6 +1115,18 @@ def validate_mock_exam_content() -> None:
             raise ValueError(f"{exam_id} references unknown questions: {unknown}")
         if int(exam["duration_minutes"]) < 5:
             raise ValueError(f"{exam_id} has an invalid duration")
+        sections = _section_plan(exam)
+        section_question_ids = tuple(
+            question_id
+            for section in sections
+            for question_id in section["question_ids"]
+        )
+        if section_question_ids != question_ids:
+            raise ValueError(f"{exam_id} has sections that do not match its question order")
+        if any(int(section["minutes"]) < 1 for section in sections):
+            raise ValueError(f"{exam_id} has a section with an invalid duration")
+        if exam.get("sections") and sum(int(section["minutes"]) for section in sections) != int(exam["duration_minutes"]):
+            raise ValueError(f"{exam_id} section timings do not match the mock duration")
         for source_id in exam["source_ids"]:
             if source_id not in PUBLIC_SOURCES:
                 raise ValueError(f"{exam_id} references an unknown source")

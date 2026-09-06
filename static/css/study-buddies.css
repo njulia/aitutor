@@ -265,6 +265,22 @@ body.study-buddies-page {
 .study-buddies-page .buddy strong { color: #443772; }
 .study-buddies-page .buddy small { display: block; margin-top: 4px; color: #737b94; font-weight: 700; }
 .study-buddies-page .buddy-ranking-row { grid-template-columns: minmax(0, 1fr) auto; }
+.study-buddies-page .buddy-ranking-columns {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.study-buddies-page .buddy-ranking-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 2px solid #e8e3f7;
+  border-radius: 18px;
+  background: #fcfbff;
+}
+.study-buddies-page .buddy-ranking-panel h3 { margin-bottom: 10px; font-size: 1rem; }
 .study-buddies-page .buddy-ranking-row.is-current-learner {
   border-color: #8b70df;
   background: linear-gradient(120deg, #f2edff, #fff8df);
@@ -318,7 +334,8 @@ body.study-buddies-page {
 .study-buddies-page .challenge-picker {
   display: flex;
   flex-wrap: wrap;
-  max-width: 350px;
+  width: min(100%, 720px);
+  max-width: 720px;
   margin: 0;
   justify-content: flex-end;
 }
@@ -329,6 +346,18 @@ body.study-buddies-page {
   font-size: .78rem;
   font-weight: 900;
   text-align: right;
+}
+.study-buddies-page .challenge-picker-group {
+  display: flex;
+  flex: 1 1 300px;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+}
+.study-buddies-page .challenge-picker-heading {
+  flex-basis: 100%;
+  color: #493b78;
+  font-size: .82rem;
 }
 
 .study-buddies-page .buddy-challenge-row {
@@ -386,6 +415,30 @@ body.study-buddies-page {
 .study-buddies-page .challenge-picker .btn { background: #fff; }
 .study-buddies-page .status { position: relative; z-index: 1; color: #565e7b; font-weight: 750; }
 
+.study-buddies-page .buddy-completion-dialog-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(44, 35, 83, .48);
+}
+.study-buddies-page .buddy-completion-dialog {
+  width: min(100%, 430px);
+  padding: 28px;
+  border: 3px solid #fff;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #fffdf2, #f4efff);
+  box-shadow: 0 10px 0 #cfc2f1, 0 24px 48px rgba(34, 24, 78, .32);
+  color: #4c4078;
+  text-align: center;
+}
+.study-buddies-page .buddy-completion-dialog-icon { display: block; margin-bottom: 4px; font-size: 3.1rem; }
+.study-buddies-page .buddy-completion-dialog h2 { margin: 0; color: #4a397a; font-size: 1.6rem; }
+.study-buddies-page .buddy-completion-dialog p { margin: 10px 0; color: #636b87; font-weight: 750; line-height: 1.45; }
+.study-buddies-page .buddy-completion-dialog-reward { display: block; margin: 14px 0 18px; color: #39705f; font-size: 1.06rem; }
+
 @media (max-width: 620px) {
   .study-buddies-page .buddy-hero { grid-template-columns: 1fr; }
   .study-buddies-page .buddy-hero-friends { grid-template-columns: repeat(4, 50px); justify-content: start; }
@@ -396,6 +449,7 @@ body.study-buddies-page {
   .study-buddies-page .buddy-actions { width: 100%; justify-content: flex-start; margin-left: 0; }
   .study-buddies-page .buddy-emoji-actions { justify-content: flex-start; }
   .study-buddies-page .challenge-picker { max-width: none; justify-content: flex-start; }
+  .study-buddies-page .buddy-ranking-columns { grid-template-columns: 1fr; }
   .study-buddies-page .challenge-picker-label { text-align: left; }
   .study-buddies-page .buddy-challenge-row { gap: 7px; }
   .study-buddies-page .buddy-challenge-actions { justify-content: flex-start; }

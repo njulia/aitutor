@@ -55,6 +55,15 @@ buddy_emoji_reactions = Table(
     # feature a light, kind signal rather than an ongoing child message log.
     Column("expires_at", DateTime(timezone=True), nullable=False, index=True),
 )
+buddy_challenge_notifications = Table(
+    "study_buddy_challenge_notifications", _metadata,
+    Column("id", String(80), primary_key=True),
+    Column("recipient_student_id", String(80), nullable=False, index=True),
+    Column("challenge_id", String(80), nullable=False),
+    Column("seen_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("recipient_student_id", "challenge_id", name="uq_study_buddy_completion_notice"),
+)
 
 study_buddy_settings = Table(
     "study_buddy_settings", _metadata,
@@ -473,7 +482,7 @@ def create_challenge(requester:str,target:str,challenge_type:str)->dict[str,Any]
         "xp_reward": catalog["xp"],
         "gift_points_reward": catalog["gift_points"],
         "challenge_type": key,
-        "practice_subject": catalog["subject"],
+        "practice_subject": catalog["practice_subject"],
         "practice_tab": catalog["practice_tab"],
     }
 
@@ -486,10 +495,15 @@ def challenges_for(student_id:str)->list[dict[str,Any]]:
             for challenge in challenges
             for student_key in ("requester_student_id", "target_student_id")
         }
-        names = {
-            str(row.id): str(row.name or "Buddy")
+        learners = {
+            str(row.id): {
+                "nickname": str(row.name or "Buddy"),
+                "year_group": int(row.year_group) if row.year_group else None,
+            }
             for row in conn.execute(
-                select(students.c.id, students.c.name).where(students.c.id.in_(learner_ids))
+                select(students.c.id, students.c.name, students.c.year_group).where(
+                    students.c.id.in_(learner_ids)
+                )
             ).all()
         } if learner_ids else {}
     for challenge in challenges:
@@ -499,16 +513,21 @@ def challenges_for(student_id:str)->list[dict[str,Any]]:
         if catalog:
             # These are presentation/navigation details, never the catalogue's
             # internal subject-matching rules.
-            challenge["practice_subject"] = catalog["subject"]
+            challenge["practice_subject"] = catalog["practice_subject"]
             challenge["practice_tab"] = catalog["practice_tab"]
         challenge["requester_nickname"] = (
             "You" if challenge["requester_student_id"] == student_id
-            else names.get(str(challenge["requester_student_id"]), "Buddy")
+            else learners.get(str(challenge["requester_student_id"]), {}).get("nickname", "Buddy")
         )
         challenge["target_nickname"] = (
             "You" if challenge["target_student_id"] == student_id
-            else names.get(str(challenge["target_student_id"]), "Buddy")
+            else learners.get(str(challenge["target_student_id"]), {}).get("nickname", "Buddy")
         )
+        # The receiving learner's year is only used to open their own learning
+        # area. It is never shown to another child or used for a directory.
+        challenge["target_year_group"] = learners.get(
+            str(challenge["target_student_id"]), {}
+        ).get("year_group")
         if challenge["status"] == "open":
             count = _verified_activity_count(challenge["target_student_id"], challenge)
             challenge["verified_activity_count"] = count
@@ -579,6 +598,22 @@ def complete_challenge(
         student_id=d["requester_student_id"], xp=d["xp_reward"], gift_points=d["gift_points_reward"],
         source_key=f"study-buddy:{challenge_id}:requester", label=f"Buddy completed: {d['title']}",
     )
+    # Let the child who sent the challenge celebrate next time they open their
+    # own Study Buddies page. The notification stores no message text or other
+    # profile details, and only exists for this already-approved buddy pair.
+    try:
+        with _engine().begin() as conn:
+            conn.execute(
+                insert(buddy_challenge_notifications).values(
+                    id=f"sbcn_{secrets.token_urlsafe(18)}",
+                    recipient_student_id=d["requester_student_id"],
+                    challenge_id=challenge_id,
+                    created_at=now,
+                )
+            )
+    except IntegrityError:
+        # A retry after a completed request must not create duplicate pop-ups.
+        pass
     d.update({"status":"completed","completed_by_student_id":student_id,"verified_activity_count":verified_count,"completion_source":completion_source,"completed_at":now})
     # Only return badges earned by the signed-in learner.  A buddy's badge
     # progress is private even though a small earned-badge summary is shown
@@ -595,7 +630,70 @@ def complete_challenge(
         "new_certificates": target_reward.get("new_certificates", []),
         "new_badges": target_reward.get("new_badges", []),
     }
+    d["buddy_reward"] = {
+        "awarded_xp": int(requester_reward.get("xp") or 0),
+        "awarded_gift_points": int(requester_reward.get("gift_points") or 0),
+    }
     return d
+
+
+def challenge_completion_notifications_for(student_id: str, limit: int = 3) -> list[dict[str, Any]]:
+    """Return a small, one-time celebration queue for a challenge sender."""
+    safe_limit = max(1, min(int(limit), 3))
+    with _engine().begin() as conn:
+        rows = conn.execute(
+            select(
+                buddy_challenge_notifications.c.id,
+                buddy_challenges.c.id.label("challenge_id"),
+                buddy_challenges.c.title,
+                buddy_challenges.c.xp_reward,
+                buddy_challenges.c.gift_points_reward,
+                students.c.name.label("buddy_nickname"),
+            )
+            .join(
+                buddy_challenges,
+                buddy_challenge_notifications.c.challenge_id == buddy_challenges.c.id,
+            )
+            .join(students, students.c.id == buddy_challenges.c.target_student_id)
+            .where(
+                and_(
+                    buddy_challenge_notifications.c.recipient_student_id == student_id,
+                    buddy_challenge_notifications.c.seen_at.is_(None),
+                    buddy_challenges.c.status == "completed",
+                )
+            )
+            .order_by(buddy_challenge_notifications.c.created_at.asc())
+            .limit(safe_limit)
+        ).all()
+    return [
+        {
+            "id": str(row.id),
+            "challenge_id": str(row.challenge_id),
+            "title": str(row.title),
+            "buddy_nickname": str(row.buddy_nickname or "Your buddy"),
+            "awarded_xp": int(row.xp_reward or 0),
+            "awarded_gift_points": int(row.gift_points_reward or 0),
+        }
+        for row in rows
+    ]
+
+
+def acknowledge_challenge_completion_notification(notification_id: str, student_id: str) -> dict[str, bool]:
+    with _engine().begin() as conn:
+        result = conn.execute(
+            update(buddy_challenge_notifications)
+            .where(
+                and_(
+                    buddy_challenge_notifications.c.id == notification_id,
+                    buddy_challenge_notifications.c.recipient_student_id == student_id,
+                    buddy_challenge_notifications.c.seen_at.is_(None),
+                )
+            )
+            .values(seen_at=_now())
+        )
+    if result.rowcount != 1:
+        raise ValueError("Celebration not found.")
+    return {"acknowledged": True}
 
 
 def complete_challenge_for_verified_activity(
